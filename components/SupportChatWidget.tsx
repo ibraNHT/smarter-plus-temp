@@ -1,0 +1,191 @@
+
+import React, { useState, useRef, useEffect } from 'react';
+import { useStore } from '../services/storeContext';
+import { X, Send, Headphones, Bot, User } from 'lucide-react';
+
+export const SupportChatWidget: React.FC = () => {
+  const { isSupportChatOpen, toggleSupportChat, supportMessages, sendSupportMessage } = useStore();
+  const [inputText, setInputText] = useState('');
+  
+  // Position state (persists across re-renders/toggles)
+  const [position, setPosition] = useState<{ top: number, left: number } | null>(null);
+  
+  // Refs for dragging logic to avoid re-renders during drag
+  const isDraggingRef = useRef(false);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const widgetRef = useRef<HTMLDivElement>(null);
+  const chatBodyRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom on new message
+  useEffect(() => {
+    if (chatBodyRef.current) {
+      chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
+    }
+  }, [supportMessages, isSupportChatOpen]);
+
+  // Global Mouse Events for Dragging
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current || !widgetRef.current) return;
+
+      // Calculate new position
+      const newLeft = e.clientX - dragOffsetRef.current.x;
+      const newTop = e.clientY - dragOffsetRef.current.y;
+      
+      // Apply directly to DOM for smooth performance
+      widgetRef.current.style.left = `${newLeft}px`;
+      widgetRef.current.style.top = `${newTop}px`;
+      widgetRef.current.style.bottom = 'auto';
+      widgetRef.current.style.right = 'auto';
+    };
+
+    const handleMouseUp = () => {
+      if (isDraggingRef.current && widgetRef.current) {
+        isDraggingRef.current = false;
+        document.body.style.userSelect = ''; // Re-enable text selection
+        
+        // Commit the final position to state so it survives React re-renders
+        const rect = widgetRef.current.getBoundingClientRect();
+        setPosition({ top: rect.top, left: rect.left });
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only left click
+    if (!widgetRef.current) return;
+
+    const rect = widgetRef.current.getBoundingClientRect();
+    dragOffsetRef.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+    isDraggingRef.current = true;
+    document.body.style.userSelect = 'none'; // Prevent text selection
+  };
+
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inputText.trim()) {
+        sendSupportMessage(inputText);
+        setInputText('');
+    }
+  };
+
+  // Dynamic Style for Widget
+  const widgetStyle: React.CSSProperties = {
+      height: '500px',
+      // If we have a saved position, use it. Otherwise default to bottom-right.
+      ...(position ? { top: position.top, left: position.left } : { bottom: '24px', right: '24px' })
+  };
+
+  return (
+    <>
+      {/* Floating Button (Visible when chat is closed) */}
+      {!isSupportChatOpen && (
+        <button
+          onClick={toggleSupportChat}
+          className="fixed bottom-6 right-6 z-50 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-all hover:scale-110 flex items-center justify-center"
+          aria-label="Open Support Chat"
+        >
+          <Headphones className="h-6 w-6" />
+        </button>
+      )}
+
+      {/* Chat Window */}
+      <div
+        ref={widgetRef}
+        className={`fixed z-50 w-80 md:w-96 bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden flex flex-col transition-opacity duration-200 ${isSupportChatOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        style={widgetStyle}
+      >
+        {/* Header (Draggable Handle) */}
+        <div 
+           className="bg-blue-600 p-4 flex justify-between items-center cursor-move select-none"
+           onMouseDown={handleMouseDown}
+        >
+           <div className="flex items-center text-white">
+              <div className="p-1 bg-white/20 rounded-full mr-2">
+                <Bot className="h-5 w-5" />
+              </div>
+              <div>
+                 <h3 className="font-bold text-sm">AgriBot Support</h3>
+                 <span className="text-xs text-blue-200 flex items-center">
+                    <span className="w-2 h-2 bg-green-400 rounded-full mr-1 animate-pulse"></span>
+                    Online
+                 </span>
+              </div>
+           </div>
+           <div className="flex items-center">
+               <button 
+                 onClick={toggleSupportChat} 
+                 className="text-blue-100 hover:text-white p-1 rounded hover:bg-blue-500 transition-colors"
+                 onMouseDown={(e) => e.stopPropagation()} // Prevent drag on close button
+               >
+                  <X className="h-5 w-5" />
+               </button>
+           </div>
+        </div>
+
+        {/* Messages Body */}
+        <div 
+          ref={chatBodyRef}
+          className="flex-1 bg-gray-50 p-4 overflow-y-auto space-y-4"
+        >
+           {supportMessages.map(msg => {
+              const isUser = msg.sender === 'USER';
+              return (
+                <div key={msg.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                   {!isUser && (
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white mr-2 flex-shrink-0 ${msg.sender === 'AI' ? 'bg-blue-500' : 'bg-purple-600'}`}>
+                         {msg.sender === 'AI' ? <Bot className="h-4 w-4" /> : <Headphones className="h-4 w-4" />}
+                      </div>
+                   )}
+                   <div className={`max-w-[80%] rounded-lg p-3 text-sm shadow-sm ${
+                      isUser 
+                      ? 'bg-blue-600 text-white rounded-br-none' 
+                      : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none'
+                   }`}>
+                      <p>{msg.text}</p>
+                      <p className={`text-[10px] mt-1 text-right ${isUser ? 'text-blue-200' : 'text-gray-400'}`}>
+                         {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      </p>
+                   </div>
+                   {isUser && (
+                      <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 ml-2 flex-shrink-0">
+                         <User className="h-4 w-4" />
+                      </div>
+                   )}
+                </div>
+              );
+           })}
+        </div>
+
+        {/* Input Area */}
+        <form onSubmit={handleSend} className="p-3 bg-white border-t border-gray-200 flex gap-2">
+           <input 
+             type="text" 
+             className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+             placeholder="Type a question..."
+             value={inputText}
+             onChange={(e) => setInputText(e.target.value)}
+           />
+           <button 
+             type="submit"
+             disabled={!inputText.trim()}
+             className="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+           >
+              <Send className="h-4 w-4" />
+           </button>
+        </form>
+      </div>
+    </>
+  );
+};

@@ -1,0 +1,7 @@
+{
+  "name": "AgriMarket Connect deploy",
+  "description": "A digital marketplace connecting service providers directly with clients. ",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
