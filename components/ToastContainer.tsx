@@ -5,7 +5,7 @@ import { Notification } from '../types';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 export const ToastContainer: React.FC = () => {
-  const { notifications, markNotificationsAsRead, user } = useStore();
+  const { notifications, user } = useStore();
   const [visibleToasts, setVisibleToasts] = useState<Notification[]>([]);
   const lastNotifyIdRef = useRef<string | null>(null);
 
@@ -13,17 +13,17 @@ export const ToastContainer: React.FC = () => {
     if (notifications.length > 0) {
       // Get the most recent notification
       const latest = notifications[0];
-      
+
       // Check if it belongs to current user (or is system wide) and hasn't been shown yet
       if (latest.userId === user?.id && latest.id !== lastNotifyIdRef.current) {
         lastNotifyIdRef.current = latest.id;
-        
+
         // Add to visible toasts
         setVisibleToasts(prev => [latest, ...prev]);
 
         // Auto remove after 5 seconds
         setTimeout(() => {
-           removeToast(latest.id);
+          removeToast(latest.id);
         }, 5000);
       }
     }
@@ -41,28 +41,28 @@ export const ToastContainer: React.FC = () => {
         const isSuccess = toast.type === 'SUCCESS';
         const isError = toast.type === 'ERROR';
         const isWarning = toast.type === 'WARNING';
-        
+
         let bgColor = 'bg-white';
         let borderColor = 'border-gray-200';
         let icon = <Info className="h-6 w-6 text-blue-500" />;
 
         if (isSuccess) {
-           bgColor = 'bg-green-50';
-           borderColor = 'border-green-200';
-           icon = <CheckCircle className="h-6 w-6 text-green-600" />;
+          bgColor = 'bg-green-50';
+          borderColor = 'border-green-200';
+          icon = <CheckCircle className="h-6 w-6 text-green-600" />;
         } else if (isError) {
-           bgColor = 'bg-red-50';
-           borderColor = 'border-red-200';
-           icon = <AlertCircle className="h-6 w-6 text-red-600" />;
+          bgColor = 'bg-red-50';
+          borderColor = 'border-red-200';
+          icon = <AlertCircle className="h-6 w-6 text-red-600" />;
         } else if (isWarning) {
-           bgColor = 'bg-yellow-50';
-           borderColor = 'border-yellow-200';
-           icon = <AlertTriangle className="h-6 w-6 text-yellow-600" />;
+          bgColor = 'bg-yellow-50';
+          borderColor = 'border-yellow-200';
+          icon = <AlertTriangle className="h-6 w-6 text-yellow-600" />;
         }
 
         return (
-          <div 
-            key={toast.id} 
+          <div
+            key={toast.id}
             className={`pointer-events-auto transform transition-all duration-300 ease-in-out translate-y-0 opacity-100
                         flex items-start p-4 rounded-lg shadow-lg border ${bgColor} ${borderColor}`}
           >

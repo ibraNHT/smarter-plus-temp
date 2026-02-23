@@ -1,0 +1,14 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+
+# Private sections - Do not index
+Disallow: /producer/
+Disallow: /client/
+Disallow: /wallet
+Disallow: /cart
+Disallow: /checkout
+Disallow: /api/
+
+# Specify the sitemap location
+Sitemap: https://agrimarketconnect.shop/sitemap.xml

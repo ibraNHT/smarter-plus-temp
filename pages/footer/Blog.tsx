@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useTranslation } from '../../services/i18nContext';
-import { Calendar, User, ArrowRight } from 'lucide-react';
+import { User, ArrowRight } from 'lucide-react';
 
 export const Blog: React.FC = () => {
   const { t } = useTranslation();
@@ -68,7 +68,7 @@ export const Blog: React.FC = () => {
                   <div className="flex-shrink-0">
                     <span className="sr-only">{post.author}</span>
                     <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
-                        <User className="h-6 w-6" />
+                      <User className="h-6 w-6" />
                     </div>
                   </div>
                   <div className="ml-3">
@@ -79,9 +79,9 @@ export const Blog: React.FC = () => {
                   </div>
                 </div>
                 <div className="mt-4 pt-4 border-t border-gray-100">
-                    <button className="text-primary-600 hover:text-primary-700 font-medium flex items-center">
-                        Read Article <ArrowRight className="ml-2 h-4 w-4"/>
-                    </button>
+                  <button className="text-primary-600 hover:text-primary-700 font-medium flex items-center">
+                    Read Article <ArrowRight className="ml-2 h-4 w-4" />
+                  </button>
                 </div>
               </div>
             </div>

@@ -3,7 +3,7 @@
 
 // If hosted separately, this will be 'https://your-backend.com'. 
 // If hosted together, this is empty string '' and uses relative paths.
-const BASE_URL = process.env.BACKEND_URL || '';
+const BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 export const generateProductDescription = async (title: string, category: string, features: string): Promise<string> => {
   try {
@@ -25,7 +25,7 @@ export const generateProductDescription = async (title: string, category: string
   }
 };
 
-export const generateSupportResponse = async (userMessage: string, contextRole: string): Promise<{text: string, handover: boolean}> => {
+export const generateSupportResponse = async (userMessage: string, contextRole: string): Promise<{ text: string, handover: boolean }> => {
   try {
     const response = await fetch(`${BASE_URL}/api/ai/support-chat`, {
       method: 'POST',

@@ -1,5 +1,5 @@
 
-import { ProducerProfile, ClientProfile, Offer, UserRole, ProducerStatus, OfferType, UnitOfMeasure, MarketType, Order, OrderStatus, Wallet, TransactionType, ExternalTransactionRecord, Portfolio, WeeklySchedule, Coupon, PickupPoint } from '../types';
+import { ProducerProfile, ClientProfile, Offer, ProducerStatus, OfferType, UnitOfMeasure, MarketType, Order, OrderStatus, Wallet, TransactionType, ExternalTransactionRecord, Portfolio, WeeklySchedule, Coupon, PickupPoint } from '../types';
 
 // Default Schedule: Mon-Fri 9-5
 export const defaultSchedule: WeeklySchedule = {
@@ -134,7 +134,7 @@ const genId = (prefix: string, index: number) => `${prefix}-${index}`;
 export const initialOffers: Offer[] = [
   {
     id: genId('ag', 1), producerId: 'prod-1', title: 'Yellow Corn (Dried)', description: 'High quality dried yellow corn, suitable for animal feed or processing.',
-    category: 'Agriculture', type: OfferType.PRODUCT, marketType: MarketType.PRODUCER, unit: UnitOfMeasure.KG, quantity: 5000, price: 250, imageUrl: 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?auto=format&fit=crop&w=800&q=80', 
+    category: 'Agriculture', type: OfferType.PRODUCT, marketType: MarketType.PRODUCER, unit: UnitOfMeasure.KG, quantity: 5000, price: 250, imageUrl: 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?auto=format&fit=crop&w=800&q=80',
     isNegotiable: true, isDeliveryAvailable: true, offerLocation: 'West Region, Bafoussam', minQuantity: 50, maxQuantity: 5000, createdAt: new Date().toISOString()
   },
   {
@@ -204,21 +204,21 @@ export const initialWallets: Record<string, Wallet> = {
 
 // Initial Orders Mock for History
 export const initialOrders: Order[] = [
-   {
-     id: 'order-hist-1',
-     clientId: 'client-demo',
-     producerId: 'prod-1',
-     items: [{...initialOffers[0], cartQuantity: 2}],
-     subtotal: 500,
-     serviceFee: 25,
-     totalAmount: 525,
-     platformCommission: 75,
-     status: OrderStatus.DELIVERED,
-     createdAt: new Date(Date.now() - 86400000 * 10).toISOString(), // 10 days ago
-     clientReviewed: true,
-     producerReviewed: true,
-     deliveryMethod: 'HOME'
-   }
+  {
+    id: 'order-hist-1',
+    clientId: 'client-demo',
+    producerId: 'prod-1',
+    items: [{ ...initialOffers[0], cartQuantity: 2 }],
+    subtotal: 500,
+    serviceFee: 25,
+    totalAmount: 525,
+    platformCommission: 75,
+    status: OrderStatus.DELIVERED,
+    createdAt: new Date(Date.now() - 86400000 * 10).toISOString(), // 10 days ago
+    clientReviewed: true,
+    producerReviewed: true,
+    deliveryMethod: 'HOME'
+  }
 ];
 
 export const initialExternalRecords: ExternalTransactionRecord[] = [
