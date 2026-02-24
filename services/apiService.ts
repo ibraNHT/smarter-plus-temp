@@ -5,10 +5,12 @@
  * attaches the JWT Authorization header when a token is present.
  */
 
-const BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 const TOKEN_KEY = 'authToken';
 
-export const getToken = (): string | null => localStorage.getItem(TOKEN_KEY);
+export const getToken = (): string | null => {
+    return localStorage.getItem(TOKEN_KEY) || localStorage.getItem('token') || localStorage.getItem('accessToken');
+};
 export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token);
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
@@ -38,11 +40,16 @@ export const apiFetch = async <T = unknown>(
     const { headers: extraHeaders, ...rest } = options;
     const response = await fetch(`${BASE_URL}${path}`, {
         ...rest,
-        credentials: 'include',
         headers: buildHeaders(extraHeaders),
     });
 
     if (!response.ok) {
+        if (response.status === 401) {
+            clearToken();
+            localStorage.removeItem('currentUser');
+            window.location.hash = '/login';
+        }
+
         let message = `API error ${response.status}`;
         try {
             const body = await response.json();
@@ -72,7 +79,6 @@ export const apiUpload = async <T = unknown>(
 
     const response = await fetch(`${BASE_URL}${path}`, {
         method: 'POST',
-        credentials: 'include',
         headers,
         body: formData,
     });

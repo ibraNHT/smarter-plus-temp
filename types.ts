@@ -165,20 +165,21 @@ export interface Portfolio {
 
 export interface ProducerProfile {
   id: string;
+  userId?: string;
   type: ProducerType; // New: Business vs Individual
   name: string; // Display Name (Business Name or "First Last")
   firstName?: string; // For Individual
   lastName?: string; // For Individual
   gender?: 'MALE' | 'FEMALE'; // For Individual
   dateOfBirth?: string; // For Individual
-  
+
   email: string;
   phone: string;
   description: string;
   profileImageUrl?: string; // New
-  
+
   locations: Location[]; // Refactored to Array
-  
+
   certifications: string[]; // URLs or filenames
   productionTypes: string[]; // e.g., 'Agriculture', 'Livestock'
   status: ProducerStatus;
@@ -192,7 +193,7 @@ export interface ProducerProfile {
   // Producer as Client features
   favorites: string[]; // List of Offer IDs or Producer IDs
   searchHistory: string[]; // List of search terms or categories
-  
+
   // Referral System
   referralCode: string;
   referrals: string[]; // List of User IDs referred
@@ -201,6 +202,7 @@ export interface ProducerProfile {
 
 export interface ClientProfile {
   id: string;
+  userId?: string;
   name: string; // Display Name
   firstName: string;
   lastName: string;
@@ -211,7 +213,7 @@ export interface ClientProfile {
   profileImageUrl?: string;
   locations: Location[]; // Refactored to Array
   joinedDate: string;
-  
+
   // New Features
   favorites: string[]; // List of Offer IDs or Producer IDs
   searchHistory: string[]; // List of search terms or categories
@@ -240,11 +242,11 @@ export interface Offer {
   offerLocation: string; // New field
   minQuantity: number; // New field: Minimum order
   maxQuantity?: number; // New field: Maximum order per client
-  
+
   serviceDuration?: number; // in Hours, for services
-  
+
   reservedClientId?: string; // If set, only this client can see/buy (Personalized Offer)
-  
+
   createdAt: string;
 }
 
@@ -278,14 +280,14 @@ export interface Order {
   clientId: string;
   producerId: string;
   items: CartItem[];
-  
+
   // Financials
   subtotal: number; // Items * Price
   serviceFee: number; // 5% of Subtotal
   discountAmount?: number; // Amount deducted by coupon
   totalAmount: number; // Subtotal + ServiceFee - Discount
   platformCommission?: number; // 15% of Subtotal (Deducted from Producer)
-  
+
   // Coupons
   appliedCoupon?: string;
 
@@ -296,7 +298,7 @@ export interface Order {
   contactRevealed?: boolean; // New: Allows sharing phone/email after payment
   disputeReason?: string;
   disputeEvidence?: DisputeEvidence[];
-  
+
   // Delivery
   requestedDeliveryDate?: string; // YYYY-MM-DD for ATI Retail Orders
   deliveryMethod?: 'HOME' | 'PICKUP'; // New
@@ -340,7 +342,7 @@ export interface ChatMessage {
 
 export interface ChatSession {
   id: string;
-  participants: string[]; // [clientId, producerId]
+  participantIds: string[]; // [clientId, producerId]
   offerId?: string; // Context of the chat (optional)
   lastMessage: string;
   lastMessageAt: string;

@@ -1,8 +1,8 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerStatus, OfferType, CartItem, Order, OrderStatus, Wallet, TransactionType, WalletTransaction, ExternalTransactionRecord, Notification, WithdrawalRequest, WithdrawalStatus, PaymentMethod, ChatSession, ChatMessage, Proposal, ProposalStatus, WeeklySchedule, AvailabilityException, Review, SupportMessage, Portfolio, DisputeEvidence, Coupon, PickupPoint } from '../types';
+import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerStatus, OfferType, CartItem, Order, OrderStatus, Wallet, Notification, WithdrawalRequest, WithdrawalStatus, PaymentMethod, ChatSession, ChatMessage, Proposal, ProposalStatus, WeeklySchedule, AvailabilityException, Review, SupportMessage, Portfolio, DisputeEvidence, Coupon, PickupPoint } from '../types';
 import { generateSupportResponse } from './geminiService';
-import { initialProducers, initialClients, initialOffers, initialOrders, initialWallets, initialExternalRecords, initialPortfolios, defaultSchedule, initialCoupons, initialPickupPoints } from '../data/mockData';
+const defaultSchedule: WeeklySchedule = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
 import { BUSINESS_RULES } from '../data/config';
 import { apiFetch, apiUpload, setToken, clearToken, getToken } from './apiService';
 
@@ -25,7 +25,9 @@ interface StoreContextType {
   // Chat & Negotiation
   chats: ChatSession[];
   messages: ChatMessage[];
-  startNegotiation: (producerId: string, offerId: string) => string;
+  fetchChats: () => Promise<void>;
+  fetchMessages: (chatId: string) => Promise<void>;
+  startNegotiation: (producerId: string, offerId: string) => Promise<string>;
   sendMessage: (chatId: string, text: string, proposal?: Proposal) => void;
   respondToProposal: (chatId: string, messageId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', counterPrice?: number, counterQty?: number) => void;
 
@@ -109,20 +111,20 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // pendingRegistration kept in-memory for OTP verification flow
   const [pendingRegistration, setPendingRegistration] = useState<{ email: string, code: string, data: any, role: UserRole, password?: string } | null>(null);
 
-  // State — seeded with mock data as visual demo fallback
-  const [producers, setProducers] = useState<ProducerProfile[]>(initialProducers);
-  const [clients, setClients] = useState<ClientProfile[]>(initialClients);
-  const [offers, setOffers] = useState<Offer[]>(initialOffers);
+  // State
+  const [producers, setProducers] = useState<ProducerProfile[]>([]);
+  const [clients, setClients] = useState<ClientProfile[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [orders, setOrders] = useState<Order[]>(initialOrders);
-  const [wallets, setWallets] = useState<Record<string, Wallet>>(initialWallets);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [wallets, setWallets] = useState<Record<string, Wallet>>({});
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
-  const [externalRecords, _setExternalRecords] = useState<ExternalTransactionRecord[]>(initialExternalRecords);
+
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [portfolios, setPortfolios] = useState<Portfolio[]>(initialPortfolios);
-  const [coupons, _setCoupons] = useState<Coupon[]>(initialCoupons);
-  const [pickupPoints, setPickupPoints] = useState<PickupPoint[]>(initialPickupPoints);
+  const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
+  const [coupons, _setCoupons] = useState<Coupon[]>([]);
+  const [pickupPoints, setPickupPoints] = useState<PickupPoint[]>([]);
 
   // Chat State
   const [chats, setChats] = useState<ChatSession[]>([]);
@@ -146,31 +148,72 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     fetchData();
   }, []);
 
+  // ─── GLOBAL REALTIME POLLING (Notifications & Chats) ────────────────────────
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (user) {
+      interval = setInterval(async () => {
+        try {
+          await fetchChats();
+
+          // Poll notifications if the backend route exists. 
+          // If the backend doesn't have a dedicated GET /api/notifications yet, 
+          // this will safely catch and ignore it, relying purely on the chats.
+          const res = await apiFetch<Notification[]>('/api/notifications').catch(() => null);
+          if (res && Array.isArray(res)) {
+            setNotifications(res);
+          }
+        } catch (e) {
+          // ignore background polling errors 
+        }
+      }, 15000); // 15 seconds
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [user?.id]);
+
   // ─── DATA FETCHING ──────────────────────────────────────────────────────────
 
   const fetchData = async () => {
     try {
+      if (user) await fetchChats();
       const [resProducers, resClients, resOffers, resOrders, resPickup] = await Promise.all([
-        apiFetch<ProducerProfile[]>('/api/producers'),
-        apiFetch<ClientProfile[]>('/api/clients'),
-        apiFetch<Offer[]>('/api/offers'),
-        apiFetch<any[]>('/api/orders'),
-        apiFetch<PickupPoint[]>('/api/pickup-points'),
+        apiFetch<ProducerProfile[]>('/api/producers').catch(() => []),
+        apiFetch<ClientProfile[]>('/api/clients').catch(() => []),
+        apiFetch<Offer[]>('/api/offers').catch(() => []),
+        apiFetch<any[]>('/api/orders').catch(() => []),
+        apiFetch<PickupPoint[]>('/api/pickup-points').catch(() => []),
       ]);
-      setProducers(resProducers);
-      setClients(resClients);
-      setOffers(resOffers);
-      setOrders(resOrders.map((o: any) => ({
+      setProducers(Array.isArray(resProducers) ? resProducers.map(p => ({
+        ...p,
+        locations: p.locations || [],
+        certifications: p.certifications || [],
+        paymentMethods: p.paymentMethods || [],
+        referrals: p.referrals || [],
+        favorites: p.favorites || [],
+        productionTypes: p.productionTypes || [],
+        searchHistory: p.searchHistory || []
+      })) : []);
+      setClients(Array.isArray(resClients) ? resClients.map(c => ({
+        ...c,
+        locations: c.locations || [],
+        favorites: c.favorites || [],
+        referrals: c.referrals || [],
+        searchHistory: c.searchHistory || []
+      })) : []);
+      setOffers(Array.isArray(resOffers) ? resOffers : ((resOffers as any)?.data || []));
+      setOrders(Array.isArray(resOrders) ? resOrders.map((o: any) => ({
         ...o,
-        items: o.items.map((item: any) => ({
+        items: Array.isArray(o.items) ? o.items.map((item: any) => ({
           ...item,
           cartQuantity: item.quantity,
           id: item.offerId
-        }))
-      })));
-      setPickupPoints(resPickup);
+        })) : []
+      })) : []);
+      setPickupPoints(Array.isArray(resPickup) ? resPickup : []);
     } catch (error) {
-      console.warn('Could not fetch data from API — running in demo mode with mock data.', error);
+      console.error('Could not fetch data from API:', error);
     }
   };
 
@@ -184,9 +227,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setNotifications(prev => [newNote, ...prev]);
   };
 
-  const markNotificationsAsRead = () => {
+  const markNotificationsAsRead = async () => {
     if (!user) return;
-    setNotifications(prev => prev.map(n => n.userId === user.id ? { ...n, isRead: true } : n));
+    try {
+      await apiFetch('/api/notifications/read', { method: 'PATCH' });
+      setNotifications(prev => prev.map(n => n.userId === user.id ? { ...n, isRead: true } : n));
+    } catch (e) {
+      console.error('Failed to mark notifications as read:', e);
+    }
   };
 
 
@@ -195,13 +243,17 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const login = async (email: string, password: string): Promise<{ success: boolean; message: string }> => {
     try {
-      const data = await apiFetch<{ token: string; user: UserSession }>('/api/auth/login', {
+      const data = await apiFetch<{ token?: string; accessToken?: string; user: UserSession }>('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
-      setToken(data.token);
+      const jwtToken = data.accessToken || data.token;
+      if (jwtToken) {
+        setToken(jwtToken);
+      }
       setUser(data.user);
       localStorage.setItem('currentUser', JSON.stringify(data.user));
+      await fetchData(); // Fetch profiles, orders, etc., now that we have a valid token
       return { success: true, message: 'Logged in successfully.' };
     } catch (err: any) {
       return { success: false, message: err.message || 'Login failed.' };
@@ -288,11 +340,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(updatedProducer),
       });
       setProducers(prev => prev.map(p => p.id === saved.id ? saved : p));
-    } catch {
-      // Optimistic fallback
-      setProducers(prev => prev.map(p => p.id === updatedProducer.id ? updatedProducer : p));
+      addNotification(updatedProducer.id, 'Profile updated', 'SUCCESS');
+    } catch (error) {
+      console.error('Failed to update producer profile', error);
     }
-    addNotification(updatedProducer.id, 'Profile updated', 'SUCCESS');
   };
 
   const updateProducerAvailability = async (producerId: string, schedule: WeeklySchedule, exceptions: AvailabilityException[]) => {
@@ -301,11 +352,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         method: 'PUT',
         body: JSON.stringify({ schedule, exceptions }),
       });
-    } catch {
-      // Optimistic fallback
+      setProducers(prev => prev.map(p => p.id === producerId ? { ...p, availability: schedule, exceptions } : p));
+      addNotification(producerId, 'Availability updated', 'SUCCESS');
+    } catch (error) {
+      console.error('Failed to update availability', error);
     }
-    setProducers(prev => prev.map(p => p.id === producerId ? { ...p, availability: schedule, exceptions } : p));
-    addNotification(producerId, 'Availability updated', 'SUCCESS');
   };
 
   const validateProducer = async (id: string, status: ProducerStatus) => {
@@ -314,10 +365,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         method: 'PATCH',
         body: JSON.stringify({ status }),
       });
-    } catch {
-      // Optimistic fallback
+      setProducers(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+    } catch (error) {
+      console.error('Failed to validate producer', error);
     }
-    setProducers(prev => prev.map(p => p.id === id ? { ...p, status } : p));
   };
 
   const upgradeClientToProducer = (clientId: string, producerDetails: Partial<ProducerProfile>) => {
@@ -354,10 +405,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(updatedClient),
       });
       setClients(prev => prev.map(c => c.id === saved.id ? saved : c));
-    } catch {
-      setClients(prev => prev.map(c => c.id === updatedClient.id ? updatedClient : c));
+      addNotification(updatedClient.id, 'Profile updated', 'SUCCESS');
+    } catch (error) {
+      console.error('Failed to update client profile', error);
     }
-    addNotification(updatedClient.id, 'Profile updated', 'SUCCESS');
   };
 
   // ─── OFFERS ──────────────────────────────────────────────────────────────────
@@ -382,8 +433,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(updatedOffer),
       });
       setOffers(prev => prev.map(o => o.id === saved.id ? saved : o));
-    } catch {
-      setOffers(prev => prev.map(o => o.id === updatedOffer.id ? updatedOffer : o));
+    } catch (error) {
+      console.error('Failed to update offer', error);
     }
   };
 
@@ -425,11 +476,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       });
       setOrders(prev => [...prev, saved]);
       addNotification(user.id, `Order #${saved.id.substring(saved.id.length - 6).toUpperCase()} placed!`, 'SUCCESS');
-    } catch {
-      // Optimistic local add on failure
-      const localOrder: Order = { ...newOrder, id: `order-${Date.now()}` };
-      setOrders(prev => [...prev, localOrder]);
-      addNotification(user.id, `Order placed (offline). Will sync when connection is restored.`, 'WARNING');
+    } catch (error) {
+      console.error('Failed to place order:', error);
+      addNotification(user.id, 'Failed to place order. Please try again.', 'ERROR');
     }
     clearCart();
   };
@@ -437,10 +486,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const confirmOrder = async (orderId: string) => {
     try {
       await apiFetch(`/api/orders/${orderId}/confirm`, { method: 'PATCH' });
-    } catch { /* optimistic */ }
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CONFIRMED_AWAITING_PAYMENT } : o));
-    const order = orders.find(o => o.id === orderId);
-    if (order) addNotification(order.clientId, `Order #${order.id.substring(order.id.length - 6).toUpperCase()} confirmed.`, 'SUCCESS');
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CONFIRMED_AWAITING_PAYMENT } : o));
+      const order = orders.find(o => o.id === orderId);
+      if (order) addNotification(order.clientId, `Order #${order.id.substring(order.id.length - 6).toUpperCase()} confirmed.`, 'SUCCESS');
+    } catch (error) {
+      console.error('Failed to confirm order', error);
+    }
   };
 
   const rejectOrder = async (orderId: string) => {
@@ -451,9 +502,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
     try {
       await apiFetch(`/api/orders/${orderId}/reject`, { method: 'PATCH' });
-    } catch { /* optimistic */ }
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CANCELLED } : o));
-    addNotification(order.clientId, `Order #${orderId.substring(orderId.length - 6).toUpperCase()} cancelled by producer.`, 'WARNING');
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CANCELLED } : o));
+      addNotification(order.clientId, `Order #${orderId.substring(orderId.length - 6).toUpperCase()} cancelled by producer.`, 'WARNING');
+    } catch (error) {
+      console.error('Failed to reject order', error);
+    }
   };
 
   const cancelOrder = async (orderId: string) => {
@@ -464,9 +517,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
     try {
       await apiFetch(`/api/orders/${orderId}/cancel`, { method: 'PATCH' });
-    } catch { /* optimistic */ }
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CANCELLED } : o));
-    addNotification(order.producerId, `Order #${orderId.substring(orderId.length - 6).toUpperCase()} cancelled by client.`, 'WARNING');
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CANCELLED } : o));
+      addNotification(order.producerId, `Order #${orderId.substring(orderId.length - 6).toUpperCase()} cancelled by client.`, 'WARNING');
+    } catch (error) {
+      console.error('Failed to cancel order', error);
+    }
   };
 
   const payForOrder = async (orderId: string): Promise<{ success: boolean; error?: 'INSUFFICIENT_FUNDS' }> => {
@@ -480,40 +535,34 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (result.wallet) setWallets(prev => ({ ...prev, [user.id]: result.wallet! }));
       addNotification(user.id, 'Payment successful!', 'SUCCESS');
       return { success: true };
-    } catch {
-      // Fallback: local wallet deduction
-      const wallet = getWallet(user.id);
-      if (wallet.balance < order.totalAmount) return { success: false, error: 'INSUFFICIENT_FUNDS' };
-      const tx: WalletTransaction = { id: `txn-${Date.now()}`, userId: user.id, type: TransactionType.PAYMENT, amount: order.totalAmount, description: `Order #${order.id.substring(order.id.length - 6).toUpperCase()} (inc. fees)`, date: new Date().toISOString() };
-      setWallets(prev => ({ ...prev, [user.id]: { ...wallet, balance: wallet.balance - order.totalAmount, transactions: [tx, ...wallet.transactions] } }));
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.PAID_IN_PREPARATION } : o));
-      addNotification(user.id, 'Payment successful!', 'SUCCESS');
-      return { success: true };
+    } catch (error) {
+      console.error('Payment failed', error);
+      return { success: false };
     }
   };
 
   const startDelivery = async (id: string) => {
     try {
       await apiFetch(`/api/orders/${id}/deliver`, { method: 'PATCH' });
-    } catch { /* optimistic */ }
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: OrderStatus.IN_TRANSIT } : o));
-    const order = orders.find(o => o.id === id);
-    if (order) addNotification(order.clientId, 'Order in transit', 'INFO');
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, status: OrderStatus.IN_TRANSIT } : o));
+      const order = orders.find(o => o.id === id);
+      if (order) addNotification(order.clientId, 'Order in transit', 'INFO');
+    } catch (error) {
+      console.error('Failed to start delivery', error);
+    }
   };
 
   const confirmReceipt = async (id: string) => {
     try {
       await apiFetch(`/api/orders/${id}/confirm-receipt`, { method: 'PATCH' });
-    } catch { /* optimistic */ }
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: OrderStatus.DELIVERED } : o));
-    const order = orders.find(o => o.id === id);
-    if (order) {
-      const commission = order.subtotal * BUSINESS_RULES.PLATFORM_COMMISSION_PERCENT;
-      const producerEarnings = order.subtotal - commission;
-      const producerWallet = getWallet(order.producerId);
-      const tx: WalletTransaction = { id: `tx-earn-${Date.now()}`, userId: order.producerId, type: TransactionType.RECEIVED, amount: producerEarnings, description: `Earnings Order #${order.id.substring(order.id.length - 6).toUpperCase()} (less commission)`, date: new Date().toISOString() };
-      setWallets(prev => ({ ...prev, [order.producerId]: { ...producerWallet, balance: producerWallet.balance + producerEarnings, transactions: [tx, ...producerWallet.transactions] } }));
-      addNotification(order.producerId, 'Order delivered. Funds released to wallet.', 'SUCCESS');
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, status: OrderStatus.DELIVERED } : o));
+      const order = orders.find(o => o.id === id);
+      if (order) {
+        // Assume backend updates wallet, so we might need to fetch updated wallet. Just show notification:
+        addNotification(order.producerId, 'Order delivered. Funds released to wallet.', 'SUCCESS');
+      }
+    } catch (error) {
+      console.error('Failed to confirm receipt', error);
     }
   };
 
@@ -526,13 +575,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       const result = await apiUpload<{ evidence: DisputeEvidence[] }>(`/api/orders/${orderId}/dispute`, formData);
       evidence = result.evidence;
-    } catch {
-      // Fallback: local blob URLs
-      evidence = files.map(f => ({ id: `ev-${Date.now()}-${Math.random()}`, uploaderId: user!.id, fileName: f.name, fileUrl: URL.createObjectURL(f), fileType: f.type.includes('image') ? 'IMAGE' as const : 'DOCUMENT' as const, uploadedAt: new Date().toISOString() }));
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.DISPUTE, disputeReason: reason, disputeEvidence: evidence } : o));
+      const order = orders.find(o => o.id === orderId);
+      if (order) addNotification(order.producerId, 'Dispute opened', 'WARNING');
+    } catch (error) {
+      console.error('Failed to report problem', error);
+      addNotification(user!.id, 'Failed to report problem. Please try again.', 'ERROR');
     }
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.DISPUTE, disputeReason: reason, disputeEvidence: evidence } : o));
-    const order = orders.find(o => o.id === orderId);
-    if (order) addNotification(order.producerId, 'Dispute opened', 'WARNING');
   };
 
   const addDisputeEvidence = (orderId: string, files: File[]) => {
@@ -554,11 +603,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       });
       setReviews(prev => [...prev, saved]);
       setOrders(prev => prev.map(o => o.id === data.orderId ? (data.reviewerId === o.clientId ? { ...o, clientReviewed: true } : { ...o, producerReviewed: true }) : o));
-    } catch {
-      // Optimistic fallback
-      const review: Review = { ...data, id: `rev-${Date.now()}`, createdAt: new Date().toISOString() };
-      setReviews(prev => [...prev, review]);
-      setOrders(prev => prev.map(o => o.id === data.orderId ? (data.reviewerId === o.clientId ? { ...o, clientReviewed: true } : { ...o, producerReviewed: true }) : o));
+    } catch (error) {
+      console.error('Failed to submit review', error);
     }
   };
 
@@ -570,7 +616,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // ─── WALLET ──────────────────────────────────────────────────────────────────
 
   const getWallet = (userId: string): Wallet => {
-    if (!wallets[userId]) setWallets(prev => ({ ...prev, [userId]: { userId, balance: 0, transactions: [] } }));
     return wallets[userId] || { userId, balance: 0, transactions: [] };
   };
 
@@ -583,13 +628,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       });
       if (result.wallet) setWallets(prev => ({ ...prev, [user.id]: result.wallet }));
       return { success: result.success, message: result.message };
-    } catch {
-      // DEMO FALLBACK: validate against mock external records
-      const recIdx = externalRecords.findIndex(r => r.referenceId === refId && !r.isUsed && r.amount === amount && r.provider === provider);
-      if (recIdx === -1) return { success: false, message: 'Invalid transaction reference (demo mode)' };
-      const tx: WalletTransaction = { id: `tx-${Date.now()}`, userId: user.id, type: TransactionType.DEPOSIT, amount, description: `Top up ${provider}`, date: new Date().toISOString(), reference: refId };
-      setWallets(prev => ({ ...prev, [user.id]: { ...prev[user.id], balance: (prev[user.id]?.balance || 0) + amount, transactions: [tx, ...(prev[user.id]?.transactions || [])] } }));
-      return { success: true, message: 'Funded (demo mode)' };
+    } catch (error: any) {
+      console.error('Failed to fund wallet', error);
+      return { success: false, message: error.message || 'Funding failed' };
     }
   };
 
@@ -602,13 +643,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       });
       setWithdrawalRequests(prev => [...prev, { id: `w-${Date.now()}`, userId: user.id, amount, paymentMethod: method, status: WithdrawalStatus.PENDING, requestDate: new Date().toISOString() }]);
       return { success: result.success, message: result.message };
-    } catch {
-      // DEMO FALLBACK
-      const wallet = getWallet(user.id);
-      const pending = withdrawalRequests.filter(r => r.userId === user.id && r.status === WithdrawalStatus.PENDING).reduce((a, b) => a + b.amount, 0);
-      if (wallet.balance - pending < amount) return { success: false, message: 'Insufficient available funds' };
-      setWithdrawalRequests(prev => [...prev, { id: `w-${Date.now()}`, userId: user.id, amount, paymentMethod: method, status: WithdrawalStatus.PENDING, requestDate: new Date().toISOString() }]);
-      return { success: true, message: 'Requested (demo mode)' };
+    } catch (error: any) {
+      console.error('Failed to request withdrawal', error);
+      return { success: false, message: error.message || 'Withdrawal request failed' };
     }
   };
 
@@ -623,8 +660,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(data),
       });
       setPortfolios(prev => [...prev, saved]);
-    } catch {
-      setPortfolios(prev => [...prev, { ...data, id: `port-${Date.now()}`, createdAt: new Date().toISOString() }]);
+    } catch (error) {
+      console.error('Failed to add portfolio', error);
     }
   };
 
@@ -635,16 +672,18 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(updated),
       });
       setPortfolios(prev => prev.map(p => p.id === saved.id ? saved : p));
-    } catch {
-      setPortfolios(prev => prev.map(p => p.id === updated.id ? updated : p));
+    } catch (error) {
+      console.error('Failed to update portfolio', error);
     }
   };
 
   const deletePortfolio = async (id: string) => {
     try {
       await apiFetch(`/api/portfolios/${id}`, { method: 'DELETE' });
-    } catch { /* optimistic */ }
-    setPortfolios(prev => prev.filter(p => p.id !== id));
+      setPortfolios(prev => prev.filter(p => p.id !== id));
+    } catch (error) {
+      console.error('Failed to delete portfolio', error);
+    }
   };
 
   // ─── AVAILABILITY ─────────────────────────────────────────────────────────────
@@ -781,23 +820,114 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── CHAT & NEGOTIATION ───────────────────────────────────────────────────────
 
-  const startNegotiation = (pid: string, oid: string) => {
-    if (!user) return '';
-    const existing = chats.find(c => c.participants.includes(user.id) && c.participants.includes(pid) && c.offerId === oid);
-    if (existing) return existing.id;
-    const id = `chat-${Date.now()}`;
-    setChats(prev => [...prev, { id, participants: [user.id, pid], offerId: oid, lastMessage: 'Started', lastMessageAt: new Date().toISOString(), unreadCounts: {} }]);
-    return id;
+  const fetchChats = async () => {
+    if (!user) return;
+    try {
+      const res = await apiFetch<ChatSession[]>('/api/chat/sessions');
+      setChats(res);
+    } catch (e) {
+      console.error('Failed to fetch chats:', e);
+    }
   };
 
-  const sendMessage = (chatId: string, text: string, proposal?: any) => {
+  const fetchMessages = async (chatId: string) => {
     if (!user) return;
-    if (!proposal && !text.startsWith('Counter') && !text.startsWith('Formal') && (text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/) || text.match(/\b6\d{8}\b/))) {
+    try {
+      const res = await apiFetch<any[]>(`/api/chat/sessions/${chatId}/messages`);
+
+      const mappedMessages: ChatMessage[] = res.map(m => ({
+        id: m.id,
+        chatId: m.chatSessionId || chatId,
+        senderId: m.senderId,
+        text: m.text,
+        systemMessage: m.systemMessage,
+        createdAt: m.createdAt,
+        proposal: m.proposalOfferId ? {
+          offerId: m.proposalOfferId,
+          pricePerUnit: m.proposalPricePerUnit,
+          quantity: m.proposalQuantity,
+          status: m.proposalStatus as ProposalStatus || ProposalStatus.PENDING
+        } : undefined
+      }));
+
+      // Merge with existing messages, preventing duplicates based on ID
+      setMessages(prev => {
+        const existingIds = new Set(prev.map(msg => msg.id));
+        const newMessages = mappedMessages.filter(msg => !existingIds.has(msg.id));
+        return [...prev, ...newMessages];
+      });
+    } catch (e) {
+      console.error('Failed to fetch messages:', e);
+    }
+  };
+
+  const startNegotiation = async (pid: string, oid: string) => {
+    if (!user) return '';
+    const existing = chats.find(c => c.participantIds.includes(user.id) && c.participantIds.includes(pid) && c.offerId === oid);
+    if (existing) return existing.id;
+
+    try {
+      const res = await apiFetch<ChatSession>('/api/chat/sessions', {
+        method: 'POST',
+        body: JSON.stringify({ participantIds: [pid], offerId: oid })
+      });
+      setChats(prev => [...prev, res]);
+      return res.id;
+    } catch (e) {
+      console.error('Failed to create chat:', e);
+      // Fallback
+      const id = `chat-${Date.now()}`;
+      setChats(prev => [...prev, { id, participantIds: [user.id, pid], offerId: oid, lastMessage: 'Started', lastMessageAt: new Date().toISOString(), unreadCounts: {} }]);
+      return id;
+    }
+  };
+
+  const sendMessage = async (chatId: string, text: string, proposal?: any) => {
+    if (!user) return;
+    if (!proposal && !text.startsWith('Counter') && !text.startsWith('Formal') && (text.match(/[a-zA-Z0-9._%+-]+@?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/) || text.match(/\b6\d{8}\b/))) {
       addNotification(user.id, 'Forbidden: No contact info allowed', 'ERROR'); return;
     }
-    const msg = { id: `m-${Date.now()}`, chatId, senderId: user.id, text, proposal, createdAt: new Date().toISOString() };
-    setMessages(prev => [...prev, msg]);
-    setChats(prev => prev.map(c => c.id === chatId ? { ...c, lastMessage: text, lastMessageAt: msg.createdAt } : c));
+
+    try {
+      const body: any = { text };
+      if (proposal) {
+        body.proposalOfferId = proposal.offerId;
+        body.proposalPricePerUnit = proposal.pricePerUnit;
+        body.proposalQuantity = proposal.quantity;
+      }
+
+      const res = await apiFetch<any>(`/api/chat/sessions/${chatId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+
+      const mappedMsg: ChatMessage = {
+        id: res.id,
+        chatId: res.chatSessionId || chatId,
+        senderId: res.senderId,
+        text: res.text,
+        systemMessage: res.systemMessage,
+        createdAt: res.createdAt,
+        proposal: res.proposalOfferId ? {
+          offerId: res.proposalOfferId,
+          pricePerUnit: res.proposalPricePerUnit,
+          quantity: res.proposalQuantity,
+          status: res.proposalStatus as ProposalStatus || ProposalStatus.PENDING
+        } : undefined
+      };
+
+      // Optimistic updates for new messages
+      setMessages(prev => [...prev, mappedMsg]);
+      setChats(prev => prev.map(c => c.id === chatId ? { ...c, lastMessage: text, lastMessageAt: res.createdAt } : c));
+    } catch (e) {
+      console.error('Failed to send message:', e);
+      addNotification(user.id, 'Failed to send message', 'ERROR');
+
+      // Keep old explicit fallback just in case the backend crashes during testing
+      const msg = { id: `m-${Date.now()}`, chatId, senderId: user.id, text, proposal, createdAt: new Date().toISOString() };
+      setMessages(prev => [...prev, msg]);
+      setChats(prev => prev.map(c => c.id === chatId ? { ...c, lastMessage: text, lastMessageAt: msg.createdAt } : c));
+    }
   };
 
   const respondToProposal = (chatId: string, msgId: string, action: any, price?: number, qty?: number) => {
@@ -807,7 +937,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const chat = chats.find(c => c.id === chatId);
       const original = messages.find(m => m.id === msgId);
       if (chat && original?.proposal) {
-        const client = chat.participants.find(p => p !== user.id);
+        const client = chat.participantIds.find(p => p !== user.id);
         if (client) {
           const offerOrigin = offers.find(o => o.id === original.proposal!.offerId);
           if (offerOrigin) {
@@ -824,7 +954,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   return (
     <StoreContext.Provider value={{
       user, pendingRegistration, producers, clients, offers, cart, orders, wallets, notifications, withdrawalRequests, reviews, portfolios, coupons, pickupPoints,
-      chats, messages, startNegotiation, sendMessage, respondToProposal,
+      chats,
+      messages,
+      fetchChats,
+      fetchMessages,
+      startNegotiation,
+      sendMessage, respondToProposal,
       login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, createOffer, updateOffer, getProducerOffers, getOfferById,
       addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, confirmReceipt, reportProblem, addDisputeEvidence, revealContactInfo,
       getWallet, fundWallet, requestWithdrawal, markNotificationsAsRead, getAvailableSlots, submitReview, getAverageRating,

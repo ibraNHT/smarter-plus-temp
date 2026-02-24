@@ -67,7 +67,7 @@ export const ProductDetails: React.FC = () => {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center">
         <h2 className="text-2xl font-bold text-gray-900">Product Not Found</h2>
-        <Link to="/" className="mt-4 text-primary-600 hover:underline">Return Home</Link>
+        <button onClick={() => navigate(-1)} className="mt-4 text-primary-600 hover:underline">Go Back</button>
       </div>
     );
   }
@@ -78,7 +78,7 @@ export const ProductDetails: React.FC = () => {
         <Lock className="h-12 w-12 text-red-500 mb-4" />
         <h2 className="text-2xl font-bold text-gray-900">Access Denied</h2>
         <p className="text-gray-500">This is a personalized offer reserved for another client.</p>
-        <Link to="/" className="mt-4 text-primary-600 hover:underline">Return Home</Link>
+        <button onClick={() => navigate(-1)} className="mt-4 text-primary-600 hover:underline">Go Back</button>
       </div>
     );
   }
@@ -123,7 +123,7 @@ export const ProductDetails: React.FC = () => {
     }
   };
 
-  const handleNegotiate = () => {
+  const handleNegotiate = async () => {
     if (!user) {
       const confirmLogin = window.confirm("You must be logged in to negotiate prices.");
       if (confirmLogin) {
@@ -131,7 +131,8 @@ export const ProductDetails: React.FC = () => {
       }
       return;
     }
-    const chatId = startNegotiation(offer.producerId, offer.id);
+    const producerUserId = producer?.userId || producer?.id || offer.producerId;
+    const chatId = await startNegotiation(producerUserId, offer.id);
     navigate(`/messages/${chatId}`);
   };
 

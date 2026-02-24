@@ -318,7 +318,10 @@ export const ProducerMarket: React.FC = () => {
       <div className="bg-primary-900 text-white pt-8 pb-16 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => {
+              if (window.history.length > 2) navigate(-1);
+              else navigate('/producer/dashboard');
+            }}
             className="absolute top-6 left-4 md:left-8 flex items-center text-primary-200 hover:text-white transition-colors"
           >
             <ArrowLeft className="h-5 w-5 mr-1" /> Back

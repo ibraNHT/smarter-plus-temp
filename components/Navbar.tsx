@@ -7,7 +7,7 @@ import { UserRole } from '../types';
 import { LogOut, Sprout, ShoppingBasket, Tractor, ShoppingCart, Globe, Bell, X, User, MessageCircle } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
-  const { user, logout, cart, notifications, markNotificationsAsRead } = useStore();
+  const { user, producers, clients, logout, cart, notifications, markNotificationsAsRead } = useStore();
   const { t, language, setLanguage } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -22,6 +22,25 @@ export const Navbar: React.FC = () => {
 
   const toggleLanguage = () => {
     setLanguage(language === 'en' ? 'fr' : 'en');
+  };
+
+  const getUserDisplayName = () => {
+    if (!user) return '';
+    if (user.role === UserRole.PRODUCER) {
+      const p = producers.find(x => x.userId === user.id || x.id === user.producerId);
+      if (p) {
+        if (p.name) return p.name;
+        if (p.firstName) return `${p.firstName} ${p.lastName || ''}`.trim();
+      }
+    }
+    if (user.role === UserRole.CLIENT) {
+      const c = clients.find(x => x.userId === user.id);
+      if (c) {
+        if (c.name) return c.name;
+        if (c.firstName) return `${c.firstName} ${c.lastName || ''}`.trim();
+      }
+    }
+    return user.name;
   };
 
   // Close notifications when clicking outside
@@ -56,12 +75,18 @@ export const Navbar: React.FC = () => {
   const isActive = (path: string) => location.pathname === path ? 'text-primary-600 font-semibold border-b-2 border-primary-600' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50';
   const linkClass = (path: string) => `px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150 ${isActive(path)}`;
 
+  const getHomeLink = () => {
+    if (!user) return '/';
+    if (user.role === UserRole.PRODUCER) return '/producer/dashboard';
+    return '/market/producers';
+  };
+
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
-            <Link to="/" className="flex-shrink-0 flex items-center cursor-pointer">
+            <Link to={getHomeLink()} className="flex-shrink-0 flex items-center cursor-pointer">
               <Sprout className="h-8 w-8 text-primary-600" />
               <span className="ml-2 text-xl font-bold text-gray-900">AgriMarket Connect</span>
             </Link>
@@ -142,7 +167,13 @@ export const Navbar: React.FC = () => {
                           <ul>
                             {myNotifications.map((notif) => (
                               <li key={notif.id} className={`px-4 py-3 border-b border-gray-100 text-sm ${notif.isRead ? 'bg-white' : 'bg-blue-50'}`}>
-                                <div onClick={() => { if (notif.link) navigate(notif.link); setShowNotifications(false); }} className={`${notif.link ? 'cursor-pointer' : ''}`}>
+                                <div onClick={() => {
+                                  if (notif.link) {
+                                    const dest = notif.link.startsWith('/chat/') ? notif.link.replace('/chat/', '/messages/') : notif.link;
+                                    navigate(dest);
+                                  }
+                                  setShowNotifications(false);
+                                }} className={`${notif.link ? 'cursor-pointer' : ''}`}>
                                   <p className={`text-gray-800 ${!notif.isRead && 'font-semibold'}`}>{notif.message}</p>
                                   <p className="text-xs text-gray-400 mt-1">{new Date(notif.createdAt).toLocaleString()}</p>
                                 </div>
@@ -168,7 +199,7 @@ export const Navbar: React.FC = () => {
                 )}
 
                 <div className="hidden md:flex flex-col items-end">
-                  <span className="text-sm font-medium text-gray-900">{user.name}</span>
+                  <span className="text-sm font-medium text-gray-900">{getUserDisplayName()}</span>
                   <span className="text-xs text-gray-500 px-2 py-0.5 rounded-full bg-gray-100">
                     {user.role}
                   </span>

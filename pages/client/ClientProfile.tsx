@@ -56,8 +56,9 @@ export const ClientProfile: React.FC = () => {
 
    const [showPasswordModal, setShowPasswordModal] = useState(false);
 
-   const currentClient = clients.find(c => c.id === user?.id);
+   const currentClient = clients.find(c => c.userId === user?.id || c.id === user?.id);
    const wallet = user ? getWallet(user.id) : null;
+   const copyReferralLink = () => { if (!currentClient?.referralCode) return; const link = `${window.location.origin}/#/register/client?ref=${currentClient.referralCode}`; navigator.clipboard.writeText(link); alert("Referral link copied!"); };
 
    const myReviews = user ? reviews.filter(r => r.targetId === user.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : [];
    const myAverageRating = user ? getAverageRating(user.id) : 0;
@@ -393,6 +394,40 @@ export const ClientProfile: React.FC = () => {
                            ))}
                         </div>
                      )}
+                  </div>
+               )}
+
+               {activeTab === 'referrals' && currentClient && (
+                  <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-6">
+                     <div className="border-b border-gray-200 pb-4 mb-4">
+                        <h3 className="text-lg font-medium text-gray-900">Referrals</h3>
+                     </div>
+                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                        <p className="text-sm text-blue-800 mb-2 font-bold">Your Referral Link</p>
+                        <div className="flex gap-2">
+                           <input type="text" readOnly value={`${window.location.origin}/#/register/client?ref=${currentClient.referralCode}`} className="block w-full border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-700" />
+                           <button onClick={copyReferralLink} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center">
+                              Copy
+                           </button>
+                        </div>
+                        <p className="text-xs text-blue-600 mt-2">Share this link with friends to invite them to the platform.</p>
+                     </div>
+                     <div className="border-t border-gray-200 pt-4">
+                        <div className="flex items-center justify-between mb-4">
+                           <h4 className="text-sm font-bold text-gray-900">Your Impact</h4>
+                           <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">{currentClient.referrals.length} Referrals</span>
+                        </div>
+                        {currentClient.referrals.length === 0 ? (
+                           <div className="text-center py-8 text-gray-500">
+                              <Users className="h-12 w-12 mx-auto text-gray-300 mb-2" />
+                              <p>You haven't referred anyone yet.</p>
+                           </div>
+                        ) : (
+                           <div className="space-y-2">
+                              <p className="text-sm text-gray-600">You have successfully referred {currentClient.referrals.length} users.</p>
+                           </div>
+                        )}
+                     </div>
                   </div>
                )}
 
