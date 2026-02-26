@@ -22,6 +22,9 @@ interface StoreContextType {
   coupons: Coupon[];
   pickupPoints: PickupPoint[];
 
+  guestEmail: string | null;
+  setGuestEmail: (email: string | null) => void;
+
   // Chat & Negotiation
   chats: ChatSession[];
   messages: ChatMessage[];
@@ -110,6 +113,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [user, setUser] = useState<UserSession | null>(null);
   // pendingRegistration kept in-memory for OTP verification flow
   const [pendingRegistration, setPendingRegistration] = useState<{ email: string, code: string, data: any, role: UserRole, password?: string } | null>(null);
+  const [guestEmail, setGuestEmail] = useState<string | null>(null);
 
   // State
   const [producers, setProducers] = useState<ProducerProfile[]>([]);
@@ -145,8 +149,36 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (savedUser) {
       setUser(JSON.parse(savedUser));
     }
+    const savedCart = localStorage.getItem('cart');
+    if (savedCart) {
+      try { setCart(JSON.parse(savedCart)); } catch (e) { }
+    }
+    const savedGuestEmail = localStorage.getItem('guestEmail');
+    if (savedGuestEmail) setGuestEmail(savedGuestEmail);
     fetchData();
   }, []);
+
+  // ─── DEBOUNCED CART SYNC ───────────────────────────────────────────────────
+  useEffect(() => {
+    localStorage.setItem('cart', JSON.stringify(cart));
+    if (guestEmail) localStorage.setItem('guestEmail', guestEmail);
+    else localStorage.removeItem('guestEmail');
+
+    if ((user || guestEmail) && cart.length > 0) {
+      const timer = setTimeout(() => {
+        apiFetch('/sync-cart', {
+          method: 'POST',
+          body: JSON.stringify({
+            items: cart,
+            userId: user?.id,
+            guestEmail: !user ? guestEmail : undefined
+          })
+        }).catch(err => console.error('Failed to sync cart:', err));
+      }, 750);
+      return () => clearTimeout(timer);
+    }
+  }, [cart, user, guestEmail]);
+
 
   // ─── GLOBAL REALTIME POLLING (Notifications & Chats) ────────────────────────
   useEffect(() => {
@@ -253,6 +285,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }
       setUser(data.user);
       localStorage.setItem('currentUser', JSON.stringify(data.user));
+
+      // Merge offline/localStorage cart with backend on login
+      const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
+      if (localCart.length > 0) {
+        apiFetch('/sync-cart', {
+          method: 'POST',
+          body: JSON.stringify({ items: localCart, userId: data.user.id })
+        }).catch(() => { });
+      }
+
       await fetchData(); // Fetch profiles, orders, etc., now that we have a valid token
       return { success: true, message: 'Logged in successfully.' };
     } catch (err: any) {
@@ -459,15 +501,19 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // ─── ORDERS ──────────────────────────────────────────────────────────────────
 
   const placeOrder = async (couponCode?: string, discountAmount: number = 0, deliveryDate?: string, deliveryMethod: 'HOME' | 'PICKUP' = 'HOME', pickupPointId?: string) => {
-    if (cart.length === 0 || !user) return;
+    if (cart.length === 0 || (!user && !guestEmail)) return;
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
     const serviceFee = subtotal * BUSINESS_RULES.SERVICE_FEE_PERCENT;
     const totalAmount = Math.max(0, subtotal + serviceFee - discountAmount);
-    const newOrder: Omit<Order, 'id'> = {
-      clientId: user.id, producerId: cart[0].producerId, items: [...cart],
+    const clientId = user ? user.id : 'GUEST';
+
+    // Additional parameters like guestEmail would be added to the backend schema, but let's pass it anyway
+    const newOrder: Omit<Order, 'id'> & { guestEmail?: string } = {
+      clientId, producerId: cart[0].producerId, items: [...cart],
       subtotal, serviceFee, totalAmount, status: OrderStatus.PENDING_VALIDATION, createdAt: new Date().toISOString(),
       clientReviewed: false, producerReviewed: false, contactRevealed: false,
-      appliedCoupon: couponCode, discountAmount, requestedDeliveryDate: deliveryDate, deliveryMethod, pickupPointId
+      appliedCoupon: couponCode, discountAmount, requestedDeliveryDate: deliveryDate, deliveryMethod, pickupPointId,
+      guestEmail: !user && guestEmail ? guestEmail : undefined
     };
     try {
       const saved = await apiFetch<Order>('/api/orders', {
@@ -475,10 +521,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(newOrder),
       });
       setOrders(prev => [...prev, saved]);
-      addNotification(user.id, `Order #${saved.id.substring(saved.id.length - 6).toUpperCase()} placed!`, 'SUCCESS');
+      if (user) addNotification(user.id, `Order #${saved.id.substring(saved.id.length - 6).toUpperCase()} placed!`, 'SUCCESS');
     } catch (error) {
       console.error('Failed to place order:', error);
-      addNotification(user.id, 'Failed to place order. Please try again.', 'ERROR');
+      if (user) addNotification(user.id, 'Failed to place order. Please try again.', 'ERROR');
     }
     clearCart();
   };
@@ -953,7 +999,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   return (
     <StoreContext.Provider value={{
-      user, pendingRegistration, producers, clients, offers, cart, orders, wallets, notifications, withdrawalRequests, reviews, portfolios, coupons, pickupPoints,
+      user, pendingRegistration, guestEmail, setGuestEmail, producers, clients, offers, cart, orders, wallets, notifications, withdrawalRequests, reviews, portfolios, coupons, pickupPoints,
       chats,
       messages,
       fetchChats,

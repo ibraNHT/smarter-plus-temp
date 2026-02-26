@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { Trash2, ArrowLeft, ShoppingBag, CheckCircle, Calendar, X, MapPin, Heart, Tag, ChevronLeft, ChevronRight, Truck, Home } from 'lucide-react';
@@ -8,10 +8,13 @@ import { SEO } from '../../components/SEO';
 import { OfferType, MarketType } from '../../types';
 
 export const ShoppingCart: React.FC = () => {
-  const { cart, removeFromCart, placeOrder, user, clearCart, clients, moveToFavorites, validateCoupon, pickupPoints } = useStore();
+  const { cart, removeFromCart, placeOrder, user, clearCart, clients, moveToFavorites, validateCoupon, pickupPoints, guestEmail, setGuestEmail } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [showRecap, setShowRecap] = useState(false);
+  const [showGuestEmailModal, setShowGuestEmailModal] = useState(false);
+  const [tempEmail, setTempEmail] = useState('');
 
   // Coupon State
   const [couponCode, setCouponCode] = useState('');
@@ -103,6 +106,14 @@ export const ShoppingCart: React.FC = () => {
     };
   }, []);
 
+  // Email Deep Link Handling
+  useEffect(() => {
+    if (searchParams.get('returnCart') === 'true') {
+      // Logic could automatically highlight cart or show a specific success message.
+      // Already on page, no further action strictly needed besides routing landing here.
+    }
+  }, [searchParams]);
+
   const handleApplyCoupon = () => {
     setCouponError('');
     if (!couponCode.trim()) return;
@@ -126,9 +137,8 @@ export const ShoppingCart: React.FC = () => {
   };
 
   const handleInitialPlaceOrder = () => {
-    if (!user) {
-      alert(t('cart.loginRequired'));
-      navigate('/login');
+    if (!user && !guestEmail) {
+      setShowGuestEmailModal(true);
       return;
     }
 
@@ -154,6 +164,20 @@ export const ShoppingCart: React.FC = () => {
     placeOrder(appliedCoupon || undefined, discountAmount, isAtiOrder ? deliveryDate : undefined, deliveryMethod, selectedPickupPointId);
     setShowRecap(false);
     navigate('/');
+  };
+
+  const handleGuestEmailSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (tempEmail.includes('@')) {
+      setGuestEmail(tempEmail);
+      setShowGuestEmailModal(false);
+      // Proceed to checkout if valid
+      if (canPlaceOrder) {
+        setShowRecap(true);
+      } else {
+        alert("Email saved! Please finalize your delivery method above before placing the order.");
+      }
+    }
   };
 
   if (cart.length === 0) {
@@ -586,6 +610,45 @@ export const ShoppingCart: React.FC = () => {
                   {t('cart.validate')}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Guest Email Modal */}
+      {showGuestEmailModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowGuestEmailModal(false)}></div>
+            <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full sm:p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Checkout as Guest</h3>
+                <button onClick={() => setShowGuestEmailModal(false)}>
+                  <X className="h-5 w-5 text-gray-400" />
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">Please provide an email address so we can send your order details and track your cart.</p>
+              <form onSubmit={handleGuestEmailSubmit}>
+                <div className="mb-4">
+                  <label htmlFor="tempEmail" className="block text-sm font-medium text-gray-700">Email Address</label>
+                  <input
+                    type="email"
+                    id="tempEmail"
+                    required
+                    value={tempEmail}
+                    onChange={(e) => setTempEmail(e.target.value)}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    placeholder="you@example.com"
+                  />
+                </div>
+                <div className="flex justify-end gap-3">
+                  <button type="button" onClick={() => setShowGuestEmailModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">Cancel</button>
+                  <button type="submit" className="px-4 py-2 bg-primary-600 text-white rounded-md text-sm font-bold hover:bg-primary-700">Continue to Checkout</button>
+                </div>
+                <div className="mt-4 pt-4 border-t border-gray-200 text-center">
+                  <p className="text-sm text-gray-500">Already have an account? <Link to="/login" className="text-primary-600 font-medium hover:underline">Log in</Link></p>
+                </div>
+              </form>
             </div>
           </div>
         </div>
