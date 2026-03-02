@@ -10,5 +10,6 @@ Disallow: /cart
 Disallow: /checkout
 Disallow: /api/
 
-# Specify the sitemap location
+# Sitemaps for both domains
+Sitemap: https://acheteici.com/sitemap.xml
 Sitemap: https://agrimarketconnect.shop/sitemap.xml

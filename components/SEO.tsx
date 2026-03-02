@@ -13,23 +13,33 @@ interface SEOProps {
 }
 
 const DEFAULT_DESCRIPTION = 'AgriMarket Connect brings you high-quality agricultural products directly from trusted local producers.';
-const DEFAULT_IMAGE = 'https://agrimarketconnect.shop/og-image.jpg'; // Placeholder for default social image
 const SITE_NAME = 'AgriMarket Connect';
-const DOMAIN = 'https://agrimarketconnect.shop';
+const SUPPORTED_DOMAINS = ['https://acheteici.com', 'https://agrimarketconnect.shop'] as const;
+
+/** Base URL for the current domain (supports both acheteici.com and agrimarketconnect.shop). */
+function getBaseUrl(): string {
+    if (typeof window !== 'undefined' && window.location?.origin) {
+        return window.location.origin;
+    }
+    return SUPPORTED_DOMAINS[0];
+}
 
 export const SEO: React.FC<SEOProps> = ({
     title,
     description = DEFAULT_DESCRIPTION,
     type = 'website',
-    imageUrl = DEFAULT_IMAGE,
+    imageUrl,
     url,
     noindex = false,
     canonicalUrl,
     schema,
 }) => {
+    const baseUrl = getBaseUrl();
+    const defaultImage = `${baseUrl}/og-image.jpg`;
     const fullTitle = `${title} | ${SITE_NAME}`;
-    const fullUrl = url ? `${DOMAIN}${url}` : DOMAIN;
-    const canonical = canonicalUrl ? `${DOMAIN}${canonicalUrl}` : fullUrl;
+    const fullUrl = url ? `${baseUrl}${url}` : baseUrl;
+    const canonical = canonicalUrl ? `${baseUrl}${canonicalUrl}` : fullUrl;
+    const resolvedImage = imageUrl ?? defaultImage;
 
     return (
         <Helmet>
@@ -50,7 +60,7 @@ export const SEO: React.FC<SEOProps> = ({
             <meta property="og:url" content={fullUrl} />
             <meta property="og:title" content={fullTitle} />
             <meta property="og:description" content={description} />
-            <meta property="og:image" content={imageUrl} />
+            <meta property="og:image" content={resolvedImage} />
             <meta property="og:site_name" content={SITE_NAME} />
 
             {/* Twitter */}
@@ -58,7 +68,7 @@ export const SEO: React.FC<SEOProps> = ({
             <meta name="twitter:url" content={fullUrl} />
             <meta name="twitter:title" content={fullTitle} />
             <meta name="twitter:description" content={description} />
-            <meta name="twitter:image" content={imageUrl} />
+            <meta name="twitter:image" content={resolvedImage} />
 
             {/* JSON-LD Schema (Rich Snippets) */}
             {schema && (
