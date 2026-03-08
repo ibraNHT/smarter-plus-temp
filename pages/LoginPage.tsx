@@ -3,7 +3,37 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useStore } from '../services/storeContext';
 import { useTranslation } from '../services/i18nContext';
-import { Sprout, Lock, Mail, X } from 'lucide-react';
+import { Sprout, Lock, Mail, X, Phone } from 'lucide-react';
+
+const AFRICA_COUNTRY_CODES = [
+  // Central Africa
+  { code: '+237', country: 'Cameroon' },
+  { code: '+236', country: 'Central African Rep' },
+  { code: '+235', country: 'Chad' },
+  { code: '+242', country: 'Congo Rep' },
+  { code: '+243', country: 'DR Congo' },
+  { code: '+240', country: 'Equatorial Guinea' },
+  { code: '+241', country: 'Gabon' },
+  // West Africa
+  { code: '+234', country: 'Nigeria' },
+  { code: '+233', country: 'Ghana' },
+  { code: '+225', country: 'Ivory Coast' },
+  { code: '+221', country: 'Senegal' },
+  { code: '+223', country: 'Mali' },
+  { code: '+226', country: 'Burkina Faso' },
+  { code: '+227', country: 'Niger' },
+  { code: '+228', country: 'Togo' },
+  { code: '+229', country: 'Benin' },
+  { code: '+224', country: 'Guinea' },
+  // East Africa
+  { code: '+254', country: 'Kenya' },
+  { code: '+255', country: 'Tanzania' },
+  { code: '+256', country: 'Uganda' },
+  { code: '+250', country: 'Rwanda' },
+  { code: '+257', country: 'Burundi' },
+  { code: '+251', country: 'Ethiopia' },
+  { code: '+252', country: 'Somalia' },
+];
 
 export const LoginPage: React.FC = () => {
   const { login } = useStore();
@@ -11,7 +41,10 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
+  const [phoneCode, setPhoneCode] = useState('+237');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('phone');
   const [isLoading, setIsLoading] = useState(false);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
@@ -22,7 +55,8 @@ export const LoginPage: React.FC = () => {
     setError('');
     setIsLoading(true);
     try {
-      const result = await login(email, password);
+      const identifier = loginMethod === 'email' ? email : `${phoneCode}${phone}`;
+      const result = await login(identifier, password);
       if (result.success) {
         navigate('/');
       } else {
@@ -68,20 +102,65 @@ export const LoginPage: React.FC = () => {
           </div>
 
           <form className="mt-8 space-y-6" onSubmit={handleStandardLogin}>
+            {/* Login Method Toggle */}
+            <div className="flex rounded-md shadow-sm border border-gray-300 p-1 bg-gray-50 mb-4">
+              <button
+                type="button"
+                onClick={() => setLoginMethod('phone')}
+                className={`flex-1 py-2 text-sm font-medium rounded-md flex justify-center items-center transition-colors ${loginMethod === 'phone' ? 'bg-white shadow text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                <Phone className="w-4 h-4 mr-2" /> Phone Num
+              </button>
+              <button
+                type="button"
+                onClick={() => setLoginMethod('email')}
+                className={`flex-1 py-2 text-sm font-medium rounded-md flex justify-center items-center transition-colors ${loginMethod === 'email' ? 'bg-white shadow text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                <Mail className="w-4 h-4 mr-2" /> Email
+              </button>
+            </div>
+
             <div className="rounded-md shadow-sm -space-y-px">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
+              {loginMethod === 'email' ? (
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Mail className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="email"
+                    required={loginMethod === 'email'}
+                    className="appearance-none rounded-none relative block w-full px-3 py-3 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm bg-white"
+                    placeholder={t('login.emailPlaceholder')}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
                 </div>
-                <input
-                  type="email"
-                  required
-                  className="appearance-none rounded-none relative block w-full px-3 py-3 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm bg-white"
-                  placeholder={t('login.emailPlaceholder')}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
+              ) : (
+                <div className="relative flex">
+                  <select
+                    className="w-24 sm:w-32 appearance-none rounded-none relative block px-2 py-3 border border-r-0 border-gray-300 text-gray-600 rounded-tl-md focus:outline-none focus:ring-primary-500 sm:text-sm bg-gray-50 overflow-hidden"
+                    value={phoneCode}
+                    onChange={e => setPhoneCode(e.target.value)}
+                  >
+                    {AFRICA_COUNTRY_CODES.map(c => (
+                      <option key={c.code} value={c.code}>{c.code}</option>
+                    ))}
+                  </select>
+                  <div className="relative flex-1">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Phone className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="tel"
+                      required={loginMethod === 'phone'}
+                      className="appearance-none rounded-none relative block w-full px-3 py-3 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-tr-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm bg-white"
+                      placeholder="612 345 678"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-gray-400" />

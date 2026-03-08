@@ -224,7 +224,12 @@ const translations: Record<string, Record<Language, string>> = {
   'dash.myCatalog': { en: 'My Catalog', fr: 'Mon Catalogue' },
   'dash.incomingOrders': { en: 'Incoming Orders', fr: 'Commandes Reçues' },
   'dash.ordersToShip': { en: 'Orders to Ship', fr: 'Commandes à Expédier' },
+  'dash.awaitingPayment': { en: 'Confirmed – Awaiting Payment', fr: 'Confirmées – En attente de paiement' },
+  'dash.allOrders': { en: 'All Orders', fr: 'Toutes les commandes' },
+  'dash.allOrdersDesc': { en: 'View details for any order from booking to delivery, including completed or cancelled.', fr: 'Voir les détails de chaque commande du réservation à la livraison, y compris terminées ou annulées.' },
   'dash.orderHistory': { en: 'Order History (Completed/Cancelled)', fr: 'Historique (Terminées/Annulées)' },
+  'dash.orderTimeline': { en: 'Order timeline', fr: 'Étapes de la commande' },
+  'dash.orderPlaced': { en: 'Order placed', fr: 'Commande passée' },
   'dash.createFirst': { en: 'Create your first offer', fr: 'Créez votre première offre' },
   'dash.confirm': { en: 'Confirm Order', fr: 'Confirmer' },
   'dash.reject': { en: 'Reject', fr: 'Rejeter' },
@@ -267,6 +272,14 @@ const translations: Record<string, Record<Language, string>> = {
   'wallet.success': { en: 'Deposit successful!', fr: 'Dépôt réussi !' },
   'wallet.noTx': { en: 'No transactions yet.', fr: 'Aucune transaction.' },
   'wallet.noReq': { en: 'No withdrawal requests.', fr: 'Aucune demande de retrait.' },
+  'wallet.processWithdraw': { en: 'Submit Withdrawal', fr: 'Soumettre le retrait' },
+
+  // OTP verification
+  'otp.verifyProfileTitle': { en: 'Verify identity to update profile', fr: 'Vérifiez votre identité pour modifier le profil' },
+  'otp.verifyWithdrawTitle': { en: 'Verify identity to withdraw', fr: 'Vérifiez votre identité pour retirer' },
+  'otp.sendCode': { en: 'Send code to my phone', fr: 'Envoyer le code à mon téléphone' },
+  'otp.verify': { en: 'Verify', fr: 'Vérifier' },
+  'otp.enterCode': { en: 'Enter the 6-digit code sent to your registered phone number.', fr: 'Entrez le code à 6 chiffres envoyé à votre numéro enregistré.' },
 
   // Orders
   'order.id': { en: 'Order ID', fr: 'ID Commande' },
@@ -295,6 +308,7 @@ const translations: Record<string, Record<Language, string>> = {
   'order.reason': { en: 'Reason', fr: 'Raison' },
   'order.submitReport': { en: 'Submit Report', fr: 'Envoyer le Rapport' },
   'order.paymentRecap': { en: 'Payment Validation', fr: 'Validation du Paiement' },
+  'order.soldBy': { en: 'Sold by', fr: 'Vendu par' },
   'order.walletBalance': { en: 'Wallet Balance', fr: 'Solde Portefeuille' },
   'order.orderTotal': { en: 'Order Amount', fr: 'Montant Commande' },
   'order.confirmPayment': { en: 'Confirm Payment', fr: 'Confirmer Paiement' },

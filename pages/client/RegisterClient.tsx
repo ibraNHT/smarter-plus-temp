@@ -18,6 +18,36 @@ const CAMEROON_LOCATIONS: Record<string, string[]> = {
   'South': ['Ebolowa', 'Kribi', 'Sangmelima']
 };
 
+const AFRICA_COUNTRY_CODES = [
+  // Central Africa
+  { code: '+237', country: 'Cameroon' },
+  { code: '+236', country: 'Central African Rep' },
+  { code: '+235', country: 'Chad' },
+  { code: '+242', country: 'Congo Rep' },
+  { code: '+243', country: 'DR Congo' },
+  { code: '+240', country: 'Equatorial Guinea' },
+  { code: '+241', country: 'Gabon' },
+  // West Africa
+  { code: '+234', country: 'Nigeria' },
+  { code: '+233', country: 'Ghana' },
+  { code: '+225', country: 'Ivory Coast' },
+  { code: '+221', country: 'Senegal' },
+  { code: '+223', country: 'Mali' },
+  { code: '+226', country: 'Burkina Faso' },
+  { code: '+227', country: 'Niger' },
+  { code: '+228', country: 'Togo' },
+  { code: '+229', country: 'Benin' },
+  { code: '+224', country: 'Guinea' },
+  // East Africa
+  { code: '+254', country: 'Kenya' },
+  { code: '+255', country: 'Tanzania' },
+  { code: '+256', country: 'Uganda' },
+  { code: '+250', country: 'Rwanda' },
+  { code: '+257', country: 'Burundi' },
+  { code: '+251', country: 'Ethiopia' },
+  { code: '+252', country: 'Somalia' },
+];
+
 export const RegisterClient: React.FC = () => {
   const { registerClient } = useStore();
   const { t } = useTranslation();
@@ -33,6 +63,7 @@ export const RegisterClient: React.FC = () => {
     email: '',
     password: '',
     confirmPassword: '',
+    phoneCode: '+237',
     phone: '',
     address: '',
     region: '',
@@ -82,7 +113,7 @@ export const RegisterClient: React.FC = () => {
       gender: formData.gender as 'MALE' | 'FEMALE',
       dateOfBirth: formData.dateOfBirth,
       email: formData.email,
-      phone: formData.phone,
+      phone: `${formData.phoneCode}${formData.phone}`,
       locations: [{
         lat: 0,
         lng: 0,
@@ -98,7 +129,7 @@ export const RegisterClient: React.FC = () => {
     setIsLoading(false);
 
     if (result.success) {
-      navigate('/verify-email');
+      navigate('/');
     } else {
       setError(result.message || 'Registration failed.');
     }
@@ -194,16 +225,27 @@ export const RegisterClient: React.FC = () => {
 
           <div className="sm:col-span-3">
             <label htmlFor="phone" className="block text-sm font-medium text-gray-700">{t('form.phone')}</label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Phone className="h-5 w-5 text-gray-400" />
+            <div className="mt-1 flex rounded-md shadow-sm">
+              <select
+                className="w-24 sm:w-32 inline-flex items-center px-2 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm overflow-hidden"
+                value={formData.phoneCode}
+                onChange={e => setFormData({ ...formData, phoneCode: e.target.value })}
+              >
+                {AFRICA_COUNTRY_CODES.map(c => (
+                  <option key={c.code} value={c.code}>{c.code} ({c.country})</option>
+                ))}
+              </select>
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Phone className="h-4 w-4 text-gray-400" />
+                </div>
+                <input type="tel" name="phone" required
+                  className="focus:ring-primary-500 focus:border-primary-500 flex-1 block w-full pl-10 rounded-none rounded-r-md sm:text-sm border-gray-300 p-2 border bg-white text-gray-900"
+                  value={formData.phone}
+                  onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="612 345 678"
+                />
               </div>
-              <input type="tel" name="phone" required
-                className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
-                value={formData.phone}
-                onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+123 456 789"
-              />
             </div>
           </div>
 

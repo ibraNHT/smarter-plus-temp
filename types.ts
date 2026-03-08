@@ -279,6 +279,10 @@ export interface Order {
   id: string;
   clientId: string;
   producerId: string;
+  /** Client display name when order is returned for producer (e.g. incoming orders) */
+  clientDisplayName?: string;
+  /** Producer display name when order is returned for client (e.g. "Sold by") */
+  producerDisplayName?: string;
   items: CartItem[];
 
   // Financials
@@ -349,12 +353,16 @@ export interface ChatSession {
   unreadCounts: Record<string, number>; // Map userId -> count
 }
 
-// Mock User Session
+// Mock User Session (matches auth API response)
 export interface UserSession {
   id: string;
   role: UserRole;
-  name: string;
+  name?: string;
+  displayName?: string;
+  email?: string;
+  phone?: string;
   producerId?: string; // If role is PRODUCER
+  clientId?: string;   // If role is CLIENT
 }
 
 // Support Chat Types

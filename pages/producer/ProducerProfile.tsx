@@ -6,6 +6,7 @@ import { UserRole, PaymentMethod, ProducerProfile as ProducerProfileType, Locati
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Wallet, Shield, Tractor, CreditCard, Trash2, Plus, Camera, Upload, MapPin, FileText, X, LogOut, Image as ImageIcon, Video, Eye, Edit, CheckCircle, Heart, ArrowLeft, Search, Users, Copy } from 'lucide-react';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
+import { OtpVerificationModal } from '../../components/OtpVerificationModal';
 
 // Mock Data for Regions/Cities in Cameroon
 const CAMEROON_LOCATIONS: Record<string, string[]> = {
@@ -24,7 +25,7 @@ const CAMEROON_LOCATIONS: Record<string, string[]> = {
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
 export const ProducerProfile: React.FC = () => {
-  const { user, producers, saveProducerPaymentMethod, deleteProducerPaymentMethod, updateProducerProfile, logout, getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio, offers, toggleFavorite } = useStore();
+  const { user, producers, saveProducerPaymentMethod, deleteProducerPaymentMethod, updateProducerProfile, requestOtp, verifyOtp, logout, getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio, offers, toggleFavorite } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'info' | 'security' | 'payment' | 'portfolio' | 'favorites' | 'referrals'>('info');
@@ -49,15 +50,37 @@ export const ProducerProfile: React.FC = () => {
 
   // Password Modal
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  // OTP for profile name/phone change
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [pendingProfileUpdate, setPendingProfileUpdate] = useState<ProducerProfileType | null>(null);
 
   if (!user || user.role !== UserRole.PRODUCER) {
     return <div className="p-8 text-center">Access Denied</div>;
   }
 
   // ... [Existing Logic for form init, favorites, handlers] ...
-  const currentProducer = producers.find(p => p.id === user.producerId);
+  const currentProducer = producers.find(p => p.id === user.producerId || p.userId === user.id);
   const myPortfolios = user.producerId ? getProducerPortfolios(user.producerId) : [];
-  useEffect(() => { if (currentProducer && !formData) { setFormData({ ...currentProducer }); } }, [currentProducer]);
+  useEffect(() => {
+    if (currentProducer && !formData) {
+      const producerUser = (currentProducer as any).user;
+      const sessionEmail = (user as any)?.email ?? '';
+      const sessionPhone = (user as any)?.phone ?? '';
+      setFormData({
+        ...currentProducer,
+        email: (producerUser?.email ?? (currentProducer as any).email ?? sessionEmail).toString(),
+        phone: (producerUser?.phone ?? (currentProducer as any).phone ?? sessionPhone).toString(),
+        name: (producerUser?.displayName ?? (currentProducer as any).name ?? ((currentProducer.type === 'INDIVIDUAL' ? `${currentProducer.firstName ?? ''} ${currentProducer.lastName ?? ''}`.trim() : currentProducer.name) || '')).toString(),
+        firstName: (currentProducer.firstName ?? '').toString(),
+        lastName: (currentProducer.lastName ?? '').toString(),
+        description: (currentProducer.description ?? '').toString(),
+        locations: Array.isArray(currentProducer.locations) ? currentProducer.locations : [],
+        productionTypes: Array.isArray(currentProducer.productionTypes) ? currentProducer.productionTypes : [],
+        certifications: Array.isArray(currentProducer.certifications) ? currentProducer.certifications : [],
+        favorites: Array.isArray(currentProducer.favorites) ? currentProducer.favorites : [],
+      });
+    }
+  }, [currentProducer, formData, user]);
   const favoriteOffers = currentProducer?.favorites.map(id => offers.find(o => o.id === id)).filter(Boolean) as any[];
   const unavailableFavoriteIds = currentProducer?.favorites.filter(id => !offers.find(o => o.id === id));
   const handleLogout = () => { logout(); navigate('/'); };
@@ -67,7 +90,26 @@ export const ProducerProfile: React.FC = () => {
   const addLocation = () => { if (!formData || !newLoc.region || !newLoc.city || !newLoc.address) return; const locationToAdd: Location = { lat: 0, lng: 0, region: newLoc.region, city: newLoc.city, address: newLoc.address }; setFormData({ ...formData, locations: [...formData.locations, locationToAdd] }); setNewLoc({ region: '', city: '', address: '' }); };
   const removeLocation = (index: number) => { if (!formData) return; setFormData({ ...formData, locations: formData.locations.filter((_, i) => i !== index) }); };
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'profileImageUrl' | 'certifications') => { if (!formData || !e.target.files || e.target.files.length === 0) return; const file = e.target.files[0]; if (file.size > 10 * 1024 * 1024) { alert("File size exceeds 10MB limit."); return; } if (!['image/png', 'image/jpeg'].includes(file.type)) { alert("Only PNG and JPG formats are allowed."); return; } const fakeUrl = URL.createObjectURL(file); if (field === 'profileImageUrl') { setFormData({ ...formData, profileImageUrl: fakeUrl }); } else { setFormData({ ...formData, certifications: [...formData.certifications, file.name] }); } };
-  const savePersonalInfo = (e: React.FormEvent) => { e.preventDefault(); if (formData) { let displayName = formData.name; if (formData.type === 'INDIVIDUAL' && formData.firstName && formData.lastName) { displayName = `${formData.firstName} ${formData.lastName}`; } updateProducerProfile({ ...formData, name: displayName }); } };
+  const savePersonalInfo = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData) return;
+    let displayName = formData.name;
+    if (formData.type === 'INDIVIDUAL' && formData.firstName && formData.lastName) displayName = `${formData.firstName} ${formData.lastName}`;
+    const payload = { ...formData, name: displayName };
+    // Producers must verify with OTP for any profile update that includes name/phone (backend enforces this).
+    setPendingProfileUpdate(payload);
+    setShowOtpModal(true);
+  };
+  const handleOtpVerifiedForProfile = async (token: string) => {
+    if (!pendingProfileUpdate) return;
+    try {
+      await updateProducerProfile(pendingProfileUpdate, token);
+      setPendingProfileUpdate(null);
+      setShowOtpModal(false);
+    } catch (err: any) {
+      alert(err?.message || 'Profile update failed. Please try again.');
+    }
+  };
   const copyReferralLink = () => { if (!currentProducer?.referralCode) return; const link = `${window.location.origin}/#/register?ref=${currentProducer.referralCode}`; navigator.clipboard.writeText(link); alert("Referral link copied!"); };
   const handlePortfolioImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) { const files = Array.from(e.target.files) as File[]; if ((portfolioForm.imageUrls?.length || 0) + files.length > 10) { alert("Maximum 10 images allowed."); return; } const newUrls: string[] = []; for (const file of files) { if (file.size > 2 * 1024 * 1024) { alert(`File ${file.name} is too large. Max 2MB.`); continue; } if (!['image/png', 'image/jpeg'].includes(file.type)) { alert(`File ${file.name} is invalid format. PNG/JPG only.`); continue; } newUrls.push(URL.createObjectURL(file)); } setPortfolioForm(prev => ({ ...prev, imageUrls: [...(prev.imageUrls || []), ...newUrls] })); } };
   const handlePortfolioVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { const file = e.target.files[0]; if (file.size > 30 * 1024 * 1024) { alert("Video file too large. Max 30MB."); return; } setPortfolioForm(prev => ({ ...prev, videoUrl: URL.createObjectURL(file) })); } };
@@ -133,9 +175,9 @@ export const ProducerProfile: React.FC = () => {
               <div className="flex items-center mb-6"><div className="relative"><div className="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">{formData.profileImageUrl ? (<img src={formData.profileImageUrl} alt="Profile" className="h-full w-full object-cover" />) : (<User className="h-12 w-12 text-gray-400" />)}</div><label className="absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white cursor-pointer hover:bg-primary-700 shadow-sm"><Camera className="h-4 w-4" /><input type="file" accept="image/png, image/jpeg" className="hidden" onChange={(e) => handleFileUpload(e, 'profileImageUrl')} /></label></div><div className="ml-4"><p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p><p className="text-xs text-gray-500">JPG or PNG. Max 10MB.</p></div></div>
               <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
                 <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-2">{t('profile.type')}</label><div className="flex space-x-4"><label className="flex items-center"><input type="radio" name="type" value="BUSINESS" checked={formData.type === 'BUSINESS'} onChange={() => setFormData({ ...formData!, type: 'BUSINESS' })} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">{t('profile.business')}</span></label><label className="flex items-center"><input type="radio" name="type" value="INDIVIDUAL" checked={formData.type === 'INDIVIDUAL'} onChange={() => setFormData({ ...formData!, type: 'INDIVIDUAL' })} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">{t('profile.individual')}</span></label></div></div>
-                {formData.type === 'BUSINESS' ? (<div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">{t('form.farmName')}</label><input type="text" name="name" value={formData.name} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>) : (<><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.firstName')}</label><input type="text" name="firstName" value={formData.firstName || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.lastName')}</label><input type="text" name="lastName" value={formData.lastName || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.gender')}</label><select name="gender" value={formData.gender || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900"><option value="">Select Gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.dob')}</label><input type="date" name="dateOfBirth" value={formData.dateOfBirth || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div></>)}
-                <div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('form.phone')}</label><input type="tel" name="phone" value={formData.phone} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
-                <div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('form.email')}</label><input type="email" name="email" value={formData.email} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
+                {formData.type === 'BUSINESS' ? (<div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">{t('form.farmName')}</label><input type="text" name="name" value={formData.name ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>) : (<><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.firstName')}</label><input type="text" name="firstName" value={formData.firstName || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.lastName')}</label><input type="text" name="lastName" value={formData.lastName || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.gender')}</label><select name="gender" value={formData.gender || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900"><option value="">Select Gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.dob')}</label><input type="date" name="dateOfBirth" value={formData.dateOfBirth || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div></>)}
+                <div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('form.phone')}</label><input type="tel" name="phone" value={formData.phone ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
+                <div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('form.email')}</label><input type="email" name="email" value={formData.email ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
                 <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-2">{t('form.category')} (Multi-select)</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded-md bg-white">{PRODUCTION_TYPES.map(cat => { const isSelected = formData.productionTypes.includes(cat); return (<button key={cat} type="button" onClick={() => toggleCategory(cat)} className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${isSelected ? 'bg-primary-100 text-primary-800 ring-2 ring-primary-500 ring-offset-1' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}{isSelected && <X className="ml-1.5 h-3 w-3" />}</button>) })}</div></div>
                 <div className="sm:col-span-6 border-t border-gray-100 pt-4 mt-2"><h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center"><MapPin className="h-4 w-4 mr-1 text-primary-600" /> Operating Locations</h4><div className="space-y-2 mb-4">{formData.locations.map((loc, idx) => (<div key={idx} className="flex items-center justify-between bg-gray-50 p-3 rounded-md border border-gray-200"><div><p className="text-sm font-medium text-gray-900">{loc.address}</p><p className="text-xs text-gray-500">{loc.city}, {loc.region}</p></div><button type="button" onClick={() => removeLocation(idx)} className="text-gray-400 hover:text-red-500"><Trash2 className="h-4 w-4" /></button></div>))}</div><div className="bg-blue-50 p-3 rounded-md border border-blue-100"><p className="text-xs font-medium text-blue-700 mb-2">Add New Location</p><div className="grid grid-cols-1 gap-3 sm:grid-cols-3"><select value={newLoc.region} onChange={e => setNewLoc({ ...newLoc, region: e.target.value, city: CAMEROON_LOCATIONS[e.target.value]?.[0] || '' })} className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"><option value="">Region</option>{Object.keys(CAMEROON_LOCATIONS).map(r => <option key={r} value={r}>{r}</option>)}</select><select value={newLoc.city} onChange={e => setNewLoc({ ...newLoc, city: e.target.value })} disabled={!newLoc.region} className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 disabled:bg-gray-100 bg-white text-gray-900"><option value="">City</option>{newLoc.region && CAMEROON_LOCATIONS[newLoc.region]?.map(c => <option key={c} value={c}>{c}</option>)}</select><div className="flex gap-2"><input type="text" placeholder="Address" value={newLoc.address} onChange={e => setNewLoc({ ...newLoc, address: e.target.value })} className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900" /><button type="button" onClick={addLocation} disabled={!newLoc.region || !newLoc.city || !newLoc.address} className="inline-flex items-center p-2 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"><Plus className="h-5 w-5" /></button></div></div></div></div>
                 <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">{t('form.desc')}</label><textarea name="description" rows={3} value={formData.description} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
@@ -148,7 +190,7 @@ export const ProducerProfile: React.FC = () => {
           {activeTab === 'referrals' && currentProducer && (
             <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center"><Users className="h-5 w-5 mr-2 text-primary-600" /> Referrals</h3>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6"><p className="text-sm text-blue-800 mb-2 font-bold">Your Referral Link</p><div className="flex gap-2"><input type="text" readOnly value={`${window.location.origin}/#/register?ref=${currentProducer.referralCode}`} className="block w-full border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-700" /><button onClick={copyReferralLink} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center"><Copy className="h-4 w-4 mr-2" /> Copy</button></div><p className="text-xs text-blue-600 mt-2">Share this link with friends to invite them to the platform.</p></div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6"><p className="text-sm text-blue-800 mb-2 font-bold">Your Referral Link</p><div className="flex gap-2"><input type="text" readOnly value={`${window.location.origin}/#/register?ref=${currentProducer.referralCode ?? ''}`} className="block w-full border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-700" /><button onClick={copyReferralLink} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center"><Copy className="h-4 w-4 mr-2" /> Copy</button></div><p className="text-xs text-blue-600 mt-2">Share this link with friends to invite them to the platform.</p></div>
               <div className="border-t border-gray-200 pt-4"><div className="flex items-center justify-between mb-4"><h4 className="text-sm font-bold text-gray-900">Your Impact</h4><span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">{currentProducer.referrals.length} Referrals</span></div>{currentProducer.referrals.length === 0 ? (<div className="text-center py-8 text-gray-500"><Users className="h-12 w-12 mx-auto text-gray-300 mb-2" /><p>You haven't referred anyone yet.</p></div>) : (<div className="space-y-2"><p className="text-sm text-gray-600">You have successfully referred {currentProducer.referrals.length} users.</p></div>)}</div>
             </div>
           )}
@@ -196,6 +238,19 @@ export const ProducerProfile: React.FC = () => {
       <ChangePasswordModal
         isOpen={showPasswordModal}
         onClose={() => setShowPasswordModal(false)}
+      />
+
+      <OtpVerificationModal
+        open={showOtpModal}
+        onClose={() => { setShowOtpModal(false); setPendingProfileUpdate(null); }}
+        action="PROFILE_UPDATE"
+        onRequestOtp={requestOtp}
+        onVerifyOtp={verifyOtp}
+        onVerified={handleOtpVerifiedForProfile}
+        title={t('otp.verifyProfileTitle')}
+        sendCodeLabel={t('otp.sendCode')}
+        verifyLabel={t('otp.verify')}
+        codeSentMessage={t('otp.enterCode')}
       />
 
       {/* Portfolio Edit/Add Modal (Omitted code block for brevity but functional logic is above) */}

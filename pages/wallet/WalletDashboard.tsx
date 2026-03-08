@@ -3,11 +3,12 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { Wallet as WalletIcon, ArrowUpRight, ArrowDownLeft, Plus, CreditCard, Smartphone, Building, MinusCircle, Clock, CheckCircle, XCircle, ArrowLeft, TrendingUp } from 'lucide-react';
 import { SEO } from '../../components/SEO';
-import { TransactionType, UserRole, WithdrawalStatus } from '../../types';
+import { TransactionType, UserRole, WithdrawalStatus, PaymentMethod } from '../../types';
 import { Link, useNavigate } from 'react-router-dom';
+import { OtpVerificationModal } from '../../components/OtpVerificationModal';
 
 export const WalletDashboard: React.FC = () => {
-  const { user, getWallet, fundWallet, requestWithdrawal, producers, withdrawalRequests } = useStore();
+  const { user, getWallet, fundWallet, requestWithdrawal, requestOtp, verifyOtp, producers, withdrawalRequests } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -18,6 +19,8 @@ export const WalletDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<'ORANGE' | 'MTN' | 'BANK'>('ORANGE');
   const [selectedSavedMethodId, setSelectedSavedMethodId] = useState<string>('');
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [pendingWithdraw, setPendingWithdraw] = useState<{ amount: number; method: PaymentMethod } | null>(null);
 
   if (!user) return <div className="p-8 text-center">Please login</div>;
 
@@ -47,28 +50,38 @@ export const WalletDashboard: React.FC = () => {
 
   const handleWithdrawRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (isProducer && currentProducer) {
-      if (!selectedSavedMethodId) {
-        alert("Please select a payment method.");
-        return;
-      }
-      const method = currentProducer.paymentMethods.find(pm => pm.id === selectedSavedMethodId);
-      if (!method) return;
-
-      setLoading(true);
-      const result = await requestWithdrawal(Number(amount), method);
-      setLoading(false);
-      if (result.success) {
-        setShowWithdraw(false);
-        setAmount('');
-        alert(result.message);
-      } else {
-        alert(result.message);
-      }
-    } else {
-      // This should not be reachable via UI due to button hiding, but keeping safety check
+    if (!isProducer || !currentProducer) {
       alert("Withdrawals are for producers only.");
+      return;
+    }
+    if (!selectedSavedMethodId) {
+      alert("Please select a payment method.");
+      return;
+    }
+    const method = currentProducer.paymentMethods.find(pm => pm.id === selectedSavedMethodId);
+    if (!method) return;
+    const withdrawAmount = Number(amount);
+    if (!withdrawAmount || withdrawAmount < 100) {
+      alert("Enter a valid amount (min 100 XAF).");
+      return;
+    }
+    setPendingWithdraw({ amount: withdrawAmount, method });
+    setShowOtpModal(true);
+  };
+
+  const handleOtpVerifiedForWithdraw = async (token: string) => {
+    if (!pendingWithdraw) return;
+    setLoading(true);
+    const result = await requestWithdrawal(pendingWithdraw.amount, pendingWithdraw.method, token);
+    setLoading(false);
+    setShowOtpModal(false);
+    setPendingWithdraw(null);
+    if (result.success) {
+      setShowWithdraw(false);
+      setAmount('');
+      alert(result.message);
+    } else {
+      alert(result.message);
     }
   };
 
@@ -115,24 +128,26 @@ export const WalletDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Balance Card */}
+        {/* Balance Card - light background so dark balance text is clearly visible */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="md:col-span-2 bg-gradient-to-r from-primary-800 to-primary-600 rounded-2xl shadow-xl overflow-hidden text-white p-8 relative">
-            <p className="text-primary-200 font-medium mb-1">{t('wallet.balance')}</p>
-            <h2 className="text-4xl font-bold mb-1">{wallet.balance.toLocaleString()} <span className="text-xl text-primary-100">XAF</span></h2>
+          <div className="md:col-span-2 bg-white rounded-2xl shadow-xl overflow-hidden p-8 relative border border-gray-200">
+            <p className="text-gray-600 text-base font-semibold mb-2 tracking-wide">{t('wallet.balance')}</p>
+            <h2 className="text-5xl md:text-6xl font-bold mb-1 tabular-nums tracking-tight text-gray-900">
+              {wallet.balance.toLocaleString()} <span className="text-2xl md:text-3xl font-bold text-gray-800 ml-1">XAF</span>
+            </h2>
 
             {/* Available Balance Display */}
-            <div className="mt-4 pt-4 border-t border-primary-500/30">
-              <p className="text-xs text-primary-200 uppercase tracking-wide font-semibold">{t('wallet.available')}</p>
-              <p className="text-xl font-bold">{availableBalance.toLocaleString()} XAF</p>
+            <div className="mt-5 pt-5 border-t border-gray-200">
+              <p className="text-sm text-gray-500 uppercase tracking-wider font-semibold">{t('wallet.available')}</p>
+              <p className="text-2xl font-bold mt-1 tabular-nums text-gray-900">{availableBalance.toLocaleString()} XAF</p>
               {pendingAmount > 0 && (
-                <p className="text-xs text-yellow-300 mt-1 italic">({pendingAmount.toLocaleString()} XAF Pending Withdrawals)</p>
+                <p className="text-sm text-amber-700 mt-1 font-medium">({pendingAmount.toLocaleString()} XAF Pending Withdrawals)</p>
               )}
             </div>
 
             <div className="absolute top-8 right-8 flex space-x-3">
-              <button onClick={() => setShowTopUp(true)} className="p-2 bg-white/20 rounded-lg hover:bg-white/30 backdrop-blur-sm transition-colors">
-                <Plus className="h-6 w-6 text-white" />
+              <button onClick={() => setShowTopUp(true)} className="p-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-colors">
+                <Plus className="h-6 w-6" />
               </button>
             </div>
           </div>
@@ -334,6 +349,19 @@ export const WalletDashboard: React.FC = () => {
             </div>
           </div>
         )}
+
+        <OtpVerificationModal
+          open={showOtpModal}
+          onClose={() => { setShowOtpModal(false); setPendingWithdraw(null); }}
+          action="WITHDRAWAL"
+          onRequestOtp={requestOtp}
+          onVerifyOtp={verifyOtp}
+          onVerified={handleOtpVerifiedForWithdraw}
+          title={t('otp.verifyWithdrawTitle')}
+          sendCodeLabel={t('otp.sendCode')}
+          verifyLabel={t('otp.verify')}
+          codeSentMessage={t('otp.enterCode')}
+        />
       </div>
     </div>
   );

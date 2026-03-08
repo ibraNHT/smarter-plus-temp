@@ -28,12 +28,13 @@ export const ProducerDashboard: React.FC = () => {
    const myOffers = user?.producerId ? getProducerOffers(user.producerId) : [];
 
    // Filter orders for this producer
-   const allMyOrders = orders.filter(o => o.producerId === user?.producerId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+   const allMyOrders = orders.filter(o => o.producerId === currentProducer?.id || o.producerId === user?.producerId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
    const pendingValidationOrders = allMyOrders.filter(o => o.status === OrderStatus.PENDING_VALIDATION);
+   const awaitingPaymentOrders = allMyOrders.filter(o => o.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT);
    const ordersToShip = allMyOrders.filter(o => o.status === OrderStatus.PAID_IN_PREPARATION);
 
-   // Past Orders (Completed, Cancelled, Dispute, Delivered)
+   // Past Orders (Completed, Cancelled, Dispute, Delivered, In Transit) — always visible so producers can see full history
    const pastOrders = allMyOrders.filter(o =>
       o.status === OrderStatus.COMPLETED ||
       o.status === OrderStatus.CANCELLED ||
@@ -54,10 +55,34 @@ export const ProducerDashboard: React.FC = () => {
       return clients.find(c => c.id === clientId);
    };
 
+   const getClientDisplayName = (order: Order) => {
+      if (order.clientDisplayName) return order.clientDisplayName;
+      const c = getClientDetails(order.clientId);
+      if (!c) return 'Unknown';
+      const name = c.name || (c as any).user?.displayName || `${(c.firstName ?? '').trim()} ${(c.lastName ?? '').trim()}`.trim();
+      return name || 'Unknown';
+   };
+
    const getClientAddress = (clientId: string) => {
       const c = getClientDetails(clientId);
       if (!c || c.locations.length === 0) return 'No Address';
       return c.locations[0].address;
+   };
+
+   // Order lifecycle steps for timeline (booking → receiving)
+   const ORDER_TIMELINE_STEPS: { status: OrderStatus; label: string }[] = [
+      { status: OrderStatus.PENDING_VALIDATION, label: 'Booked' },
+      { status: OrderStatus.CONFIRMED_AWAITING_PAYMENT, label: 'Confirmed' },
+      { status: OrderStatus.PAID_IN_PREPARATION, label: 'Paid' },
+      { status: OrderStatus.IN_TRANSIT, label: 'In transit' },
+      { status: OrderStatus.DELIVERED, label: 'Delivered' },
+      { status: OrderStatus.COMPLETED, label: 'Completed' },
+   ];
+   const TERMINAL_STATUSES = [OrderStatus.CANCELLED, OrderStatus.DISPUTE];
+   const getOrderTimelineStepIndex = (status: OrderStatus) => {
+      if (TERMINAL_STATUSES.includes(status)) return -1;
+      const i = ORDER_TIMELINE_STEPS.findIndex(s => s.status === status);
+      return i >= 0 ? i : 0;
    };
 
    const openReviewModal = (orderId: string, clientId: string, e: React.MouseEvent) => {
@@ -277,7 +302,53 @@ export const ProducerDashboard: React.FC = () => {
             </ul>
          </div>
 
-         {/* Order History Section */}
+         {/* Confirmed - Awaiting payment */}
+         {awaitingPaymentOrders.length > 0 && (
+            <div className="bg-white shadow overflow-hidden sm:rounded-md mb-8">
+               <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900">{t('dash.awaitingPayment')}</h3>
+               </div>
+               <ul className="divide-y divide-gray-200">
+                  {awaitingPaymentOrders.map(order => (
+                     <li key={order.id} className="px-4 py-4 hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedOrder(order)}>
+                        <p className="font-medium text-gray-700">Order #{order.id.substring(6)}</p>
+                        <p className="text-sm text-gray-500">{order.items.length} items • {order.totalAmount.toLocaleString()} XAF</p>
+                        <p className="text-xs text-amber-600 mt-1">{t('dash.status')}: {order.status.replace(/_/g, ' ')}</p>
+                     </li>
+                  ))}
+               </ul>
+            </div>
+         )}
+
+         {/* All orders — single list so producers can open any order (booking to receiving), including completed/cancelled */}
+         <div className="bg-white shadow overflow-hidden sm:rounded-md mb-8 border-l-4 border-gray-300">
+            <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
+               <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center">
+                  <Package className="h-5 w-5 mr-2 text-gray-500" />
+                  {t('dash.allOrders')}
+               </h3>
+               <p className="text-sm text-gray-500 mt-1">{t('dash.allOrdersDesc')}</p>
+            </div>
+            <ul className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
+               {allMyOrders.length === 0 ? (
+                  <li className="px-4 py-8 text-center text-gray-500">No orders yet.</li>
+               ) : (
+                  allMyOrders.map(order => (
+                     <li key={order.id} className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex justify-between items-center" onClick={() => setSelectedOrder(order)}>
+                        <div>
+                           <p className="font-medium text-gray-900">Order #{order.id.substring(order.id.length - 6)}</p>
+                           <p className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleDateString()} • {order.items?.length ?? 0} items • {order.totalAmount?.toLocaleString?.() ?? order.totalAmount} XAF</p>
+                        </div>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${order.status === OrderStatus.CANCELLED || order.status === OrderStatus.DISPUTE ? 'bg-red-100 text-red-800' : order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                           {order.status.replace(/_/g, ' ')}
+                        </span>
+                     </li>
+                  ))
+               )}
+            </ul>
+         </div>
+
+         {/* Order History Section (Completed, Cancelled, Delivered, Dispute, In Transit) */}
          <div className="bg-white shadow overflow-hidden sm:rounded-md mb-8">
             <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
                <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center">
@@ -453,13 +524,40 @@ export const ProducerDashboard: React.FC = () => {
                         <button onClick={() => setSelectedOrder(null)} className="text-gray-400 hover:text-gray-500"><XCircle className="h-6 w-6" /></button>
                      </div>
 
+                     {/* Order timeline: booking → receiving */}
+                     <div className="mb-4 p-3 bg-gray-50 rounded-md border border-gray-200">
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{t('dash.orderTimeline')}</h4>
+                        <div className="flex flex-wrap gap-x-1 gap-y-1 items-center">
+                           {ORDER_TIMELINE_STEPS.map((step, idx) => {
+                              const isCurrent = selectedOrder.status === step.status;
+                              const currentIdx = getOrderTimelineStepIndex(selectedOrder.status);
+                              const isPast = currentIdx >= 0 && idx < currentIdx;
+                              return (
+                                 <span
+                                    key={step.status}
+                                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isCurrent ? 'bg-primary-600 text-white' : isPast ? 'bg-gray-200 text-gray-600' : 'bg-gray-100 text-gray-500'}`}
+                                 >
+                                    {step.label}
+                                    {idx < ORDER_TIMELINE_STEPS.length - 1 && <span className="ml-1 text-gray-400">→</span>}
+                                 </span>
+                              );
+                           })}
+                           {(selectedOrder.status === OrderStatus.CANCELLED || selectedOrder.status === OrderStatus.DISPUTE) && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 ml-1">
+                                 {selectedOrder.status === OrderStatus.CANCELLED ? 'Cancelled' : 'Dispute'}
+                              </span>
+                           )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">{t('dash.orderPlaced')}: {new Date(selectedOrder.createdAt).toLocaleString()}</p>
+                     </div>
+
                      {/* Client Info */}
                      <div className="bg-gray-50 p-3 rounded-md mb-4">
                         <div className="flex items-center mb-2">
                            <User className="h-4 w-4 text-gray-500 mr-2" />
                            <span className="text-sm font-medium text-gray-900">{t('dash.client')}:
                               <Link to={`/profile/client/${selectedOrder.clientId}`} className="ml-1 text-blue-600 hover:underline">
-                                 {getClientDetails(selectedOrder.clientId)?.name || 'Unknown'}
+                                 {getClientDisplayName(selectedOrder)}
                               </Link>
                            </span>
                         </div>

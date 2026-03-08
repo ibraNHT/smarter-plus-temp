@@ -1,10 +1,10 @@
 
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react';
 import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerStatus, OfferType, CartItem, Order, OrderStatus, Wallet, Notification, WithdrawalRequest, WithdrawalStatus, PaymentMethod, ChatSession, ChatMessage, Proposal, ProposalStatus, WeeklySchedule, AvailabilityException, Review, SupportMessage, Portfolio, DisputeEvidence, Coupon, PickupPoint } from '../types';
 import { generateSupportResponse } from './geminiService';
 const defaultSchedule: WeeklySchedule = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
-import { BUSINESS_RULES } from '../data/config';
-import { apiFetch, apiUpload, setToken, clearToken, getToken } from './apiService';
+import { apiFetch, apiUpload, setToken, clearToken, getToken, setRefreshToken } from './apiService';
+import { io, Socket } from 'socket.io-client';
 
 interface StoreContextType {
   user: UserSession | null;
@@ -40,10 +40,12 @@ interface StoreContextType {
   toggleSupportChat: () => void;
   sendSupportMessage: (text: string) => Promise<void>;
 
-  login: (email: string, password: string) => Promise<{ success: boolean; message: string }>;
+  login: (identifier: string, password: string) => Promise<{ success: boolean; message: string }>;
   logout: () => Promise<void>;
   registerProducer: (data: Omit<ProducerProfile, 'id' | 'status' | 'joinedDate' | 'paymentMethods' | 'favorites' | 'searchHistory' | 'referrals' | 'referralCode'> & { referrerCode?: string }, password: string) => Promise<{ success: boolean; message: string }>;
-  updateProducerProfile: (producer: ProducerProfile) => Promise<void>;
+  updateProducerProfile: (producer: ProducerProfile, otpToken?: string) => Promise<void>;
+  requestOtp: (action: 'PROFILE_UPDATE' | 'WITHDRAWAL') => Promise<{ success: boolean; message: string }>;
+  verifyOtp: (action: 'PROFILE_UPDATE' | 'WITHDRAWAL', code: string) => Promise<{ success: boolean; token?: string; message: string }>;
   updateProducerAvailability: (producerId: string, schedule: WeeklySchedule, exceptions: AvailabilityException[]) => Promise<void>;
   registerClient: (data: Omit<ClientProfile, 'id' | 'joinedDate' | 'referrals' | 'referralCode'> & { referrerCode?: string }, password: string) => Promise<{ success: boolean; message: string }>;
   verifyEmail: (code: string) => Promise<boolean>;
@@ -102,7 +104,7 @@ interface StoreContextType {
   // Wallet Methods
   getWallet: (userId: string) => Wallet;
   fundWallet: (amount: number, provider: string, referenceId: string) => Promise<{ success: boolean; message: string }>;
-  requestWithdrawal: (amount: number, method: PaymentMethod) => Promise<{ success: boolean; message: string }>;
+  requestWithdrawal: (amount: number, method: PaymentMethod, otpToken?: string) => Promise<{ success: boolean; message: string }>;
   // Notification Methods
   markNotificationsAsRead: () => void;
 }
@@ -146,8 +148,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   useEffect(() => {
     const savedUser = localStorage.getItem('currentUser');
+    let parsedUser = null;
     if (savedUser) {
-      setUser(JSON.parse(savedUser));
+      try {
+        parsedUser = JSON.parse(savedUser);
+        setUser(parsedUser);
+      } catch (e) { }
     }
     const savedCart = localStorage.getItem('cart');
     if (savedCart) {
@@ -155,7 +161,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
     const savedGuestEmail = localStorage.getItem('guestEmail');
     if (savedGuestEmail) setGuestEmail(savedGuestEmail);
-    fetchData();
+    fetchData(parsedUser); // Pass user directly to avoid stale-closure on first render
   }, []);
 
   // ─── DEBOUNCED CART SYNC ───────────────────────────────────────────────────
@@ -164,39 +170,87 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (guestEmail) localStorage.setItem('guestEmail', guestEmail);
     else localStorage.removeItem('guestEmail');
 
-    if ((user || guestEmail) && cart.length > 0) {
+    if (user && cart.length > 0) {
       const timer = setTimeout(() => {
-        apiFetch('/sync-cart', {
+        apiFetch('/api/cart/sync-cart', {
           method: 'POST',
+          silent401: true,
           body: JSON.stringify({
-            items: cart,
-            userId: user?.id,
-            guestEmail: !user ? guestEmail : undefined
+            items: cart.map(item => ({
+              offerId: item.id,
+              quantity: item.cartQuantity,
+              bookingDate: item.bookingDate || undefined
+            }))
           })
-        }).catch(err => console.error('Failed to sync cart:', err));
+        } as any).catch(err => console.error('Failed to sync cart:', err));
       }, 750);
       return () => clearTimeout(timer);
     }
   }, [cart, user, guestEmail]);
 
 
-  // ─── GLOBAL REALTIME POLLING (Notifications & Chats) ────────────────────────
+  // ─── REALTIME: WebSocket for instant order/notification updates ───────────────
+  const socketRef = useRef<Socket | null>(null);
+  const userRef = useRef<typeof user>(user);
+  userRef.current = user;
+  useEffect(() => {
+    const token = getToken();
+    if (!user?.id || !token) {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      return;
+    }
+    // Socket must connect to backend; in dev with proxy, origin is Vite (5173) so use explicit backend URL when no env set
+    const apiBase = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:3000' : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'))).replace(/\/$/, '');
+    const socket = io(apiBase + '/notifications', {
+      path: '/socket.io',
+      auth: { token },
+      transports: ['websocket', 'polling'],
+    });
+    socketRef.current = socket;
+    socket.on('notification', () => {
+      // Any notification (e.g. order status change) → refetch orders and notifications so UI updates without refresh
+      fetchData(userRef.current);
+    });
+    socket.on('connect_error', () => {
+      // Fallback: polling will still refresh orders every 15s
+    });
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [user?.id]);
+
+  // ─── GLOBAL POLLING (Orders, Notifications, Chats) — fallback when WebSocket is unavailable ─
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (user) {
+    if (user && getToken()) {
       interval = setInterval(async () => {
         try {
-          await fetchChats();
+          const on401 = (e: unknown) => { if ((e as { status?: number })?.status === 401) setUser(null); };
+          const resSessions = await apiFetch<ChatSession[]>('/api/chat/sessions', { silent401: true } as any).catch((e) => { on401(e); return null; });
+          if (resSessions && Array.isArray(resSessions)) setChats(resSessions);
 
-          // Poll notifications if the backend route exists. 
-          // If the backend doesn't have a dedicated GET /api/notifications yet, 
-          // this will safely catch and ignore it, relying purely on the chats.
-          const res = await apiFetch<Notification[]>('/api/notifications').catch(() => null);
-          if (res && Array.isArray(res)) {
-            setNotifications(res);
+          const resNotif = await apiFetch<Notification[]>('/api/notifications', { silent401: true } as any).catch((e) => { on401(e); return null; });
+          if (resNotif && Array.isArray(resNotif)) setNotifications(resNotif);
+
+          const resOrders = await apiFetch<any[]>('/api/orders', { silent401: true } as any).catch((e) => { on401(e); return null; });
+          if (resOrders && Array.isArray(resOrders)) {
+            setOrders(resOrders.map((o: any) => ({
+              ...o,
+              items: Array.isArray(o.orderItems || o.items)
+                ? (o.orderItems || o.items).map((item: any) => ({
+                  ...item,
+                  cartQuantity: item.cartQuantity || item.quantity || 1,
+                  id: item.offerId || item.id
+                }))
+                : []
+            })));
           }
-        } catch (e) {
-          // ignore background polling errors 
+        } catch {
+          // ignore background polling errors
         }
       }, 15000); // 15 seconds
     }
@@ -207,42 +261,72 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── DATA FETCHING ──────────────────────────────────────────────────────────
 
-  const fetchData = async () => {
+  const fetchData = async (currentUser?: typeof user) => {
+    const activeUser = currentUser ?? user;
     try {
-      if (user) await fetchChats();
-      const [resProducers, resClients, resOffers, resOrders, resPickup] = await Promise.all([
-        apiFetch<ProducerProfile[]>('/api/producers').catch(() => []),
-        apiFetch<ClientProfile[]>('/api/clients').catch(() => []),
-        apiFetch<Offer[]>('/api/offers').catch(() => []),
-        apiFetch<any[]>('/api/orders').catch(() => []),
-        apiFetch<PickupPoint[]>('/api/pickup-points').catch(() => []),
+      const on401 = (e: unknown) => {
+        if ((e as { status?: number })?.status === 401) setUser(null);
+      };
+      if (activeUser && getToken()) await fetchChats().catch(on401);
+      const [resProducers, resClients, resOffers, resPickup] = await Promise.all([
+        apiFetch<ProducerProfile[]>('/api/producers', { silent401: true } as any).catch((e) => { on401(e); return []; }),
+        apiFetch<ClientProfile[]>('/api/clients', { silent401: true } as any).catch((e) => { on401(e); return []; }),
+        apiFetch<Offer[]>('/api/offers', { silent401: true } as any).catch((e) => { on401(e); return []; }),
+        apiFetch<PickupPoint[]>('/api/pickup-points', { silent401: true } as any).catch((e) => { on401(e); return []; }),
       ]);
-      setProducers(Array.isArray(resProducers) ? resProducers.map(p => ({
-        ...p,
-        locations: p.locations || [],
-        certifications: p.certifications || [],
-        paymentMethods: p.paymentMethods || [],
-        referrals: p.referrals || [],
-        favorites: p.favorites || [],
-        productionTypes: p.productionTypes || [],
-        searchHistory: p.searchHistory || []
-      })) : []);
-      setClients(Array.isArray(resClients) ? resClients.map(c => ({
-        ...c,
-        locations: c.locations || [],
-        favorites: c.favorites || [],
-        referrals: c.referrals || [],
-        searchHistory: c.searchHistory || []
-      })) : []);
+      // Only fetch orders and wallet when authenticated and we have a token (avoids 401 spam when token expired)
+      if (activeUser && getToken()) {
+        const [resOrders, resWallet] = await Promise.all([
+          apiFetch<any[]>('/api/orders', { silent401: true } as any).catch((e) => { on401(e); return []; }),
+          apiFetch<any>('/api/wallet/me', { silent401: true } as any).catch((e) => { on401(e); return null; }),
+        ]);
+        setOrders(Array.isArray(resOrders) ? resOrders.map((o: any) => ({
+          ...o,
+          items: Array.isArray(o.orderItems || o.items)
+            ? (o.orderItems || o.items).map((item: any) => ({
+              ...item,
+              cartQuantity: item.cartQuantity || item.quantity || 1,
+              id: item.offerId || item.id
+            }))
+            : []
+        })) : []);
+        if (resWallet && resWallet.userId) {
+          setWallets(prev => ({
+            ...prev,
+            [activeUser.id]: {
+              userId: resWallet.userId,
+              balance: Number(resWallet.balance) ?? 0,
+              transactions: Array.isArray(resWallet.transactions) ? resWallet.transactions : [],
+            },
+          }));
+        }
+      }
+      setProducers(Array.isArray(resProducers) ? resProducers.map(p => {
+        const displayName = (p as any).user?.displayName ?? `${String((p as any).firstName ?? '').trim()} ${String((p as any).lastName ?? '').trim()}`.trim();
+        return {
+          ...p,
+          name: displayName || 'Unknown',
+          locations: p.locations || [],
+          certifications: p.certifications || [],
+          paymentMethods: p.paymentMethods || [],
+          referrals: p.referrals || [],
+          favorites: p.favorites || [],
+          productionTypes: p.productionTypes || [],
+          searchHistory: p.searchHistory || []
+        };
+      }) : []);
+      setClients(Array.isArray(resClients) ? resClients.map(c => {
+        const displayName = (c as any).user?.displayName ?? `${String((c as any).firstName ?? '').trim()} ${String((c as any).lastName ?? '').trim()}`.trim();
+        return {
+          ...c,
+          name: displayName || 'Unknown',
+          locations: c.locations || [],
+          favorites: c.favorites || [],
+          referrals: c.referrals || [],
+          searchHistory: c.searchHistory || []
+        };
+      }) : []);
       setOffers(Array.isArray(resOffers) ? resOffers : ((resOffers as any)?.data || []));
-      setOrders(Array.isArray(resOrders) ? resOrders.map((o: any) => ({
-        ...o,
-        items: Array.isArray(o.items) ? o.items.map((item: any) => ({
-          ...item,
-          cartQuantity: item.quantity,
-          id: item.offerId
-        })) : []
-      })) : []);
       setPickupPoints(Array.isArray(resPickup) ? resPickup : []);
     } catch (error) {
       console.error('Could not fetch data from API:', error);
@@ -273,15 +357,18 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── AUTHENTICATION ──────────────────────────────────────────────────────────
 
-  const login = async (email: string, password: string): Promise<{ success: boolean; message: string }> => {
+  const login = async (identifier: string, password: string): Promise<{ success: boolean; message: string }> => {
     try {
-      const data = await apiFetch<{ token?: string; accessToken?: string; user: UserSession }>('/api/auth/login', {
+      const data = await apiFetch<{ token?: string; accessToken?: string; refreshToken?: string; user: UserSession }>('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier, password }),
       });
       const jwtToken = data.accessToken || data.token;
       if (jwtToken) {
         setToken(jwtToken);
+      }
+      if (data.refreshToken) {
+        setRefreshToken(data.refreshToken);
       }
       setUser(data.user);
       localStorage.setItem('currentUser', JSON.stringify(data.user));
@@ -289,13 +376,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       // Merge offline/localStorage cart with backend on login
       const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
       if (localCart.length > 0) {
-        apiFetch('/sync-cart', {
+        apiFetch('/api/cart/sync-cart', {
           method: 'POST',
-          body: JSON.stringify({ items: localCart, userId: data.user.id })
-        }).catch(() => { });
+          silent401: true,
+          body: JSON.stringify({ items: localCart.map((i: any) => ({ offerId: i.id, quantity: i.cartQuantity || 1 })) })
+        } as any).catch(() => { });
       }
 
-      await fetchData(); // Fetch profiles, orders, etc., now that we have a valid token
+      await fetchData(data.user); // Pass user directly to avoid stale state
       return { success: true, message: 'Logged in successfully.' };
     } catch (err: any) {
       return { success: false, message: err.message || 'Login failed.' };
@@ -318,13 +406,47 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const registerProducer = async (data: any, password: string): Promise<{ success: boolean; message: string }> => {
     try {
-      await apiFetch('/api/auth/register/producer', {
+      // 1. Create User
+      await apiFetch('/api/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ ...data, password }),
+        body: JSON.stringify({
+          email: data.email,
+          phone: data.phone,
+          password: password,
+          displayName: data.name || 'Producer',
+          role: UserRole.PRODUCER,
+          referralCode: data.referrerCode
+        }),
       });
-      // Store pending state for OTP verification step
-      setPendingRegistration({ email: data.email, code: '', data, role: UserRole.PRODUCER, password });
-      return { success: true, message: 'Registration submitted. Please verify your email.' };
+
+      // 2. Login to get Access Token
+      const loginData = await apiFetch<{ token?: string; accessToken?: string; user: UserSession }>('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ identifier: data.email, password }),
+      });
+
+      const jwtToken = loginData.accessToken || loginData.token;
+      if (jwtToken) setToken(jwtToken);
+      setUser(loginData.user);
+      localStorage.setItem('currentUser', JSON.stringify(loginData.user));
+
+      // 3. Create Producer Profile
+      await apiFetch('/api/profiles/producer', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: data.type || "BUSINESS",
+          firstName: data.name || "Farm",
+          lastName: "Owner",
+          gender: "OTHER",
+          dateOfBirth: new Date().toISOString(),
+          description: data.description || "",
+          certifications: data.certifications || [],
+          productionTypes: data.productionTypes || []
+        }),
+      });
+
+      await fetchData();
+      return { success: true, message: 'Registration successful!' };
     } catch (err: any) {
       return { success: false, message: err.message || 'Registration failed.' };
     }
@@ -332,12 +454,43 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const registerClient = async (data: any, password: string): Promise<{ success: boolean; message: string }> => {
     try {
-      await apiFetch('/api/auth/register/client', {
+      // 1. Create User
+      await apiFetch('/api/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ ...data, password }),
+        body: JSON.stringify({
+          email: data.email,
+          phone: data.phone,
+          password: password,
+          displayName: data.name || (data.firstName + ' ' + data.lastName),
+          role: UserRole.CLIENT,
+          referralCode: data.referrerCode
+        }),
       });
-      setPendingRegistration({ email: data.email, code: '', data, role: UserRole.CLIENT, password });
-      return { success: true, message: 'Registration submitted. Please verify your email.' };
+
+      // 2. Login to get Access Token
+      const loginData = await apiFetch<{ token?: string; accessToken?: string; user: UserSession }>('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ identifier: data.email, password }),
+      });
+
+      const jwtToken = loginData.accessToken || loginData.token;
+      if (jwtToken) setToken(jwtToken);
+      setUser(loginData.user);
+      localStorage.setItem('currentUser', JSON.stringify(loginData.user));
+
+      // 3. Create Client Profile
+      await apiFetch('/api/profiles/client', {
+        method: 'POST',
+        body: JSON.stringify({
+          firstName: data.firstName || "Client",
+          lastName: data.lastName || "",
+          gender: data.gender || "OTHER",
+          dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth).toISOString() : new Date().toISOString()
+        }),
+      });
+
+      await fetchData();
+      return { success: true, message: 'Registration successful!' };
     } catch (err: any) {
       return { success: false, message: err.message || 'Registration failed.' };
     }
@@ -375,17 +528,37 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── PRODUCER PROFILE ────────────────────────────────────────────────────────
 
-  const updateProducerProfile = async (updatedProducer: ProducerProfile) => {
+  const updateProducerProfile = async (updatedProducer: ProducerProfile, otpToken?: string) => {
     try {
-      const saved = await apiFetch<ProducerProfile>(`/api/producers/${updatedProducer.id}`, {
+      const headers: Record<string, string> = {};
+      if (otpToken) headers['X-OTP-Verification'] = otpToken;
+      const saved = await apiFetch<any>(`/api/producers/${updatedProducer.id}`, {
         method: 'PUT',
         body: JSON.stringify(updatedProducer),
+        headers,
       });
-      setProducers(prev => prev.map(p => p.id === saved.id ? saved : p));
+      setProducers(prev => prev.map(p => p.id === saved.id ? { ...saved, user: saved.user ?? (p as any).user } : p));
       addNotification(updatedProducer.id, 'Profile updated', 'SUCCESS');
     } catch (error) {
       console.error('Failed to update producer profile', error);
+      throw error;
     }
+  };
+
+  const requestOtp = async (action: 'PROFILE_UPDATE' | 'WITHDRAWAL') => {
+    const res = await apiFetch<{ success: boolean; message: string }>('/api/otp/request', {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    });
+    return res;
+  };
+
+  const verifyOtp = async (action: 'PROFILE_UPDATE' | 'WITHDRAWAL', code: string) => {
+    const res = await apiFetch<{ success: boolean; token?: string; message: string }>('/api/otp/verify', {
+      method: 'POST',
+      body: JSON.stringify({ action, code }),
+    });
+    return res;
   };
 
   const updateProducerAvailability = async (producerId: string, schedule: WeeklySchedule, exceptions: AvailabilityException[]) => {
@@ -442,11 +615,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const updateClientProfile = async (updatedClient: ClientProfile) => {
     try {
-      const saved = await apiFetch<ClientProfile>(`/api/clients/${updatedClient.id}`, {
+      const saved = await apiFetch<any>(`/api/clients/${updatedClient.id}`, {
         method: 'PUT',
         body: JSON.stringify(updatedClient),
       });
-      setClients(prev => prev.map(c => c.id === saved.id ? saved : c));
+      setClients(prev => prev.map(c => c.id === saved.id ? { ...saved, user: saved.user ?? (c as any).user } : c));
       addNotification(updatedClient.id, 'Profile updated', 'SUCCESS');
     } catch (error) {
       console.error('Failed to update client profile', error);
@@ -500,28 +673,40 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── ORDERS ──────────────────────────────────────────────────────────────────
 
-  const placeOrder = async (couponCode?: string, discountAmount: number = 0, deliveryDate?: string, deliveryMethod: 'HOME' | 'PICKUP' = 'HOME', pickupPointId?: string) => {
+  const placeOrder = async (couponCode?: string, _discountAmount: number = 0, deliveryDate?: string, deliveryMethod: 'HOME' | 'PICKUP' = 'HOME', pickupPointId?: string) => {
     if (cart.length === 0 || (!user && !guestEmail)) return;
-    const subtotal = cart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
-    const serviceFee = subtotal * BUSINESS_RULES.SERVICE_FEE_PERCENT;
-    const totalAmount = Math.max(0, subtotal + serviceFee - discountAmount);
-    const clientId = user ? user.id : 'GUEST';
 
-    // Additional parameters like guestEmail would be added to the backend schema, but let's pass it anyway
-    const newOrder: Omit<Order, 'id'> & { guestEmail?: string } = {
-      clientId, producerId: cart[0].producerId, items: [...cart],
-      subtotal, serviceFee, totalAmount, status: OrderStatus.PENDING_VALIDATION, createdAt: new Date().toISOString(),
-      clientReviewed: false, producerReviewed: false, contactRevealed: false,
-      appliedCoupon: couponCode, discountAmount, requestedDeliveryDate: deliveryDate, deliveryMethod, pickupPointId,
-      guestEmail: !user && guestEmail ? guestEmail : undefined
+    const payload = {
+      items: cart.map(item => ({
+        offerId: item.id,
+        quantity: item.cartQuantity,
+        bookingDate: item.bookingDate ? new Date(item.bookingDate).toISOString() : undefined,
+      })),
+      requestedDeliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : new Date(Date.now() + 86400 * 1000).toISOString(),
+      deliveryMethod,
+      pickupPointId: pickupPointId || undefined,
+      couponId: couponCode || undefined,
     };
+
     try {
       const saved = await apiFetch<Order>('/api/orders', {
         method: 'POST',
-        body: JSON.stringify(newOrder),
+        body: JSON.stringify(payload),
       });
-      setOrders(prev => [...prev, saved]);
+      // Append the saved order immediately for optimistic UI
+      setOrders(prev => [...prev, {
+        ...saved,
+        items: Array.isArray((saved as any).orderItems || saved.items)
+          ? ((saved as any).orderItems || saved.items).map((item: any) => ({
+            ...item,
+            cartQuantity: item.cartQuantity || item.quantity || 1,
+            id: item.offerId || item.id
+          }))
+          : []
+      }]);
       if (user) addNotification(user.id, `Order #${saved.id.substring(saved.id.length - 6).toUpperCase()} placed!`, 'SUCCESS');
+      // Refresh from server after a short delay to ensure both parties see the accurate state
+      setTimeout(() => fetchData(user), 1500);
     } catch (error) {
       console.error('Failed to place order:', error);
       if (user) addNotification(user.id, 'Failed to place order. Please try again.', 'ERROR');
@@ -680,12 +865,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const requestWithdrawal = async (amount: number, method: PaymentMethod): Promise<{ success: boolean; message: string }> => {
+  const requestWithdrawal = async (amount: number, method: PaymentMethod, otpToken?: string): Promise<{ success: boolean; message: string }> => {
     if (!user) return { success: false, message: 'No user' };
     try {
+      const headers: Record<string, string> = {};
+      if (otpToken) headers['X-OTP-Verification'] = otpToken;
       const result = await apiFetch<{ success: boolean; message: string }>('/api/wallet/withdraw', {
         method: 'POST',
         body: JSON.stringify({ amount, method }),
+        headers,
       });
       setWithdrawalRequests(prev => [...prev, { id: `w-${Date.now()}`, userId: user.id, amount, paymentMethod: method, status: WithdrawalStatus.PENDING, requestDate: new Date().toISOString() }]);
       return { success: result.success, message: result.message };
@@ -869,7 +1057,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const fetchChats = async () => {
     if (!user) return;
     try {
-      const res = await apiFetch<ChatSession[]>('/api/chat/sessions');
+      const res = await apiFetch<ChatSession[]>('/api/chat/sessions', { silent401: true } as any);
       setChats(res);
     } catch (e) {
       console.error('Failed to fetch chats:', e);
@@ -879,7 +1067,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const fetchMessages = async (chatId: string) => {
     if (!user) return;
     try {
-      const res = await apiFetch<any[]>(`/api/chat/sessions/${chatId}/messages`);
+      const res = await apiFetch<any[]>(`/api/chat/sessions/${chatId}/messages`, { silent401: true } as any);
 
       const mappedMessages: ChatMessage[] = res.map(m => ({
         id: m.id,
@@ -896,11 +1084,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         } : undefined
       }));
 
-      // Merge with existing messages, preventing duplicates based on ID
+      // Merge: update existing messages (status may have changed) + append new ones
       setMessages(prev => {
-        const existingIds = new Set(prev.map(msg => msg.id));
-        const newMessages = mappedMessages.filter(msg => !existingIds.has(msg.id));
-        return [...prev, ...newMessages];
+        const existingMap = new Map(prev.map(msg => [msg.id, msg]));
+        mappedMessages.forEach(msg => existingMap.set(msg.id, msg)); // overwrite with server truth
+        return Array.from(existingMap.values()).sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
       });
     } catch (e) {
       console.error('Failed to fetch messages:', e);
@@ -909,8 +1099,20 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const startNegotiation = async (pid: string, oid: string) => {
     if (!user) return '';
-    const existing = chats.find(c => c.participantIds.includes(user.id) && c.participantIds.includes(pid) && c.offerId === oid);
-    if (existing) return existing.id;
+
+    // First refresh chats from server to check for an existing session
+    try {
+      const freshChats = await apiFetch<ChatSession[]>('/api/chat/sessions', { silent401: true } as any);
+      if (Array.isArray(freshChats)) setChats(freshChats);
+      const existing = freshChats.find((c: ChatSession) =>
+        c.participantIds?.includes(user.id) && c.participantIds?.includes(pid) && c.offerId === oid
+      );
+      if (existing) return existing.id;
+    } catch (_) {
+      // Network error — fall through to check local cache
+      const existing = chats.find(c => c.participantIds?.includes(user.id) && c.participantIds?.includes(pid) && c.offerId === oid);
+      if (existing) return existing.id;
+    }
 
     try {
       const res = await apiFetch<ChatSession>('/api/chat/sessions', {
@@ -921,10 +1123,83 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return res.id;
     } catch (e) {
       console.error('Failed to create chat:', e);
-      // Fallback
       const id = `chat-${Date.now()}`;
       setChats(prev => [...prev, { id, participantIds: [user.id, pid], offerId: oid, lastMessage: 'Started', lastMessageAt: new Date().toISOString(), unreadCounts: {} }]);
       return id;
+    }
+  };
+
+  const respondToProposal = async (chatId: string, msgId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', price?: number, qty?: number) => {
+    if (!user) return;
+
+    if (action === 'COUNTER') {
+      // Counter-offer: send a new proposal message — no backend proposal-respond needed
+      const original = messages.find(m => m.id === msgId);
+      await sendMessage(
+        chatId,
+        `Counter-offer: ${qty} units @ ${price?.toLocaleString()} XAF each`,
+        {
+          offerId: original?.proposal?.offerId,
+          pricePerUnit: price,
+          quantity: qty,
+          status: ProposalStatus.PENDING
+        }
+      );
+      return;
+    }
+
+    // Optimistic UI update immediately
+    setMessages(prev => prev.map(m =>
+      m.id === msgId && m.proposal
+        ? { ...m, proposal: { ...m.proposal, status: action === 'ACCEPT' ? ProposalStatus.ACCEPTED : ProposalStatus.REJECTED } }
+        : m
+    ));
+
+    try {
+      const res = await apiFetch<{ message: any; order?: any }>(
+        `/api/chat/messages/${msgId}/proposal`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ response: action === 'ACCEPT' ? 'ACCEPTED' : 'REJECTED' }),
+        }
+      );
+
+      if (action === 'ACCEPT' && res.order) {
+        // Backend auto-created the order — add it to local orders state
+        setOrders(prev => {
+          const alreadyExists = prev.some(o => o.id === res.order.id);
+          if (alreadyExists) return prev;
+          const mapped = {
+            ...res.order,
+            items: Array.isArray(res.order.orderItems || res.order.items)
+              ? (res.order.orderItems || res.order.items).map((item: any) => ({
+                ...item,
+                cartQuantity: item.cartQuantity || item.quantity || 1,
+                id: item.offerId || item.id
+              }))
+              : []
+          };
+          return [...prev, mapped];
+        });
+        addNotification(user.id, `✅ Proposal accepted! Order #${res.order.id?.substring(res.order.id.length - 6).toUpperCase()} has been created.`, 'SUCCESS', `/orders/${res.order.id}`);
+        // Refresh all orders from server
+        setTimeout(() => fetchData(user), 1000);
+      } else if (action === 'REJECT') {
+        addNotification(user.id, '❌ Proposal rejected. The buyer has been notified.', 'WARNING');
+      }
+
+      // Confirm the real server proposal status by refreshing this chat's messages
+      fetchMessages(chatId);
+
+    } catch (err: any) {
+      console.error('Failed to respond to proposal:', err);
+      // Revert optimistic update on error
+      setMessages(prev => prev.map(m =>
+        m.id === msgId && m.proposal
+          ? { ...m, proposal: { ...m.proposal, status: ProposalStatus.PENDING } }
+          : m
+      ));
+      addNotification(user.id, `Failed to respond to proposal: ${err.message}`, 'ERROR');
     }
   };
 
@@ -976,26 +1251,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const respondToProposal = (chatId: string, msgId: string, action: any, price?: number, qty?: number) => {
-    if (!user) return;
-    setMessages(prev => prev.map(m => m.id === msgId && m.proposal ? { ...m, proposal: { ...m.proposal, status: action === 'ACCEPT' ? ProposalStatus.ACCEPTED : action === 'REJECT' ? ProposalStatus.REJECTED : ProposalStatus.COUNTERED } } : m));
-    if (action === 'ACCEPT') {
-      const chat = chats.find(c => c.id === chatId);
-      const original = messages.find(m => m.id === msgId);
-      if (chat && original?.proposal) {
-        const client = chat.participantIds.find(p => p !== user.id);
-        if (client) {
-          const offerOrigin = offers.find(o => o.id === original.proposal!.offerId);
-          if (offerOrigin) {
-            const custom = { ...offerOrigin, id: `cust-${Date.now()}`, title: `Special: ${offerOrigin.title}`, price: original.proposal!.pricePerUnit, quantity: original.proposal!.quantity, reservedClientId: client, isNegotiable: false, createdAt: new Date().toISOString() };
-            setOffers(prev => [...prev, custom]);
-            sendMessage(chatId, 'Proposal Accepted! Offer created.', undefined);
-          }
-        }
-      }
-    } else if (action === 'REJECT') { sendMessage(chatId, 'Rejected'); }
-    else if (action === 'COUNTER') { sendMessage(chatId, `Counter: ${qty} @ ${price}`, { offerId: messages.find(m => m.id === msgId)?.proposal?.offerId, pricePerUnit: price, quantity: qty, status: ProposalStatus.PENDING }); }
-  };
+
 
   return (
     <StoreContext.Provider value={{
@@ -1006,7 +1262,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       fetchMessages,
       startNegotiation,
       sendMessage, respondToProposal,
-      login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, createOffer, updateOffer, getProducerOffers, getOfferById,
+      login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, getProducerOffers, getOfferById,
       addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, confirmReceipt, reportProblem, addDisputeEvidence, revealContactInfo,
       getWallet, fundWallet, requestWithdrawal, markNotificationsAsRead, getAvailableSlots, submitReview, getAverageRating,
       getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,
@@ -1029,3 +1285,6 @@ export const useStore = () => {
   }
   return context;
 };
+
+/** Use when component may render outside StoreProvider (e.g. global widgets). Returns undefined when outside provider. */
+export const useStoreOptional = (): StoreContextType | undefined => useContext(StoreContext);

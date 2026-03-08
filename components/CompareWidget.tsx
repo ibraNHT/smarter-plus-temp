@@ -1,15 +1,13 @@
 
 import React from 'react';
-import { useStore } from '../services/storeContext';
+import { useStoreOptional } from '../services/storeContext';
 import { useTranslation } from '../services/i18nContext';
 import { Link } from 'react-router-dom';
 import { Layers, X, ArrowRight } from 'lucide-react';
 
 export const CompareWidget: React.FC = () => {
-  const store = useStore();
+  const store = useStoreOptional();
   const { t } = useTranslation();
-
-  // Safety check for context updates
   if (!store || !store.compareList) return null;
 
   const { compareList, removeFromCompare, clearCompare, offers } = store;

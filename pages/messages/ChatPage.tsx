@@ -14,10 +14,14 @@ export const ChatPage: React.FC = () => {
 
    const [inputText, setInputText] = useState('');
    const [showProposalModal, setShowProposalModal] = useState(false);
+   const [showCounterModal, setShowCounterModal] = useState(false);
+   const [counterTargetMsgId, setCounterTargetMsgId] = useState<string | null>(null);
 
    // Proposal Form State
    const [proposalPrice, setProposalPrice] = useState<number>(0);
    const [proposalQty, setProposalQty] = useState<number>(0);
+   const [counterPrice, setCounterPrice] = useState<number>(0);
+   const [counterQty, setCounterQty] = useState<number>(0);
 
    const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -102,6 +106,21 @@ export const ChatPage: React.FC = () => {
          status: ProposalStatus.PENDING
       });
       setShowProposalModal(false);
+   };
+
+   const handleOpenCounter = (msgId: string, currentPrice: number, currentQty: number) => {
+      setCounterTargetMsgId(msgId);
+      setCounterPrice(currentPrice);
+      setCounterQty(currentQty);
+      setShowCounterModal(true);
+   };
+
+   const handleSendCounter = () => {
+      if (!counterTargetMsgId || !chatId) return;
+      if (counterPrice <= 0 || counterQty <= 0) { alert('Invalid price or quantity'); return; }
+      respondToProposal(chatId, counterTargetMsgId, 'COUNTER', counterPrice, counterQty);
+      setShowCounterModal(false);
+      setCounterTargetMsgId(null);
    };
 
    // Initialize proposal form with offer defaults if available
@@ -225,16 +244,22 @@ export const ChatPage: React.FC = () => {
 
                                        {/* Action Buttons (Only for receiver and if pending) */}
                                        {!isMe && msg.proposal.status === ProposalStatus.PENDING && (
-                                          <div className="mt-3 flex gap-2">
+                                          <div className="mt-3 flex gap-2 flex-wrap">
                                              <button
                                                 onClick={() => respondToProposal(msg.chatId, msg.id, 'ACCEPT')}
-                                                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded font-bold transition-colors"
+                                                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded font-bold transition-colors min-w-[60px]"
                                              >
                                                 {t('chat.accept')}
                                              </button>
                                              <button
+                                                onClick={() => handleOpenCounter(msg.id, msg.proposal!.pricePerUnit, msg.proposal!.quantity)}
+                                                className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-2 rounded font-bold transition-colors min-w-[60px]"
+                                             >
+                                                Counter
+                                             </button>
+                                             <button
                                                 onClick={() => respondToProposal(msg.chatId, msg.id, 'REJECT')}
-                                                className="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs py-2 rounded font-bold transition-colors"
+                                                className="w-full bg-red-600 hover:bg-red-700 text-white text-xs py-2 rounded font-bold transition-colors"
                                              >
                                                 {t('chat.reject')}
                                              </button>
@@ -336,6 +361,56 @@ export const ChatPage: React.FC = () => {
                         className="px-4 py-2 bg-primary-600 text-white rounded-md text-sm font-bold hover:bg-primary-700"
                      >
                         {t('chat.proposed')}
+                     </button>
+                  </div>
+               </div>
+            </div>
+         )}
+
+         {/* Counter-Offer Modal */}
+         {showCounterModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+               <div className="bg-white rounded-lg max-w-sm w-full p-6 shadow-xl">
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">Send a Counter-Offer</h3>
+                  <p className="text-sm text-gray-500 mb-4">Propose your own price and quantity. The other party will receive it as a new proposal.</p>
+                  <div className="space-y-4">
+                     <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('chat.pricePerUnit')} (XAF)</label>
+                        <input
+                           type="number" min="1"
+                           value={counterPrice}
+                           onChange={(e) => setCounterPrice(Number(e.target.value))}
+                           className="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900"
+                        />
+                     </div>
+                     <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('form.quantity')}</label>
+                        <input
+                           type="number" min="1"
+                           value={counterQty}
+                           onChange={(e) => setCounterQty(Number(e.target.value))}
+                           className="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900"
+                        />
+                     </div>
+                     <div className="bg-gray-50 p-3 rounded text-sm">
+                        <div className="flex justify-between font-bold text-gray-900">
+                           <span>New Total:</span>
+                           <span>{(counterPrice * counterQty).toLocaleString()} XAF</span>
+                        </div>
+                     </div>
+                  </div>
+                  <div className="mt-6 flex justify-end gap-3">
+                     <button
+                        onClick={() => { setShowCounterModal(false); setCounterTargetMsgId(null); }}
+                        className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md text-sm font-medium"
+                     >
+                        {t('form.cancel')}
+                     </button>
+                     <button
+                        onClick={handleSendCounter}
+                        className="px-4 py-2 bg-yellow-500 text-white rounded-md text-sm font-bold hover:bg-yellow-600"
+                     >
+                        Send Counter-Offer
                      </button>
                   </div>
                </div>

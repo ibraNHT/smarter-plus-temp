@@ -1,16 +1,20 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useStore } from '../services/storeContext';
+import { useStoreOptional } from '../services/storeContext';
 import { Notification } from '../types';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 export const ToastContainer: React.FC = () => {
-  const { notifications, user } = useStore();
+  const store = useStoreOptional();
   const [visibleToasts, setVisibleToasts] = useState<Notification[]>([]);
   const lastNotifyIdRef = useRef<string | null>(null);
 
+  const notifications = store?.notifications ?? [];
+  const user = store?.user ?? null;
+
   useEffect(() => {
-    if (notifications.length > 0) {
+    if (!store || notifications.length === 0) return;
+    {
       // Get the most recent notification
       const latest = notifications[0];
 
@@ -27,13 +31,13 @@ export const ToastContainer: React.FC = () => {
         }, 5000);
       }
     }
-  }, [notifications, user]);
+  }, [store, notifications, user]);
 
   const removeToast = (id: string) => {
     setVisibleToasts(prev => prev.filter(t => t.id !== id));
   };
 
-  if (visibleToasts.length === 0) return null;
+  if (!store || visibleToasts.length === 0) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-3 max-w-sm w-full pointer-events-none px-4 sm:px-0">

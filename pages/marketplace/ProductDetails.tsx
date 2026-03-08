@@ -96,15 +96,6 @@ export const ProductDetails: React.FC = () => {
   };
 
   const handleAddToCart = () => {
-    // Authentication Check
-    if (!user) {
-      const confirmLogin = window.confirm(t('cart.loginRequired'));
-      if (confirmLogin) {
-        navigate('/login');
-      }
-      return;
-    }
-
     if (offer.type === OfferType.SERVICE && !selectedSlot) {
       alert("Please select a time slot.");
       return;
@@ -142,9 +133,10 @@ export const ProductDetails: React.FC = () => {
   };
 
   const getProducerDisplayName = () => {
+    if (!isProducerMarket) return 'ATI Retail Store';
     if (!producer) return 'Unknown';
-    if (producer.type === 'BUSINESS') return producer.name;
-    return `${producer.firstName || ''} ${producer.lastName || ''}`.trim() || producer.name;
+    if (producer.type === 'BUSINESS') return producer.name || `${producer.firstName || ''} ${producer.lastName || ''}`.trim() || 'Business';
+    return `${producer.firstName || ''} ${producer.lastName || ''}`.trim() || producer.name || 'Unknown';
   };
 
   const productSchema = offer ? {
@@ -357,13 +349,13 @@ export const ProductDetails: React.FC = () => {
                   </div>
                 )}
 
-                {/* Producer Info Card */}
-                {producer && (
+                {/* Info Card */}
+                {isProducerMarket && producer ? (
                   <div className="bg-primary-50 p-4 rounded-lg mb-6 border border-primary-100">
                     <h3 className="text-xs font-bold text-primary-800 uppercase tracking-wide mb-3">{t('product.soldBy')}</h3>
                     <div className="flex items-start space-x-3">
                       <div className="flex-shrink-0 h-12 w-12 rounded-full bg-white border border-primary-200 flex items-center justify-center text-primary-700 font-bold text-lg shadow-sm">
-                        {getProducerDisplayName().charAt(0)}
+                        {(getProducerDisplayName() || 'U').charAt(0)}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
@@ -388,7 +380,30 @@ export const ProductDetails: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                )}
+                ) : !isProducerMarket ? (
+                  <div className="bg-blue-50 p-4 rounded-lg mb-6 border border-blue-100">
+                    <h3 className="text-xs font-bold text-blue-800 uppercase tracking-wide mb-3">{t('product.soldBy')}</h3>
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0 h-12 w-12 rounded-full bg-white border border-blue-200 flex items-center justify-center text-blue-700 font-bold text-lg shadow-sm">
+                        <img src="/apple-touch-icon.png" alt="ATI Logo" className="h-10 w-10 object-contain rounded-full" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-base font-bold text-gray-900">
+                            ATI Retail Store
+                          </span>
+                        </div>
+                        <div className="flex items-center text-xs text-gray-600 mt-1">
+                          <MapPin className="h-3 w-3 mr-1" />
+                          {offer.offerLocation || 'Official Warehouse'}
+                        </div>
+                        <div className="flex items-center text-xs text-blue-700 mt-1 font-medium">
+                          <ShieldCheck className="h-3 w-3 mr-1" /> Vetted Quality
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               {/* Actions */}
@@ -424,7 +439,7 @@ export const ProductDetails: React.FC = () => {
         </div>
 
         {/* PORTFOLIO SECTION */}
-        {relevantPortfolios.length > 0 && (
+        {isProducerMarket && relevantPortfolios.length > 0 && (
           <div className="mt-12">
             <div className="flex items-center mb-6">
               <ImageIcon className="h-6 w-6 text-gray-400 mr-2" />
@@ -466,7 +481,7 @@ export const ProductDetails: React.FC = () => {
         )}
 
         {/* REVIEWS SECTION */}
-        {producer && (
+        {isProducerMarket && producer && (
           <div className="mt-12 bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="p-6 border-b border-gray-100 flex items-center">
               <Star className="h-6 w-6 text-yellow-500 fill-current mr-3" />

@@ -1,22 +1,22 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useStore } from '../services/storeContext';
+import { useStoreOptional } from '../services/storeContext';
 import { X, Send, Headphones, Bot, User } from 'lucide-react';
 
 export const SupportChatWidget: React.FC = () => {
-  const { isSupportChatOpen, toggleSupportChat, supportMessages, sendSupportMessage } = useStore();
+  const store = useStoreOptional();
   const [inputText, setInputText] = useState('');
-  
-  // Position state (persists across re-renders/toggles)
   const [position, setPosition] = useState<{ top: number, left: number } | null>(null);
-  
-  // Refs for dragging logic to avoid re-renders during drag
   const isDraggingRef = useRef(false);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
   const widgetRef = useRef<HTMLDivElement>(null);
   const chatBodyRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom on new message
+  const isSupportChatOpen = store?.isSupportChatOpen ?? false;
+  const toggleSupportChat = store?.toggleSupportChat ?? (() => {});
+  const supportMessages = store?.supportMessages ?? [];
+  const sendSupportMessage = store?.sendSupportMessage ?? (async () => {});
+
   useEffect(() => {
     if (chatBodyRef.current) {
       chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
@@ -80,12 +80,12 @@ export const SupportChatWidget: React.FC = () => {
     }
   };
 
-  // Dynamic Style for Widget
   const widgetStyle: React.CSSProperties = {
       height: '500px',
-      // If we have a saved position, use it. Otherwise default to bottom-right.
       ...(position ? { top: position.top, left: position.left } : { bottom: '24px', right: '24px' })
   };
+
+  if (!store) return null;
 
   return (
     <>

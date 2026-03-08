@@ -142,6 +142,12 @@ export const ShoppingCart: React.FC = () => {
       return;
     }
 
+    if (!user) {
+      alert("For security reasons, please log in or create an account to finalize your purchase.");
+      navigate('/login');
+      return;
+    }
+
     if (!canPlaceOrder) {
       if (!isDeliveryMethodValid) alert("Please select a valid delivery method and address/pickup point.");
       else if (!isAtiDateValid) alert("Please select a delivery date.");
@@ -171,12 +177,9 @@ export const ShoppingCart: React.FC = () => {
     if (tempEmail.includes('@')) {
       setGuestEmail(tempEmail);
       setShowGuestEmailModal(false);
-      // Proceed to checkout if valid
-      if (canPlaceOrder) {
-        setShowRecap(true);
-      } else {
-        alert("Email saved! Please finalize your delivery method above before placing the order.");
-      }
+
+      alert(t('cart.loginRequired'));
+      navigate('/login');
     }
   };
 

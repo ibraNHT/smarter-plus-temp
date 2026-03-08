@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
-import { MapPin, X, Plus, Lock } from 'lucide-react';
+import { MapPin, X, Plus, Lock, Phone } from 'lucide-react';
 import { ProducerType, Location } from '../../types';
 
 // Mock Data for Regions/Cities
@@ -20,6 +20,36 @@ const CAMEROON_LOCATIONS: Record<string, string[]> = {
   'South': ['Ebolowa', 'Kribi', 'Sangmelima']
 };
 
+const AFRICA_COUNTRY_CODES = [
+  // Central Africa
+  { code: '+237', country: 'Cameroon' },
+  { code: '+236', country: 'Central African Rep' },
+  { code: '+235', country: 'Chad' },
+  { code: '+242', country: 'Congo Rep' },
+  { code: '+243', country: 'DR Congo' },
+  { code: '+240', country: 'Equatorial Guinea' },
+  { code: '+241', country: 'Gabon' },
+  // West Africa
+  { code: '+234', country: 'Nigeria' },
+  { code: '+233', country: 'Ghana' },
+  { code: '+225', country: 'Ivory Coast' },
+  { code: '+221', country: 'Senegal' },
+  { code: '+223', country: 'Mali' },
+  { code: '+226', country: 'Burkina Faso' },
+  { code: '+227', country: 'Niger' },
+  { code: '+228', country: 'Togo' },
+  { code: '+229', country: 'Benin' },
+  { code: '+224', country: 'Guinea' },
+  // East Africa
+  { code: '+254', country: 'Kenya' },
+  { code: '+255', country: 'Tanzania' },
+  { code: '+256', country: 'Uganda' },
+  { code: '+250', country: 'Rwanda' },
+  { code: '+257', country: 'Burundi' },
+  { code: '+251', country: 'Ethiopia' },
+  { code: '+252', country: 'Somalia' },
+];
+
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock', 'Vegetables', 'Processed Goods', 'Equipment', 'Service'];
 
 export const RegisterProducer: React.FC = () => {
@@ -33,6 +63,7 @@ export const RegisterProducer: React.FC = () => {
     email: '',
     password: '',
     confirmPassword: '',
+    phoneCode: '+237',
     phone: '',
     description: '',
     productionTypes: [] as string[],
@@ -88,7 +119,7 @@ export const RegisterProducer: React.FC = () => {
       type: formData.type,
       name: formData.name,
       email: formData.email,
-      phone: formData.phone,
+      phone: `${formData.phoneCode}${formData.phone}`,
       description: formData.description,
       locations: locations,
       certifications: [],
@@ -173,12 +204,27 @@ export const RegisterProducer: React.FC = () => {
 
           <div className="sm:col-span-3">
             <label htmlFor="phone" className="block text-sm font-medium text-gray-700">{t('form.phone')}</label>
-            <div className="mt-1">
-              <input type="tel" name="phone" required
-                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
-                value={formData.phone}
-                onChange={e => setFormData({ ...formData, phone: e.target.value })}
-              />
+            <div className="mt-1 flex rounded-md shadow-sm">
+              <select
+                className="w-24 sm:w-32 inline-flex items-center px-2 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm overflow-hidden"
+                value={formData.phoneCode}
+                onChange={e => setFormData({ ...formData, phoneCode: e.target.value })}
+              >
+                {AFRICA_COUNTRY_CODES.map(c => (
+                  <option key={c.code} value={c.code}>{c.code} ({c.country})</option>
+                ))}
+              </select>
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Phone className="h-4 w-4 text-gray-400" />
+                </div>
+                <input type="tel" name="phone" required
+                  className="focus:ring-primary-500 focus:border-primary-500 flex-1 block w-full pl-10 rounded-none rounded-r-md sm:text-sm border-gray-300 p-2 border bg-white text-gray-900"
+                  value={formData.phone}
+                  onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="612 345 678"
+                />
+              </div>
             </div>
           </div>
 
@@ -233,8 +279,8 @@ export const RegisterProducer: React.FC = () => {
                   type="button"
                   onClick={() => toggleCategory(cat)}
                   className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${isSelected
-                      ? 'bg-primary-100 text-primary-800 ring-2 ring-primary-500 ring-offset-1'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    ? 'bg-primary-100 text-primary-800 ring-2 ring-primary-500 ring-offset-1'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                 >
                   {cat}
