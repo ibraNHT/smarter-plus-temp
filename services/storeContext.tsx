@@ -31,7 +31,7 @@ interface StoreContextType {
   fetchChats: () => Promise<void>;
   fetchMessages: (chatId: string) => Promise<void>;
   startNegotiation: (producerId: string, offerId: string) => Promise<string>;
-  sendMessage: (chatId: string, text: string, proposal?: Proposal) => void;
+  sendMessage: (chatId: string, text: string, proposal?: Proposal) => Promise<boolean>;
   respondToProposal: (chatId: string, messageId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', counterPrice?: number, counterQty?: number) => void;
 
   // Support Chat (Client Side)
@@ -1203,10 +1203,43 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
+  /** Detect phone numbers (East, West, Central Africa): with/without spaces/dashes, international or national. */
+  const hasPhoneNumber = (str: string): boolean => {
+    if (!str || typeof str !== 'string') return false;
+    const s = str.trim();
+    // International: + then country code (1–4 digits), optional space/dot/dash, then 6–12 digits (e.g. +237 96326121, +254 712 345 678)
+    if (/\+[0-9]{1,4}[\s.\-]*[0-9]{6,12}\b/.test(s)) return true;
+    // Collapse spaces/dots/dashes only between digits: "0 6 12 34 56 78" -> "0612345678"
+    let collapsed = s;
+    while (true) {
+      const next = collapsed.replace(/(\d)([\s.\-]+)(?=\d)/g, '$1');
+      if (next === collapsed) break;
+      collapsed = next;
+    }
+    // International (collapsed): + then 10–14 digits
+    if (/\+[0-9]{10,14}\b/.test(collapsed)) return true;
+    if (/\+[\s.\-]*\d([\s.\-]*\d){9,13}/.test(collapsed)) return true;
+    // African patterns: national (0 + 8–11 digits), 9-digit mobile (5–9 + 8), 10-digit (7–9 + 9), country code (2–9 + 10–11)
+    if (/(^|[^\d])0\d{8,11}([^\d]|$)/.test(collapsed)) return true;
+    if (/(^|[^\d])[5-9]\d{8}([^\d]|$)/.test(collapsed)) return true;
+    if (/(^|[^\d])[789]\d{9}([^\d]|$)/.test(collapsed)) return true;
+    if (/(^|[^\d])[2-9]\d{10,11}([^\d]|$)/.test(collapsed)) return true;
+    // Same checks on original (no collapse) for numbers without separators
+    if (/\b0\d{8,11}\b/.test(s)) return true;
+    if (/\b[5-9]\d{8}\b/.test(s)) return true;
+    if (/\b[789]\d{9}\b/.test(s)) return true;
+    if (/\b[2-9]\d{10,11}\b/.test(s)) return true;
+    return false;
+  };
+
   const sendMessage = async (chatId: string, text: string, proposal?: any) => {
     if (!user) return;
-    if (!proposal && !text.startsWith('Counter') && !text.startsWith('Formal') && (text.match(/[a-zA-Z0-9._%+-]+@?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/) || text.match(/\b6\d{8}\b/))) {
-      addNotification(user.id, 'Forbidden: No contact info allowed', 'ERROR'); return;
+    const hasEmail = text.match(/[a-zA-Z0-9._%+-]+@?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    const hasPhone = hasPhoneNumber(text);
+    const hasLink = text.match(/https?:\/\/\S+|www\.\S+/i);
+    if (!proposal && !text.startsWith('Counter') && !text.startsWith('Formal') && (hasEmail || hasPhone || hasLink)) {
+      addNotification(user.id, hasPhone ? 'Sharing phone numbers is not allowed in chat.' : hasEmail ? 'Sharing email addresses is not allowed in chat.' : 'Sharing links is not allowed in chat.', 'ERROR');
+      return Promise.resolve(false);
     }
 
     try {
@@ -1240,14 +1273,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       // Optimistic updates for new messages
       setMessages(prev => [...prev, mappedMsg]);
       setChats(prev => prev.map(c => c.id === chatId ? { ...c, lastMessage: text, lastMessageAt: res.createdAt } : c));
-    } catch (e) {
+      return true;
+    } catch (e: any) {
       console.error('Failed to send message:', e);
-      addNotification(user.id, 'Failed to send message', 'ERROR');
-
-      // Keep old explicit fallback just in case the backend crashes during testing
-      const msg = { id: `m-${Date.now()}`, chatId, senderId: user.id, text, proposal, createdAt: new Date().toISOString() };
-      setMessages(prev => [...prev, msg]);
-      setChats(prev => prev.map(c => c.id === chatId ? { ...c, lastMessage: text, lastMessageAt: msg.createdAt } : c));
+      const message = (e?.message || (e?.status === 400 ? 'Message not allowed (e.g. no phone numbers or links).' : 'Failed to send message'));
+      addNotification(user.id, message, 'ERROR');
+      // Never add the message to the UI when the request failed — server may have rejected it (e.g. phone number / link)
+      return false;
     }
   };
 

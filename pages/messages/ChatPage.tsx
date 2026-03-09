@@ -85,12 +85,11 @@ export const ChatPage: React.FC = () => {
       return 'User';
    };
 
-   const handleSendMessage = (e?: React.FormEvent) => {
+   const handleSendMessage = async (e?: React.FormEvent) => {
       e?.preventDefault();
-      if (inputText.trim() && chatId) {
-         sendMessage(chatId, inputText);
-         setInputText('');
-      }
+      if (!inputText.trim() || !chatId) return;
+      const sent = await sendMessage(chatId, inputText);
+      if (sent) setInputText('');
    };
 
    const handleSendProposal = () => {
