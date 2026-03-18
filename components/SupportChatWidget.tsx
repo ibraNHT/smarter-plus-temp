@@ -2,6 +2,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStoreOptional } from '../services/storeContext';
 import { X, Send, Headphones, Bot, User } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export const SupportChatWidget: React.FC = () => {
   const store = useStoreOptional();
@@ -16,6 +18,17 @@ export const SupportChatWidget: React.FC = () => {
   const toggleSupportChat = store?.toggleSupportChat ?? (() => {});
   const supportMessages = store?.supportMessages ?? [];
   const sendSupportMessage = store?.sendSupportMessage ?? (async () => {});
+  
+  // Guest form state
+  const user = store?.user ?? null;
+  const showGuestForm = store?.showGuestForm ?? false;
+  const setShowGuestForm = store?.setShowGuestForm ?? (() => {});
+  const guestEmailInput = store?.guestEmailInput ?? '';
+  const setGuestEmailInput = store?.setGuestEmailInput ?? (() => {});
+  const guestNameInput = store?.guestNameInput ?? '';
+  const setGuestNameInput = store?.setGuestNameInput ?? (() => {});
+  const submitGuestForm = store?.submitGuestForm ?? (() => {});
+  const [formEmailError, setFormEmailError] = useState('');
 
   useEffect(() => {
     if (chatBodyRef.current) {
@@ -78,6 +91,25 @@ export const SupportChatWidget: React.FC = () => {
         sendSupportMessage(inputText);
         setInputText('');
     }
+  };
+
+  const handleSubmitGuestForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormEmailError('');
+
+    // Validate email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!guestEmailInput.trim()) {
+      setFormEmailError('Email is required');
+      return;
+    }
+    if (!emailRegex.test(guestEmailInput.trim())) {
+      setFormEmailError('Please enter a valid email address');
+      return;
+    }
+
+    // Submit form
+    submitGuestForm(guestEmailInput.trim(), guestNameInput.trim() || 'Guest');
   };
 
   const widgetStyle: React.CSSProperties = {
@@ -153,8 +185,37 @@ export const SupportChatWidget: React.FC = () => {
                       ? 'bg-blue-600 text-white rounded-br-none' 
                       : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none'
                    }`}>
-                      <p>{msg.text}</p>
-                      <p className={`text-[10px] mt-1 text-right ${isUser ? 'text-blue-200' : 'text-gray-400'}`}>
+                      {isUser ? (
+                        <p>{msg.text}</p>
+                      ) : (
+                        <div className="markdown-content space-y-2">
+                          <ReactMarkdown 
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              p: ({node, ...props}) => <p className="mb-2" {...props} />,
+                              ul: ({node, ...props}) => <ul className="list-disc list-inside mb-2 space-y-1" {...props} />,
+                              ol: ({node, ...props}) => <ol className="list-decimal list-inside mb-2 space-y-1" {...props} />,
+                              li: ({node, ...props}) => <li className="ml-1" {...props} />,
+                              strong: ({node, ...props}) => <strong className="font-semibold" {...props} />,
+                              em: ({node, ...props}) => <em className="italic" {...props} />,
+                              code: ({node, inline, ...props}) => 
+                                inline ? (
+                                  <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-700 font-mono text-xs" {...props} />
+                                ) : (
+                                  <pre className="bg-gray-100 p-2 rounded overflow-x-auto mb-2"><code {...props} /></pre>
+                                ),
+                              a: ({node, ...props}) => <a className="text-blue-600 hover:underline" {...props} />,
+                              h1: ({node, ...props}) => <h1 className="font-bold text-base mb-2" {...props} />,
+                              h2: ({node, ...props}) => <h2 className="font-bold text-sm mb-2" {...props} />,
+                              h3: ({node, ...props}) => <h3 className="font-semibold text-sm mb-1" {...props} />,
+                              blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 pl-2 italic text-gray-600 mb-2" {...props} />,
+                            }}
+                          >
+                            {msg.text}
+                          </ReactMarkdown>
+                        </div>
+                      )}
+                      <p className={`text-[10px] mt-2 text-right ${isUser ? 'text-blue-200' : 'text-gray-400'}`}>
                          {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                       </p>
                    </div>
@@ -168,23 +229,59 @@ export const SupportChatWidget: React.FC = () => {
            })}
         </div>
 
-        {/* Input Area */}
-        <form onSubmit={handleSend} className="p-3 bg-white border-t border-gray-200 flex gap-2">
-           <input 
-             type="text" 
-             className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
-             placeholder="Type a question..."
-             value={inputText}
-             onChange={(e) => setInputText(e.target.value)}
-           />
-           <button 
-             type="submit"
-             disabled={!inputText.trim()}
-             className="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-           >
+        {/* Input Area or Guest Form */}
+        {showGuestForm && !user ? (
+          <form onSubmit={handleSubmitGuestForm} className="p-4 bg-white border-t border-gray-200 space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Email Address *</label>
+              <input
+                type="email"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                placeholder="your@email.com"
+                value={guestEmailInput}
+                onChange={(e) => {
+                  setGuestEmailInput(e.target.value);
+                  setFormEmailError('');
+                }}
+                required
+              />
+              {formEmailError && <p className="text-xs text-red-500 mt-1">{formEmailError}</p>}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Name (optional)</label>
+              <input
+                type="text"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                placeholder="Your name"
+                value={guestNameInput}
+                onChange={(e) => setGuestNameInput(e.target.value)}
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full bg-blue-600 text-white py-2 px-3 rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              Start Chat
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleSend} className="p-3 bg-white border-t border-gray-200 flex gap-2">
+            <input 
+              type="text" 
+              className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+              placeholder="Type a question..."
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+            />
+            <button 
+              type="submit"
+              disabled={!inputText.trim()}
+              className="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
               <Send className="h-4 w-4" />
-           </button>
-        </form>
+            </button>
+          </form>
+        )}
       </div>
     </>
   );

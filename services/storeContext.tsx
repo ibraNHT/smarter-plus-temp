@@ -39,6 +39,17 @@ interface StoreContextType {
   isSupportChatOpen: boolean;
   toggleSupportChat: () => void;
   sendSupportMessage: (text: string) => Promise<void>;
+  showGuestForm: boolean;
+  setShowGuestForm: (show: boolean) => void;
+  guestEmailInput: string;
+  setGuestEmailInput: (email: string) => void;
+  guestNameInput: string;
+  setGuestNameInput: (name: string) => void;
+  guestName: string | null;
+  setGuestName: (name: string | null) => void;
+  submitGuestForm: (email: string, name: string) => void;
+  supportSessionId: string | null;
+  setSupportSessionId: (id: string | null) => void;
 
   login: (identifier: string, password: string) => Promise<{ success: boolean; message: string }>;
   logout: () => Promise<void>;
@@ -116,6 +127,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // pendingRegistration kept in-memory for OTP verification flow
   const [pendingRegistration, setPendingRegistration] = useState<{ email: string, code: string, data: any, role: UserRole, password?: string } | null>(null);
   const [guestEmail, setGuestEmail] = useState<string | null>(null);
+  const [guestName, setGuestName] = useState<string | null>(null);
 
   // State
   const [producers, setProducers] = useState<ProducerProfile[]>([]);
@@ -145,6 +157,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     { id: 'init-1', sender: 'AI', text: 'Hello! I am AgriBot, your automated assistant. How can I help you today?', timestamp: new Date().toISOString() }
   ]);
   const [isHandedOver, setIsHandedOver] = useState(false);
+  const [showGuestForm, setShowGuestForm] = useState(false);
+  const [guestEmailInput, setGuestEmailInput] = useState('');
+  const [guestNameInput, setGuestNameInput] = useState('');
+  const [supportSessionId, setSupportSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('currentUser');
@@ -1038,12 +1054,39 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── SUPPORT CHAT ─────────────────────────────────────────────────────────────
 
-  const toggleSupportChat = () => setIsSupportChatOpen(prev => !prev);
+  const toggleSupportChat = () => {
+    setIsSupportChatOpen(prev => !prev);
+    // Show guest form on first open if guest
+    if (!isSupportChatOpen && !user && !guestEmail) {
+      setShowGuestForm(true);
+    }
+  };
+
+  const submitGuestForm = (email: string, name: string) => {
+    setGuestEmail(email);
+    setGuestName(name);
+    setShowGuestForm(false);
+    setGuestEmailInput('');
+    setGuestNameInput('');
+  };
 
   const sendSupportMessage = async (text: string) => {
+    // If guest and no email, show form first
+    if (!user && !guestEmail) {
+      setShowGuestForm(true);
+      return;
+    }
+
     setSupportMessages(prev => [...prev, { id: `u-${Date.now()}`, sender: 'USER', text, timestamp: new Date().toISOString() }]);
     if (!isHandedOver) {
-      const res = await generateSupportResponse(text, user?.role || 'Guest');
+      // Pass guest email and name if user is not authenticated
+      const res = await generateSupportResponse(text, supportSessionId, !user ? guestEmail : undefined, !user ? guestName : undefined);
+      
+      // Store the sessionId for future messages
+      if (res.sessionId && !supportSessionId) {
+        setSupportSessionId(res.sessionId);
+      }
+      
       setSupportMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: 'AI', text: res.text, timestamp: new Date().toISOString() }]);
       if (res.handover) {
         setIsHandedOver(true);
@@ -1051,6 +1094,44 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }
     }
   };
+
+  // Polling for guest support messages when handed over to agent
+  useEffect(() => {
+    if (!isHandedOver || user || !supportSessionId || !guestEmail) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const baseURL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '' : 'http://localhost:3000');
+        const response = await fetch(`${baseURL}/api/support/guest/sessions/${supportSessionId}/messages?guestEmail=${encodeURIComponent(guestEmail)}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.messages && Array.isArray(data.messages)) {
+            // Map backend messages to local format and update state
+            const backendMessages = data.messages.map((msg: any) => ({
+              id: msg.id,
+              sender: msg.sender,
+              text: msg.text,
+              timestamp: msg.timestamp,
+            }));
+            
+            // Only update if there are new messages
+            setSupportMessages(prev => {
+              const existingIds = new Set(prev.map(m => m.id));
+              const newMessages = backendMessages.filter((m: any) => !existingIds.has(m.id));
+              if (newMessages.length > 0) {
+                return [...prev, ...newMessages];
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error polling support messages:', err);
+      }
+    }, 3000); // Poll every 3 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [isHandedOver, user, supportSessionId, guestEmail]);
 
   // ─── CHAT & NEGOTIATION ───────────────────────────────────────────────────────
 
@@ -1300,7 +1381,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,
       trackUserSearch, toggleFavorite, moveToFavorites, getRecommendedOffers,
       compareList, addToCompare, removeFromCompare, clearCompare,
-      supportMessages, isSupportChatOpen, toggleSupportChat, sendSupportMessage,
+      supportMessages, isSupportChatOpen, toggleSupportChat, sendSupportMessage, showGuestForm, setShowGuestForm, guestEmailInput, setGuestEmailInput, guestNameInput, setGuestNameInput, guestName, setGuestName, submitGuestForm, supportSessionId, setSupportSessionId,
       validateCoupon,
       addPickupPoint, deletePickupPoint,
       changePassword
