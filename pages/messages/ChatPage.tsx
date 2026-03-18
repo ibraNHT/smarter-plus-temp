@@ -94,10 +94,24 @@ export const ChatPage: React.FC = () => {
 
    const handleSendProposal = () => {
       if (!activeChat || !activeChat.offerId) return;
-      if (proposalPrice <= 0 || proposalQty <= 0) {
-         alert("Invalid Price or Quantity");
+      
+      // Check if offer exists and is negotiable
+      const offer = getOfferById(activeChat.offerId);
+      if (!offer) {
+         alert("Offer not found");
          return;
       }
+      if (!offer.isNegotiable) {
+         alert("This offer is not open for negotiation");
+         return;
+      }
+      
+      // Validate price and quantity
+      if (proposalPrice <= 0 || proposalQty <= 0) {
+         alert("Price per unit and quantity must be greater than 0");
+         return;
+      }
+      
       sendMessage(activeChat.id, "Formal Proposal Sent", {
          offerId: activeChat.offerId,
          pricePerUnit: Number(proposalPrice),
@@ -107,16 +121,22 @@ export const ChatPage: React.FC = () => {
       setShowProposalModal(false);
    };
 
-   const handleOpenCounter = (msgId: string, currentPrice: number, currentQty: number) => {
+   const handleOpenCounter = (msgId: string, currentPrice: number | string, currentQty: number | string) => {
       setCounterTargetMsgId(msgId);
-      setCounterPrice(currentPrice);
-      setCounterQty(currentQty);
+      setCounterPrice(Number(currentPrice) || 0);
+      setCounterQty(Number(currentQty) || 0);
       setShowCounterModal(true);
    };
 
    const handleSendCounter = () => {
       if (!counterTargetMsgId || !chatId) return;
-      if (counterPrice <= 0 || counterQty <= 0) { alert('Invalid price or quantity'); return; }
+      
+      // Validate counter offer values
+      if (counterPrice <= 0 || counterQty <= 0) { 
+         alert('Price per unit and quantity must be greater than 0'); 
+         return; 
+      }
+      
       respondToProposal(chatId, counterTargetMsgId, 'COUNTER', counterPrice, counterQty);
       setShowCounterModal(false);
       setCounterTargetMsgId(null);
@@ -284,8 +304,9 @@ export const ChatPage: React.FC = () => {
                         <button
                            type="button"
                            onClick={() => setShowProposalModal(true)}
-                           className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
-                           title={t('chat.makeProposal')}
+                           disabled={!activeChat?.offerId || !(getOfferById(activeChat?.offerId || '')?.isNegotiable ?? false)}
+                           className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                           title={!activeChat?.offerId ? 'Select an offer first' : (getOfferById(activeChat?.offerId || '')?.isNegotiable ? 'Make Proposal' : 'This offer is not open for negotiation')}
                         >
                            <Gavel className="h-6 w-6 text-primary-600" />
                         </button>
@@ -325,25 +346,25 @@ export const ChatPage: React.FC = () => {
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">{t('chat.pricePerUnit')} (XAF)</label>
                         <input
-                           type="number" min="1"
-                           value={proposalPrice}
-                           onChange={(e) => setProposalPrice(Number(e.target.value))}
+                           type="number" min="0.01" step="0.01"
+                           value={proposalPrice || ''}
+                           onChange={(e) => setProposalPrice(Number(e.target.value) || 0)}
                            className="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900"
                         />
                      </div>
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">{t('form.quantity')}</label>
                         <input
-                           type="number" min="1"
-                           value={proposalQty}
-                           onChange={(e) => setProposalQty(Number(e.target.value))}
+                           type="number" min="0.01" step="0.01"
+                           value={proposalQty || ''}
+                           onChange={(e) => setProposalQty(Number(e.target.value) || 0)}
                            className="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900"
                         />
                      </div>
                      <div className="bg-gray-50 p-3 rounded text-sm">
                         <div className="flex justify-between font-bold text-gray-900">
                            <span>Total:</span>
-                           <span>{(proposalPrice * proposalQty).toLocaleString()} XAF</span>
+                           <span>{(Number(proposalPrice) * Number(proposalQty)).toLocaleString()} XAF</span>
                         </div>
                      </div>
                   </div>
@@ -376,25 +397,25 @@ export const ChatPage: React.FC = () => {
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">{t('chat.pricePerUnit')} (XAF)</label>
                         <input
-                           type="number" min="1"
-                           value={counterPrice}
-                           onChange={(e) => setCounterPrice(Number(e.target.value))}
+                           type="number" min="0.01" step="0.01"
+                           value={counterPrice || ''}
+                           onChange={(e) => setCounterPrice(Number(e.target.value) || 0)}
                            className="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900"
                         />
                      </div>
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">{t('form.quantity')}</label>
                         <input
-                           type="number" min="1"
-                           value={counterQty}
-                           onChange={(e) => setCounterQty(Number(e.target.value))}
+                           type="number" min="0.01" step="0.01"
+                           value={counterQty || ''}
+                           onChange={(e) => setCounterQty(Number(e.target.value) || 0)}
                            className="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900"
                         />
                      </div>
                      <div className="bg-gray-50 p-3 rounded text-sm">
                         <div className="flex justify-between font-bold text-gray-900">
                            <span>New Total:</span>
-                           <span>{(counterPrice * counterQty).toLocaleString()} XAF</span>
+                           <span>{(Number(counterPrice) * Number(counterQty)).toLocaleString()} XAF</span>
                         </div>
                      </div>
                   </div>

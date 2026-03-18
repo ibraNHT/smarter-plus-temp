@@ -1280,7 +1280,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           ? { ...m, proposal: { ...m.proposal, status: ProposalStatus.PENDING } }
           : m
       ));
-      addNotification(user.id, `Failed to respond to proposal: ${err.message}`, 'ERROR');
+      
+      // Provide user-friendly error messages
+      let errorMessage = err?.message || 'Failed to respond to proposal';
+      if (errorMessage.toLowerCase().includes('profile')) {
+        errorMessage = '❌ Unable to process proposal: One or both parties have incomplete profiles. Please complete your profile and try again.';
+      } else if (errorMessage.toLowerCase().includes('order')) {
+        errorMessage = '❌ Proposal accepted but failed to create order. Please contact support.';
+      }
+      
+      addNotification(user.id, errorMessage, 'ERROR');
     }
   };
 
@@ -1357,8 +1366,22 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return true;
     } catch (e: any) {
       console.error('Failed to send message:', e);
-      const message = (e?.message || (e?.status === 400 ? 'Message not allowed (e.g. no phone numbers or links).' : 'Failed to send message'));
-      addNotification(user.id, message, 'ERROR');
+      
+      // Parse and provide user-friendly error messages
+      let errorMessage = e?.message || 'Failed to send message';
+      
+      // Map common backend errors to user-friendly messages
+      if (errorMessage.toLowerCase().includes('offer') && errorMessage.toLowerCase().includes('not negotiable')) {
+        errorMessage = '❌ This offer is not open for negotiation.';
+      } else if (errorMessage.toLowerCase().includes('offer') && errorMessage.toLowerCase().includes('not exist')) {
+        errorMessage = '❌ The offer no longer exists.';
+      } else if (errorMessage.toLowerCase().includes('price') || errorMessage.toLowerCase().includes('quantity')) {
+        errorMessage = '❌ Price per unit and quantity must be greater than 0.';
+      } else if (e?.status === 400) {
+        errorMessage = '❌ Invalid proposal. Please check your price and quantity values.';
+      }
+      
+      addNotification(user.id, errorMessage, 'ERROR');
       // Never add the message to the UI when the request failed — server may have rejected it (e.g. phone number / link)
       return false;
     }

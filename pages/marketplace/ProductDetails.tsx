@@ -424,7 +424,7 @@ export const ProductDetails: React.FC = () => {
                   <span className="ml-2">- {(offer.price * quantity).toLocaleString()} XAF</span>
                 </button>
 
-                {isProducerMarket && offer.isNegotiable && !offer.reservedClientId && (
+                {isProducerMarket && !offer.reservedClientId && (
                   <button
                     onClick={handleNegotiate}
                     className="flex items-center justify-center bg-white text-primary-600 border-2 border-primary-600 px-6 py-3 rounded-xl font-bold hover:bg-primary-50 transition-colors"
