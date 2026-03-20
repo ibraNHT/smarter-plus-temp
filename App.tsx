@@ -34,18 +34,22 @@ import { Terms, Privacy } from './pages/footer/Legal';
 import { StoreProvider } from './services/storeContext';
 import { I18nProvider } from './services/i18nContext';
 import { PublicRoute } from './components/PublicRoute';
+import { PwaInstallProvider } from './contexts/PwaInstallContext';
+import { InstallAppBanner } from './components/InstallAppBanner';
 
 const App: React.FC = () => {
   return (
     <I18nProvider>
       <StoreProvider>
-        <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
-            <Navbar />
-            <ToastContainer />
-            <SupportChatWidget />
-            <CompareWidget />
-            <main className="flex-grow pb-16 md:pb-0">
+        <PwaInstallProvider>
+          <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
+              <Navbar />
+              <InstallAppBanner />
+              <ToastContainer />
+              <SupportChatWidget />
+              <CompareWidget />
+              <main className="flex-grow pb-16 md:pb-0">
               <Routes>
                 <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
                 <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
@@ -91,10 +95,11 @@ const App: React.FC = () => {
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
-            </main>
-            <Footer />
-          </div>
-        </Router>
+              </main>
+              <Footer />
+            </div>
+          </Router>
+        </PwaInstallProvider>
       </StoreProvider>
     </I18nProvider>
   );

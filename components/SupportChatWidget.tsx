@@ -22,7 +22,6 @@ export const SupportChatWidget: React.FC = () => {
   // Guest form state
   const user = store?.user ?? null;
   const showGuestForm = store?.showGuestForm ?? false;
-  const setShowGuestForm = store?.setShowGuestForm ?? (() => {});
   const guestEmailInput = store?.guestEmailInput ?? '';
   const setGuestEmailInput = store?.setGuestEmailInput ?? (() => {});
   const guestNameInput = store?.guestNameInput ?? '';
@@ -198,11 +197,11 @@ export const SupportChatWidget: React.FC = () => {
                               li: ({node, ...props}) => <li className="ml-1" {...props} />,
                               strong: ({node, ...props}) => <strong className="font-semibold" {...props} />,
                               em: ({node, ...props}) => <em className="italic" {...props} />,
-                              code: ({node, inline, ...props}) => 
+                              code: ({ node: _node, inline, className, children, ...props }: React.HTMLAttributes<HTMLElement> & { node?: unknown; inline?: boolean }) =>
                                 inline ? (
-                                  <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-700 font-mono text-xs" {...props} />
+                                  <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-700 font-mono text-xs" {...props}>{children}</code>
                                 ) : (
-                                  <pre className="bg-gray-100 p-2 rounded overflow-x-auto mb-2"><code {...props} /></pre>
+                                  <pre className="bg-gray-100 p-2 rounded overflow-x-auto mb-2"><code className={className} {...props}>{children}</code></pre>
                                 ),
                               a: ({node, ...props}) => <a className="text-blue-600 hover:underline" {...props} />,
                               h1: ({node, ...props}) => <h1 className="font-bold text-base mb-2" {...props} />,

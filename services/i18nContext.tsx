@@ -27,6 +27,13 @@ const translations: Record<string, Record<Language, string>> = {
   'nav.messages': { en: 'Messages', fr: 'Messages' },
   'nav.switchAccount': { en: 'Switch Account', fr: 'Changer de Compte' },
 
+  // PWA install (beforeinstallprompt / Android Chrome)
+  'pwa.bannerTitle': { en: 'Install AgriMarket Connect', fr: 'Installer AgriMarket Connect' },
+  'pwa.bannerBody': { en: 'Add the app to your home screen for quicker access.', fr: 'Ajoutez l’app à votre écran d’accueil pour un accès plus rapide.' },
+  'pwa.installButton': { en: 'Install', fr: 'Installer' },
+  'pwa.dismiss': { en: 'Dismiss', fr: 'Fermer' },
+  'pwa.installMenu': { en: 'Install app', fr: 'Installer l’application' },
+
   // Footer
   'footer.about': { en: 'About AgriMarket', fr: 'À propos d\'AgriMarket' },
   'footer.tagline': { en: 'Connecting producers and consumers for a sustainable future.', fr: 'Connecter producteurs et consommateurs pour un avenir durable.' },

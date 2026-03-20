@@ -1080,7 +1080,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setSupportMessages(prev => [...prev, { id: `u-${Date.now()}`, sender: 'USER', text, timestamp: new Date().toISOString() }]);
     if (!isHandedOver) {
       // Pass guest email and name if user is not authenticated
-      const res = await generateSupportResponse(text, supportSessionId, !user ? guestEmail : undefined, !user ? guestName : undefined);
+      const res = await generateSupportResponse(
+        text,
+        supportSessionId ?? undefined,
+        !user ? (guestEmail ?? undefined) : undefined,
+        !user ? (guestName ?? undefined) : undefined
+      );
       
       // Store the sessionId for future messages
       if (res.sessionId && !supportSessionId) {
@@ -1323,7 +1328,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const sendMessage = async (chatId: string, text: string, proposal?: any) => {
-    if (!user) return;
+    if (!user) return false;
     const hasEmail = text.match(/[a-zA-Z0-9._%+-]+@?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
     const hasPhone = hasPhoneNumber(text);
     const hasLink = text.match(/https?:\/\/\S+|www\.\S+/i);

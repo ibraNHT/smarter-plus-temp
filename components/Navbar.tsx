@@ -3,17 +3,21 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../services/storeContext';
 import { useTranslation } from '../services/i18nContext';
+import { usePwaInstall } from '../contexts/PwaInstallContext';
 import { UserRole } from '../types';
-import { LogOut, Sprout, ShoppingBasket, Tractor, ShoppingCart, Globe, Bell, X, User, MessageCircle } from 'lucide-react';
+import { LogOut, Sprout, ShoppingBasket, Tractor, ShoppingCart, Globe, Bell, X, User, MessageCircle, ChevronDown, Download } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { user, producers, clients, logout, cart, notifications, markNotificationsAsRead } = useStore();
   const { t, language, setLanguage } = useTranslation();
+  const { canInstall, promptInstall } = usePwaInstall();
   const navigate = useNavigate();
   const location = useLocation();
 
   const [showNotifications, setShowNotifications] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = () => {
     logout();
@@ -43,11 +47,15 @@ export const Navbar: React.FC = () => {
     return user.name;
   };
 
-  // Close notifications when clicking outside
+  // Close notifications & profile menu when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (notifRef.current && !notifRef.current.contains(target)) {
         setShowNotifications(false);
+      }
+      if (profileMenuRef.current && !profileMenuRef.current.contains(target)) {
+        setProfileMenuOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -186,16 +194,45 @@ export const Navbar: React.FC = () => {
                   )}
                 </div>
 
-                {/* Profile Link (replaces simple user name text) */}
-                {user.role === UserRole.CLIENT && (
-                  <Link to="/client/profile" className="flex items-center text-gray-600 hover:text-primary-600" title={t('nav.profile')}>
-                    <User className="h-6 w-6" />
-                  </Link>
-                )}
-                {user.role === UserRole.PRODUCER && (
-                  <Link to="/producer/profile" className="flex items-center text-gray-600 hover:text-primary-600" title={t('nav.profile')}>
-                    <User className="h-6 w-6" />
-                  </Link>
+                {/* Profile menu: profile link + Install app (after banner dismiss) */}
+                {(user.role === UserRole.CLIENT || user.role === UserRole.PRODUCER) && (
+                  <div className="relative" ref={profileMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setProfileMenuOpen((o) => !o)}
+                      className="flex items-center text-gray-600 hover:text-primary-600 p-1 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      aria-expanded={profileMenuOpen}
+                      aria-haspopup="true"
+                      title={t('nav.profile')}
+                    >
+                      <User className="h-6 w-6" />
+                      <ChevronDown className="h-4 w-4 ml-0.5 hidden sm:inline opacity-70" />
+                    </button>
+                    {profileMenuOpen && (
+                      <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
+                        <Link
+                          to={user.role === UserRole.CLIENT ? '/client/profile' : '/producer/profile'}
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          onClick={() => setProfileMenuOpen(false)}
+                        >
+                          {t('nav.profile')}
+                        </Link>
+                        {canInstall && (
+                          <button
+                            type="button"
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                            onClick={() => {
+                              void promptInstall();
+                              setProfileMenuOpen(false);
+                            }}
+                          >
+                            <Download className="h-4 w-4 flex-shrink-0" />
+                            {t('pwa.installMenu')}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 <div className="hidden md:flex flex-col items-end">
@@ -233,6 +270,16 @@ export const Navbar: React.FC = () => {
                 <Link to="/market/producers" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">{t('nav.producerMarket')}</Link>
                 <Link to="/market/ati" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">{t('nav.atiStore')}</Link>
               </>
+            )}
+            {!user && canInstall && (
+              <button
+                type="button"
+                onClick={() => void promptInstall()}
+                className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-md text-base font-medium text-primary-700 hover:bg-primary-50 border border-primary-200 mt-1"
+              >
+                <Download className="h-5 w-5 flex-shrink-0" />
+                {t('pwa.installMenu')}
+              </button>
             )}
           </div>
         </div>
