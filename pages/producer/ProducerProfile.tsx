@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, PaymentMethod, ProducerProfile as ProducerProfileType, Location, Portfolio } from '../../types';
@@ -25,7 +25,7 @@ const CAMEROON_LOCATIONS: Record<string, string[]> = {
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
 export const ProducerProfile: React.FC = () => {
-  const { user, producers, saveProducerPaymentMethod, deleteProducerPaymentMethod, updateProducerProfile, requestOtp, verifyOtp, logout, getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio, offers, toggleFavorite } = useStore();
+  const { user, producers, saveProducerPaymentMethod, deleteProducerPaymentMethod, updateProducerProfile, requestOtp, verifyOtp, logout, getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio, offers, toggleFavorite, myReferrals, refreshMyReferrals } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'info' | 'security' | 'payment' | 'portfolio' | 'favorites' | 'referrals'>('info');
@@ -54,13 +54,20 @@ export const ProducerProfile: React.FC = () => {
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [pendingProfileUpdate, setPendingProfileUpdate] = useState<ProducerProfileType | null>(null);
 
-  if (!user || user.role !== UserRole.PRODUCER) {
-    return <div className="p-8 text-center">Access Denied</div>;
-  }
-
   // ... [Existing Logic for form init, favorites, handlers] ...
-  const currentProducer = producers.find(p => p.id === user.producerId || p.userId === user.id);
-  const myPortfolios = user.producerId ? getProducerPortfolios(user.producerId) : [];
+  const currentProducer = producers.find(p => p.id === user?.producerId || p.userId === user?.id);
+  const myPortfolios = user?.producerId ? getProducerPortfolios(user.producerId) : [];
+
+  const referralCodeDisplay = useMemo(
+    () => (myReferrals?.referralCode || currentProducer?.referralCode || '').trim(),
+    [myReferrals?.referralCode, currentProducer?.referralCode]
+  );
+  const referralCount = myReferrals?.totalReferred ?? currentProducer?.referrals?.length ?? 0;
+  const referredPeople = myReferrals?.referredUsers ?? [];
+
+  useEffect(() => {
+    if (activeTab === 'referrals') void refreshMyReferrals();
+  }, [activeTab, refreshMyReferrals]);
   useEffect(() => {
     if (currentProducer && !formData) {
       const producerUser = (currentProducer as any).user;
@@ -84,7 +91,7 @@ export const ProducerProfile: React.FC = () => {
   const favoriteOffers = currentProducer?.favorites.map(id => offers.find(o => o.id === id)).filter(Boolean) as any[];
   const unavailableFavoriteIds = currentProducer?.favorites.filter(id => !offers.find(o => o.id === id));
   const handleLogout = () => { logout(); navigate('/'); };
-  const handleAddPayment = (e: React.FormEvent) => { e.preventDefault(); if (user.producerId && newPayment.provider && newPayment.accountNumber && newPayment.accountName) { saveProducerPaymentMethod(user.producerId, { id: `pm-${Date.now()}`, provider: newPayment.provider, accountNumber: newPayment.accountNumber, accountName: newPayment.accountName }); setShowAddPayment(false); setNewPayment({ provider: 'ORANGE', accountNumber: '', accountName: '' }); } };
+  const handleAddPayment = (e: React.FormEvent) => { e.preventDefault(); if (user?.producerId && newPayment.provider && newPayment.accountNumber && newPayment.accountName) { saveProducerPaymentMethod(user.producerId, { id: `pm-${Date.now()}`, provider: newPayment.provider, accountNumber: newPayment.accountNumber, accountName: newPayment.accountName }); setShowAddPayment(false); setNewPayment({ provider: 'ORANGE', accountNumber: '', accountName: '' }); } };
   const handleInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => { if (!formData) return; const { name, value } = e.target; setFormData(prev => prev ? ({ ...prev, [name]: value }) : null); };
   const toggleCategory = (cat: string) => { if (!formData) return; if (formData.productionTypes.includes(cat)) { setFormData({ ...formData, productionTypes: formData.productionTypes.filter(c => c !== cat) }); } else { setFormData({ ...formData, productionTypes: [...formData.productionTypes, cat] }); } };
   const addLocation = () => { if (!formData || !newLoc.region || !newLoc.city || !newLoc.address) return; const locationToAdd: Location = { lat: 0, lng: 0, region: newLoc.region, city: newLoc.city, address: newLoc.address }; setFormData({ ...formData, locations: [...formData.locations, locationToAdd] }); setNewLoc({ region: '', city: '', address: '' }); };
@@ -110,12 +117,20 @@ export const ProducerProfile: React.FC = () => {
       alert(err?.message || 'Profile update failed. Please try again.');
     }
   };
-  const copyReferralLink = () => { if (!currentProducer?.referralCode) return; const link = `${window.location.origin}/#/register?ref=${currentProducer.referralCode}`; navigator.clipboard.writeText(link); alert("Referral link copied!"); };
+  const copyReferralLink = () => {
+    if (!referralCodeDisplay) return;
+    const link = `${window.location.origin}/#/register?ref=${referralCodeDisplay}`;
+    void navigator.clipboard.writeText(link);
+    alert('Referral link copied!');
+  };
   const handlePortfolioImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) { const files = Array.from(e.target.files) as File[]; if ((portfolioForm.imageUrls?.length || 0) + files.length > 10) { alert("Maximum 10 images allowed."); return; } const newUrls: string[] = []; for (const file of files) { if (file.size > 2 * 1024 * 1024) { alert(`File ${file.name} is too large. Max 2MB.`); continue; } if (!['image/png', 'image/jpeg'].includes(file.type)) { alert(`File ${file.name} is invalid format. PNG/JPG only.`); continue; } newUrls.push(URL.createObjectURL(file)); } setPortfolioForm(prev => ({ ...prev, imageUrls: [...(prev.imageUrls || []), ...newUrls] })); } };
   const handlePortfolioVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { const file = e.target.files[0]; if (file.size > 30 * 1024 * 1024) { alert("Video file too large. Max 30MB."); return; } setPortfolioForm(prev => ({ ...prev, videoUrl: URL.createObjectURL(file) })); } };
   const openPortfolioModal = (portfolio?: Portfolio) => { if (portfolio) { setPortfolioForm({ ...portfolio }); } else { setPortfolioForm({ title: '', description: '', category: currentProducer?.productionTypes[0] || '', imageUrls: [], isPublished: true }); } setShowPortfolioModal(true); };
-  const savePortfolio = (e: React.FormEvent) => { e.preventDefault(); if (!user.producerId) return; const data = { producerId: user.producerId, title: portfolioForm.title!, description: portfolioForm.description!, category: portfolioForm.category!, imageUrls: portfolioForm.imageUrls || [], videoUrl: portfolioForm.videoUrl, isPublished: portfolioForm.isPublished || false }; if (portfolioForm.id) { updatePortfolio({ ...data, id: portfolioForm.id, createdAt: (portfolioForm as Portfolio).createdAt }); } else { addPortfolio(data); } setShowPortfolioModal(false); };
+  const savePortfolio = (e: React.FormEvent) => { e.preventDefault(); if (!user?.producerId) return; const data = { producerId: user.producerId, title: portfolioForm.title!, description: portfolioForm.description!, category: portfolioForm.category!, imageUrls: portfolioForm.imageUrls || [], videoUrl: portfolioForm.videoUrl, isPublished: portfolioForm.isPublished || false }; if (portfolioForm.id) { updatePortfolio({ ...data, id: portfolioForm.id, createdAt: (portfolioForm as Portfolio).createdAt }); } else { addPortfolio(data); } setShowPortfolioModal(false); };
 
+  if (!user || user.role !== UserRole.PRODUCER) {
+    return <div className="p-8 text-center">Access Denied</div>;
+  }
   if (!formData) return <div>Loading...</div>;
 
   return (
@@ -190,8 +205,26 @@ export const ProducerProfile: React.FC = () => {
           {activeTab === 'referrals' && currentProducer && (
             <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center"><Users className="h-5 w-5 mr-2 text-primary-600" /> Referrals</h3>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6"><p className="text-sm text-blue-800 mb-2 font-bold">Your Referral Link</p><div className="flex gap-2"><input type="text" readOnly value={`${window.location.origin}/#/register?ref=${currentProducer.referralCode ?? ''}`} className="block w-full border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-700" /><button onClick={copyReferralLink} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center"><Copy className="h-4 w-4 mr-2" /> Copy</button></div><p className="text-xs text-blue-600 mt-2">Share this link with friends to invite them to the platform.</p></div>
-              <div className="border-t border-gray-200 pt-4"><div className="flex items-center justify-between mb-4"><h4 className="text-sm font-bold text-gray-900">Your Impact</h4><span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">{currentProducer.referrals.length} Referrals</span></div>{currentProducer.referrals.length === 0 ? (<div className="text-center py-8 text-gray-500"><Users className="h-12 w-12 mx-auto text-gray-300 mb-2" /><p>You haven't referred anyone yet.</p></div>) : (<div className="space-y-2"><p className="text-sm text-gray-600">You have successfully referred {currentProducer.referrals.length} users.</p></div>)}</div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6"><p className="text-sm text-blue-800 mb-2 font-bold">Your Referral Link</p><div className="flex gap-2"><input type="text" readOnly value={`${window.location.origin}/#/register?ref=${referralCodeDisplay}`} className="block w-full border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-700" /><button type="button" onClick={copyReferralLink} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center"><Copy className="h-4 w-4 mr-2" /> Copy</button></div><p className="text-xs text-blue-600 mt-2">Share this link with friends to invite them to the platform.</p></div>
+              {myReferrals?.activeProgram ? (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+                  <h4 className="text-sm font-bold text-gray-900">{myReferrals.activeProgram.name}</h4>
+                  {myReferrals.activeProgram.description ? (
+                    <p className="text-sm text-gray-600 mt-1">{myReferrals.activeProgram.description}</p>
+                  ) : null}
+                  <ul className="mt-3 text-sm text-gray-800 space-y-1 list-disc list-inside">
+                    <li>Referrer reward: {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.referrerRewardAmount).toFixed(2)}</li>
+                    <li>New user reward: {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.refereeRewardAmount).toFixed(2)}</li>
+                    <li>Minimum payout: {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.minimumPayoutThreshold).toFixed(2)}</li>
+                  </ul>
+                  {myReferrals.activeProgram.termsUrl ? (
+                    <a href={myReferrals.activeProgram.termsUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 text-sm font-medium mt-3 inline-block hover:underline">
+                      Terms &amp; conditions
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
+              <div className="border-t border-gray-200 pt-4"><div className="flex items-center justify-between mb-4"><h4 className="text-sm font-bold text-gray-900">Your Impact</h4><span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">{referralCount} Referrals</span></div>{referralCount === 0 ? (<div className="text-center py-8 text-gray-500"><Users className="h-12 w-12 mx-auto text-gray-300 mb-2" /><p>You haven&apos;t referred anyone yet.</p></div>) : (<div className="space-y-3"><p className="text-sm text-gray-600">You have successfully referred {referralCount} user{referralCount === 1 ? '' : 's'}.</p>{referredPeople.length > 0 ? (<ul className="divide-y divide-gray-200 border border-gray-200 rounded-md bg-white">{referredPeople.map((u) => (<li key={u.id} className="px-3 py-2 flex justify-between text-sm"><span className="font-medium text-gray-900">{u.displayName || 'User'}</span><span className="text-gray-500">{u.joinedDate ? new Date(u.joinedDate).toLocaleDateString() : ''}</span></li>))}</ul>) : null}</div>)}</div>
             </div>
           )}
 

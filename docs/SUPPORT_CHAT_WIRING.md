@@ -1,71 +1,53 @@
 # Support Chat ↔ Admin Console Wiring
 
-This doc describes how to connect the **support chat** (AgriBot in the main webapp) to the **admin console** so agents can handle handover conversations.
+This doc describes how the **main webapp** support widget connects to the **Nest API** and the **admin console**.
 
 ## Projects
 
 | Project        | Path / URL |
 |----------------|------------|
 | Main webapp    | This repo (`webApp-AgriMarket-Connect-test`) |
-| Admin console  | `AgriMarket-webapp-Console-test` (e.g. `/Users/account/Documents/ATI devops/AgriMarket-webapp-Console-test`) |
-| Backend API    | Same backend as main app (e.g. `http://localhost:3000`) |
+| Admin console  | `AgriMarket-webapp-Console-test` (e.g. Chat Support at `/app/chat-support`) |
+| Backend API    | `API-AgriMarket-Connect-test` (e.g. `http://localhost:3000`, global `/api` prefix) |
 
-## Backend API contract
+## Backend API (support)
 
-The backend must expose the following so both apps can use the same support sessions.
-
-### Support sessions
-
-- **`GET /api/support/sessions`** (admin only)  
-  - Query: `?status=WAITING_FOR_AGENT` (optional)  
-  - Returns: `{ sessionId, userId, userName?, status, lastMessage?, lastActive, unreadCount? }[]`
-
-- **`GET /api/support/sessions/:id`**  
-  - Returns one session (same shape).
-
-- **`GET /api/support/sessions/:id/messages`**  
-  - Returns: `{ id, sender: 'USER'|'AI'|'AGENT', text, timestamp }[]`
-
-- **`POST /api/support/sessions`** (main webapp – create or get for current user)  
-  - Body: `{}` or `{ userId }`  
-  - Returns: session object including `sessionId`.
-
-- **`POST /api/support/sessions/:id/messages`**  
-  - Body: `{ text, sender?: 'USER'|'AI'|'AGENT' }`  
-  - Used by: main webapp (user/AI) and admin console (agent).
-
-- **`PATCH /api/support/sessions/:id`**  
-  - Body: `{ status: 'AI_HANDLING'|'WAITING_FOR_AGENT'|'AGENT_ACTIVE'|'CLOSED' }`  
-  - Used by: admin console (take over, close).
-
-### AI support endpoint (existing)
-
-- **`POST /api/ai/support-chat`**  
-  - Body: `{ message, role }`  
-  - Returns: `{ text, handover }`  
-  - When `handover === true`, backend should create or update a support session with status `WAITING_FOR_AGENT` and persist the thread so the admin console can load it.
+| Endpoint | Who | Purpose |
+|----------|-----|---------|
+| `POST /api/ai/support-chat` | User or guest | AI turn; persists USER + AI messages via support session; may set `WAITING_FOR_AGENT` on handover. |
+| `POST /api/support/sessions` | JWT user | Create or get session for current user. |
+| `GET /api/support/sessions/:id/messages` | JWT user (owner) or admin | List messages (internal notes omitted for non-admin). |
+| `POST /api/support/sessions/:id/messages` | JWT user (owner) or admin | Send message; users send `{ text }`. |
+| `GET /api/support/guest/sessions/:id/messages?guestEmail=` | Public | Guest poll (internal messages filtered). |
+| `POST /api/support/guest/sessions/:id/messages` | Public | Guest post-handover user message; body `{ text, guestEmail }` must match session. |
+| Admin-only | Admin JWT | `GET .../overview`, `POST .../assign-to-me`, `PATCH ...` with assign/priority, agent internal notes, etc. |
 
 ## Main webapp (this repo)
 
-- **SupportChatWidget**  
-  - Currently: client-only state; calls `POST /api/ai/support-chat`; on handover shows “Connecting agent…” with no real session.
-- **To wire:**  
-  - On first message or open: `POST /api/support/sessions` to create/get session; send user messages to `POST /api/support/sessions/:id/messages`; call AI via existing support-chat and append AI reply to session.  
-  - When AI returns `handover: true`, set session status to `WAITING_FOR_AGENT` (or rely on backend to do it).  
-  - Poll `GET /api/support/sessions/:id/messages` (or use WebSocket) and append messages with `sender === 'AGENT'` so the user sees agent replies.
+### Client module
 
-## Admin console (`AgriMarket-webapp-Console-test`)
+- [`services/supportSessionsApi.ts`](../services/supportSessionsApi.ts) — `createOrGetSupportSession`, `getSupportMessages` (auth poll, fetch-based to avoid logout on 401), `postUserSupportMessage`, `postGuestSupportMessage`, `mergeIncomingSupportMessages`, `mapDtoToSupportMessage`.
 
-- **Chat Support** at `/app/chat-support`: uses mock data (`mockChatService`).
-- **API client:** `src/api/supportSessions.ts` defines the support session API (list, get, get messages, send as agent, update status).
-- **To wire:**  
-  - Replace or augment the chat-support page so it loads conversations from `getSupportSessions()` and messages from `getSupportMessages(sessionId)`.  
-  - Map `SupportSessionDto` → `Conversation` (e.g. `sessionId` → `id`, `userName` → `title`) and `SupportMessageDto` → `Message` (e.g. `sender === 'AGENT'` → `senderId === 'agent'`, `text` → `body`).  
-  - On send: call `sendSupportMessageAsAgent(sessionId, text)` and append or refresh messages.  
-  - Optionally call `updateSupportSessionStatus(sessionId, 'AGENT_ACTIVE')` when an agent opens a session and `'CLOSED'` when done.
+### State (`storeContext.tsx`)
+
+1. **Before handover** — `sendSupportMessage` calls `POST /api/ai/support-chat` via [`services/geminiService.ts`](../services/geminiService.ts) (`generateSupportResponse`); stores `supportSessionId` from the response; shows AI reply and optional handover UI.
+2. **After handover** — User messages are sent with **`POST /api/support/sessions/:id/messages`** (authenticated) or **`POST /api/support/guest/sessions/:id/messages`** (guest). **No** further AI calls for those messages.
+3. **Polling** — Guests: `GET .../guest/sessions/:id/messages`. Authenticated users: `GET .../api/support/sessions/:id/messages` every 3s to receive **AGENT** replies. New messages are merged by `id`.
+
+### UI
+
+- [`components/SupportChatWidget.tsx`](../components/SupportChatWidget.tsx) — reads `supportMessages` + `sendSupportMessage` from context.
+
+### Types
+
+- [`types.ts`](../types.ts) — `SupportMessage` (optional `internal`), `SupportSession` (optional `priority`, `assignedToUserId`) for parity with API DTOs.
+
+## Admin console
+
+Uses its own `src/api/supportSessions.ts` and `src/api/ticketing.ts` (list, messages, agent send, PATCH, assign-to-me, overview, internal notes). Same `sessionId` as the webapp thread.
 
 ## Summary
 
-1. **Backend:** Implement support session CRUD and messages; when `POST /api/ai/support-chat` returns `handover: true`, create/update session and set `WAITING_FOR_AGENT`.  
-2. **Main webapp:** Create/get session per user; send messages to session; poll (or WS) for agent messages.  
-3. **Admin console:** Use `src/api/supportSessions.ts`; load sessions and messages from API; send agent replies via `sendSupportMessageAsAgent`.
+1. **AI path** creates and fills the session; **handover** switches the widget to **REST support** messages + polling.
+2. **Guests** after handover use **guest** GET/POST endpoints (no JWT).
+3. **Authenticated users** after handover use **JWT** GET/POST on `/api/support/sessions/...`.

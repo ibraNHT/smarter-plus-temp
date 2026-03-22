@@ -1,9 +1,18 @@
 
-import React, { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react';
-import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerStatus, OfferType, CartItem, Order, OrderStatus, Wallet, Notification, WithdrawalRequest, WithdrawalStatus, PaymentMethod, ChatSession, ChatMessage, Proposal, ProposalStatus, WeeklySchedule, AvailabilityException, Review, SupportMessage, Portfolio, DisputeEvidence, Coupon, PickupPoint } from '../types';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback } from 'react';
+import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerStatus, OfferType, CartItem, Order, OrderStatus, Wallet, Notification, WithdrawalRequest, WithdrawalStatus, PaymentMethod, ChatSession, ChatMessage, Proposal, ProposalStatus, WeeklySchedule, AvailabilityException, Review, SupportMessage, Portfolio, DisputeEvidence, Coupon, PickupPoint, MyReferralsData } from '../types';
 import { generateSupportResponse } from './geminiService';
+import {
+  getSupportMessages,
+  mapDtoToSupportMessage,
+  mergeIncomingSupportMessages,
+  postGuestSupportMessage,
+  postUserSupportMessage,
+} from './supportSessionsApi';
 const defaultSchedule: WeeklySchedule = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
 import { apiFetch, apiUpload, setToken, clearToken, getToken, setRefreshToken } from './apiService';
+import { fetchMyReferrals } from './referralsApi';
+import { validateCouponRemote, type CouponValidationChannel } from './couponsApi';
 import { io, Socket } from 'socket.io-client';
 
 interface StoreContextType {
@@ -73,7 +82,7 @@ interface StoreContextType {
   addToCart: (offer: Offer, quantity: number, bookingDate?: string) => { success: boolean; error?: 'PRODUCER_CONFLICT' };
   removeFromCart: (offerId: string) => void;
   clearCart: () => void;
-  placeOrder: (couponCode?: string, discountAmount?: number, deliveryDate?: string, deliveryMethod?: 'HOME' | 'PICKUP', pickupPointId?: string) => Promise<void>;
+  placeOrder: (couponId?: string, discountAmount?: number, deliveryDate?: string, deliveryMethod?: 'HOME' | 'PICKUP', pickupPointId?: string) => Promise<void>;
   confirmOrder: (orderId: string) => Promise<void>;
   rejectOrder: (orderId: string) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
@@ -87,8 +96,12 @@ interface StoreContextType {
   getAverageRating: (targetId: string) => number;
   changePassword: (currentPass: string, newPass: string) => Promise<{ success: boolean; message: string }>;
 
-  // Coupon Logic
-  validateCoupon: (code: string, cartTotal: number) => number;
+  /** Validates against POST /api/coupons/validate (admin-configured coupons). */
+  validateCoupon: (
+    code: string,
+    cartTotal: number,
+    channel?: CouponValidationChannel
+  ) => Promise<{ discountAmount: number; couponId: string | null; errorMessage?: string }>;
 
   // Pickup Points Logic (Admin)
   addPickupPoint: (point: Omit<PickupPoint, 'id'>) => void;
@@ -118,6 +131,10 @@ interface StoreContextType {
   requestWithdrawal: (amount: number, method: PaymentMethod, otpToken?: string) => Promise<{ success: boolean; message: string }>;
   // Notification Methods
   markNotificationsAsRead: () => void;
+
+  /** From GET /api/users/me/referrals — null when logged out or not loaded. */
+  myReferrals: MyReferralsData | null;
+  refreshMyReferrals: () => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -143,6 +160,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [coupons, _setCoupons] = useState<Coupon[]>([]);
   const [pickupPoints, setPickupPoints] = useState<PickupPoint[]>([]);
+  const [myReferrals, setMyReferrals] = useState<MyReferralsData | null>(null);
 
   // Chat State
   const [chats, setChats] = useState<ChatSession[]>([]);
@@ -290,12 +308,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         apiFetch<Offer[]>('/api/offers', { silent401: true } as any).catch((e) => { on401(e); return []; }),
         apiFetch<PickupPoint[]>('/api/pickup-points', { silent401: true } as any).catch((e) => { on401(e); return []; }),
       ]);
-      // Only fetch orders and wallet when authenticated and we have a token (avoids 401 spam when token expired)
+      // Only fetch orders, wallet, and referral stats when authenticated and we have a token (avoids 401 spam when token expired)
       if (activeUser && getToken()) {
-        const [resOrders, resWallet] = await Promise.all([
+        const [resOrders, resWallet, referralsPayload] = await Promise.all([
           apiFetch<any[]>('/api/orders', { silent401: true } as any).catch((e) => { on401(e); return []; }),
           apiFetch<any>('/api/wallet/me', { silent401: true } as any).catch((e) => { on401(e); return null; }),
+          fetchMyReferrals(),
         ]);
+        setMyReferrals(referralsPayload);
         setOrders(Array.isArray(resOrders) ? resOrders.map((o: any) => ({
           ...o,
           items: Array.isArray(o.orderItems || o.items)
@@ -316,6 +336,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             },
           }));
         }
+      } else {
+        setMyReferrals(null);
       }
       setProducers(Array.isArray(resProducers) ? resProducers.map(p => {
         const displayName = (p as any).user?.displayName ?? `${String((p as any).firstName ?? '').trim()} ${String((p as any).lastName ?? '').trim()}`.trim();
@@ -416,9 +438,19 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
     clearToken();
     setUser(null);
+    setMyReferrals(null);
     setCart([]);
     localStorage.removeItem('currentUser');
   };
+
+  const refreshMyReferrals = useCallback(async () => {
+    if (!user || !getToken()) {
+      setMyReferrals(null);
+      return;
+    }
+    const data = await fetchMyReferrals();
+    setMyReferrals(data);
+  }, [user]);
 
   const registerProducer = async (data: any, password: string): Promise<{ success: boolean; message: string }> => {
     try {
@@ -689,7 +721,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── ORDERS ──────────────────────────────────────────────────────────────────
 
-  const placeOrder = async (couponCode?: string, _discountAmount: number = 0, deliveryDate?: string, deliveryMethod: 'HOME' | 'PICKUP' = 'HOME', pickupPointId?: string) => {
+  const placeOrder = async (couponId?: string, _discountAmount: number = 0, deliveryDate?: string, deliveryMethod: 'HOME' | 'PICKUP' = 'HOME', pickupPointId?: string) => {
     if (cart.length === 0 || (!user && !guestEmail)) return;
 
     const payload = {
@@ -701,7 +733,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       requestedDeliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : new Date(Date.now() + 86400 * 1000).toISOString(),
       deliveryMethod,
       pickupPointId: pickupPointId || undefined,
-      couponId: couponCode || undefined,
+      couponId: couponId || undefined,
     };
 
     try {
@@ -964,12 +996,32 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── COUPONS ─────────────────────────────────────────────────────────────────
 
-  const validateCoupon = (code: string, cartTotal: number): number => {
-    const coupon = coupons.find(c => c.code === code && c.isActive);
-    if (!coupon) return 0;
-    if (coupon.minOrderAmount && cartTotal < coupon.minOrderAmount) return 0;
-    if (coupon.expiryDate && new Date(coupon.expiryDate) < new Date()) return 0;
-    if (coupon.type === 'PERCENTAGE') { return (cartTotal * coupon.value) / 100; } else { return Math.min(coupon.value, cartTotal); }
+  const validateCoupon = async (
+    code: string,
+    cartTotal: number,
+    channel: CouponValidationChannel = 'MARKETPLACE'
+  ): Promise<{ discountAmount: number; couponId: string | null; errorMessage?: string }> => {
+    const trimmed = code.trim();
+    if (!trimmed) {
+      return { discountAmount: 0, couponId: null, errorMessage: 'Enter a coupon code.' };
+    }
+    try {
+      const clientProfileId =
+        user?.role === UserRole.CLIENT && user.clientId ? user.clientId : undefined;
+      const data = await validateCouponRemote(trimmed, cartTotal, channel, clientProfileId);
+      if (data.valid && typeof data.discountAmount === 'number' && data.coupon?.id) {
+        return { discountAmount: data.discountAmount, couponId: data.coupon.id };
+      }
+      return { discountAmount: 0, couponId: null, errorMessage: 'Coupon could not be applied.' };
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : typeof e === 'object' && e !== null && 'message' in e
+            ? String((e as { message: unknown }).message)
+            : 'Invalid coupon.';
+      return { discountAmount: 0, couponId: null, errorMessage: msg };
+    }
   };
 
   // ─── PICKUP POINTS ────────────────────────────────────────────────────────────
@@ -1077,26 +1129,72 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return;
     }
 
-    setSupportMessages(prev => [...prev, { id: `u-${Date.now()}`, sender: 'USER', text, timestamp: new Date().toISOString() }]);
-    if (!isHandedOver) {
-      // Pass guest email and name if user is not authenticated
-      const res = await generateSupportResponse(
-        text,
-        supportSessionId ?? undefined,
-        !user ? (guestEmail ?? undefined) : undefined,
-        !user ? (guestName ?? undefined) : undefined
+    const tempId = `u-${Date.now()}`;
+    setSupportMessages((prev) => [
+      ...prev,
+      { id: tempId, sender: 'USER', text, timestamp: new Date().toISOString() },
+    ]);
+
+    if (isHandedOver) {
+      if (!supportSessionId) {
+        setSupportMessages((prev) => prev.filter((m) => m.id !== tempId));
+        return;
+      }
+      try {
+        if (user) {
+          const res = await postUserSupportMessage(supportSessionId, text);
+          if (res.message) {
+            const mapped = mapDtoToSupportMessage(res.message);
+            setSupportMessages((prev) => prev.map((m) => (m.id === tempId ? mapped : m)));
+          }
+        } else if (guestEmail) {
+          const res = await postGuestSupportMessage(supportSessionId, text, guestEmail);
+          if (res.message) {
+            const mapped = mapDtoToSupportMessage(res.message);
+            setSupportMessages((prev) => prev.map((m) => (m.id === tempId ? mapped : m)));
+          }
+        } else {
+          setSupportMessages((prev) => prev.filter((m) => m.id !== tempId));
+        }
+      } catch (e) {
+        console.error('Failed to send support message', e);
+        setSupportMessages((prev) => prev.filter((m) => m.id !== tempId));
+        if (user) addNotification(user.id, 'Could not send message. Please try again.', 'ERROR');
+      }
+      return;
+    }
+
+    // AI phase — guest email and name if not authenticated
+    const res = await generateSupportResponse(
+      text,
+      supportSessionId ?? undefined,
+      !user ? (guestEmail ?? undefined) : undefined,
+      !user ? (guestName ?? undefined) : undefined
+    );
+
+    if (res.sessionId && !supportSessionId) {
+      setSupportSessionId(res.sessionId);
+    }
+
+    setSupportMessages((prev) => [
+      ...prev,
+      { id: `a-${Date.now()}`, sender: 'AI', text: res.text, timestamp: new Date().toISOString() },
+    ]);
+    if (res.handover) {
+      setIsHandedOver(true);
+      setTimeout(
+        () =>
+          setSupportMessages((prev) => [
+            ...prev,
+            {
+              id: `s-${Date.now()}`,
+              sender: 'AGENT',
+              text: 'Connecting agent...',
+              timestamp: new Date().toISOString(),
+            },
+          ]),
+        1000
       );
-      
-      // Store the sessionId for future messages
-      if (res.sessionId && !supportSessionId) {
-        setSupportSessionId(res.sessionId);
-      }
-      
-      setSupportMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: 'AI', text: res.text, timestamp: new Date().toISOString() }]);
-      if (res.handover) {
-        setIsHandedOver(true);
-        setTimeout(() => setSupportMessages(prev => [...prev, { id: `s-${Date.now()}`, sender: 'AGENT', text: 'Connecting agent...', timestamp: new Date().toISOString() }]), 1000);
-      }
     }
   };
 
@@ -1112,22 +1210,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           const data = await response.json();
           if (data.messages && Array.isArray(data.messages)) {
             // Map backend messages to local format and update state
-            const backendMessages = data.messages.map((msg: any) => ({
-              id: msg.id,
-              sender: msg.sender,
-              text: msg.text,
-              timestamp: msg.timestamp,
-            }));
-            
-            // Only update if there are new messages
-            setSupportMessages(prev => {
-              const existingIds = new Set(prev.map(m => m.id));
-              const newMessages = backendMessages.filter((m: any) => !existingIds.has(m.id));
-              if (newMessages.length > 0) {
-                return [...prev, ...newMessages];
-              }
-              return prev;
-            });
+            const backendMessages = data.messages.map((msg: any) =>
+              mapDtoToSupportMessage({
+                id: msg.id,
+                sender: msg.sender,
+                text: msg.text,
+                timestamp: msg.timestamp,
+              })
+            );
+            setSupportMessages((prev) => mergeIncomingSupportMessages(prev, backendMessages));
           }
         }
       } catch (err) {
@@ -1137,6 +1228,24 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     return () => clearInterval(pollInterval);
   }, [isHandedOver, user, supportSessionId, guestEmail]);
+
+  // Polling for authenticated users when handed over to agent
+  useEffect(() => {
+    if (!isHandedOver || !user || !supportSessionId) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const data = await getSupportMessages(supportSessionId);
+        if (!Array.isArray(data)) return;
+        const backendMessages = data.map((msg) => mapDtoToSupportMessage(msg));
+        setSupportMessages((prev) => mergeIncomingSupportMessages(prev, backendMessages));
+      } catch (err) {
+        console.error('Error polling support messages (auth):', err);
+      }
+    }, 3000);
+
+    return () => clearInterval(pollInterval);
+  }, [isHandedOver, user, supportSessionId]);
 
   // ─── CHAT & NEGOTIATION ───────────────────────────────────────────────────────
 
@@ -1412,7 +1521,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       supportMessages, isSupportChatOpen, toggleSupportChat, sendSupportMessage, showGuestForm, setShowGuestForm, guestEmailInput, setGuestEmailInput, guestNameInput, setGuestNameInput, guestName, setGuestName, submitGuestForm, supportSessionId, setSupportSessionId,
       validateCoupon,
       addPickupPoint, deletePickupPoint,
-      changePassword
+      changePassword,
+      myReferrals,
+      refreshMyReferrals
     }}>
       {children}
     </StoreContext.Provider>

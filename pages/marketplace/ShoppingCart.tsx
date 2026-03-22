@@ -16,11 +16,13 @@ export const ShoppingCart: React.FC = () => {
   const [showGuestEmailModal, setShowGuestEmailModal] = useState(false);
   const [tempEmail, setTempEmail] = useState('');
 
-  // Coupon State
+  // Coupon State (discount from POST /api/coupons/validate; order sends coupon UUID)
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [appliedCouponId, setAppliedCouponId] = useState<string | null>(null);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [couponError, setCouponError] = useState('');
+  const [couponApplying, setCouponApplying] = useState(false);
 
   // Delivery Date State (ATI Only)
   const [deliveryDate, setDeliveryDate] = useState('');
@@ -114,24 +116,32 @@ export const ShoppingCart: React.FC = () => {
     }
   }, [searchParams]);
 
-  const handleApplyCoupon = () => {
+  const handleApplyCoupon = async () => {
     setCouponError('');
     if (!couponCode.trim()) return;
 
-    const discount = validateCoupon(couponCode, subtotal);
-    if (discount > 0) {
-      setDiscountAmount(discount);
-      setAppliedCoupon(couponCode);
-    } else {
-      setDiscountAmount(0);
-      setAppliedCoupon(null);
-      setCouponError('Invalid coupon code or minimum order not met.');
+    setCouponApplying(true);
+    try {
+      const result = await validateCoupon(couponCode, subtotal, 'MARKETPLACE');
+      if (result.discountAmount > 0 && result.couponId) {
+        setDiscountAmount(result.discountAmount);
+        setAppliedCoupon(couponCode.trim());
+        setAppliedCouponId(result.couponId);
+      } else {
+        setDiscountAmount(0);
+        setAppliedCoupon(null);
+        setAppliedCouponId(null);
+        setCouponError(result.errorMessage || 'Invalid coupon code or minimum order not met.');
+      }
+    } finally {
+      setCouponApplying(false);
     }
   };
 
   const removeCoupon = () => {
     setCouponCode('');
     setAppliedCoupon(null);
+    setAppliedCouponId(null);
     setDiscountAmount(0);
     setCouponError('');
   };
@@ -167,7 +177,7 @@ export const ShoppingCart: React.FC = () => {
   };
 
   const confirmPlacement = () => {
-    placeOrder(appliedCoupon || undefined, discountAmount, isAtiOrder ? deliveryDate : undefined, deliveryMethod, selectedPickupPointId);
+    placeOrder(appliedCouponId || undefined, discountAmount, isAtiOrder ? deliveryDate : undefined, deliveryMethod, selectedPickupPointId);
     setShowRecap(false);
     navigate('/');
   };
@@ -482,10 +492,12 @@ export const ShoppingCart: React.FC = () => {
                             onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
                           />
                           <button
-                            onClick={handleApplyCoupon}
-                            className="bg-gray-800 text-white px-3 py-2 rounded-md text-xs font-bold hover:bg-gray-700"
+                            type="button"
+                            onClick={() => void handleApplyCoupon()}
+                            disabled={couponApplying}
+                            className="bg-gray-800 text-white px-3 py-2 rounded-md text-xs font-bold hover:bg-gray-700 disabled:opacity-60"
                           >
-                            APPLY
+                            {couponApplying ? '…' : 'APPLY'}
                           </button>
                         </div>
                         {couponError && <p className="text-xs text-red-500 mt-1">{couponError}</p>}

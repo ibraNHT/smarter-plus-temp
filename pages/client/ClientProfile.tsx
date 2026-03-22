@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order } from '../../types';
@@ -24,7 +24,7 @@ const CAMEROON_LOCATIONS: Record<string, string[]> = {
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
 export const ClientProfile: React.FC = () => {
-   const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, updateClientProfile, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating } = useStore();
+   const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, updateClientProfile, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals } = useStore();
    const { t } = useTranslation();
    const navigate = useNavigate();
    const [activeTab, setActiveTab] = useState<'info' | 'orders' | 'security' | 'favorites' | 'reputation' | 'referrals'>('orders');
@@ -59,7 +59,24 @@ export const ClientProfile: React.FC = () => {
 
    const currentClient = clients.find(c => c.userId === user?.id || c.id === user?.id);
    const wallet = user ? getWallet(user.id) : null;
-   const copyReferralLink = () => { if (!currentClient?.referralCode) return; const link = `${window.location.origin}/#/register/client?ref=${currentClient.referralCode}`; navigator.clipboard.writeText(link); alert("Referral link copied!"); };
+
+   const referralCodeDisplay = useMemo(
+      () => (myReferrals?.referralCode || (currentClient as any)?.referralCode || '').toString().trim(),
+      [myReferrals?.referralCode, currentClient]
+   );
+   const referralCount = myReferrals?.totalReferred ?? currentClient?.referrals?.length ?? 0;
+   const referredPeople = myReferrals?.referredUsers ?? [];
+
+   useEffect(() => {
+      if (activeTab === 'referrals') void refreshMyReferrals();
+   }, [activeTab, refreshMyReferrals]);
+
+   const copyReferralLink = () => {
+      if (!referralCodeDisplay) return;
+      const link = `${window.location.origin}/#/register/client?ref=${referralCodeDisplay}`;
+      void navigator.clipboard.writeText(link);
+      alert('Referral link copied!');
+   };
 
    const myReviews = user ? reviews.filter(r => r.targetId === user.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : [];
    const myAverageRating = user ? getAverageRating(user.id) : 0;
@@ -467,26 +484,54 @@ export const ClientProfile: React.FC = () => {
                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                         <p className="text-sm text-blue-800 mb-2 font-bold">Your Referral Link</p>
                         <div className="flex gap-2">
-                           <input type="text" readOnly value={`${window.location.origin}/#/register/client?ref=${currentClient.referralCode ?? ''}`} className="block w-full border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-700" />
-                           <button onClick={copyReferralLink} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center">
+                           <input type="text" readOnly value={`${window.location.origin}/#/register/client?ref=${referralCodeDisplay}`} className="block w-full border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-700" />
+                           <button type="button" onClick={copyReferralLink} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center">
                               Copy
                            </button>
                         </div>
                         <p className="text-xs text-blue-600 mt-2">Share this link with friends to invite them to the platform.</p>
                      </div>
+                     {myReferrals?.activeProgram ? (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+                           <h4 className="text-sm font-bold text-gray-900">{myReferrals.activeProgram.name}</h4>
+                           {myReferrals.activeProgram.description ? (
+                              <p className="text-sm text-gray-600 mt-1">{myReferrals.activeProgram.description}</p>
+                           ) : null}
+                           <ul className="mt-3 text-sm text-gray-800 space-y-1 list-disc list-inside">
+                              <li>Referrer reward: {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.referrerRewardAmount).toFixed(2)}</li>
+                              <li>New user reward: {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.refereeRewardAmount).toFixed(2)}</li>
+                              <li>Minimum payout: {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.minimumPayoutThreshold).toFixed(2)}</li>
+                           </ul>
+                           {myReferrals.activeProgram.termsUrl ? (
+                              <a href={myReferrals.activeProgram.termsUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 text-sm font-medium mt-3 inline-block hover:underline">
+                                 Terms &amp; conditions
+                              </a>
+                           ) : null}
+                        </div>
+                     ) : null}
                      <div className="border-t border-gray-200 pt-4">
                         <div className="flex items-center justify-between mb-4">
                            <h4 className="text-sm font-bold text-gray-900">Your Impact</h4>
-                           <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">{currentClient.referrals.length} Referrals</span>
+                           <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">{referralCount} Referrals</span>
                         </div>
-                        {currentClient.referrals.length === 0 ? (
+                        {referralCount === 0 ? (
                            <div className="text-center py-8 text-gray-500">
                               <Users className="h-12 w-12 mx-auto text-gray-300 mb-2" />
-                              <p>You haven't referred anyone yet.</p>
+                              <p>You haven&apos;t referred anyone yet.</p>
                            </div>
                         ) : (
-                           <div className="space-y-2">
-                              <p className="text-sm text-gray-600">You have successfully referred {currentClient.referrals.length} users.</p>
+                           <div className="space-y-3">
+                              <p className="text-sm text-gray-600">You have successfully referred {referralCount} user{referralCount === 1 ? '' : 's'}.</p>
+                              {referredPeople.length > 0 ? (
+                                 <ul className="divide-y divide-gray-200 border border-gray-200 rounded-md bg-white">
+                                    {referredPeople.map((u) => (
+                                       <li key={u.id} className="px-3 py-2 flex justify-between text-sm">
+                                          <span className="font-medium text-gray-900">{u.displayName || 'User'}</span>
+                                          <span className="text-gray-500">{u.joinedDate ? new Date(u.joinedDate).toLocaleDateString() : ''}</span>
+                                       </li>
+                                    ))}
+                                 </ul>
+                              ) : null}
                            </div>
                         )}
                      </div>

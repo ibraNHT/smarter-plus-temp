@@ -6,6 +6,33 @@ export enum UserRole {
   CLIENT = 'CLIENT'
 }
 
+/** Response from GET /api/users/me/referrals (API: GetMyReferralsUseCase). */
+export interface ReferredUserSummary {
+  id: string;
+  displayName: string;
+  joinedDate: string;
+}
+
+/** Mirrors admin active program (GET /api/referral-programs/active & me/referrals). */
+export interface ActiveReferralProgramPublic {
+  id: string;
+  name: string;
+  description: string;
+  referrerRewardAmount: number;
+  refereeRewardAmount: number;
+  currency: string;
+  minimumPayoutThreshold: number;
+  termsUrl: string;
+}
+
+export interface MyReferralsData {
+  referralCode: string;
+  totalReferred: number;
+  referredUsers: ReferredUserSummary[];
+  /** Active platform program from admin console (null if none configured). */
+  activeProgram: ActiveReferralProgramPublic | null;
+}
+
 export enum ProducerStatus {
   PENDING = 'PENDING',
   VALIDATED = 'VALIDATED',
@@ -371,6 +398,8 @@ export interface SupportMessage {
   sender: 'USER' | 'AI' | 'AGENT';
   text: string;
   timestamp: string;
+  /** Present only in admin context; omitted for customers from API. */
+  internal?: boolean;
 }
 
 export interface SupportSession {
@@ -380,4 +409,6 @@ export interface SupportSession {
   status: 'AI_HANDLING' | 'WAITING_FOR_AGENT' | 'AGENT_ACTIVE' | 'CLOSED';
   messages: SupportMessage[];
   lastActive: string;
+  priority?: string | null;
+  assignedToUserId?: string | null;
 }
