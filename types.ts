@@ -209,6 +209,10 @@ export interface ProducerProfile {
 
   certifications: string[]; // URLs or filenames
   productionTypes: string[]; // e.g., 'Agriculture', 'Livestock'
+  /** TIN / NIU for business producers (admin validation). */
+  taxIdentificationNumber?: string;
+  /** URL of tax clearance certificate upload. */
+  taxClearanceCertificateUrl?: string;
   status: ProducerStatus;
   paymentMethods: PaymentMethod[];
   joinedDate: string;

@@ -69,6 +69,8 @@ export const RegisterProducer: React.FC = () => {
     phone: '',
     description: '',
     productionTypes: [] as string[],
+    taxIdentificationNumber: '',
+    taxClearanceCertificateUrl: '',
   });
 
   // Locations State
@@ -123,7 +125,13 @@ export const RegisterProducer: React.FC = () => {
       locations: locations,
       certifications: [],
       productionTypes: formData.productionTypes.length > 0 ? formData.productionTypes : ['Agriculture'],
-      referrerCode: refCode || undefined
+      referrerCode: refCode || undefined,
+      ...(formData.type === 'BUSINESS'
+        ? {
+            taxIdentificationNumber: formData.taxIdentificationNumber.trim() || undefined,
+            taxClearanceCertificateUrl: formData.taxClearanceCertificateUrl.trim() || undefined,
+          }
+        : {}),
     }, formData.password);
 
     if (result.success) {
@@ -189,6 +197,41 @@ export const RegisterProducer: React.FC = () => {
               />
             </div>
           </div>
+
+          {formData.type === 'BUSINESS' && (
+            <>
+              <div className="sm:col-span-6">
+                <label htmlFor="tin" className="block text-sm font-medium text-gray-700">
+                  Tax ID (TIN / NIU)
+                </label>
+                <p className="text-xs text-gray-500 mt-0.5">Required for business accounts; validated by the platform.</p>
+                <input
+                  id="tin"
+                  type="text"
+                  name="taxIdentificationNumber"
+                  required={formData.type === 'BUSINESS'}
+                  className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
+                  value={formData.taxIdentificationNumber}
+                  onChange={e => setFormData({ ...formData, taxIdentificationNumber: e.target.value })}
+                />
+              </div>
+              <div className="sm:col-span-6">
+                <label htmlFor="taxCert" className="block text-sm font-medium text-gray-700">
+                  Tax clearance certificate URL
+                </label>
+                <p className="text-xs text-gray-500 mt-0.5">Link to your uploaded Attestation de non-redevance (e.g. from document upload).</p>
+                <input
+                  id="taxCert"
+                  type="url"
+                  name="taxClearanceCertificateUrl"
+                  placeholder="https://..."
+                  className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
+                  value={formData.taxClearanceCertificateUrl}
+                  onChange={e => setFormData({ ...formData, taxClearanceCertificateUrl: e.target.value })}
+                />
+              </div>
+            </>
+          )}
 
           <div className="sm:col-span-3">
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">{t('form.email')}</label>

@@ -11,6 +11,35 @@ import {
 } from './supportSessionsApi';
 const defaultSchedule: WeeklySchedule = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
 import { apiFetch, apiUpload, setToken, clearToken, getToken, setRefreshToken } from './apiService';
+
+/** Map Prisma withdrawal row (+ nested paymentMethod) to app `WithdrawalRequest`. */
+function mapWithdrawalFromApi(d: any): WithdrawalRequest {
+  const pm = d.paymentMethod ?? {};
+  const prov = String(pm.provider ?? '').toUpperCase();
+  const provider: PaymentMethod['provider'] =
+    prov === 'ORANGE' || prov === 'MTN' || prov === 'BANK' ? prov : 'MTN';
+  const st = String(d.status ?? 'PENDING').toUpperCase();
+  const status =
+    st === 'APPROVED' ? WithdrawalStatus.APPROVED
+    : st === 'PROCESSED' ? WithdrawalStatus.PROCESSED
+    : st === 'REJECTED' ? WithdrawalStatus.REJECTED
+    : WithdrawalStatus.PENDING;
+  return {
+    id: d.id,
+    userId: d.userId,
+    amount: Number(d.amount),
+    paymentMethod: {
+      id: pm.id ?? d.paymentMethodId ?? '',
+      provider,
+      accountNumber: String(pm.accountNumber ?? ''),
+      accountName: String(pm.accountName ?? ''),
+    },
+    status,
+    requestDate: d.requestDate ? new Date(d.requestDate).toISOString() : new Date().toISOString(),
+    processedDate: d.processedDate ? new Date(d.processedDate).toISOString() : undefined,
+    adminNote: d.adminNote || undefined,
+  };
+}
 import { fetchMyReferrals } from './referralsApi';
 import { validateCouponRemote, type CouponValidationChannel } from './couponsApi';
 import { io, Socket } from 'socket.io-client';
@@ -310,12 +339,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       ]);
       // Only fetch orders, wallet, and referral stats when authenticated and we have a token (avoids 401 spam when token expired)
       if (activeUser && getToken()) {
-        const [resOrders, resWallet, referralsPayload] = await Promise.all([
+        const [resOrders, resWallet, resWithdrawals, referralsPayload] = await Promise.all([
           apiFetch<any[]>('/api/orders', { silent401: true } as any).catch((e) => { on401(e); return []; }),
           apiFetch<any>('/api/wallet/me', { silent401: true } as any).catch((e) => { on401(e); return null; }),
+          apiFetch<any[]>('/api/wallet/me/withdrawals', { silent401: true } as any).catch((e) => { on401(e); return []; }),
           fetchMyReferrals(),
         ]);
         setMyReferrals(referralsPayload);
+        setWithdrawalRequests(Array.isArray(resWithdrawals) ? resWithdrawals.map(mapWithdrawalFromApi) : []);
         setOrders(Array.isArray(resOrders) ? resOrders.map((o: any) => ({
           ...o,
           items: Array.isArray(o.orderItems || o.items)
@@ -338,6 +369,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
       } else {
         setMyReferrals(null);
+        setWithdrawalRequests([]);
       }
       setProducers(Array.isArray(resProducers) ? resProducers.map(p => {
         const displayName = (p as any).user?.displayName ?? `${String((p as any).firstName ?? '').trim()} ${String((p as any).lastName ?? '').trim()}`.trim();
@@ -391,37 +423,45 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
+  type AuthSessionPayload = {
+    token?: string;
+    accessToken?: string;
+    refreshToken?: string;
+    user: UserSession;
+  };
 
+  const establishSession = async (data: AuthSessionPayload) => {
+    const jwtToken = data.accessToken || data.token;
+    if (jwtToken) {
+      setToken(jwtToken);
+    }
+    if (data.refreshToken) {
+      setRefreshToken(data.refreshToken);
+    }
+    setUser(data.user);
+    localStorage.setItem('currentUser', JSON.stringify(data.user));
+
+    const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
+    if (localCart.length > 0) {
+      apiFetch('/api/cart/sync-cart', {
+        method: 'POST',
+        silent401: true,
+        body: JSON.stringify({ items: localCart.map((i: any) => ({ offerId: i.id, quantity: i.cartQuantity || 1 })) }),
+      } as any).catch(() => {});
+    }
+
+    await fetchData(data.user);
+  };
 
   // ─── AUTHENTICATION ──────────────────────────────────────────────────────────
 
   const login = async (identifier: string, password: string): Promise<{ success: boolean; message: string }> => {
     try {
-      const data = await apiFetch<{ token?: string; accessToken?: string; refreshToken?: string; user: UserSession }>('/api/auth/login', {
+      const data = await apiFetch<AuthSessionPayload>('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ identifier, password }),
       });
-      const jwtToken = data.accessToken || data.token;
-      if (jwtToken) {
-        setToken(jwtToken);
-      }
-      if (data.refreshToken) {
-        setRefreshToken(data.refreshToken);
-      }
-      setUser(data.user);
-      localStorage.setItem('currentUser', JSON.stringify(data.user));
-
-      // Merge offline/localStorage cart with backend on login
-      const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
-      if (localCart.length > 0) {
-        apiFetch('/api/cart/sync-cart', {
-          method: 'POST',
-          silent401: true,
-          body: JSON.stringify({ items: localCart.map((i: any) => ({ offerId: i.id, quantity: i.cartQuantity || 1 })) })
-        } as any).catch(() => { });
-      }
-
-      await fetchData(data.user); // Pass user directly to avoid stale state
+      await establishSession(data);
       return { success: true, message: 'Logged in successfully.' };
     } catch (err: any) {
       return { success: false, message: err.message || 'Login failed.' };
@@ -454,31 +494,22 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const registerProducer = async (data: any, password: string): Promise<{ success: boolean; message: string }> => {
     try {
-      // 1. Create User
-      await apiFetch('/api/auth/register', {
+      const session = await apiFetch<AuthSessionPayload>('/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({
           email: data.email,
           phone: data.phone,
-          password: password,
+          password,
           displayName: data.name || 'Producer',
           role: UserRole.PRODUCER,
-          referralCode: data.referrerCode
+          producerAccountType: data.type === 'INDIVIDUAL' ? 'INDIVIDUAL' : 'BUSINESS',
+          referralCode: data.referrerCode,
+          phoneVerificationToken: data.phoneVerificationToken,
         }),
       });
 
-      // 2. Login to get Access Token
-      const loginData = await apiFetch<{ token?: string; accessToken?: string; user: UserSession }>('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ identifier: data.email, password }),
-      });
+      await establishSession(session);
 
-      const jwtToken = loginData.accessToken || loginData.token;
-      if (jwtToken) setToken(jwtToken);
-      setUser(loginData.user);
-      localStorage.setItem('currentUser', JSON.stringify(loginData.user));
-
-      // 3. Create Producer Profile
       await apiFetch('/api/profiles/producer', {
         method: 'POST',
         body: JSON.stringify({
@@ -489,7 +520,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           dateOfBirth: new Date().toISOString(),
           description: data.description || "",
           certifications: data.certifications || [],
-          productionTypes: data.productionTypes || []
+          productionTypes: data.productionTypes || [],
+          ...(data.type === 'BUSINESS' || !data.type
+            ? {
+                taxIdentificationNumber: data.taxIdentificationNumber || undefined,
+                taxClearanceCertificateUrl: data.taxClearanceCertificateUrl || undefined,
+              }
+            : {}),
         }),
       });
 
@@ -502,31 +539,21 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const registerClient = async (data: any, password: string): Promise<{ success: boolean; message: string }> => {
     try {
-      // 1. Create User
-      await apiFetch('/api/auth/register', {
+      const session = await apiFetch<AuthSessionPayload>('/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({
           email: data.email,
           phone: data.phone,
-          password: password,
-          displayName: data.name || (data.firstName + ' ' + data.lastName),
+          password,
+          displayName: data.name || `${data.firstName} ${data.lastName}`,
           role: UserRole.CLIENT,
-          referralCode: data.referrerCode
+          referralCode: data.referrerCode,
+          phoneVerificationToken: data.phoneVerificationToken,
         }),
       });
 
-      // 2. Login to get Access Token
-      const loginData = await apiFetch<{ token?: string; accessToken?: string; user: UserSession }>('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ identifier: data.email, password }),
-      });
+      await establishSession(session);
 
-      const jwtToken = loginData.accessToken || loginData.token;
-      if (jwtToken) setToken(jwtToken);
-      setUser(loginData.user);
-      localStorage.setItem('currentUser', JSON.stringify(loginData.user));
-
-      // 3. Create Client Profile
       await apiFetch('/api/profiles/client', {
         method: 'POST',
         body: JSON.stringify({
@@ -920,10 +947,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (otpToken) headers['X-OTP-Verification'] = otpToken;
       const result = await apiFetch<{ success: boolean; message: string }>('/api/wallet/withdraw', {
         method: 'POST',
-        body: JSON.stringify({ amount, method }),
+        body: JSON.stringify({ amount, paymentMethodId: method.id }),
         headers,
       });
-      setWithdrawalRequests(prev => [...prev, { id: `w-${Date.now()}`, userId: user.id, amount, paymentMethod: method, status: WithdrawalStatus.PENDING, requestDate: new Date().toISOString() }]);
+      const list = await apiFetch<any[]>('/api/wallet/me/withdrawals', { silent401: true } as any).catch(() => []);
+      setWithdrawalRequests(Array.isArray(list) ? list.map(mapWithdrawalFromApi) : []);
       return { success: result.success, message: result.message };
     } catch (error: any) {
       console.error('Failed to request withdrawal', error);
