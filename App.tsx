@@ -47,8 +47,8 @@ const RoleScopeBoundary: React.FC<{ children: React.ReactNode }> = ({ children }
       <main className="max-w-3xl mx-auto py-16 px-4 text-center">
         <h1 className="text-2xl font-bold text-gray-900">Use the Admin Panel for this account</h1>
         <p className="mt-3 text-gray-600">
-          This app is for guests, clients, and producers. Platform and retail staff should sign in to the Admin Panel
-          (or Retail Admin) instead.
+          This app is for guests, clients, and producers. Retail/admin/manager staff accounts should sign in to
+          the admin applications instead.
         </p>
       </main>
     );

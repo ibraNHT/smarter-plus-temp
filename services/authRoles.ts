@@ -18,7 +18,10 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 }
 
 export function normalizeRole(role: unknown): string {
-  return String(role ?? '').trim().toUpperCase();
+  const normalized = String(role ?? '').trim().toUpperCase();
+  // Defensive aliases for older/misspelled role payloads.
+  if (normalized === 'RETAILER' || normalized === 'RETAIL') return 'RETAIL_ADMIN';
+  return normalized;
 }
 
 export function getRoleFromToken(token: string): string {
