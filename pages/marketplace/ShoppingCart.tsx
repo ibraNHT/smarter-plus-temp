@@ -5,10 +5,10 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { Trash2, ArrowLeft, ShoppingBag, CheckCircle, Calendar, X, MapPin, Heart, Tag, ChevronLeft, ChevronRight, Truck, Home } from 'lucide-react';
 import { SEO } from '../../components/SEO';
-import { OfferType, MarketType } from '../../types';
+import { OfferType, MarketType, UserRole } from '../../types';
 
 export const ShoppingCart: React.FC = () => {
-  const { cart, removeFromCart, placeOrder, user, clearCart, clients, moveToFavorites, validateCoupon, pickupPoints, guestEmail, setGuestEmail } = useStore();
+  const { cart, removeFromCart, placeOrder, user, clearCart, clients, producers, moveToFavorites, validateCoupon, pickupPoints, guestEmail, setGuestEmail } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -39,13 +39,23 @@ export const ShoppingCart: React.FC = () => {
   const serviceFee = subtotal * 0.05;
   const totalAmount = Math.max(0, subtotal + serviceFee - discountAmount);
 
-  const currentClient = user ? clients.find(c => c.id === user.id) : null;
+  const currentClient = user
+    ? clients.find(c => c.userId === user.id || c.id === user.id)
+    : null;
+  const currentProducer = user
+    ? producers.find(p => p.userId === user.id || p.id === user.producerId)
+    : null;
+
+  /** Buyer profile location, or producer operating location as fallback for producers. */
+  const primaryHomeLocation =
+    currentClient?.locations?.[0] ??
+    (user?.role === UserRole.PRODUCER ? currentProducer?.locations?.[0] : undefined);
 
   // Check if order contains ATI items
   const isAtiOrder = cart.length > 0 && cart[0].marketType === MarketType.ATI;
 
   // Client City from Profile
-  const clientCity = currentClient?.locations?.[0]?.city || '';
+  const clientCity = primaryHomeLocation?.city || '';
 
   // Location Validation for ATI
   // Rule: ATI delivers to cities where they operate. AND pickup must be in same city as User.
@@ -64,7 +74,7 @@ export const ShoppingCart: React.FC = () => {
   const availablePickupPoints = pickupPoints.filter(p => p.city === selectedPickupCity);
 
   // Validation Flags
-  const isHomeAddressValid = !!currentClient?.locations?.[0];
+  const isHomeAddressValid = !!primaryHomeLocation;
   const isPickupValid = deliveryMethod === 'PICKUP' && !!selectedPickupPointId;
   const isDeliveryMethodValid = deliveryMethod === 'HOME' ? isHomeAddressValid : isPickupValid;
 
@@ -320,11 +330,16 @@ export const ShoppingCart: React.FC = () => {
                   <p className="font-bold text-gray-700 mb-1">Delivering to:</p>
                   {isHomeAddressValid ? (
                     <>
-                      <p className="text-gray-900">{currentClient?.locations[0].address}</p>
-                      <p className="text-gray-500">{currentClient?.locations[0].city}, {currentClient?.locations[0].region}</p>
+                      <p className="text-gray-900">{primaryHomeLocation?.address}</p>
+                      <p className="text-gray-500">{primaryHomeLocation?.city}, {primaryHomeLocation?.region}</p>
                     </>
                   ) : (
-                    <p className="text-red-500">No address in profile. Please update your profile.</p>
+                    <p className="text-red-500">
+                      No address in profile.{" "}
+                      <Link to="/client/profile" className="underline font-medium text-red-600 hover:text-red-700">
+                        Set address now
+                      </Link>
+                    </p>
                   )}
                 </div>
               )}

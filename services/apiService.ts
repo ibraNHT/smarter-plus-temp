@@ -42,27 +42,38 @@ interface ApiFetchOptions extends Omit<RequestInit, 'headers'> {
     _isRetry?: boolean;
 }
 
+let refreshInFlight: Promise<boolean> | null = null;
+
 /** Attempt to silently refresh the access token using the stored refresh token */
 const attemptTokenRefresh = async (): Promise<boolean> => {
+    if (refreshInFlight) return refreshInFlight;
+    refreshInFlight = (async () => {
     const refreshToken = getRefreshToken();
     if (!refreshToken) return false;
-    try {
-        const response = await fetch(`${BASE_URL}/api/auth/refresh`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken }),
-        });
-        if (!response.ok) return false;
-        const data = await response.json();
-        if (data.accessToken) {
-            setToken(data.accessToken);
-            if (data.refreshToken) setRefreshToken(data.refreshToken);
-            return true;
+        try {
+            const response = await fetch(`${BASE_URL}/api/auth/refresh`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refreshToken }),
+            });
+            if (!response.ok) return false;
+            const data = await response.json();
+            if (data.accessToken) {
+                setToken(data.accessToken);
+                if (data.refreshToken) setRefreshToken(data.refreshToken);
+                return true;
+            }
+        } catch {
+            // network error during refresh — fail silently
         }
-    } catch {
-        // network error during refresh — fail silently
+        return false;
+    })();
+
+    try {
+        return await refreshInFlight;
+    } finally {
+        refreshInFlight = null;
     }
-    return false;
 };
 
 /**
@@ -81,14 +92,14 @@ export const apiFetch = async <T = unknown>(
 
     if (!response.ok) {
         if (response.status === 401) {
-            // Only attempt refresh for non-silent calls (e.g. user actions). Silent calls (polling, background) must not trigger refresh to avoid 429.
-            if (!silent401 && !_isRetry) {
+            // Attempt one token refresh even for silent calls, but suppress redirect for silent flows.
+            if (!_isRetry) {
                 const refreshed = await attemptTokenRefresh();
                 if (refreshed) {
                     return apiFetch<T>(path, { ...options, _isRetry: true });
                 }
             }
-            // Always clear auth on 401 so we don't keep sending an invalid token (security + consistency).
+            // Refresh failed (or retry already used): clear stale auth state.
             clearToken();
             localStorage.removeItem('currentUser');
             if (!silent401) {

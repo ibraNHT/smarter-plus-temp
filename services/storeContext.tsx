@@ -43,6 +43,7 @@ function mapWithdrawalFromApi(d: any): WithdrawalRequest {
 import { fetchMyReferrals } from './referralsApi';
 import { validateCouponRemote, type CouponValidationChannel } from './couponsApi';
 import { io, Socket } from 'socket.io-client';
+import { isWebAppAllowedRole, isWebAppSessionBlocked } from './authRoles';
 
 interface StoreContextType {
   user: UserSession | null;
@@ -215,7 +216,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (savedUser) {
       try {
         parsedUser = JSON.parse(savedUser);
-        setUser(parsedUser);
+        if (isWebAppAllowedRole(parsedUser?.role)) {
+          setUser(parsedUser);
+        } else {
+          clearToken();
+          localStorage.removeItem('currentUser');
+          parsedUser = null;
+        }
       } catch (e) { }
     }
     const savedCart = localStorage.getItem('cart');
@@ -226,6 +233,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (savedGuestEmail) setGuestEmail(savedGuestEmail);
     fetchData(parsedUser); // Pass user directly to avoid stale-closure on first render
   }, []);
+
+  // Drop admin/staff sessions using JWT role (source of truth) even if localStorage user is stale.
+  useEffect(() => {
+    const token = getToken();
+    if (isWebAppSessionBlocked(token, user)) {
+      clearToken();
+      localStorage.removeItem('currentUser');
+      setUser(null);
+    }
+  }, [user]);
 
   // ─── DEBOUNCED CART SYNC ───────────────────────────────────────────────────
   useEffect(() => {
@@ -385,7 +402,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           searchHistory: p.searchHistory || []
         };
       }) : []);
-      setClients(Array.isArray(resClients) ? resClients.map(c => {
+
+      const mapClientRow = (c: any) => {
         const displayName = (c as any).user?.displayName ?? `${String((c as any).firstName ?? '').trim()} ${String((c as any).lastName ?? '').trim()}`.trim();
         return {
           ...c,
@@ -395,7 +413,25 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           referrals: c.referrals || [],
           searchHistory: c.searchHistory || []
         };
-      }) : []);
+      };
+      let clientRows = Array.isArray(resClients) ? resClients.map(mapClientRow) : [];
+      if (activeUser && getToken()) {
+        const meClient = await apiFetch<any>('/api/profiles/me/client', { silent401: true } as any).catch(() =>
+          apiFetch<any>('/api/clients/me', { silent401: true } as any).catch(() => null),
+        );
+        if (meClient && typeof meClient === 'object' && meClient.id) {
+          const mapped = mapClientRow(meClient);
+          const ix = clientRows.findIndex(
+            c => c.id === mapped.id || (c as any).userId === (mapped as any).userId
+          );
+          if (ix >= 0) {
+            clientRows[ix] = { ...clientRows[ix], ...mapped };
+          } else {
+            clientRows = [...clientRows, mapped];
+          }
+        }
+      }
+      setClients(clientRows);
       setOffers(Array.isArray(resOffers) ? resOffers : ((resOffers as any)?.data || []));
       setPickupPoints(Array.isArray(resPickup) ? resPickup : []);
     } catch (error) {
@@ -431,6 +467,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const establishSession = async (data: AuthSessionPayload) => {
+    if (!isWebAppAllowedRole(data.user?.role)) {
+      clearToken();
+      localStorage.removeItem('currentUser');
+      throw new Error('This account is not supported in WebApp. Please use Admin Panel.');
+    }
     const jwtToken = data.accessToken || data.token;
     if (jwtToken) {
       setToken(jwtToken);
@@ -464,6 +505,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       await establishSession(data);
       return { success: true, message: 'Logged in successfully.' };
     } catch (err: any) {
+      clearToken();
+      localStorage.removeItem('currentUser');
       return { success: false, message: err.message || 'Login failed.' };
     }
   };

@@ -23,6 +23,24 @@ const CAMEROON_LOCATIONS: Record<string, string[]> = {
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
+function normalizeClientLocations(raw: unknown): Location[] {
+   if (!Array.isArray(raw)) return [];
+   return raw.map((loc: any) => ({
+      lat: Number(loc?.lat ?? loc?.latLng?.lat ?? 0),
+      lng: Number(loc?.lng ?? loc?.latLng?.lng ?? 0),
+      region: String(loc?.region ?? ''),
+      city: String(loc?.city ?? ''),
+      address: String(loc?.address ?? ''),
+   }));
+}
+
+function normalizeDob(dobRaw: unknown): string {
+   if (dobRaw == null || dobRaw === '') return '';
+   if (typeof dobRaw === 'string') return dobRaw;
+   if (dobRaw instanceof Date) return dobRaw.toISOString();
+   return String(dobRaw);
+}
+
 export const ClientProfile: React.FC = () => {
    const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, updateClientProfile, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals } = useStore();
    const { t } = useTranslation();
@@ -57,7 +75,10 @@ export const ClientProfile: React.FC = () => {
    const [showPasswordModal, setShowPasswordModal] = useState(false);
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
-   const currentClient = clients.find(c => c.userId === user?.id || c.id === user?.id);
+   const currentClient = useMemo(
+      () => (user?.id ? clients.find(c => c.userId === user.id || c.id === user.id) : undefined),
+      [clients, user?.id],
+   );
    const wallet = user ? getWallet(user.id) : null;
 
    const referralCodeDisplay = useMemo(
@@ -82,30 +103,76 @@ export const ClientProfile: React.FC = () => {
    const myAverageRating = user ? getAverageRating(user.id) : 0;
 
    useEffect(() => {
-      if (currentClient && !formData) {
+      const rowId = (currentClient as any)?.id;
+      if (!currentClient || !rowId) {
+         setFormData(null);
+         return;
+      }
+      setFormData(prev => {
+         if (prev?.id === rowId) return prev;
          const clientUser = (currentClient as any).user;
          const sessionEmail = (user as any)?.email ?? '';
          const sessionPhone = (user as any)?.phone ?? '';
-         setFormData({
+         return {
             ...currentClient,
+            id: String(rowId),
             firstName: (currentClient.firstName ?? '').toString(),
             lastName: (currentClient.lastName ?? '').toString(),
             email: (clientUser?.email ?? (currentClient as any).email ?? sessionEmail).toString(),
             phone: (clientUser?.phone ?? (currentClient as any).phone ?? sessionPhone).toString(),
             name: (clientUser?.displayName ?? (currentClient as any).name ?? (`${currentClient.firstName ?? ''} ${currentClient.lastName ?? ''}`.trim() || '')).toString(),
             gender: ((currentClient as any).gender === 'MALE' || (currentClient as any).gender === 'FEMALE' ? (currentClient as any).gender : undefined),
-            dateOfBirth: (currentClient as any).dateOfBirth ?? '',
-            locations: Array.isArray(currentClient.locations) ? currentClient.locations : [],
+            dateOfBirth: normalizeDob((currentClient as any).dateOfBirth),
+            locations: normalizeClientLocations(currentClient.locations),
             favorites: Array.isArray(currentClient.favorites) ? currentClient.favorites : [],
-            referralCode: ((currentClient as any).referralCode ?? '').toString(),
+            referralCode: ((currentClient as any).referralCode ?? (clientUser as any)?.referralCode ?? '').toString(),
             referrals: Array.isArray((currentClient as any).referrals) ? (currentClient as any).referrals : [],
             searchHistory: Array.isArray((currentClient as any).searchHistory) ? (currentClient as any).searchHistory : [],
-         });
-      }
-   }, [currentClient, formData, user]);
+         } as ClientProfileType;
+      });
+   }, [currentClient, user]);
 
-   if (!user || user.role !== UserRole.CLIENT) {
-      return <div className="p-8 text-center">Access Denied</div>;
+   if (!user) {
+      return (
+         <div className="max-w-7xl mx-auto py-8 px-4">
+            <SEO title="Client Profile | AgriMarket" noindex={true} />
+            <p className="p-8 text-center text-gray-600">Please log in to view your profile.</p>
+         </div>
+      );
+   }
+
+   if (user.role !== UserRole.CLIENT && user.role !== UserRole.PRODUCER) {
+      return (
+         <div className="max-w-7xl mx-auto py-8 px-4">
+            <SEO title="Client Profile | AgriMarket" noindex={true} />
+            <p className="p-8 text-center">Access Denied</p>
+         </div>
+      );
+   }
+
+   if (!currentClient?.id && user.role === UserRole.PRODUCER) {
+      return (
+         <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            <SEO title="Delivery profile | AgriMarket" noindex={true} />
+            <div className="p-8 text-center max-w-lg mx-auto space-y-4 bg-white rounded-lg shadow border border-gray-100">
+               <p className="text-gray-700">Your buyer (delivery) profile could not be loaded yet.</p>
+               <p className="text-sm text-gray-500">Try refreshing the page. If you just signed up, finish producer onboarding first.</p>
+               <Link to="/producer/profile" className="inline-block text-primary-600 font-medium hover:underline">Go to producer profile</Link>
+            </div>
+         </div>
+      );
+   }
+
+   if (!currentClient?.id && user.role === UserRole.CLIENT) {
+      return (
+         <div className="max-w-7xl mx-auto py-8 px-4">
+            <SEO title="Client Profile | AgriMarket" noindex={true} />
+            <div className="p-8 text-center max-w-lg mx-auto space-y-4">
+               <p className="text-gray-700">No client profile was found for your account.</p>
+               <Link to="/register/client" className="text-primary-600 font-medium hover:underline">Complete client registration</Link>
+            </div>
+         </div>
+      );
    }
 
    const allMyOrders = orders.filter(o => o.clientId === currentClient?.id || o.clientId === user.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -241,12 +308,14 @@ export const ClientProfile: React.FC = () => {
                   <button onClick={() => setActiveTab('security')} className={`${activeTab === 'security' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
                      <Shield className={`${activeTab === 'security' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.security')}</span>
                   </button>
-                  <div className="pt-6">
-                     <button onClick={() => setShowUpgradeModal(true)} className="bg-primary-600 text-white group rounded-md px-3 py-3 flex items-center text-sm font-bold w-full hover:bg-primary-700 shadow-md transition-all">
-                        <Tractor className="flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> {t('profile.upgrade')}
-                     </button>
-                     <p className="text-xs text-gray-500 mt-2 px-1">{t('profile.upgradeDesc')}</p>
-                  </div>
+                  {user.role === UserRole.CLIENT && (
+                     <div className="pt-6">
+                        <button onClick={() => setShowUpgradeModal(true)} className="bg-primary-600 text-white group rounded-md px-3 py-3 flex items-center text-sm font-bold w-full hover:bg-primary-700 shadow-md transition-all">
+                           <Tractor className="flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> {t('profile.upgrade')}
+                        </button>
+                        <p className="text-xs text-gray-500 mt-2 px-1">{t('profile.upgradeDesc')}</p>
+                     </div>
+                  )}
                   <div className="pt-4 mt-4 border-t border-gray-200">
                      <button onClick={handleLogout} className="text-red-600 hover:bg-red-50 group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors">
                         <LogOut className="flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> <span className="truncate">{t('nav.logout')}</span>
@@ -256,6 +325,11 @@ export const ClientProfile: React.FC = () => {
             </aside>
 
             <div className="space-y-6 sm:px-6 lg:px-0 lg:col-span-9">
+               {activeTab === 'info' && !formData && currentClient?.id && (
+                  <div className="shadow sm:rounded-md bg-white p-8 text-center text-gray-600">
+                     Loading profile…
+                  </div>
+               )}
                {activeTab === 'info' && formData && (
                   <form onSubmit={savePersonalInfo} className="shadow sm:rounded-md sm:overflow-hidden bg-white p-6">
                      <h3 className="text-lg font-medium text-gray-900 mb-4">{t('profile.tabs.info')}</h3>
@@ -297,7 +371,7 @@ export const ClientProfile: React.FC = () => {
                         </div>
                         <div className="sm:col-span-3">
                            <label className="block text-sm font-medium text-gray-700">{t('profile.dob')}</label>
-                           <input type="date" name="dateOfBirth" value={formData.dateOfBirth ? formData.dateOfBirth.split('T')[0] : ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" />
+                           <input type="date" name="dateOfBirth" value={typeof formData.dateOfBirth === 'string' && formData.dateOfBirth ? formData.dateOfBirth.split('T')[0] : ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" />
                         </div>
                         <div className="sm:col-span-3">
                            <label className="block text-sm font-medium text-gray-700">{t('form.email')}</label>

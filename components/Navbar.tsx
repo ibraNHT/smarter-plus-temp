@@ -5,10 +5,17 @@ import { useStore } from '../services/storeContext';
 import { useTranslation } from '../services/i18nContext';
 import { usePwaInstall } from '../contexts/PwaInstallContext';
 import { UserRole } from '../types';
+import { getToken } from '../services/apiService';
+import { isWebAppSessionBlocked } from '../services/authRoles';
 import { LogOut, Sprout, ShoppingBasket, Tractor, ShoppingCart, Globe, Bell, X, User, MessageCircle, ChevronDown, Download } from 'lucide-react';
+
+const marketplaceVisible = (user: { role?: UserRole } | null) =>
+  !user || user.role === UserRole.CLIENT || user.role === UserRole.PRODUCER;
 
 export const Navbar: React.FC = () => {
   const { user, producers, clients, logout, cart, notifications, markNotificationsAsRead } = useStore();
+  const token = typeof window !== 'undefined' ? getToken() : null;
+  const staffWrongApp = isWebAppSessionBlocked(token, user);
   const { t, language, setLanguage } = useTranslation();
   const { canInstall, promptInstall } = usePwaInstall();
   const navigate = useNavigate();
@@ -84,10 +91,32 @@ export const Navbar: React.FC = () => {
   const linkClass = (path: string) => `px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150 ${isActive(path)}`;
 
   const getHomeLink = () => {
+    if (staffWrongApp) return '/';
     if (!user) return '/';
     if (user.role === UserRole.PRODUCER) return '/producer/dashboard';
     return '/market/producers';
   };
+
+  if (staffWrongApp) {
+    return (
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
+          <Link to="/" className="flex items-center">
+            <Sprout className="h-8 w-8 text-primary-600" />
+            <span className="ml-2 text-xl font-bold text-gray-900">AgriMarket Connect</span>
+          </Link>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="inline-flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700"
+          >
+            <LogOut className="h-5 w-5" />
+            {t('nav.logout')}
+          </button>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
@@ -100,7 +129,7 @@ export const Navbar: React.FC = () => {
             </Link>
             <div className="hidden sm:ml-8 sm:flex sm:space-x-4">
               {/* Marketplace Links - Visible to Guests, Clients, and Producers */}
-              {(!user || user.role === UserRole.CLIENT || user.role === UserRole.PRODUCER) && (
+              {marketplaceVisible(user) && (
                 <>
                   <Link to="/market/producers" className={`flex items-center space-x-1 ${linkClass('/market/producers')}`}>
                     <Tractor className="h-4 w-4" />
@@ -126,7 +155,7 @@ export const Navbar: React.FC = () => {
             </button>
 
             {/* Shopping Cart Icon - Visible to Clients/Producers (Hide for Guests until they add something, or keep visible to prompt login) */}
-            {(user?.role === UserRole.CLIENT || user?.role === UserRole.PRODUCER || !user) && (
+            {(marketplaceVisible(user)) && (
               <Link to="/cart" className="relative p-2 text-gray-400 hover:text-primary-600 transition-colors">
                 <ShoppingCart className="h-6 w-6" />
                 {cartItemCount > 0 && (
@@ -265,7 +294,7 @@ export const Navbar: React.FC = () => {
         {/* Mobile menu (basic implementation) */}
         <div className="sm:hidden border-t border-gray-200 pt-2 pb-2">
           <div className="flex flex-col space-y-1">
-            {(!user || user.role === UserRole.CLIENT || user.role === UserRole.PRODUCER) && (
+            {marketplaceVisible(user) && (
               <>
                 <Link to="/market/producers" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">{t('nav.producerMarket')}</Link>
                 <Link to="/market/ati" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">{t('nav.atiStore')}</Link>

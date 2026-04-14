@@ -31,11 +31,30 @@ import { FAQ } from './pages/footer/FAQ';
 import { Jobs, Partners } from './pages/footer/Company';
 import { Terms, Privacy } from './pages/footer/Legal';
 
-import { StoreProvider } from './services/storeContext';
+import { StoreProvider, useStoreOptional } from './services/storeContext';
 import { I18nProvider } from './services/i18nContext';
 import { PublicRoute } from './components/PublicRoute';
 import { PwaInstallProvider } from './contexts/PwaInstallContext';
 import { InstallAppBanner } from './components/InstallAppBanner';
+import { getToken } from './services/apiService';
+import { isWebAppSessionBlocked } from './services/authRoles';
+
+const RoleScopeBoundary: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const store = useStoreOptional();
+  const token = typeof window !== 'undefined' ? getToken() : null;
+  if (isWebAppSessionBlocked(token, store?.user)) {
+    return (
+      <main className="max-w-3xl mx-auto py-16 px-4 text-center">
+        <h1 className="text-2xl font-bold text-gray-900">Use the Admin Panel for this account</h1>
+        <p className="mt-3 text-gray-600">
+          This app is for guests, clients, and producers. Platform and retail staff should sign in to the Admin Panel
+          (or Retail Admin) instead.
+        </p>
+      </main>
+    );
+  }
+  return <>{children}</>;
+};
 
 const App: React.FC = () => {
   return (
@@ -49,6 +68,7 @@ const App: React.FC = () => {
               <ToastContainer />
               <SupportChatWidget />
               <CompareWidget />
+              <RoleScopeBoundary>
               <main className="flex-grow pb-16 md:pb-0">
               <Routes>
                 <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
@@ -96,6 +116,7 @@ const App: React.FC = () => {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
               </main>
+              </RoleScopeBoundary>
               <Footer />
             </div>
           </Router>
