@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
@@ -24,6 +24,16 @@ export const ChatPage: React.FC = () => {
    const [counterQty, setCounterQty] = useState<number>(0);
 
    const messagesEndRef = useRef<HTMLDivElement>(null);
+   const messageInputRef = useRef<HTMLTextAreaElement>(null);
+
+   const TEXTAREA_MAX_PX = 160;
+
+   const adjustMessageInputHeight = useCallback(() => {
+      const el = messageInputRef.current;
+      if (!el) return;
+      el.style.height = 'auto';
+      el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_PX)}px`;
+   }, []);
 
    // Get active chat early to determine message length
    const activeChat = chatId ? chats.find(c => c.id === chatId) : null;
@@ -37,6 +47,10 @@ export const ChatPage: React.FC = () => {
    useEffect(() => {
       scrollToBottom();
    }, [activeMessages.length, chatId]);
+
+   useEffect(() => {
+      adjustMessageInputHeight();
+   }, [inputText, chatId, adjustMessageInputHeight]);
 
    // Fetch all chats for the user when the component loads
    useEffect(() => {
@@ -89,7 +103,12 @@ export const ChatPage: React.FC = () => {
       e?.preventDefault();
       if (!inputText.trim() || !chatId) return;
       const sent = await sendMessage(chatId, inputText);
-      if (sent) setInputText('');
+      if (sent) {
+         setInputText('');
+         requestAnimationFrame(() => {
+            adjustMessageInputHeight();
+         });
+      }
    };
 
    const handleSendProposal = () => {
@@ -171,15 +190,23 @@ export const ChatPage: React.FC = () => {
                ) : (
                   chats.filter(c => c.participantIds?.includes(user.id)).map(chat => {
                      const otherName = chat.participantIds ? getOtherParticipantName(chat.participantIds) : 'Unknown';
+                     const threadUnread = Math.max(0, Number(chat.unreadCounts?.[user.id]) || 0);
                      return (
                         <div
                            key={chat.id}
                            onClick={() => navigate(`/messages/${chat.id}`)}
                            className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${chatId === chat.id ? 'bg-blue-50' : ''}`}
                         >
-                           <div className="flex items-center justify-between mb-1">
-                              <span className="font-semibold text-gray-900">{otherName}</span>
-                              <span className="text-xs text-gray-400">{new Date(chat.lastMessageAt).toLocaleDateString()}</span>
+                           <div className="flex items-center justify-between gap-2 mb-1">
+                              <span className="font-semibold text-gray-900 truncate min-w-0">{otherName}</span>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                 {threadUnread > 0 && (
+                                    <span className="inline-flex min-h-[1.25rem] min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 text-[10px] font-bold text-white" title={String(threadUnread)}>
+                                       {threadUnread > 99 ? '99+' : threadUnread}
+                                    </span>
+                                 )}
+                                 <span className="text-xs text-gray-400 whitespace-nowrap">{new Date(chat.lastMessageAt).toLocaleDateString()}</span>
+                              </div>
                            </div>
                            <p className="text-sm text-gray-500 truncate">{chat.lastMessage}</p>
                         </div>
@@ -298,33 +325,45 @@ export const ChatPage: React.FC = () => {
                      <div ref={messagesEndRef} />
                   </div>
 
-                  {/* Input Area */}
-                  <div className="p-3 md:p-4 bg-white border-t border-gray-200">
-                     <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                  {/* Input Area — auto-growing textarea for long messages */}
+                  <div className="p-3 md:p-4 bg-white border-t border-gray-200 shrink-0">
+                     <form onSubmit={handleSendMessage} className="flex items-end gap-2">
                         <button
                            type="button"
                            onClick={() => setShowProposalModal(true)}
                            disabled={!activeChat?.offerId || !(getOfferById(activeChat?.offerId || '')?.isNegotiable ?? false)}
-                           className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                           className="mb-1 p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                            title={!activeChat?.offerId ? 'Select an offer first' : (getOfferById(activeChat?.offerId || '')?.isNegotiable ? 'Make Proposal' : 'This offer is not open for negotiation')}
                         >
                            <Gavel className="h-6 w-6 text-primary-600" />
                         </button>
-                        <input
-                           type="text"
+                        <textarea
+                           ref={messageInputRef}
+                           rows={1}
                            value={inputText}
                            onChange={(e) => setInputText(e.target.value)}
+                           onInput={adjustMessageInputHeight}
+                           onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                 e.preventDefault();
+                                 void handleSendMessage();
+                              }
+                           }}
                            placeholder={t('chat.typeMessage')}
-                           className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-gray-900"
+                           aria-label={t('chat.typeMessage')}
+                           className="flex-1 min-h-[42px] max-h-40 resize-none overflow-y-auto border border-gray-300 rounded-2xl px-4 py-2.5 text-sm leading-snug focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-gray-900 break-words [overflow-wrap:anywhere]"
                         />
                         <button
                            type="submit"
                            disabled={!inputText.trim()}
-                           className="p-2 bg-primary-600 text-white rounded-full hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                           className="mb-1 p-2 bg-primary-600 text-white rounded-full hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                         >
                            <Send className="h-5 w-5" />
                         </button>
                      </form>
+                     <p className="mt-1.5 text-[11px] text-gray-400 hidden sm:block">
+                        {t('chat.composeHint')}
+                     </p>
                   </div>
                </>
             ) : (

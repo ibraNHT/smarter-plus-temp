@@ -210,7 +210,7 @@ export const ShoppingCart: React.FC = () => {
           <ShoppingBag className="h-16 w-16 text-gray-300 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">{t('cart.empty')}</h2>
           <p className="text-gray-500 mb-6">{t('cart.emptyDesc')}</p>
-          <Link to="/" className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 w-full">
+          <Link to="/market/producers" className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 w-full">
             {t('cart.start')}
           </Link>
         </div>

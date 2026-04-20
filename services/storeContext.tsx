@@ -40,6 +40,84 @@ function mapWithdrawalFromApi(d: any): WithdrawalRequest {
     adminNote: d.adminNote || undefined,
   };
 }
+
+function mapReviewFromApi(r: any): Review {
+  return {
+    id: String(r.id),
+    orderId: String(r.orderId),
+    reviewerId: String(r.reviewerId),
+    targetId: String(r.targetId),
+    rating: Number(r.rating) || 0,
+    comment: typeof r.comment === 'string' ? r.comment : '',
+    createdAt:
+      typeof r.createdAt === 'string' ? r.createdAt : new Date(r.createdAt ?? 0).toISOString(),
+  };
+}
+
+/** `UserSession.id` is the auth user row; `ClientProfile.id` is the profile row. */
+function clientProfileMatchesSession(c: ClientProfile, session: UserSession): boolean {
+  if (session.clientId && c.id === session.clientId) return true;
+  if (c.userId && c.userId === session.id) return true;
+  return false;
+}
+
+/** Coerce API/Prisma JSON unread map to numeric counts keyed by user id. */
+function coerceUnreadCounts(raw: unknown): Record<string, number> {
+  let obj: unknown = raw;
+  if (typeof obj === 'string') {
+    try {
+      obj = JSON.parse(obj);
+    } catch {
+      return {};
+    }
+  }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+    const n = Number(v);
+    out[k] = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+  }
+  return out;
+}
+
+/**
+ * Normalize chat sessions from GET /api/chat/sessions (camelCase or snake_case, JSON quirks).
+ * Ensures Navbar / ChatPage can read `unreadCounts[userId]` reliably.
+ */
+function normalizeChatSessionFromApi(raw: any): ChatSession {
+  const id = String(raw?.id ?? '');
+  const offerId = raw?.offerId ?? raw?.offer_id ?? undefined;
+  const lastMessage = String(raw?.lastMessage ?? raw?.last_message ?? '');
+  const lm = raw?.lastMessageAt ?? raw?.last_message_at;
+  const lastMessageAt =
+    typeof lm === 'string' ? lm : lm instanceof Date ? lm.toISOString() : new Date(lm ?? 0).toISOString();
+
+  let participantIds: string[] = [];
+  if (Array.isArray(raw?.participantIds)) {
+    participantIds = raw.participantIds.map((x: unknown) => String(x));
+  } else if (Array.isArray(raw?.participant_ids)) {
+    participantIds = raw.participant_ids.map((x: unknown) => String(x));
+  } else if (Array.isArray(raw?.participantsData)) {
+    participantIds = raw.participantsData.map((p: { id?: string }) => String(p?.id ?? '')).filter(Boolean);
+  }
+
+  const unreadCounts = coerceUnreadCounts(raw?.unreadCounts ?? raw?.unread_counts);
+
+  return {
+    id,
+    offerId,
+    lastMessage,
+    lastMessageAt,
+    participantIds,
+    unreadCounts,
+  };
+}
+
+function normalizeChatSessionsFromApi(rows: unknown): ChatSession[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.map(normalizeChatSessionFromApi).filter((c) => Boolean(c.id));
+}
+
 import { fetchMyReferrals } from './referralsApi';
 import { validateCouponRemote, type CouponValidationChannel } from './couponsApi';
 import { io, Socket } from 'socket.io-client';
@@ -104,8 +182,8 @@ interface StoreContextType {
   validateProducer: (id: string, status: ProducerStatus) => Promise<void>;
   saveProducerPaymentMethod: (producerId: string, method: PaymentMethod) => void;
   deleteProducerPaymentMethod: (producerId: string, methodId: string) => void;
-  createOffer: (offer: Omit<Offer, 'id' | 'createdAt' | 'producerId'>) => Promise<void>;
-  updateOffer: (offer: Offer) => Promise<void>;
+  createOffer: (offer: Omit<Offer, 'id' | 'createdAt' | 'producerId'>) => Promise<{ success: boolean; error?: string }>;
+  updateOffer: (offer: Offer) => Promise<{ success: boolean; error?: string }>;
   getProducerOffers: (producerId: string) => Offer[];
   getOfferById: (offerId: string) => Offer | undefined;
   getAvailableSlots: (producerId: string, date: Date, durationHours: number) => Date[];
@@ -309,9 +387,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (user && getToken()) {
       interval = setInterval(async () => {
         try {
-          const on401 = (e: unknown) => { if ((e as { status?: number })?.status === 401) setUser(null); };
+          // Background polling endpoints may return 401 for domain reasons
+          // (e.g. missing client profile) even when token is valid.
+          // Do not drop the session here; let interactive auth flows handle logout.
+          const on401 = (_e: unknown) => {};
           const resSessions = await apiFetch<ChatSession[]>('/api/chat/sessions', { silent401: true } as any).catch((e) => { on401(e); return null; });
-          if (resSessions && Array.isArray(resSessions)) setChats(resSessions);
+          if (resSessions && Array.isArray(resSessions)) setChats(normalizeChatSessionsFromApi(resSessions));
 
           const resNotif = await apiFetch<Notification[]>('/api/notifications', { silent401: true } as any).catch((e) => { on401(e); return null; });
           if (resNotif && Array.isArray(resNotif)) setNotifications(resNotif);
@@ -344,9 +425,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const fetchData = async (currentUser?: typeof user) => {
     const activeUser = currentUser ?? user;
     try {
-      const on401 = (e: unknown) => {
-        if ((e as { status?: number })?.status === 401) setUser(null);
-      };
+      // Keep session on background/bootstrapping 401 responses from feature endpoints.
+      const on401 = (_e: unknown) => {};
       if (activeUser && getToken()) await fetchChats().catch(on401);
       const [resProducers, resClients, resOffers, resPickup] = await Promise.all([
         apiFetch<ProducerProfile[]>('/api/producers', { silent401: true } as any).catch((e) => { on401(e); return []; }),
@@ -356,11 +436,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       ]);
       // Only fetch orders, wallet, and referral stats when authenticated and we have a token (avoids 401 spam when token expired)
       if (activeUser && getToken()) {
-        const [resOrders, resWallet, resWithdrawals, referralsPayload] = await Promise.all([
+        const [resOrders, resWallet, resWithdrawals, referralsPayload, resPortfolios, resMyReviews] = await Promise.all([
           apiFetch<any[]>('/api/orders', { silent401: true } as any).catch((e) => { on401(e); return []; }),
           apiFetch<any>('/api/wallet/me', { silent401: true } as any).catch((e) => { on401(e); return null; }),
           apiFetch<any[]>('/api/wallet/me/withdrawals', { silent401: true } as any).catch((e) => { on401(e); return []; }),
           fetchMyReferrals(),
+          apiFetch<Portfolio[]>('/api/portfolios', { silent401: true } as any).catch((e) => { on401(e); return []; }),
+          apiFetch<any[]>(`/api/reviews/user/${activeUser.id}`, { silent401: true } as any).catch((e) => {
+            on401(e);
+            return [];
+          }),
         ]);
         setMyReferrals(referralsPayload);
         setWithdrawalRequests(Array.isArray(resWithdrawals) ? resWithdrawals.map(mapWithdrawalFromApi) : []);
@@ -384,9 +469,30 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             },
           }));
         }
+        setPortfolios(
+          Array.isArray(resPortfolios)
+            ? resPortfolios.map((p: Portfolio) => ({
+                ...p,
+                createdAt:
+                  typeof (p as any).createdAt === 'string'
+                    ? (p as any).createdAt
+                    : new Date((p as any).createdAt).toISOString(),
+                videoUrl: (p as any).videoUrl || undefined,
+              }))
+            : [],
+        );
+        if (Array.isArray(resMyReviews)) {
+          const mappedReviews = resMyReviews.map(mapReviewFromApi);
+          setReviews((prev) => {
+            const byId = new Map(prev.map((x) => [x.id, x]));
+            mappedReviews.forEach((x) => byId.set(x.id, x));
+            return Array.from(byId.values());
+          });
+        }
       } else {
         setMyReferrals(null);
         setWithdrawalRequests([]);
+        setPortfolios([]);
       }
       setProducers(Array.isArray(resProducers) ? resProducers.map(p => {
         const displayName = (p as any).user?.displayName ?? `${String((p as any).firstName ?? '').trim()} ${String((p as any).lastName ?? '').trim()}`.trim();
@@ -452,7 +558,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const markNotificationsAsRead = async () => {
     if (!user) return;
     try {
-      await apiFetch('/api/notifications/read', { method: 'PATCH' });
+      await apiFetch('/api/notifications/read', { method: 'PATCH', silent401: true } as any);
       setNotifications(prev => prev.map(n => n.userId === user.id ? { ...n, isRead: true } : n));
     } catch (e) {
       console.error('Failed to mark notifications as read:', e);
@@ -522,6 +628,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     clearToken();
     setUser(null);
     setMyReferrals(null);
+    setReviews([]);
     setCart([]);
     localStorage.removeItem('currentUser');
   };
@@ -553,7 +660,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
       await establishSession(session);
 
-      await apiFetch('/api/profiles/producer', {
+      const producerProfile = await apiFetch<{ id: string }>('/api/profiles/producer', {
         method: 'POST',
         body: JSON.stringify({
           type: data.type || "BUSINESS",
@@ -572,6 +679,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             : {}),
         }),
       });
+
+      if (producerProfile?.id) {
+        setUser(prev => {
+          if (!prev) return prev;
+          const next = { ...prev, producerId: producerProfile.id };
+          localStorage.setItem('currentUser', JSON.stringify(next));
+          return next;
+        });
+      }
 
       await fetchData();
       return { success: true, message: 'Registration successful!' };
@@ -597,7 +713,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
       await establishSession(session);
 
-      await apiFetch('/api/profiles/client', {
+      const clientProfile = await apiFetch<{ id: string }>('/api/profiles/client', {
         method: 'POST',
         body: JSON.stringify({
           firstName: data.firstName || "Client",
@@ -606,6 +722,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth).toISOString() : new Date().toISOString()
         }),
       });
+
+      if (clientProfile?.id) {
+        setUser(prev => {
+          if (!prev) return prev;
+          const next = { ...prev, clientId: clientProfile.id };
+          localStorage.setItem('currentUser', JSON.stringify(next));
+          return next;
+        });
+      }
 
       await fetchData();
       return { success: true, message: 'Registration successful!' };
@@ -746,28 +871,36 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── OFFERS ──────────────────────────────────────────────────────────────────
 
-  const createOffer = async (offerData: any) => {
-    if (!user || !user.producerId) return;
+  const createOffer = async (offerData: any): Promise<{ success: boolean; error?: string }> => {
+    if (!user || !user.producerId) {
+      return { success: false, error: 'You must be signed in as a producer to publish an offer.' };
+    }
     try {
       const newOffer = await apiFetch<Offer>('/api/offers', {
         method: 'POST',
-        body: JSON.stringify({ ...offerData, producerId: user.producerId }),
+        body: JSON.stringify(offerData),
       });
       setOffers(prev => [...prev, newOffer]);
-    } catch (err) {
+      return { success: true };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create offer.';
       console.error('Failed to create offer:', err);
+      return { success: false, error: message };
     }
   };
 
-  const updateOffer = async (updatedOffer: Offer) => {
+  const updateOffer = async (updatedOffer: Offer): Promise<{ success: boolean; error?: string }> => {
     try {
       const saved = await apiFetch<Offer>(`/api/offers/${updatedOffer.id}`, {
         method: 'PUT',
         body: JSON.stringify(updatedOffer),
       });
       setOffers(prev => prev.map(o => o.id === saved.id ? saved : o));
-    } catch (error) {
+      return { success: true };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to update offer.';
       console.error('Failed to update offer', error);
+      return { success: false, error: message };
     }
   };
 
@@ -825,11 +958,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (user) addNotification(user.id, `Order #${saved.id.substring(saved.id.length - 6).toUpperCase()} placed!`, 'SUCCESS');
       // Refresh from server after a short delay to ensure both parties see the accurate state
       setTimeout(() => fetchData(user), 1500);
-    } catch (error) {
+      clearCart();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to place order. Please try again.';
       console.error('Failed to place order:', error);
-      if (user) addNotification(user.id, 'Failed to place order. Please try again.', 'ERROR');
+      if (user) addNotification(user.id, message, 'ERROR');
     }
-    clearCart();
   };
 
   const confirmOrder = async (orderId: string) => {
@@ -948,17 +1082,43 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       const saved = await apiFetch<Review>('/api/reviews', {
         method: 'POST',
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          orderId: data.orderId,
+          rating: data.rating,
+          comment: data.comment ?? '',
+        }),
       });
       setReviews(prev => [...prev, saved]);
-      setOrders(prev => prev.map(o => o.id === data.orderId ? (data.reviewerId === o.clientId ? { ...o, clientReviewed: true } : { ...o, producerReviewed: true }) : o));
+      setOrders(prev =>
+        prev.map((o) => {
+          if (o.id !== saved.orderId) return o;
+          const clientProf = clients.find((c) => c.userId === saved.reviewerId);
+          if (clientProf && o.clientId === clientProf.id) {
+            return { ...o, clientReviewed: true };
+          }
+          const producerProf = producers.find((p) => p.userId === saved.reviewerId);
+          if (producerProf && o.producerId === producerProf.id) {
+            return { ...o, producerReviewed: true };
+          }
+          return o;
+        }),
+      );
     } catch (error) {
       console.error('Failed to submit review', error);
     }
   };
 
-  const getAverageRating = (targetId: string) => {
-    const target = reviews.filter(r => r.targetId === targetId);
+  /** Reviews use `targetId` = rated party's auth user id; callers may pass profile id or user id. */
+  const getAverageRating = (profileOrUserId: string) => {
+    if (!profileOrUserId) return 0;
+    const p = producers.find((pr) => pr.id === profileOrUserId || pr.userId === profileOrUserId);
+    const c = clients.find((cl) => cl.id === profileOrUserId || cl.userId === profileOrUserId);
+    const matchIds = new Set<string>([profileOrUserId]);
+    if (p?.userId) matchIds.add(p.userId);
+    if (p?.id) matchIds.add(p.id);
+    if (c?.userId) matchIds.add(c.userId);
+    if (c?.id) matchIds.add(c.id);
+    const target = reviews.filter((r) => matchIds.has(r.targetId));
     return target.length ? parseFloat((target.reduce((a, b) => a + b.rating, 0) / target.length).toFixed(1)) : 0;
   };
 
@@ -1008,9 +1168,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const addPortfolio = async (data: Omit<Portfolio, 'id' | 'createdAt'>) => {
     try {
+      const { producerId: _producerId, ...payload } = data as Omit<Portfolio, 'id' | 'createdAt'> & {
+        producerId?: string;
+      };
       const saved = await apiFetch<Portfolio>('/api/portfolios', {
         method: 'POST',
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
       setPortfolios(prev => [...prev, saved]);
     } catch (error) {
@@ -1043,10 +1206,27 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const getAvailableSlots = (producerId: string, date: Date, durationHours: number): Date[] => {
     const producer = producers.find(p => p.id === producerId);
-    if (!producer || !producer.availability) return [];
+    if (!producer) return [];
     const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
-    const schedule = producer.availability[dayName];
-    const dateStr = date.toISOString().split('T')[0];
+    let schedule = producer.availability?.[dayName];
+    const hasAnyConfigured =
+      producer.availability &&
+      typeof producer.availability === 'object' &&
+      Object.values(producer.availability).some(
+        (r) => Array.isArray(r) && r.length > 0,
+      );
+    // Local dev: if the producer never saved a schedule, use a simple weekday window so services can be booked.
+    if (
+      (!schedule || schedule.length === 0) &&
+      import.meta.env.DEV &&
+      !hasAnyConfigured
+    ) {
+      schedule = [{ start: '09:00', end: '17:00' }];
+    }
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${y}-${m}-${d}`;
     const isBlocked = producer.exceptions?.some(ex => ex.date === dateStr);
     if (isBlocked || !schedule || schedule.length === 0) return [];
     const bookedRanges = orders.filter(o => o.producerId === producerId && o.status !== OrderStatus.CANCELLED).flatMap(o => o.items).filter(item => item.type === OfferType.SERVICE && item.bookingDate && item.bookingDate.startsWith(dateStr)).map(item => ({ start: new Date(item.bookingDate!).getTime(), end: new Date(item.bookingDate!).getTime() + (item.serviceDuration || 1) * 3600000 }));
@@ -1111,7 +1291,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const trackUserSearch = (term: string) => {
     if (!user) return;
     if (user.role === UserRole.CLIENT) {
-      setClients(prev => prev.map(c => c.id === user.id ? { ...c, searchHistory: [term, ...(c.searchHistory || [])].slice(0, 20) } : c));
+      setClients(prev => prev.map(c => clientProfileMatchesSession(c, user) ? { ...c, searchHistory: [term, ...(c.searchHistory || [])].slice(0, 20) } : c));
     } else if (user.role === UserRole.PRODUCER && user.producerId) {
       setProducers(prev => prev.map(p => p.id === user.producerId ? { ...p, searchHistory: [term, ...(p.searchHistory || [])].slice(0, 20) } : p));
     }
@@ -1121,7 +1301,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!user) return [];
     let history: string[] = [];
     if (user.role === UserRole.CLIENT) {
-      const client = clients.find(c => c.id === user.id);
+      const client = clients.find(c => clientProfileMatchesSession(c, user));
       history = client?.searchHistory || [];
     } else if (user.role === UserRole.PRODUCER && user.producerId) {
       const producer = producers.find(p => p.id === user.producerId);
@@ -1137,7 +1317,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const toggleFavorite = (offerId: string) => {
     if (!user) return;
     if (user.role === UserRole.CLIENT) {
-      setClients(prev => prev.map(c => c.id === user.id ? { ...c, favorites: c.favorites.includes(offerId) ? c.favorites.filter(id => id !== offerId) : [...c.favorites, offerId] } : c));
+      setClients(prev => prev.map(c => clientProfileMatchesSession(c, user) ? { ...c, favorites: c.favorites.includes(offerId) ? c.favorites.filter(id => id !== offerId) : [...c.favorites, offerId] } : c));
     } else if (user.role === UserRole.PRODUCER && user.producerId) {
       setProducers(prev => prev.map(p => p.id === user.producerId ? { ...p, favorites: p.favorites?.includes(offerId) ? p.favorites.filter(id => id !== offerId) : [...(p.favorites || []), offerId] } : p));
     }
@@ -1147,7 +1327,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!user) return;
     if (user.role === UserRole.CLIENT) {
       setClients(prev => prev.map(c => {
-        if (c.id === user.id && !c.favorites.includes(offerId)) {
+        if (clientProfileMatchesSession(c, user) && !c.favorites.includes(offerId)) {
           return { ...c, favorites: [...c.favorites, offerId] };
         }
         return c;
@@ -1323,8 +1503,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const fetchChats = async () => {
     if (!user) return;
     try {
-      const res = await apiFetch<ChatSession[]>('/api/chat/sessions', { silent401: true } as any);
-      setChats(res);
+      const res = await apiFetch<any[]>('/api/chat/sessions', { silent401: true } as any);
+      if (Array.isArray(res)) setChats(normalizeChatSessionsFromApi(res));
     } catch (e) {
       console.error('Failed to fetch chats:', e);
     }
@@ -1358,6 +1538,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
       });
+      // GET /sessions/:id/messages clears this user's unread on the server — sync list immediately.
+      setChats((prev) =>
+        prev.map((c) =>
+          c.id === chatId
+            ? { ...c, unreadCounts: { ...c.unreadCounts, [user.id]: 0 } }
+            : c,
+        ),
+      );
+      void fetchChats();
     } catch (e) {
       console.error('Failed to fetch messages:', e);
     }
@@ -1368,12 +1557,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     // First refresh chats from server to check for an existing session
     try {
-      const freshChats = await apiFetch<ChatSession[]>('/api/chat/sessions', { silent401: true } as any);
-      if (Array.isArray(freshChats)) setChats(freshChats);
-      const existing = freshChats.find((c: ChatSession) =>
-        c.participantIds?.includes(user.id) && c.participantIds?.includes(pid) && c.offerId === oid
-      );
-      if (existing) return existing.id;
+      const freshChatsRaw = await apiFetch<any[]>('/api/chat/sessions', { silent401: true } as any);
+      if (Array.isArray(freshChatsRaw)) {
+        const freshChats = normalizeChatSessionsFromApi(freshChatsRaw);
+        setChats(freshChats);
+        const existing = freshChats.find((c: ChatSession) =>
+          c.participantIds?.includes(user.id) && c.participantIds?.includes(pid) && c.offerId === oid
+        );
+        if (existing) return existing.id;
+      }
     } catch (_) {
       // Network error — fall through to check local cache
       const existing = chats.find(c => c.participantIds?.includes(user.id) && c.participantIds?.includes(pid) && c.offerId === oid);
@@ -1381,12 +1573,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
 
     try {
-      const res = await apiFetch<ChatSession>('/api/chat/sessions', {
+      const res = await apiFetch<any>('/api/chat/sessions', {
         method: 'POST',
         body: JSON.stringify({ participantIds: [pid], offerId: oid })
       });
-      setChats(prev => [...prev, res]);
-      return res.id;
+      const normalized = normalizeChatSessionFromApi(res);
+      setChats(prev => [...prev, normalized]);
+      return normalized.id;
     } catch (e) {
       console.error('Failed to create chat:', e);
       const id = `chat-${Date.now()}`;
@@ -1548,6 +1741,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       // Optimistic updates for new messages
       setMessages(prev => [...prev, mappedMsg]);
       setChats(prev => prev.map(c => c.id === chatId ? { ...c, lastMessage: text, lastMessageAt: res.createdAt } : c));
+      void fetchChats();
       return true;
     } catch (e: any) {
       console.error('Failed to send message:', e);

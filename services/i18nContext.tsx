@@ -22,9 +22,12 @@ const translations: Record<string, Record<Language, string>> = {
   'nav.login': { en: 'Log in', fr: 'Connexion' },
   'nav.signup': { en: 'Sign Up', fr: 'S\'inscrire' },
   'nav.logout': { en: 'Logout', fr: 'Déconnexion' },
+  'nav.logoutConfirmTitle': { en: 'Log out?', fr: 'Se déconnecter ?' },
+  'nav.logoutConfirmBody': { en: 'You will need to sign in again to access your account.', fr: 'Vous devrez vous reconnecter pour accéder à votre compte.' },
   'nav.notifications': { en: 'Notifications', fr: 'Notifications' },
   'nav.noNotifs': { en: 'No new notifications', fr: 'Pas de nouvelles notifications' },
   'nav.messages': { en: 'Messages', fr: 'Messages' },
+  'nav.messagesUnreadAria': { en: 'unread', fr: 'non lus' },
   'nav.switchAccount': { en: 'Switch Account', fr: 'Changer de Compte' },
 
   // PWA install (beforeinstallprompt / Android Chrome)
@@ -81,8 +84,18 @@ const translations: Record<string, Record<Language, string>> = {
   'login.signIn': { en: 'Sign In', fr: 'Se Connecter' },
   'login.demo': { en: 'Demo Accounts (Quick Access)', fr: 'Comptes de Démo (Accès Rapide)' },
   'login.resetTitle': { en: 'Reset Password', fr: 'Réinitialiser le mot de passe' },
-  'login.resetDesc': { en: 'Enter your email to receive a reset link.', fr: 'Entrez votre email pour recevoir un lien de réinitialisation.' },
-  'login.sendReset': { en: 'Send Reset Link', fr: 'Envoyer le lien' },
+  'login.resetDesc': { en: 'Enter the phone number registered on your account. We will send a verification code by SMS.', fr: 'Entrez le numéro de téléphone enregistré sur votre compte. Nous enverrons un code par SMS.' },
+  'login.sendReset': { en: 'Send SMS code', fr: 'Envoyer le code SMS' },
+  'login.forgotAfterSend': { en: 'If an account exists for this number, you will receive an SMS shortly. Enter the code below.', fr: 'Si un compte existe pour ce numéro, vous recevrez un SMS sous peu. Entrez le code ci-dessous.' },
+  'login.newPasswordLabel': { en: 'New password', fr: 'Nouveau mot de passe' },
+  'login.confirmNewPasswordLabel': { en: 'Confirm new password', fr: 'Confirmer le mot de passe' },
+  'login.saveNewPassword': { en: 'Save new password', fr: 'Enregistrer le mot de passe' },
+  'login.passwordResetSuccess': { en: 'Your password was updated. You can sign in now.', fr: 'Votre mot de passe a été mis à jour. Vous pouvez vous connecter.' },
+  'login.passwordsMustMatch': { en: 'Passwords do not match.', fr: 'Les mots de passe ne correspondent pas.' },
+  'login.passwordMinLength': { en: 'Password must be at least 8 characters.', fr: 'Le mot de passe doit contenir au moins 8 caractères.' },
+  'login.changePhoneNumber': { en: 'Use a different number', fr: 'Utiliser un autre numéro' },
+  'login.phoneLocalMin': { en: 'Enter at least 6 digits for your phone number.', fr: 'Entrez au moins 6 chiffres pour votre numéro.' },
+  'login.invalidPhoneFormat': { en: 'Enter a valid phone number (country code + number).', fr: 'Entrez un numéro valide (indicatif + numéro).' },
   'login.backToLogin': { en: 'Back to Login', fr: 'Retour à la connexion' },
 
   // OTP Verification
@@ -351,6 +364,8 @@ const translations: Record<string, Record<Language, string>> = {
   'portfolio.draft': { en: 'Draft', fr: 'Brouillon' },
   'portfolio.preview': { en: 'Preview', fr: 'Aperçu' },
   'portfolio.categoryTip': { en: 'This portfolio will appear on all offers with this category.', fr: 'Ce portfolio apparaîtra sur toutes les offres de cette catégorie.' },
+  'portfolio.deleteConfirmTitle': { en: 'Delete this portfolio item?', fr: 'Supprimer cet élément du portfolio ?' },
+  'portfolio.deleteConfirmBody': { en: 'This cannot be undone. You will remove this entry from your profile.', fr: 'Cette action est irréversible. Cette entrée sera retirée de votre profil.' },
 
   // New Profile Fields
   'profile.type': { en: 'Producer Type', fr: 'Type de Producteur' },
@@ -379,6 +394,7 @@ const translations: Record<string, Record<Language, string>> = {
   'chat.status.REJECTED': { en: 'Rejected', fr: 'Rejeté' },
   'chat.status.COUNTERED': { en: 'Countered', fr: 'Contré' },
   'chat.typeMessage': { en: 'Type a message...', fr: 'Tapez un message...' },
+  'chat.composeHint': { en: 'Enter to send · Shift+Enter for new line', fr: 'Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne' },
   'chat.noChats': { en: 'No active conversations.', fr: 'Aucune conversation active.' },
   'chat.select': { en: 'Select a conversation', fr: 'Sélectionnez une conversation' },
 

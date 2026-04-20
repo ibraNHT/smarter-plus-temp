@@ -3,8 +3,22 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
-import { ProducerStatus } from '../../types';
+import { ProducerStatus, Review } from '../../types';
 import { User, MapPin, ShieldCheck, Star, ArrowLeft, Package } from 'lucide-react';
+import { apiFetch } from '../../services/apiService';
+
+function mapReviewRow(r: any): Review {
+  return {
+    id: String(r.id),
+    orderId: String(r.orderId),
+    reviewerId: String(r.reviewerId),
+    targetId: String(r.targetId),
+    rating: Number(r.rating) || 0,
+    comment: typeof r.comment === 'string' ? r.comment : '',
+    createdAt:
+      typeof r.createdAt === 'string' ? r.createdAt : new Date(r.createdAt ?? 0).toISOString(),
+  };
+}
 
 interface PublicProfileProps {
    role: 'PRODUCER' | 'CLIENT';
@@ -13,10 +27,11 @@ interface PublicProfileProps {
 export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
    const { id } = useParams<{ id: string }>();
    const navigate = useNavigate();
-   const { producers, clients, getProducerOffers, getAverageRating, reviews } = useStore();
+   const { producers, clients, getProducerOffers } = useStore();
    const { t } = useTranslation();
 
    const [profileData, setProfileData] = useState<any>(null);
+   const [profileReviews, setProfileReviews] = useState<Review[]>([]);
 
    useEffect(() => {
       if (role === 'PRODUCER') {
@@ -28,12 +43,34 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
       }
    }, [id, role, producers, clients]);
 
+   useEffect(() => {
+      const uid = profileData?.userId;
+      if (!uid) {
+         setProfileReviews([]);
+         return;
+      }
+      let cancelled = false;
+      apiFetch<any[]>(`/api/reviews/user/${uid}`)
+         .then((rows) => {
+            if (cancelled) return;
+            setProfileReviews(Array.isArray(rows) ? rows.map(mapReviewRow) : []);
+         })
+         .catch(() => {
+            if (!cancelled) setProfileReviews([]);
+         });
+      return () => {
+         cancelled = true;
+      };
+   }, [profileData?.userId]);
+
    if (!profileData) {
       return <div className="p-8 text-center">User not found</div>;
    }
 
-   const averageRating = id ? getAverageRating(id) : 0;
-   const userReviews = id ? reviews.filter(r => r.targetId === id) : [];
+   const averageRating = profileReviews.length
+      ? parseFloat((profileReviews.reduce((a, b) => a + b.rating, 0) / profileReviews.length).toFixed(1))
+      : 0;
+   const userReviews = profileReviews;
 
    // For Producers Only
    const activeOffers = role === 'PRODUCER' && id ? getProducerOffers(id) : [];

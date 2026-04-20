@@ -7,6 +7,13 @@ import { ArrowLeft, ShoppingCart, MessageCircle, MapPin, ShieldCheck, Package, P
 import { MarketType, OfferType, UserRole } from '../../types';
 import { SEO } from '../../components/SEO';
 
+/** Parse `YYYY-MM-DD` from `<input type="date">` as a local calendar day (avoids UTC weekday shifts). */
+function parseLocalYmd(ymd: string): Date {
+  const [y, mo, d] = ymd.split('-').map(Number);
+  if (!y || !mo || !d) return new Date();
+  return new Date(y, mo - 1, d);
+}
+
 export const ProductDetails: React.FC = () => {
   const { offerId } = useParams<{ offerId: string }>();
   const { getOfferById, producers, addToCart, clearCart, startNegotiation, user, getAvailableSlots, getAverageRating, getProducerPortfolios, toggleFavorite, clients, reviews, compareList, addToCompare, removeFromCompare } = useStore();
@@ -28,11 +35,15 @@ export const ProductDetails: React.FC = () => {
   const [relevantPortfolios, setRelevantPortfolios] = useState<any[]>([]);
   const [activePortfolioMedia, setActivePortfolioMedia] = useState<string | null>(null); // For Lightbox
 
-  // Get Favorites
+  // Get Favorites (session id is auth-user id; profiles use separate ids)
   let favorites: string[] = [];
   if (user) {
     if (user.role === UserRole.CLIENT) {
-      const c = clients.find(client => client.id === user.id);
+      const c = clients.find(
+        (client) =>
+          (user.clientId && client.id === user.clientId) ||
+          (!!client.userId && client.userId === user.id),
+      );
       favorites = c?.favorites || [];
     } else if (user.role === UserRole.PRODUCER) {
       const p = producers.find(prod => prod.id === user.producerId);
@@ -47,7 +58,7 @@ export const ProductDetails: React.FC = () => {
 
   useEffect(() => {
     if (offer?.type === OfferType.SERVICE && offer.producerId) {
-      const dateObj = new Date(selectedDate);
+      const dateObj = parseLocalYmd(selectedDate);
       const slots = getAvailableSlots(offer.producerId, dateObj, offer.serviceDuration || 1);
       setAvailableSlots(slots);
       setSelectedSlot(null); // Reset slot when date changes
@@ -297,7 +308,15 @@ export const ProductDetails: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       {availableSlots.length === 0 ? (
-                        <p className="col-span-3 text-sm text-gray-500 italic py-2">No slots available for this date.</p>
+                        <div className="col-span-3 space-y-2 py-2">
+                          <p className="text-sm text-gray-500 italic">No slots available for this date.</p>
+                          <p className="text-xs text-gray-600 leading-relaxed">
+                            For <strong>services</strong>, the seller must publish weekly hours in{' '}
+                            <strong>Producer dashboard → Availability</strong>. Choose a day they work, pick a time, then press{' '}
+                            <strong>Book Now</strong> (that adds the booking to your cart). Complete checkout from the{' '}
+                            <Link to="/cart" className="text-primary-600 font-semibold underline">cart</Link>.
+                          </p>
+                        </div>
                       ) : (
                         availableSlots.map((slot) => {
                           const slotStr = slot.toISOString();

@@ -44,8 +44,11 @@ export const ProducerDashboard: React.FC = () => {
    );
 
    // My Reviews
-   const myReviews = user && user.producerId ? reviews.filter(r => r.targetId === user.producerId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : [];
-   const myAverageRating = user && user.producerId ? getAverageRating(user.producerId) : 0;
+   /** Backend stores `targetId` as the rated party's auth user id, not producer profile id. */
+   const myReviews = user?.id
+     ? reviews.filter((r) => r.targetId === user.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+     : [];
+   const myAverageRating = user?.id ? getAverageRating(user.id) : 0;
 
    if (!user || user.role !== UserRole.PRODUCER || !currentProducer) {
       return <div className="p-8 text-center">Access Denied</div>;

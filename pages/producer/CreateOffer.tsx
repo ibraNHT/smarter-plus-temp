@@ -14,6 +14,8 @@ export const CreateOffer: React.FC = () => {
   const { offerId } = useParams<{ offerId: string }>();
   
   const [loadingAI, setLoadingAI] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [existingOffer, setExistingOffer] = useState<Offer | undefined>(undefined);
 
   // Get current producer
@@ -88,12 +90,12 @@ export const CreateOffer: React.FC = () => {
     setLoadingAI(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validation: Max cannot be less than Min if set
+    setSubmitError(null);
+
     if (formData.maxQuantity > 0 && formData.maxQuantity < formData.minQuantity) {
-      alert('Maximum order quantity cannot be less than Minimum order quantity.');
+      setSubmitError('Maximum order quantity cannot be less than Minimum order quantity.');
       return;
     }
 
@@ -112,22 +114,33 @@ export const CreateOffer: React.FC = () => {
       isDeliveryAvailable: formData.isDeliveryAvailable,
       serviceDuration: formData.type === OfferType.SERVICE ? Number(formData.serviceDuration) : undefined
     };
-    
-    if (existingOffer) {
-      // Update Logic
-      updateOffer({
-        ...existingOffer,
-        ...offerData
-      });
-    } else {
-      // Create Logic
-      createOffer({
-        ...offerData,
-        marketType: MarketType.PRODUCER, // Default for standard producers
-        imageUrl: `https://picsum.photos/400/300?random=${Date.now()}`, // Placeholder logic
-      });
+
+    setSubmitting(true);
+    try {
+      if (existingOffer) {
+        const result = await updateOffer({
+          ...existingOffer,
+          ...offerData
+        });
+        if (!result.success) {
+          setSubmitError(result.error ?? 'Could not update the offer.');
+          return;
+        }
+      } else {
+        const result = await createOffer({
+          ...offerData,
+          marketType: MarketType.PRODUCER,
+          imageUrl: `https://picsum.photos/400/300?random=${Date.now()}`,
+        });
+        if (!result.success) {
+          setSubmitError(result.error ?? 'Could not publish the offer.');
+          return;
+        }
+      }
+      navigate('/producer/dashboard');
+    } finally {
+      setSubmitting(false);
     }
-    navigate('/producer/dashboard');
   };
 
   const isEditMode = !!existingOffer;
@@ -136,7 +149,12 @@ export const CreateOffer: React.FC = () => {
     <div className="max-w-3xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
        <h1 className="text-3xl font-bold text-gray-900 mb-8">{isEditMode ? t('form.editOffer') : t('nav.newOffer')}</h1>
        
-       <form onSubmit={handleSubmit} className="space-y-8 divide-y divide-gray-200 bg-white p-8 shadow rounded-lg">
+       <form onSubmit={handleSubmit} aria-busy={submitting} className="space-y-8 divide-y divide-gray-200 bg-white p-8 shadow rounded-lg">
+         {submitError && (
+           <div className="rounded-md bg-red-50 p-4 border border-red-200 text-sm text-red-800" role="alert">
+             {submitError}
+           </div>
+         )}
          <div className="space-y-6">
            
            <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
@@ -355,9 +373,20 @@ export const CreateOffer: React.FC = () => {
 
          <div className="pt-5">
            <div className="flex justify-end">
-             <button type="button" onClick={() => navigate('/producer/dashboard')} className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50">{t('form.cancel')}</button>
-             <button type="submit" className="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
-                {isEditMode ? t('form.update') : t('form.publish')}
+             <button
+               type="button"
+               onClick={() => navigate('/producer/dashboard')}
+               disabled={submitting}
+               className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+               {t('form.cancel')}
+             </button>
+             <button
+               type="submit"
+               disabled={submitting}
+               className="ml-3 inline-flex items-center justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed min-w-[7rem]"
+             >
+               {submitting ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : isEditMode ? t('form.update') : t('form.publish')}
              </button>
            </div>
          </div>

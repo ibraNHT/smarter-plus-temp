@@ -6,6 +6,7 @@ import { UserRole, PaymentMethod, ProducerProfile as ProducerProfileType, Locati
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Wallet, Shield, Tractor, CreditCard, Trash2, Plus, Camera, Upload, MapPin, FileText, X, LogOut, Image as ImageIcon, Video, Eye, Edit, CheckCircle, Heart, ArrowLeft, Search, Users, Copy } from 'lucide-react';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
+import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 import { OtpVerificationModal } from '../../components/OtpVerificationModal';
 
 // Mock Data for Regions/Cities in Cameroon
@@ -23,6 +24,19 @@ const CAMEROON_LOCATIONS: Record<string, string[]> = {
 };
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
+
+function portfolioCategoryLabel(category: string, translate: (key: string) => string): string {
+  const raw = String(category ?? '').trim();
+  if (!raw) return '';
+  const key = `category.${raw}`;
+  const out = translate(key);
+  return out === key ? raw : out;
+}
+
+function isHostedHttpUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  return /^https?:\/\//i.test(url.trim());
+}
 
 export const ProducerProfile: React.FC = () => {
   const { user, producers, saveProducerPaymentMethod, deleteProducerPaymentMethod, updateProducerProfile, requestOtp, verifyOtp, logout, getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio, offers, toggleFavorite, myReferrals, refreshMyReferrals } = useStore();
@@ -46,7 +60,8 @@ export const ProducerProfile: React.FC = () => {
   const [portfolioForm, setPortfolioForm] = useState<Partial<Portfolio>>({
     title: '', description: '', category: '', imageUrls: [], isPublished: false
   });
-
+  const [portfolioPendingDelete, setPortfolioPendingDelete] = useState<Portfolio | null>(null);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   // Password Modal
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -92,7 +107,11 @@ export const ProducerProfile: React.FC = () => {
   }, [currentProducer, formData, user]);
   const favoriteOffers = currentProducer?.favorites.map(id => offers.find(o => o.id === id)).filter(Boolean) as any[];
   const unavailableFavoriteIds = currentProducer?.favorites.filter(id => !offers.find(o => o.id === id));
-  const handleLogout = () => { logout(); navigate('/'); };
+  const performLogout = async () => {
+    await logout();
+    setLogoutConfirmOpen(false);
+    navigate('/');
+  };
   const handleAddPayment = (e: React.FormEvent) => { e.preventDefault(); if (user?.producerId && newPayment.provider && newPayment.accountNumber && newPayment.accountName) { saveProducerPaymentMethod(user.producerId, { id: `pm-${Date.now()}`, provider: newPayment.provider, accountNumber: newPayment.accountNumber, accountName: newPayment.accountName }); setShowAddPayment(false); setNewPayment({ provider: 'ORANGE', accountNumber: '', accountName: '' }); } };
   const handleInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => { if (!formData) return; const { name, value } = e.target; setFormData(prev => prev ? ({ ...prev, [name]: value }) : null); };
   const toggleCategory = (cat: string) => { if (!formData) return; if (formData.productionTypes.includes(cat)) { setFormData({ ...formData, productionTypes: formData.productionTypes.filter(c => c !== cat) }); } else { setFormData({ ...formData, productionTypes: [...formData.productionTypes, cat] }); } };
@@ -105,9 +124,19 @@ export const ProducerProfile: React.FC = () => {
     let displayName = formData.name;
     if (formData.type === 'INDIVIDUAL' && formData.firstName && formData.lastName) displayName = `${formData.firstName} ${formData.lastName}`;
     const payload = { ...formData, name: displayName };
-    // Producers must verify with OTP for any profile update that includes name/phone (backend enforces this).
-    setPendingProfileUpdate(payload);
-    setShowOtpModal(true);
+    // Production: OTP before save (API enforces when APP_ENV=production). Dev: save without modal.
+    if (import.meta.env.PROD) {
+      setPendingProfileUpdate(payload);
+      setShowOtpModal(true);
+      return;
+    }
+    void (async () => {
+      try {
+        await updateProducerProfile(payload);
+      } catch (err: any) {
+        alert(err?.message || 'Profile update failed. Please try again.');
+      }
+    })();
   };
   const handleOtpVerifiedForProfile = async (token: string) => {
     if (!pendingProfileUpdate) return;
@@ -129,6 +158,12 @@ export const ProducerProfile: React.FC = () => {
   const handlePortfolioVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { const file = e.target.files[0]; if (file.size > 30 * 1024 * 1024) { alert("Video file too large. Max 30MB."); return; } setPortfolioForm(prev => ({ ...prev, videoUrl: URL.createObjectURL(file) })); } };
   const openPortfolioModal = (portfolio?: Portfolio) => { if (portfolio) { setPortfolioForm({ ...portfolio }); } else { setPortfolioForm({ title: '', description: '', category: currentProducer?.productionTypes[0] || '', imageUrls: [], isPublished: true }); } setShowPortfolioModal(true); };
   const savePortfolio = (e: React.FormEvent) => { e.preventDefault(); if (!user?.producerId) return; const data = { producerId: user.producerId, title: portfolioForm.title!, description: portfolioForm.description!, category: portfolioForm.category!, imageUrls: portfolioForm.imageUrls || [], videoUrl: portfolioForm.videoUrl, isPublished: portfolioForm.isPublished || false }; if (portfolioForm.id) { updatePortfolio({ ...data, id: portfolioForm.id, createdAt: (portfolioForm as Portfolio).createdAt }); } else { addPortfolio(data); } setShowPortfolioModal(false); };
+  const confirmDeletePortfolio = () => {
+    if (!portfolioPendingDelete) return;
+    void deletePortfolio(portfolioPendingDelete.id);
+    setShowPortfolioPreview((prev) => (prev?.id === portfolioPendingDelete.id ? null : prev));
+    setPortfolioPendingDelete(null);
+  };
 
   if (!user || user.role !== UserRole.PRODUCER) {
     return <div className="p-8 text-center">Access Denied</div>;
@@ -172,7 +207,7 @@ export const ProducerProfile: React.FC = () => {
               <Shield className={`${activeTab === 'security' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.security')}</span>
             </button>
             <div className="pt-4 mt-4 border-t border-gray-200">
-              <button onClick={handleLogout} className="text-red-600 hover:bg-red-50 group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors">
+              <button type="button" onClick={() => setLogoutConfirmOpen(true)} className="text-red-600 hover:bg-red-50 group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors">
                 <LogOut className="flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> <span className="truncate">{t('nav.logout')}</span>
               </button>
             </div>
@@ -233,7 +268,7 @@ export const ProducerProfile: React.FC = () => {
           {activeTab === 'portfolio' && (
             <div className="bg-white shadow sm:rounded-md sm:overflow-hidden p-6">
               <div className="flex justify-between items-center border-b border-gray-200 pb-4 mb-4"><h3 className="text-lg font-medium text-gray-900">{t('portfolio.title')}</h3><button onClick={() => openPortfolioModal()} className="flex items-center bg-primary-600 text-white px-3 py-2 rounded-md text-sm hover:bg-primary-700"><Plus className="h-4 w-4 mr-1" /> {t('portfolio.add')}</button></div>
-              {myPortfolios.length === 0 ? (<div className="text-center py-12 text-gray-500"><ImageIcon className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('portfolio.empty')}</p></div>) : (<div className="grid grid-cols-1 md:grid-cols-2 gap-6">{myPortfolios.map(p => (<div key={p.id} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"><div className="h-40 bg-gray-100 relative">{p.imageUrls.length > 0 ? (<img src={p.imageUrls[0]} alt={p.title} className="w-full h-full object-cover" />) : (<div className="flex items-center justify-center h-full text-gray-400"><ImageIcon className="h-8 w-8" /></div>)}<span className={`absolute top-2 right-2 px-2 py-1 text-xs font-bold rounded ${p.isPublished ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-800'}`}>{p.isPublished ? t('portfolio.published') : t('portfolio.draft')}</span><span className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">{t(`category.${p.category}`)}</span></div><div className="p-4"><h4 className="font-bold text-gray-900 mb-1">{p.title}</h4><p className="text-xs text-gray-500 mb-3 line-clamp-2">{p.description}</p><div className="flex justify-between items-center pt-3 border-t border-gray-100"><div className="flex space-x-2"><span className="flex items-center text-xs text-gray-500"><ImageIcon className="w-3 h-3 mr-1" /> {p.imageUrls.length}</span>{p.videoUrl && <span className="flex items-center text-xs text-gray-500"><Video className="w-3 h-3 mr-1" /> 1</span>}</div><div className="flex space-x-2"><button onClick={() => setShowPortfolioPreview(p)} className="text-blue-600 hover:text-blue-800"><Eye className="h-4 w-4" /></button><button onClick={() => openPortfolioModal(p)} className="text-gray-600 hover:text-primary-600"><Edit className="h-4 w-4" /></button><button onClick={() => deletePortfolio(p.id)} className="text-red-600 hover:text-red-800"><Trash2 className="h-4 w-4" /></button></div></div></div></div>))}</div>)}
+              {myPortfolios.length === 0 ? (<div className="text-center py-12 text-gray-500"><ImageIcon className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('portfolio.empty')}</p></div>) : (<div className="grid grid-cols-1 md:grid-cols-2 gap-6">{myPortfolios.map(p => (<div key={p.id} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"><div className="h-40 bg-gray-100 relative">{(p.imageUrls?.length ?? 0) > 0 ? (<img src={p.imageUrls?.[0] ?? ''} alt={p.title} className="w-full h-full object-cover" />) : (<div className="flex items-center justify-center h-full text-gray-400"><ImageIcon className="h-8 w-8" /></div>)}<span className={`absolute top-2 right-2 px-2 py-1 text-xs font-bold rounded ${p.isPublished ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-800'}`}>{p.isPublished ? t('portfolio.published') : t('portfolio.draft')}</span><span className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">{portfolioCategoryLabel(p.category, t)}</span></div><div className="p-4"><h4 className="font-bold text-gray-900 mb-1 line-clamp-2 break-words">{p.title}</h4><p className="text-xs text-gray-500 mb-3 line-clamp-2 break-words">{p.description}</p><div className="flex justify-between items-center pt-3 border-t border-gray-100"><div className="flex space-x-2"><span className="flex items-center text-xs text-gray-500"><ImageIcon className="w-3 h-3 mr-1" /> {p.imageUrls?.length ?? 0}</span>{p.videoUrl && <span className="flex items-center text-xs text-gray-500"><Video className="w-3 h-3 mr-1" /> 1</span>}</div><div className="flex space-x-2"><button onClick={() => setShowPortfolioPreview(p)} className="text-blue-600 hover:text-blue-800"><Eye className="h-4 w-4" /></button><button onClick={() => openPortfolioModal(p)} className="text-gray-600 hover:text-primary-600"><Edit className="h-4 w-4" /></button><button type="button" onClick={() => setPortfolioPendingDelete(p)} className="text-red-600 hover:text-red-800"><Trash2 className="h-4 w-4" /></button></div></div></div></div>))}</div>)}
             </div>
           )}
 
@@ -275,24 +310,173 @@ export const ProducerProfile: React.FC = () => {
         onClose={() => setShowPasswordModal(false)}
       />
 
-      <OtpVerificationModal
-        open={showOtpModal}
-        onClose={() => { setShowOtpModal(false); setPendingProfileUpdate(null); }}
-        action="PROFILE_UPDATE"
-        onRequestOtp={requestOtp}
-        onVerifyOtp={verifyOtp}
-        onVerified={handleOtpVerifiedForProfile}
-        title={t('otp.verifyProfileTitle')}
-        sendCodeLabel={t('otp.sendCode')}
-        verifyLabel={t('otp.verify')}
-        codeSentMessage={t('otp.enterCode')}
-      />
+      {import.meta.env.PROD && (
+        <OtpVerificationModal
+          open={showOtpModal}
+          onClose={() => { setShowOtpModal(false); setPendingProfileUpdate(null); }}
+          action="PROFILE_UPDATE"
+          onRequestOtp={requestOtp}
+          onVerifyOtp={verifyOtp}
+          onVerified={handleOtpVerifiedForProfile}
+          title={t('otp.verifyProfileTitle')}
+          sendCodeLabel={t('otp.sendCode')}
+          verifyLabel={t('otp.verify')}
+          codeSentMessage={t('otp.enterCode')}
+        />
+      )}
 
       {/* Portfolio Edit/Add Modal (Omitted code block for brevity but functional logic is above) */}
       {showPortfolioModal && (<div className="fixed inset-0 z-50 overflow-y-auto"><div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0"><div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowPortfolioModal(false)}></div><span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span><div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6"><h3 className="text-lg font-medium text-gray-900 mb-4">{portfolioForm.id ? 'Edit' : 'Add'} Portfolio Item</h3><form onSubmit={savePortfolio} className="space-y-4"><div><label className="block text-sm font-medium text-gray-700">{t('form.title')}</label><input type="text" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.title} onChange={e => setPortfolioForm({ ...portfolioForm, title: e.target.value })} /></div><div><label className="block text-sm font-medium text-gray-700">{t('form.category')}</label><select required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.category} onChange={e => setPortfolioForm({ ...portfolioForm, category: e.target.value })}><option value="">Select Category</option>{currentProducer?.productionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select><p className="text-xs text-gray-500 mt-1">{t('portfolio.categoryTip')}</p></div><div><label className="block text-sm font-medium text-gray-700">{t('form.desc')}</label><textarea required rows={3} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.description} onChange={e => setPortfolioForm({ ...portfolioForm, description: e.target.value })} /></div><div className="bg-gray-50 p-3 rounded border border-gray-200"><label className="block text-sm font-medium text-gray-700 mb-2">Media</label><div className="mb-3"><label className="cursor-pointer flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800"><ImageIcon className="h-4 w-4" /><span>Add Images (Max 10)</span><input type="file" multiple accept="image/png, image/jpeg" className="hidden" onChange={handlePortfolioImageUpload} /></label><div className="flex flex-wrap gap-2 mt-2">{portfolioForm.imageUrls?.map((url, idx) => (<div key={idx} className="relative w-16 h-16 border rounded overflow-hidden group"><img src={url} className="w-full h-full object-cover" /><button type="button" onClick={() => setPortfolioForm(prev => ({ ...prev, imageUrls: prev.imageUrls?.filter((_, i) => i !== idx) }))} className="absolute top-0 right-0 bg-red-500 text-white p-0.5 rounded-bl opacity-0 group-hover:opacity-100"><X className="h-3 w-3" /></button></div>))}</div><p className="text-xs text-gray-500 mt-1">{t('portfolio.maxImages')}</p></div><div><label className="cursor-pointer flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800"><Video className="h-4 w-4" /><span>{portfolioForm.videoUrl ? 'Replace Video' : 'Add Video'}</span><input type="file" accept="video/*" className="hidden" onChange={handlePortfolioVideoUpload} /></label>{portfolioForm.videoUrl && (<div className="mt-2 text-xs text-green-600 flex items-center"><CheckCircle className="h-3 w-3 mr-1" /> Video attached<button type="button" onClick={() => setPortfolioForm(prev => ({ ...prev, videoUrl: undefined }))} className="ml-2 text-red-500 hover:underline">Remove</button></div>)}<p className="text-xs text-gray-500 mt-1">{t('portfolio.video')}</p></div></div><div className="flex items-center"><input type="checkbox" id="publish" className="h-4 w-4 text-primary-600 border-gray-300 rounded" checked={portfolioForm.isPublished} onChange={e => setPortfolioForm({ ...portfolioForm, isPublished: e.target.checked })} /><label htmlFor="publish" className="ml-2 block text-sm text-gray-900">{t('form.publish')}</label></div><div className="flex justify-end space-x-3"><button type="button" onClick={() => setShowPortfolioModal(false)} className="text-gray-600 hover:text-gray-900">{t('form.cancel')}</button><button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded hover:bg-primary-700">{t('form.save')}</button></div></form></div></div></div>)}
 
       {/* Portfolio Preview Modal */}
-      {showPortfolioPreview && (<div className="fixed inset-0 z-50 overflow-y-auto"><div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0"><div className="fixed inset-0 bg-gray-900 bg-opacity-90 transition-opacity" onClick={() => setShowPortfolioPreview(null)}></div><div className="inline-block align-middle bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:max-w-3xl sm:w-full relative"><button onClick={() => setShowPortfolioPreview(null)} className="absolute top-2 right-2 z-10 bg-black/50 text-white p-1 rounded-full hover:bg-black/70"><X className="h-6 w-6" /></button><div className="bg-white p-6"><h2 className="text-2xl font-bold mb-2">{showPortfolioPreview.title}</h2><span className="inline-block bg-primary-100 text-primary-800 text-xs px-2 py-1 rounded mb-4">{t(`category.${showPortfolioPreview.category}`)}</span><p className="text-gray-700 mb-6">{showPortfolioPreview.description}</p>{showPortfolioPreview.videoUrl && (<div className="mb-6 aspect-w-16 aspect-h-9 bg-black rounded-lg flex items-center justify-center text-white"><p>Video Preview Placeholder (Browser dependent)</p></div>)}<div className="grid grid-cols-2 sm:grid-cols-3 gap-4">{showPortfolioPreview.imageUrls.map((url, idx) => (<img key={idx} src={url} className="w-full h-48 object-cover rounded-lg hover:opacity-90 transition-opacity" />))}</div></div></div></div></div>)}
+      {showPortfolioPreview && (() => {
+        const p = showPortfolioPreview;
+        const images = p.imageUrls ?? [];
+        const hero = images[0];
+        const gallery = images.slice(1);
+        const videoUrl = p.videoUrl?.trim();
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+            <button
+              type="button"
+              className="fixed inset-0 bg-gray-900/90 transition-opacity"
+              aria-label="Close preview"
+              onClick={() => setShowPortfolioPreview(null)}
+            />
+            <div
+              className="relative z-10 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="portfolio-preview-title"
+            >
+              <button
+                type="button"
+                onClick={() => setShowPortfolioPreview(null)}
+                className="absolute right-3 top-3 z-20 rounded-full bg-black/55 p-2 text-white hover:bg-black/75"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {hero ? (
+                  <div className="relative h-52 w-full shrink-0 bg-gray-100 sm:h-64">
+                    <img src={hero} alt="" className="h-full w-full object-cover" />
+                  </div>
+                ) : null}
+                <div className="p-6 pt-10 sm:pt-8">
+                  <div className="mb-3 flex flex-wrap items-center gap-2 pr-10">
+                    <span className="inline-flex items-center rounded-md bg-primary-100 px-2.5 py-1 text-xs font-bold text-primary-800">
+                      {portfolioCategoryLabel(p.category, t)}
+                    </span>
+                    <span
+                      className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-bold ${
+                        p.isPublished ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-700'
+                      }`}
+                    >
+                      {p.isPublished ? t('portfolio.published') : t('portfolio.draft')}
+                    </span>
+                  </div>
+                  <h2
+                    id="portfolio-preview-title"
+                    className="break-words text-xl font-bold leading-snug text-gray-900 sm:text-2xl"
+                  >
+                    {p.title}
+                  </h2>
+                  <p className="mt-4 max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-700 sm:text-base">
+                    {p.description}
+                  </p>
+                  {videoUrl ? (
+                    isHostedHttpUrl(videoUrl) ? (
+                      <div className="mt-6 overflow-hidden rounded-lg bg-black">
+                        <video
+                          controls
+                          playsInline
+                          className="max-h-72 w-full"
+                          src={videoUrl}
+                        />
+                      </div>
+                    ) : (
+                      <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                        Video uses a temporary local URL and cannot be played here after reload. Edit this item and upload again, or use a public <code className="rounded bg-amber-100 px-1">https://</code> link.
+                      </p>
+                    )
+                  ) : null}
+                  {gallery.length > 0 ? (
+                    <div className="mt-6">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        {gallery.length === 1 ? '1 more image' : `${gallery.length} more images`}
+                      </p>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        {gallery.map((url, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            className="overflow-hidden rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                            onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+                          >
+                            <img
+                              src={url}
+                              alt=""
+                              className="h-36 w-full object-cover transition-opacity hover:opacity-90 sm:h-40"
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {portfolioPendingDelete && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="fixed inset-0 bg-gray-900/50 transition-opacity"
+            aria-label={t('pwa.dismiss')}
+            onClick={() => setPortfolioPendingDelete(null)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="portfolio-delete-title"
+            className="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl"
+          >
+            <h3 id="portfolio-delete-title" className="text-lg font-medium text-gray-900">
+              {t('portfolio.deleteConfirmTitle')}
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">{t('portfolio.deleteConfirmBody')}</p>
+            <p className="mt-2 break-words text-sm font-semibold text-gray-900">
+              {portfolioPendingDelete.title}
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPortfolioPendingDelete(null)}
+                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                {t('form.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeletePortfolio}
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              >
+                {t('form.delete')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <LogoutConfirmModal
+        open={logoutConfirmOpen}
+        onClose={() => setLogoutConfirmOpen(false)}
+        onConfirm={performLogout}
+      />
     </div>
   );
 };

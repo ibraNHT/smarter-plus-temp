@@ -7,6 +7,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
+import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 
 const CAMEROON_LOCATIONS: Record<string, string[]> = {
    'West': ['Bafoussam', 'Dschang', 'Foumban', 'Mbouda', 'Bandjoun'],
@@ -73,6 +74,7 @@ export const ClientProfile: React.FC = () => {
    const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
 
    const [showPasswordModal, setShowPasswordModal] = useState(false);
+   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
    const currentClient = useMemo(
@@ -207,7 +209,11 @@ export const ClientProfile: React.FC = () => {
    const savePersonalInfo = (e: React.FormEvent) => { e.preventDefault(); if (formData) { updateClientProfile({ ...formData, name: `${formData.firstName} ${formData.lastName}` }); } };
    const toggleUpgradeCategory = (cat: string) => { const current = upgradeData.productionTypes; if (current.includes(cat)) { setUpgradeData({ ...upgradeData, productionTypes: current.filter(c => c !== cat) }); } else { setUpgradeData({ ...upgradeData, productionTypes: [...current, cat] }); } };
    const handleUpgradeSubmit = (e: React.FormEvent) => { e.preventDefault(); if (!user) return; upgradeClientToProducer(user.id, { type: upgradeData.type, name: upgradeData.type === 'BUSINESS' ? upgradeData.farmName : undefined, description: upgradeData.description, productionTypes: upgradeData.productionTypes }); setShowUpgradeModal(false); navigate('/producer/dashboard'); };
-   const handleLogout = () => { logout(); navigate('/'); };
+   const performLogout = async () => {
+      await logout();
+      setLogoutConfirmOpen(false);
+      navigate('/');
+   };
    const openReviewModal = (orderId: string, producerId: string) => { setReviewOrderId(orderId); setReviewTargetId(producerId); setRating(5); setComment(''); setShowReviewModal(true); };
    const handleSubmitReview = (e: React.FormEvent) => { e.preventDefault(); if (user && reviewOrderId && reviewTargetId) { submitReview({ orderId: reviewOrderId, reviewerId: user.id, targetId: reviewTargetId, rating, comment }); setShowReviewModal(false); } };
    const getProducerName = (producerId: string) => { const p = producers.find(prod => prod.id === producerId); return p ? (p.name || (p as any).user?.displayName || `${(p.firstName ?? '').trim()} ${(p.lastName ?? '').trim()}`.trim()) : 'Unknown Producer'; };
@@ -317,7 +323,7 @@ export const ClientProfile: React.FC = () => {
                      </div>
                   )}
                   <div className="pt-4 mt-4 border-t border-gray-200">
-                     <button onClick={handleLogout} className="text-red-600 hover:bg-red-50 group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors">
+                     <button type="button" onClick={() => setLogoutConfirmOpen(true)} className="text-red-600 hover:bg-red-50 group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors">
                         <LogOut className="flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> <span className="truncate">{t('nav.logout')}</span>
                      </button>
                   </div>
@@ -915,6 +921,12 @@ export const ClientProfile: React.FC = () => {
                </div>
             </div>
          )}
+
+         <LogoutConfirmModal
+            open={logoutConfirmOpen}
+            onClose={() => setLogoutConfirmOpen(false)}
+            onConfirm={performLogout}
+         />
       </div>
    );
 };

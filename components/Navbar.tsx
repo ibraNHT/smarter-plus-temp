@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../services/storeContext';
 import { useTranslation } from '../services/i18nContext';
@@ -7,13 +7,14 @@ import { usePwaInstall } from '../contexts/PwaInstallContext';
 import { UserRole } from '../types';
 import { getToken } from '../services/apiService';
 import { isWebAppSessionBlocked } from '../services/authRoles';
+import { LogoutConfirmModal } from './LogoutConfirmModal';
 import { LogOut, Sprout, ShoppingBasket, Tractor, ShoppingCart, Globe, Bell, X, User, MessageCircle, ChevronDown, Download } from 'lucide-react';
 
 const marketplaceVisible = (user: { role?: UserRole } | null) =>
   !user || user.role === UserRole.CLIENT || user.role === UserRole.PRODUCER;
 
 export const Navbar: React.FC = () => {
-  const { user, producers, clients, logout, cart, notifications, markNotificationsAsRead } = useStore();
+  const { user, producers, clients, logout, cart, notifications, markNotificationsAsRead, chats } = useStore();
   const token = typeof window !== 'undefined' ? getToken() : null;
   const staffWrongApp = isWebAppSessionBlocked(token, user);
   const { t, language, setLanguage } = useTranslation();
@@ -23,11 +24,13 @@ export const Navbar: React.FC = () => {
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
-  const handleLogout = () => {
-    logout();
+  const performLogout = async () => {
+    await logout();
+    setLogoutConfirmOpen(false);
     navigate('/');
   };
 
@@ -84,8 +87,14 @@ export const Navbar: React.FC = () => {
   const myNotifications = notifications.filter(n => n.userId === user?.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const unreadCount = myNotifications.filter(n => !n.isRead).length;
 
-  // Unread Chats (Very basic mock implementation for badge)
-
+  /** Sum of unread messages across chats for the signed-in user (from API `unreadCounts`). */
+  const unreadChatTotal = useMemo(() => {
+    if (!user?.id) return 0;
+    return chats.reduce((sum, c) => {
+      const n = Number(c.unreadCounts?.[user.id]);
+      return sum + (Number.isFinite(n) && n > 0 ? Math.floor(n) : 0);
+    }, 0);
+  }, [chats, user?.id]);
 
   const isActive = (path: string) => location.pathname === path ? 'text-primary-600 font-semibold border-b-2 border-primary-600' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50';
   const linkClass = (path: string) => `px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150 ${isActive(path)}`;
@@ -99,26 +108,34 @@ export const Navbar: React.FC = () => {
 
   if (staffWrongApp) {
     return (
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
-          <Link to="/" className="flex items-center">
-            <Sprout className="h-8 w-8 text-primary-600" />
-            <span className="ml-2 text-xl font-bold text-gray-900">AgriMarket Connect</span>
-          </Link>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="inline-flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700"
-          >
-            <LogOut className="h-5 w-5" />
-            {t('nav.logout')}
-          </button>
-        </div>
-      </nav>
+      <>
+        <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
+            <Link to="/" className="flex items-center">
+              <Sprout className="h-8 w-8 text-primary-600" />
+              <span className="ml-2 text-xl font-bold text-gray-900">AgriMarket Connect</span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => setLogoutConfirmOpen(true)}
+              className="inline-flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700"
+            >
+              <LogOut className="h-5 w-5" />
+              {t('nav.logout')}
+            </button>
+          </div>
+        </nav>
+        <LogoutConfirmModal
+          open={logoutConfirmOpen}
+          onClose={() => setLogoutConfirmOpen(false)}
+          onConfirm={performLogout}
+        />
+      </>
     );
   }
 
   return (
+    <>
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
@@ -169,8 +186,22 @@ export const Navbar: React.FC = () => {
             {user ? (
               <div className="flex items-center space-x-4">
                 {/* Messages Link */}
-                <Link to="/messages" className="relative p-2 text-gray-600 hover:text-primary-600 focus:outline-none" title={t('nav.messages')}>
+                <Link
+                  to="/messages"
+                  className="relative p-2 text-gray-600 hover:text-primary-600 focus:outline-none"
+                  title={unreadChatTotal > 0 ? `${t('nav.messages')} (${unreadChatTotal})` : t('nav.messages')}
+                  aria-label={
+                    unreadChatTotal > 0
+                      ? `${t('nav.messages')}, ${unreadChatTotal} ${t('nav.messagesUnreadAria')}`
+                      : t('nav.messages')
+                  }
+                >
                   <MessageCircle className="h-6 w-6" />
+                  {unreadChatTotal > 0 && (
+                    <span className="absolute top-0 right-0 inline-flex min-h-[1.25rem] min-w-[1.25rem] items-center justify-center px-1 text-[10px] font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-600 rounded-full ring-2 ring-white pointer-events-none">
+                      {unreadChatTotal > 99 ? '99+' : unreadChatTotal}
+                    </span>
+                  )}
                 </Link>
 
                 {/* Notifications */}
@@ -271,7 +302,8 @@ export const Navbar: React.FC = () => {
                   </span>
                 </div>
                 <button
-                  onClick={handleLogout}
+                  type="button"
+                  onClick={() => setLogoutConfirmOpen(true)}
                   className="p-2 text-gray-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50"
                   title={t('nav.logout')}
                 >
@@ -314,5 +346,11 @@ export const Navbar: React.FC = () => {
         </div>
       </div>
     </nav>
+    <LogoutConfirmModal
+      open={logoutConfirmOpen}
+      onClose={() => setLogoutConfirmOpen(false)}
+      onConfirm={performLogout}
+    />
+    </>
   );
 };

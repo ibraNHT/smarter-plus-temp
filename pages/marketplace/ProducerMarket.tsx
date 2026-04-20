@@ -47,7 +47,11 @@ export const ProducerMarket: React.FC = () => {
 
   if (user) {
     if (user.role === UserRole.CLIENT) {
-      const c = clients.find(client => client.id === user.id);
+      const c = clients.find(
+        client =>
+          (user.clientId && client.id === user.clientId) ||
+          (client as { userId?: string }).userId === user.id,
+      );
       if (c) {
         clientRegion = c.locations.length > 0 ? c.locations[0].region : '';
         favorites = c.favorites || [];

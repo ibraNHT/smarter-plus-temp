@@ -40,21 +40,25 @@ interface ApiFetchOptions extends Omit<RequestInit, 'headers'> {
     silent401?: boolean;
     /** Internal flag — set to true after one refresh attempt to prevent infinite loops */
     _isRetry?: boolean;
+    /** Internal — after a 304, retry GET once without conditional cache headers */
+    _after304Retry?: boolean;
 }
 
 let refreshInFlight: Promise<boolean> | null = null;
 
-/** Attempt to silently refresh the access token using the stored refresh token */
+/** Attempt to silently refresh the access token (HttpOnly cookie and/or body refresh token). */
 const attemptTokenRefresh = async (): Promise<boolean> => {
     if (refreshInFlight) return refreshInFlight;
     refreshInFlight = (async () => {
-    const refreshToken = getRefreshToken();
-    if (!refreshToken) return false;
+        const bodyRefresh = getRefreshToken();
         try {
             const response = await fetch(`${BASE_URL}/api/auth/refresh`, {
                 method: 'POST',
+                credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ refreshToken }),
+                body: JSON.stringify(
+                    bodyRefresh ? { refreshToken: bodyRefresh } : {},
+                ),
             });
             if (!response.ok) return false;
             const data = await response.json();
@@ -84,26 +88,48 @@ export const apiFetch = async <T = unknown>(
     path: string,
     options: ApiFetchOptions = {}
 ): Promise<T> => {
-    const { headers: extraHeaders, silent401, _isRetry, ...rest } = options;
+    const { headers: extraHeaders, silent401, _isRetry, _after304Retry, ...rest } = options;
     const response = await fetch(`${BASE_URL}${path}`, {
         ...rest,
+        credentials: 'include',
         headers: buildHeaders(extraHeaders),
     });
 
+    // 304 Not Modified has no body — browsers may send If-None-Match from a prior response.
+    // Backend disables ETag for JSON; if a proxy still returns 304, retry once with no-store headers.
+    if (
+        response.status === 304 &&
+        !_after304Retry &&
+        (!rest.method || rest.method === 'GET')
+    ) {
+        return apiFetch<T>(path, {
+            ...options,
+            _after304Retry: true,
+            cache: 'no-store',
+            headers: {
+                ...extraHeaders,
+                'Cache-Control': 'no-store',
+                Pragma: 'no-cache',
+            },
+        });
+    }
+
     if (!response.ok) {
         if (response.status === 401) {
-            // Attempt one token refresh even for silent calls, but suppress redirect for silent flows.
+            // Attempt one token refresh (cookie + optional body token), then retry once.
             if (!_isRetry) {
                 const refreshed = await attemptTokenRefresh();
                 if (refreshed) {
                     return apiFetch<T>(path, { ...options, _isRetry: true });
                 }
             }
-            // Refresh failed (or retry already used): clear stale auth state.
-            clearToken();
-            localStorage.removeItem('currentUser');
+            // Only hard-reset session for interactive calls. Background `silent401` requests
+            // must not wipe tokens (e.g. cross-origin cookie not sent previously → spurious 401).
             if (!silent401) {
-                window.location.assign('/');
+                clearToken();
+                localStorage.removeItem('currentUser');
+                // HashRouter app: route via hash to avoid landing on a blank/non-hash URL.
+                window.location.assign('/#/login');
             }
         }
 
@@ -122,7 +148,13 @@ export const apiFetch = async <T = unknown>(
     // 204 No Content has no body
     if (response.status === 204) return undefined as T;
 
-    return response.json() as Promise<T>;
+    const raw = await response.text();
+    if (!raw.trim()) return undefined as T;
+    try {
+        return JSON.parse(raw) as T;
+    } catch {
+        return undefined as T;
+    }
 };
 
 
@@ -139,6 +171,7 @@ export const apiUpload = async <T = unknown>(
 
     const response = await fetch(`${BASE_URL}${path}`, {
         method: 'POST',
+        credentials: 'include',
         headers,
         body: formData,
     });
