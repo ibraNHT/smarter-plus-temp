@@ -163,14 +163,12 @@ export const ChatPage: React.FC = () => {
 
    // Initialize proposal form with offer defaults if available
    useEffect(() => {
-      if (activeChat?.offerId && showProposalModal) {
-         const offer = getOfferById(activeChat.offerId);
-         if (offer) {
-            setProposalPrice(offer.price);
-            setProposalQty(1);
-         }
-      }
-   }, [activeChat, showProposalModal]);
+      if (!showProposalModal || !activeChat?.offerId) return;
+      const offer = getOfferById(activeChat.offerId);
+      if (!offer) return;
+      setProposalPrice(Number(offer.price) || 0);
+      setProposalQty(1);
+   }, [showProposalModal, activeChat?.offerId, getOfferById]);
 
    if (!user) return <div className="p-8 text-center">Login required.</div>;
 

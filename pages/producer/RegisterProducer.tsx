@@ -1,24 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { MapPin, X, Plus, Lock, Phone, Eye, EyeOff } from 'lucide-react';
 import { ProducerType, Location } from '../../types';
-
-// Mock Data for Regions/Cities
-const CAMEROON_LOCATIONS: Record<string, string[]> = {
-  'West': ['Bafoussam', 'Dschang', 'Foumban', 'Mbouda', 'Bandjoun'],
-  'Center': ['Yaoundé', 'Mbalmayo', 'Bafia', 'Obala', 'Eseka'],
-  'Littoral': ['Douala', 'Edea', 'Nkongsamba', 'Loum', 'Mbanga'],
-  'North West': ['Bamenda', 'Kumbo', 'Ndop', 'Wum', 'Mbengwi'],
-  'South West': ['Buea', 'Limbe', 'Kumba', 'Tiko', 'Mamfe'],
-  'Adamaoua': ['Ngaoundere', 'Meiganga', 'Tibati'],
-  'North': ['Garoua', 'Guider', 'Figuil'],
-  'Far North': ['Maroua', 'Kousseri', 'Mokolo'],
-  'East': ['Bertoua', 'Batouri', 'Abong-Mbang'],
-  'South': ['Ebolowa', 'Kribi', 'Sangmelima']
-};
+import { loadGooglePlacesApi, parseGooglePlace } from '../../services/googlePlaces';
 
 const AFRICA_COUNTRY_CODES = [
   // Central Africa
@@ -75,15 +62,55 @@ export const RegisterProducer: React.FC = () => {
 
   // Locations State
   const [locations, setLocations] = useState<Location[]>([]);
-  const [currentLoc, setCurrentLoc] = useState({ region: '', city: '', address: '' });
+  const [currentLoc, setCurrentLoc] = useState({ region: '', city: '', address: '', lat: 0, lng: 0 });
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const locationInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    let autocomplete: any;
+    const setup = async () => {
+      const ok = await loadGooglePlacesApi();
+      if (!ok || !locationInputRef.current) return;
+      const g = (window as any).google;
+      autocomplete = new g.maps.places.Autocomplete(locationInputRef.current, {
+        fields: ['formatted_address', 'geometry', 'address_components', 'name'],
+        types: ['geocode'],
+      });
+      autocomplete.addListener('place_changed', () => {
+        const parsed = parseGooglePlace(autocomplete.getPlace());
+        if (!parsed) return;
+        setCurrentLoc(prev => ({
+          ...prev,
+          address: parsed.address,
+          city: parsed.city || prev.city,
+          region: parsed.region || prev.region,
+          lat: parsed.lat,
+          lng: parsed.lng,
+        }));
+      });
+    };
+    void setup();
+  }, []);
+
+  const handleTaxDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0]) return;
+    const file = e.target.files[0];
+    const allowedTypes = ['image/png', 'image/jpeg', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Tax document must be PNG, JPG, JPEG, or PDF.');
+      return;
+    }
+    const fakeUrl = URL.createObjectURL(file);
+    setFormData(prev => ({ ...prev, taxClearanceCertificateUrl: fakeUrl }));
+    setError('');
+  };
 
   const addLocation = () => {
     if (currentLoc.region && currentLoc.city && currentLoc.address) {
-      setLocations([...locations, { ...currentLoc, lat: 0, lng: 0 }]);
-      setCurrentLoc({ region: '', city: '', address: '' });
+      setLocations([...locations, { ...currentLoc }]);
+      setCurrentLoc({ region: '', city: '', address: '', lat: 0, lng: 0 });
     }
   };
 
@@ -219,18 +246,20 @@ export const RegisterProducer: React.FC = () => {
               </div>
               <div className="sm:col-span-6">
                 <label htmlFor="taxCert" className="block text-sm font-medium text-gray-700">
-                  Tax clearance certificate URL
+                  Tax clearance certificate (PNG, JPG, PDF)
                 </label>
-                <p className="text-xs text-gray-500 mt-0.5">Link to your uploaded Attestation de non-redevance (e.g. from document upload).</p>
+                <p className="text-xs text-gray-500 mt-0.5">Upload your Attestation de non-redevance document.</p>
                 <input
                   id="taxCert"
-                  type="url"
+                  type="file"
                   name="taxClearanceCertificateUrl"
-                  placeholder="https://..."
+                  accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf"
                   className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
-                  value={formData.taxClearanceCertificateUrl}
-                  onChange={e => setFormData({ ...formData, taxClearanceCertificateUrl: e.target.value })}
+                  onChange={handleTaxDocumentUpload}
                 />
+                {formData.taxClearanceCertificateUrl && (
+                  <p className="text-xs text-green-600 mt-1">Document selected successfully.</p>
+                )}
               </div>
             </>
           )}
@@ -370,33 +399,31 @@ export const RegisterProducer: React.FC = () => {
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
-                <select
+                <input
+                  type="text"
                   className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 sm:text-sm text-gray-900"
                   value={currentLoc.region}
-                  onChange={e => setCurrentLoc({ ...currentLoc, region: e.target.value, city: CAMEROON_LOCATIONS[e.target.value]?.[0] || '' })}
-                >
-                  <option value="">Select Region</option>
-                  {Object.keys(CAMEROON_LOCATIONS).map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
+                  onChange={e => setCurrentLoc({ ...currentLoc, region: e.target.value })}
+                  placeholder="Region"
+                />
               </div>
               <div>
-                <select
+                <input
+                  type="text"
                   className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 sm:text-sm text-gray-900"
                   value={currentLoc.city}
                   onChange={e => setCurrentLoc({ ...currentLoc, city: e.target.value })}
-                  disabled={!currentLoc.region}
-                >
-                  <option value="">Select City</option>
-                  {currentLoc.region && CAMEROON_LOCATIONS[currentLoc.region]?.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                  placeholder="City"
+                />
               </div>
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Address/Street"
+                  placeholder="Google Maps location or street address"
                   className="flex-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 sm:text-sm bg-white text-gray-900"
                   value={currentLoc.address}
                   onChange={e => setCurrentLoc({ ...currentLoc, address: e.target.value })}
+                  ref={locationInputRef}
                 />
                 <button
                   type="button"
@@ -408,6 +435,7 @@ export const RegisterProducer: React.FC = () => {
                 </button>
               </div>
             </div>
+            <p className="mt-2 text-xs text-gray-500">Select a Google place to auto-fill city/region and capture lat/lng.</p>
           </div>
 
           {/* Locations List */}

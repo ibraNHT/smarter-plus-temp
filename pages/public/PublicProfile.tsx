@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { ProducerStatus, Review } from '../../types';
-import { User, MapPin, ShieldCheck, Star, ArrowLeft, Package } from 'lucide-react';
+import { User, MapPin, ShieldCheck, Star, ArrowLeft, Package, Image as ImageIcon } from 'lucide-react';
 import { apiFetch } from '../../services/apiService';
 
 function mapReviewRow(r: any): Review {
@@ -27,7 +27,7 @@ interface PublicProfileProps {
 export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
    const { id } = useParams<{ id: string }>();
    const navigate = useNavigate();
-   const { producers, clients, getProducerOffers } = useStore();
+   const { producers, clients, getProducerOffers, getProducerPortfolios } = useStore();
    const { t } = useTranslation();
 
    const [profileData, setProfileData] = useState<any>(null);
@@ -74,6 +74,7 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
 
    // For Producers Only
    const activeOffers = role === 'PRODUCER' && id ? getProducerOffers(id) : [];
+   const producerPortfolios = role === 'PRODUCER' && id ? getProducerPortfolios(id).filter(p => p.isPublished) : [];
    const isVerified = role === 'PRODUCER' && profileData.status === ProducerStatus.VALIDATED;
 
    // Display Name Logic
@@ -185,6 +186,34 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
                                           <p className="font-medium text-gray-900 truncate">{offer.title}</p>
                                           <p className="text-xs text-gray-500">{offer.price} XAF / {t(`unit.${offer.unit}`)}</p>
                                        </div>
+                                    </div>
+                                 ))}
+                              </div>
+                           )}
+                        </div>
+                     )}
+
+                     {/* Producer Portfolio */}
+                     {role === 'PRODUCER' && (
+                        <div>
+                           <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                              <ImageIcon className="w-5 h-5 mr-2 text-primary-600" /> Portfolio ({producerPortfolios.length})
+                           </h3>
+                           {producerPortfolios.length === 0 ? (
+                              <p className="text-gray-500 italic">No portfolio items published yet.</p>
+                           ) : (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                 {producerPortfolios.slice(0, 4).map(item => (
+                                    <div key={item.id} className="border border-gray-200 rounded-lg p-3 bg-white">
+                                       {item.imageUrls?.[0] ? (
+                                          <img src={item.imageUrls[0]} alt={item.title} className="w-full h-32 object-cover rounded mb-3" />
+                                       ) : (
+                                          <div className="w-full h-32 bg-gray-100 rounded mb-3 flex items-center justify-center">
+                                             <ImageIcon className="h-8 w-8 text-gray-400" />
+                                          </div>
+                                       )}
+                                       <p className="font-semibold text-gray-900 line-clamp-1">{item.title}</p>
+                                       <p className="text-xs text-gray-500 line-clamp-2 mt-1">{item.description}</p>
                                     </div>
                                  ))}
                               </div>
