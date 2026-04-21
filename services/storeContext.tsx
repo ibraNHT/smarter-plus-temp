@@ -11,7 +11,7 @@ import {
 } from './supportSessionsApi';
 const defaultSchedule: WeeklySchedule = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
 import { apiFetch, apiUpload, setToken, clearToken, getToken, setRefreshToken } from './apiService';
-
+// asda
 /** Map Prisma withdrawal row (+ nested paymentMethod) to app `WithdrawalRequest`. */
 function mapWithdrawalFromApi(d: any): WithdrawalRequest {
   const pm = d.paymentMethod ?? {};
