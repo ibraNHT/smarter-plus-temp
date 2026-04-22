@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order } from '../../types';
@@ -8,19 +8,7 @@ import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, 
 import { SEO } from '../../components/SEO';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
-
-const CAMEROON_LOCATIONS: Record<string, string[]> = {
-   'West': ['Bafoussam', 'Dschang', 'Foumban', 'Mbouda', 'Bandjoun'],
-   'Center': ['Yaoundé', 'Mbalmayo', 'Bafia', 'Obala', 'Eseka'],
-   'Littoral': ['Douala', 'Edea', 'Nkongsamba', 'Loum', 'Mbanga'],
-   'North West': ['Bamenda', 'Kumbo', 'Ndop', 'Wum', 'Mbengwi'],
-   'South West': ['Buea', 'Limbe', 'Kumba', 'Tiko', 'Mamfe'],
-   'Adamaoua': ['Ngaoundere', 'Meiganga', 'Tibati'],
-   'North': ['Garoua', 'Guider', 'Figuil'],
-   'Far North': ['Maroua', 'Kousseri', 'Mokolo'],
-   'East': ['Bertoua', 'Batouri', 'Abong-Mbang'],
-   'South': ['Ebolowa', 'Kribi', 'Sangmelima']
-};
+import { loadGooglePlacesApi, parseGooglePlace } from '../../services/googlePlaces';
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
@@ -51,6 +39,12 @@ export const ClientProfile: React.FC = () => {
    const [formData, setFormData] = useState<ClientProfileType | null>(null);
    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
    const [newLoc, setNewLoc] = useState<Partial<Location>>({ region: '', city: '', address: '' });
+   const [locationSearch, setLocationSearch] = useState('');
+   const [placesStatus, setPlacesStatus] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+   const [locationSuggestions, setLocationSuggestions] = useState<Array<{ address: string; city: string; region: string; lat: number; lng: number }>>([]);
+   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
+   const [isNearbyLoading, setIsNearbyLoading] = useState(false);
+   const locationSearchRef = useRef<HTMLInputElement | null>(null);
 
    const [upgradeData, setUpgradeData] = useState({
       type: 'INDIVIDUAL' as 'INDIVIDUAL' | 'BUSINESS',
@@ -93,6 +87,134 @@ export const ClientProfile: React.FC = () => {
    useEffect(() => {
       if (activeTab === 'referrals') void refreshMyReferrals();
    }, [activeTab, refreshMyReferrals]);
+   useEffect(() => {
+      let canceled = false;
+      let autocomplete: any = null;
+      const initAutocomplete = async () => {
+         const ok = await loadGooglePlacesApi();
+         if (canceled) return;
+         if (!ok) {
+            setPlacesStatus('unavailable');
+            return;
+         }
+         setPlacesStatus('ready');
+         const input = locationSearchRef.current;
+         const g = (window as any).google;
+         if (!input || !g?.maps?.places) return;
+         autocomplete = new g.maps.places.Autocomplete(input, {
+            fields: ['formatted_address', 'address_components', 'geometry', 'name'],
+         });
+         autocomplete.addListener('place_changed', () => {
+            const parsed = parseGooglePlace(autocomplete.getPlace());
+            if (!parsed) return;
+            setLocationSearch(parsed.address);
+            setNewLoc({
+               address: parsed.address,
+               city: parsed.city,
+               region: parsed.region,
+               lat: parsed.lat,
+               lng: parsed.lng,
+            });
+         });
+      };
+      void initAutocomplete();
+      return () => {
+         canceled = true;
+      };
+   }, []);
+   useEffect(() => {
+      const query = String(locationSearch ?? '').trim();
+      if (query.length < 3) {
+         setLocationSuggestions([]);
+         setShowLocationSuggestions(false);
+         return;
+      }
+      const timer = setTimeout(async () => {
+         try {
+            const response = await fetch(
+               `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=${encodeURIComponent(query)}`,
+               { headers: { Accept: 'application/json' } },
+            );
+            if (!response.ok) {
+               setLocationSuggestions([]);
+               setShowLocationSuggestions(false);
+               return;
+            }
+            const rows = await response.json();
+            const mapped = Array.isArray(rows)
+               ? rows.map((row: any) => {
+                    const addr = row?.address ?? {};
+                    const city = addr.city || addr.town || addr.village || addr.county || '';
+                    const region = addr.state || addr.region || addr.province || '';
+                    return {
+                       address: String(row?.display_name ?? ''),
+                       city: String(city),
+                       region: String(region),
+                       lat: Number(row?.lat ?? 0),
+                       lng: Number(row?.lon ?? 0),
+                    };
+                 }).filter((x: any) => x.address)
+               : [];
+            setLocationSuggestions(mapped);
+            setShowLocationSuggestions(mapped.length > 0);
+         } catch {
+            setLocationSuggestions([]);
+            setShowLocationSuggestions(false);
+         }
+      }, 250);
+      return () => clearTimeout(timer);
+   }, [locationSearch]);
+   const loadNearbySuggestions = useCallback(() => {
+      if (!navigator.geolocation) return;
+      setIsNearbyLoading(true);
+      navigator.geolocation.getCurrentPosition(
+         async (pos) => {
+            try {
+               const lat = pos.coords.latitude;
+               const lng = pos.coords.longitude;
+               const reverseRes = await fetch(
+                  `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lng))}`,
+                  { headers: { Accept: 'application/json' } },
+               );
+               const reverseRow = reverseRes.ok ? await reverseRes.json() : null;
+               const addr = reverseRow?.address ?? {};
+               const city = addr.city || addr.town || addr.village || addr.county || '';
+               const region = addr.state || addr.region || addr.province || '';
+               const seed = [city, region].filter(Boolean).join(', ') || String(reverseRow?.display_name ?? '');
+               if (!seed) {
+                  setIsNearbyLoading(false);
+                  return;
+               }
+               const searchRes = await fetch(
+                  `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=${encodeURIComponent(seed)}`,
+                  { headers: { Accept: 'application/json' } },
+               );
+               const rows = searchRes.ok ? await searchRes.json() : [];
+               const mapped = Array.isArray(rows)
+                  ? rows.map((row: any) => {
+                       const a = row?.address ?? {};
+                       return {
+                          address: String(row?.display_name ?? ''),
+                          city: String(a.city || a.town || a.village || a.county || ''),
+                          region: String(a.state || a.region || a.province || ''),
+                          lat: Number(row?.lat ?? 0),
+                          lng: Number(row?.lon ?? 0),
+                       };
+                    }).filter((x: any) => x.address)
+                  : [];
+               setLocationSuggestions(mapped);
+               setShowLocationSuggestions(mapped.length > 0);
+            } catch {
+               setLocationSuggestions([]);
+               setShowLocationSuggestions(false);
+            } finally {
+               setIsNearbyLoading(false);
+            }
+         },
+         () => setIsNearbyLoading(false),
+         { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 },
+      );
+   }, []);
 
    const copyReferralLink = () => {
       if (!referralCodeDisplay) return;
@@ -143,24 +265,11 @@ export const ClientProfile: React.FC = () => {
       );
    }
 
-   if (user.role !== UserRole.CLIENT && user.role !== UserRole.PRODUCER) {
+   if (user.role !== UserRole.CLIENT) {
       return (
          <div className="max-w-7xl mx-auto py-8 px-4">
             <SEO title="Client Profile | AgriMarket" noindex={true} />
             <p className="p-8 text-center">Access Denied</p>
-         </div>
-      );
-   }
-
-   if (!currentClient?.id && user.role === UserRole.PRODUCER) {
-      return (
-         <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-            <SEO title="Delivery profile | AgriMarket" noindex={true} />
-            <div className="p-8 text-center max-w-lg mx-auto space-y-4 bg-white rounded-lg shadow border border-gray-100">
-               <p className="text-gray-700">Your buyer (delivery) profile could not be loaded yet.</p>
-               <p className="text-sm text-gray-500">Try refreshing the page. If you just signed up, finish producer onboarding first.</p>
-               <Link to="/producer/profile" className="inline-block text-primary-600 font-medium hover:underline">Go to producer profile</Link>
-            </div>
          </div>
       );
    }
@@ -203,7 +312,26 @@ export const ClientProfile: React.FC = () => {
    const initiatePayment = (orderId: string) => { setPaymentOrderId(orderId); setShowPaymentRecap(true); };
    const confirmPayment = async () => { if (!paymentOrderId) return; const result = await payForOrder(paymentOrderId); if (!result.success && result.error === 'INSUFFICIENT_FUNDS') { alert(t('order.insufficient')); } setShowPaymentRecap(false); setPaymentOrderId(null); };
    const handleInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { if (!formData) return; const { name, value } = e.target; setFormData({ ...formData, [name]: value ?? '' }); };
-   const addLocation = () => { if (!formData || !newLoc.region || !newLoc.city || !newLoc.address) return; const locationToAdd: Location = { lat: 0, lng: 0, region: newLoc.region, city: newLoc.city, address: newLoc.address }; setFormData({ ...formData, locations: [...formData.locations, locationToAdd] }); setNewLoc({ region: '', city: '', address: '' }); };
+   const addLocation = () => {
+      if (!formData || !newLoc.address) return;
+      const address = String(newLoc.address).trim();
+      if (!address) return;
+      const city = String(newLoc.city ?? '').trim();
+      const region = String(newLoc.region ?? '').trim();
+      const fallbackParts = address.split(',').map((x) => x.trim()).filter(Boolean);
+      const inferredCity = city || fallbackParts[1] || fallbackParts[0] || 'Unknown';
+      const inferredRegion = region || fallbackParts[2] || fallbackParts[1] || 'Unknown';
+      const locationToAdd: Location = {
+         lat: Number(newLoc.lat ?? 0),
+         lng: Number(newLoc.lng ?? 0),
+         region: inferredRegion,
+         city: inferredCity,
+         address,
+      };
+      setFormData({ ...formData, locations: [...formData.locations, locationToAdd] });
+      setNewLoc({ region: '', city: '', address: '' });
+      setLocationSearch('');
+   };
    const removeLocation = (index: number) => { if (!formData) return; setFormData({ ...formData, locations: formData.locations.filter((_, i) => i !== index) }); };
    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (formData && e.target.files && e.target.files[0]) { const file = e.target.files[0]; const fakeUrl = URL.createObjectURL(file); setFormData({ ...formData, profileImageUrl: fakeUrl }); } };
    const savePersonalInfo = (e: React.FormEvent) => { e.preventDefault(); if (formData) { updateClientProfile({ ...formData, name: `${formData.firstName} ${formData.lastName}` }); } };
@@ -405,41 +533,87 @@ export const ClientProfile: React.FC = () => {
                            <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
                               <p className="text-xs font-medium text-blue-700 mb-2">Add New Location</p>
                               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                                 <select
+                                 <input
+                                    ref={locationSearchRef}
+                                    type="text"
+                                    placeholder={
+                                       placesStatus === 'ready'
+                                          ? 'Search address (Google Places)'
+                                          : placesStatus === 'loading'
+                                             ? 'Loading Google Places...'
+                                             : 'Type full address manually'
+                                    }
+                                    value={locationSearch}
+                                    onChange={e => {
+                                       const value = e.target.value;
+                                       setLocationSearch(value);
+                                       setNewLoc((prev) => ({ ...prev, address: value }));
+                                       setShowLocationSuggestions(true);
+                                    }}
+                                    onFocus={() => {
+                                       if (locationSuggestions.length > 0) setShowLocationSuggestions(true);
+                                       else loadNearbySuggestions();
+                                    }}
+                                    className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900 sm:col-span-3"
+                                 />
+                                 {showLocationSuggestions && locationSuggestions.length > 0 && (
+                                    <div className="sm:col-span-3 border border-gray-200 rounded-md bg-white shadow-sm max-h-56 overflow-auto">
+                                       {locationSuggestions.map((item, idx) => (
+                                          <button
+                                             key={`${item.address}-${idx}`}
+                                             type="button"
+                                             onClick={() => {
+                                                setLocationSearch(item.address);
+                                                setNewLoc({
+                                                   address: item.address,
+                                                   city: item.city || '',
+                                                   region: item.region || '',
+                                                   lat: item.lat,
+                                                   lng: item.lng,
+                                                });
+                                                setShowLocationSuggestions(false);
+                                             }}
+                                             className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                                          >
+                                             <p className="text-sm text-gray-900">{item.address}</p>
+                                             <p className="text-xs text-gray-500">{[item.city, item.region].filter(Boolean).join(', ')}</p>
+                                          </button>
+                                       ))}
+                                    </div>
+                                 )}
+                                 {isNearbyLoading && (
+                                    <p className="sm:col-span-3 text-xs text-gray-500">Finding nearby locations...</p>
+                                 )}
+                                 <input
+                                    type="text"
+                                    placeholder="Region"
                                     value={newLoc.region ?? ''}
-                                    onChange={e => setNewLoc({ ...newLoc, region: e.target.value, city: CAMEROON_LOCATIONS[e.target.value]?.[0] || '' })}
+                                    onChange={e => setNewLoc((prev) => ({ ...prev, region: e.target.value }))}
                                     className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"
-                                 >
-                                    <option value="">Region</option>
-                                    {Object.keys(CAMEROON_LOCATIONS).map(r => <option key={r} value={r}>{r}</option>)}
-                                 </select>
-                                 <select
+                                 />
+                                 <input
+                                    type="text"
+                                    placeholder="City"
                                     value={newLoc.city ?? ''}
-                                    onChange={e => setNewLoc({ ...newLoc, city: e.target.value })}
-                                    disabled={!newLoc.region}
-                                    className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 disabled:bg-gray-100 bg-white text-gray-900"
-                                 >
-                                    <option value="">City</option>
-                                    {newLoc.region && CAMEROON_LOCATIONS[newLoc.region]?.map(c => <option key={c} value={c}>{c}</option>)}
-                                 </select>
-                                 <div className="flex gap-2">
-                                    <input
-                                       type="text"
-                                       placeholder="Address"
-                                       value={newLoc.address ?? ''}
-                                       onChange={e => setNewLoc({ ...newLoc, address: e.target.value })}
-                                       className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"
-                                    />
+                                    onChange={e => setNewLoc((prev) => ({ ...prev, city: e.target.value }))}
+                                    className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"
+                                 />
+                                 <div className="sm:col-span-3 flex gap-2">
                                     <button
                                        type="button"
                                        onClick={addLocation}
-                                       disabled={!newLoc.region || !newLoc.city || !newLoc.address}
+                                       disabled={!String(newLoc.address ?? '').trim()}
                                        className="inline-flex items-center p-2 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"
                                     >
                                        <Plus className="h-5 w-5" />
                                     </button>
                                  </div>
                               </div>
+                              <p className="mt-2 text-xs text-gray-500">
+                                 {placesStatus === 'ready'
+                                    ? 'Select a place to auto-fill city/region and capture lat/lng.'
+                                    : 'Type full address and click +.'}
+                              </p>
                            </div>
                         </div>
                         <div className="sm:col-span-6 pt-4 flex justify-end">

@@ -1,5 +1,6 @@
 
-import React, { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback } from 'react';
+import React, { useState, ReactNode, useEffect, useRef, useCallback } from 'react';
+import { create } from 'zustand';
 import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerStatus, OfferType, CartItem, Order, OrderStatus, Wallet, Notification, WithdrawalRequest, WithdrawalStatus, PaymentMethod, ChatSession, ChatMessage, Proposal, ProposalStatus, WeeklySchedule, AvailabilityException, Review, SupportMessage, Portfolio, DisputeEvidence, Coupon, PickupPoint, MyReferralsData } from '../types';
 import { generateSupportResponse } from './geminiService';
 import {
@@ -245,7 +246,22 @@ interface StoreContextType {
   refreshMyReferrals: () => Promise<void>;
 }
 
-const StoreContext = createContext<StoreContextType | undefined>(undefined);
+type StoreSnapshotState = {
+  snapshot: StoreContextType | undefined;
+  setSnapshot: (snapshot: StoreContextType) => void;
+};
+
+const useStoreSnapshot = create<StoreSnapshotState>((set) => ({
+  snapshot: undefined,
+  setSnapshot: (snapshot) => set({ snapshot }),
+}));
+
+const getOrdersEndpointForUser = (activeUser?: UserSession | null): string | null => {
+  if (!activeUser) return null;
+  if (activeUser.role === UserRole.PRODUCER) return '/api/orders/producer-orders';
+  if (activeUser.role === UserRole.CLIENT) return '/api/orders/my-orders';
+  return null;
+};
 
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserSession | null>(null);
@@ -397,18 +413,21 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           const resNotif = await apiFetch<Notification[]>('/api/notifications', { silent401: true } as any).catch((e) => { on401(e); return null; });
           if (resNotif && Array.isArray(resNotif)) setNotifications(resNotif);
 
-          const resOrders = await apiFetch<any[]>('/api/orders', { silent401: true } as any).catch((e) => { on401(e); return null; });
-          if (resOrders && Array.isArray(resOrders)) {
-            setOrders(resOrders.map((o: any) => ({
-              ...o,
-              items: Array.isArray(o.orderItems || o.items)
-                ? (o.orderItems || o.items).map((item: any) => ({
-                  ...item,
-                  cartQuantity: item.cartQuantity || item.quantity || 1,
-                  id: item.offerId || item.id
-                }))
-                : []
-            })));
+          const ordersEndpoint = getOrdersEndpointForUser(userRef.current);
+          if (ordersEndpoint) {
+            const resOrders = await apiFetch<any[]>(ordersEndpoint, { silent401: true } as any).catch((e) => { on401(e); return null; });
+            if (resOrders && Array.isArray(resOrders)) {
+              setOrders(resOrders.map((o: any) => ({
+                ...o,
+                items: Array.isArray(o.orderItems || o.items)
+                  ? (o.orderItems || o.items).map((item: any) => ({
+                    ...item,
+                    cartQuantity: item.cartQuantity || item.quantity || 1,
+                    id: item.offerId || item.id
+                  }))
+                  : []
+              })));
+            }
           }
         } catch {
           // ignore background polling errors
@@ -424,6 +443,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const fetchData = async (currentUser?: typeof user) => {
     const activeUser = currentUser ?? user;
+    const isClientSession = activeUser?.role === UserRole.CLIENT;
+    const isProducerSession = activeUser?.role === UserRole.PRODUCER;
+    const hashPath = typeof window !== 'undefined' ? window.location.hash : '';
+    const isClientUiRoute = hashPath.includes('/client/') || hashPath.includes('/register/client');
+    const shouldFetchBuyerProfile = isClientSession || (isProducerSession && isClientUiRoute);
+    const shouldFetchProducerPortfolios = isProducerSession && Boolean(activeUser?.producerId);
+    const ordersEndpoint = getOrdersEndpointForUser(activeUser);
     try {
       // Keep session on background/bootstrapping 401 responses from feature endpoints.
       const on401 = (_e: unknown) => {};
@@ -437,11 +463,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       // Only fetch orders, wallet, and referral stats when authenticated and we have a token (avoids 401 spam when token expired)
       if (activeUser && getToken()) {
         const [resOrders, resWallet, resWithdrawals, referralsPayload, resPortfolios, resMyReviews] = await Promise.all([
-          apiFetch<any[]>('/api/orders', { silent401: true } as any).catch((e) => { on401(e); return []; }),
+          ordersEndpoint
+            ? apiFetch<any[]>(ordersEndpoint, { silent401: true } as any).catch((e) => { on401(e); return []; })
+            : Promise.resolve([] as any[]),
           apiFetch<any>('/api/wallet/me', { silent401: true } as any).catch((e) => { on401(e); return null; }),
           apiFetch<any[]>('/api/wallet/me/withdrawals', { silent401: true } as any).catch((e) => { on401(e); return []; }),
           fetchMyReferrals(),
-          apiFetch<Portfolio[]>('/api/portfolios', { silent401: true } as any).catch((e) => { on401(e); return []; }),
+          shouldFetchProducerPortfolios
+            ? apiFetch<Portfolio[]>('/api/portfolios', { silent401: true } as any).catch((e) => { on401(e); return []; })
+            : Promise.resolve([] as Portfolio[]),
           apiFetch<any[]>(`/api/reviews/user/${activeUser.id}`, { silent401: true } as any).catch((e) => {
             on401(e);
             return [];
@@ -521,7 +551,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         };
       };
       let clientRows = Array.isArray(resClients) ? resClients.map(mapClientRow) : [];
-      if (activeUser && getToken()) {
+      if (activeUser && getToken() && shouldFetchBuyerProfile) {
         const meClient = await apiFetch<any>('/api/profiles/me/client', { silent401: true } as any).catch(() =>
           apiFetch<any>('/api/clients/me', { silent401: true } as any).catch(() => null),
         );
@@ -1765,43 +1795,41 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return false;
     }
   };
+  const storeValue: StoreContextType = {
+    user, pendingRegistration, guestEmail, setGuestEmail, producers, clients, offers, cart, orders, wallets, notifications, withdrawalRequests, reviews, portfolios, coupons, pickupPoints,
+    chats,
+    messages,
+    fetchChats,
+    fetchMessages,
+    startNegotiation,
+    sendMessage, respondToProposal,
+    login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, getProducerOffers, getOfferById,
+    addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, confirmReceipt, reportProblem, addDisputeEvidence, revealContactInfo,
+    getWallet, fundWallet, requestWithdrawal, markNotificationsAsRead, getAvailableSlots, submitReview, getAverageRating,
+    getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,
+    trackUserSearch, toggleFavorite, moveToFavorites, getRecommendedOffers,
+    compareList, addToCompare, removeFromCompare, clearCompare,
+    supportMessages, isSupportChatOpen, toggleSupportChat, sendSupportMessage, showGuestForm, setShowGuestForm, guestEmailInput, setGuestEmailInput, guestNameInput, setGuestNameInput, guestName, setGuestName, submitGuestForm, supportSessionId, setSupportSessionId,
+    validateCoupon,
+    addPickupPoint, deletePickupPoint,
+    changePassword,
+    myReferrals,
+    refreshMyReferrals
+  };
 
+  // Keep Zustand snapshot in sync before rendering children so hooks can read it on first paint.
+  useStoreSnapshot.setState({ snapshot: storeValue });
 
-
-  return (
-    <StoreContext.Provider value={{
-      user, pendingRegistration, guestEmail, setGuestEmail, producers, clients, offers, cart, orders, wallets, notifications, withdrawalRequests, reviews, portfolios, coupons, pickupPoints,
-      chats,
-      messages,
-      fetchChats,
-      fetchMessages,
-      startNegotiation,
-      sendMessage, respondToProposal,
-      login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, getProducerOffers, getOfferById,
-      addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, confirmReceipt, reportProblem, addDisputeEvidence, revealContactInfo,
-      getWallet, fundWallet, requestWithdrawal, markNotificationsAsRead, getAvailableSlots, submitReview, getAverageRating,
-      getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,
-      trackUserSearch, toggleFavorite, moveToFavorites, getRecommendedOffers,
-      compareList, addToCompare, removeFromCompare, clearCompare,
-      supportMessages, isSupportChatOpen, toggleSupportChat, sendSupportMessage, showGuestForm, setShowGuestForm, guestEmailInput, setGuestEmailInput, guestNameInput, setGuestNameInput, guestName, setGuestName, submitGuestForm, supportSessionId, setSupportSessionId,
-      validateCoupon,
-      addPickupPoint, deletePickupPoint,
-      changePassword,
-      myReferrals,
-      refreshMyReferrals
-    }}>
-      {children}
-    </StoreContext.Provider>
-  );
+  return <>{children}</>;
 };
 
-export const useStore = () => {
-  const context = useContext(StoreContext);
-  if (!context) {
+export const useStore = (): StoreContextType => {
+  const snapshot = useStoreSnapshot((state) => state.snapshot);
+  if (!snapshot) {
     throw new Error('useStore must be used within a StoreProvider');
   }
-  return context;
+  return snapshot;
 };
 
 /** Use when component may render outside StoreProvider (e.g. global widgets). Returns undefined when outside provider. */
-export const useStoreOptional = (): StoreContextType | undefined => useContext(StoreContext);
+export const useStoreOptional = (): StoreContextType | undefined => useStoreSnapshot((state) => state.snapshot);

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, PaymentMethod, ProducerProfile as ProducerProfileType, Location, Portfolio } from '../../types';
@@ -8,20 +8,7 @@ import { User, Wallet, Shield, Tractor, CreditCard, Trash2, Plus, Camera, Upload
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 import { OtpVerificationModal } from '../../components/OtpVerificationModal';
-
-// Mock Data for Regions/Cities in Cameroon
-const CAMEROON_LOCATIONS: Record<string, string[]> = {
-  'West': ['Bafoussam', 'Dschang', 'Foumban', 'Mbouda', 'Bandjoun'],
-  'Center': ['Yaoundé', 'Mbalmayo', 'Bafia', 'Obala', 'Eseka'],
-  'Littoral': ['Douala', 'Edea', 'Nkongsamba', 'Loum', 'Mbanga'],
-  'North West': ['Bamenda', 'Kumbo', 'Ndop', 'Wum', 'Mbengwi'],
-  'South West': ['Buea', 'Limbe', 'Kumba', 'Tiko', 'Mamfe'],
-  'Adamaoua': ['Ngaoundere', 'Meiganga', 'Tibati'],
-  'North': ['Garoua', 'Guider', 'Figuil'],
-  'Far North': ['Maroua', 'Kousseri', 'Mokolo'],
-  'East': ['Bertoua', 'Batouri', 'Abong-Mbang'],
-  'South': ['Ebolowa', 'Kribi', 'Sangmelima']
-};
+import { loadGooglePlacesApi, parseGooglePlace } from '../../services/googlePlaces';
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
@@ -53,6 +40,12 @@ export const ProducerProfile: React.FC = () => {
 
   // Temp Location State for adding new ones
   const [newLoc, setNewLoc] = useState<Partial<Location>>({ region: '', city: '', address: '' });
+  const [locationSearch, setLocationSearch] = useState('');
+  const [placesStatus, setPlacesStatus] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const [locationSuggestions, setLocationSuggestions] = useState<Array<{ address: string; city: string; region: string; lat: number; lng: number }>>([]);
+  const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
+  const [isNearbyLoading, setIsNearbyLoading] = useState(false);
+  const locationSearchRef = useRef<HTMLInputElement | null>(null);
 
   // Portfolio State
   const [showPortfolioModal, setShowPortfolioModal] = useState(false);
@@ -115,7 +108,26 @@ export const ProducerProfile: React.FC = () => {
   const handleAddPayment = (e: React.FormEvent) => { e.preventDefault(); if (user?.producerId && newPayment.provider && newPayment.accountNumber && newPayment.accountName) { saveProducerPaymentMethod(user.producerId, { id: `pm-${Date.now()}`, provider: newPayment.provider, accountNumber: newPayment.accountNumber, accountName: newPayment.accountName }); setShowAddPayment(false); setNewPayment({ provider: 'ORANGE', accountNumber: '', accountName: '' }); } };
   const handleInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => { if (!formData) return; const { name, value } = e.target; setFormData(prev => prev ? ({ ...prev, [name]: value }) : null); };
   const toggleCategory = (cat: string) => { if (!formData) return; if (formData.productionTypes.includes(cat)) { setFormData({ ...formData, productionTypes: formData.productionTypes.filter(c => c !== cat) }); } else { setFormData({ ...formData, productionTypes: [...formData.productionTypes, cat] }); } };
-  const addLocation = () => { if (!formData || !newLoc.region || !newLoc.city || !newLoc.address) return; const locationToAdd: Location = { lat: 0, lng: 0, region: newLoc.region, city: newLoc.city, address: newLoc.address }; setFormData({ ...formData, locations: [...formData.locations, locationToAdd] }); setNewLoc({ region: '', city: '', address: '' }); };
+  const addLocation = () => {
+    if (!formData || !newLoc.address) return;
+    const address = String(newLoc.address).trim();
+    if (!address) return;
+    const city = String(newLoc.city ?? '').trim();
+    const region = String(newLoc.region ?? '').trim();
+    const fallbackParts = address.split(',').map((x) => x.trim()).filter(Boolean);
+    const inferredCity = city || fallbackParts[1] || fallbackParts[0] || 'Unknown';
+    const inferredRegion = region || fallbackParts[2] || fallbackParts[1] || 'Unknown';
+    const locationToAdd: Location = {
+      lat: Number(newLoc.lat ?? 0),
+      lng: Number(newLoc.lng ?? 0),
+      region: inferredRegion,
+      city: inferredCity,
+      address,
+    };
+    setFormData({ ...formData, locations: [...formData.locations, locationToAdd] });
+    setNewLoc({ region: '', city: '', address: '' });
+    setLocationSearch('');
+  };
   const removeLocation = (index: number) => { if (!formData) return; setFormData({ ...formData, locations: formData.locations.filter((_, i) => i !== index) }); };
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'profileImageUrl' | 'certifications') => { if (!formData || !e.target.files || e.target.files.length === 0) return; const file = e.target.files[0]; if (file.size > 10 * 1024 * 1024) { alert("File size exceeds 10MB limit."); return; } const allowedTypes = field === 'profileImageUrl' ? ['image/png', 'image/jpeg'] : ['image/png', 'image/jpeg', 'application/pdf']; if (!allowedTypes.includes(file.type)) { alert(field === 'profileImageUrl' ? "Only PNG and JPG formats are allowed." : "Only PNG, JPG, and PDF formats are allowed."); return; } const fakeUrl = URL.createObjectURL(file); if (field === 'profileImageUrl') { setFormData({ ...formData, profileImageUrl: fakeUrl }); } else { setFormData({ ...formData, certifications: [...formData.certifications, file.name] }); } };
   const savePersonalInfo = (e: React.FormEvent) => {
@@ -154,6 +166,134 @@ export const ProducerProfile: React.FC = () => {
     void navigator.clipboard.writeText(link);
     alert('Referral link copied!');
   };
+  useEffect(() => {
+    let canceled = false;
+    let autocomplete: any = null;
+    const initAutocomplete = async () => {
+      const ok = await loadGooglePlacesApi();
+      if (canceled) return;
+      if (!ok) {
+        setPlacesStatus('unavailable');
+        return;
+      }
+      setPlacesStatus('ready');
+      const input = locationSearchRef.current;
+      const g = (window as any).google;
+      if (!input || !g?.maps?.places) return;
+      autocomplete = new g.maps.places.Autocomplete(input, {
+        fields: ['formatted_address', 'address_components', 'geometry', 'name'],
+      });
+      autocomplete.addListener('place_changed', () => {
+        const parsed = parseGooglePlace(autocomplete.getPlace());
+        if (!parsed) return;
+        setLocationSearch(parsed.address);
+        setNewLoc({
+          region: parsed.region,
+          city: parsed.city,
+          address: parsed.address,
+          lat: parsed.lat,
+          lng: parsed.lng,
+        });
+      });
+    };
+    void initAutocomplete();
+    return () => {
+      canceled = true;
+    };
+  }, []);
+  useEffect(() => {
+    const query = String(locationSearch ?? '').trim();
+    if (query.length < 3) {
+      setLocationSuggestions([]);
+      setShowLocationSuggestions(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=${encodeURIComponent(query)}`,
+          { headers: { Accept: 'application/json' } },
+        );
+        if (!response.ok) {
+          setLocationSuggestions([]);
+          setShowLocationSuggestions(false);
+          return;
+        }
+        const rows = await response.json();
+        const mapped = Array.isArray(rows)
+          ? rows.map((row: any) => {
+              const addr = row?.address ?? {};
+              const city = addr.city || addr.town || addr.village || addr.county || '';
+              const region = addr.state || addr.region || addr.province || '';
+              return {
+                address: String(row?.display_name ?? ''),
+                city: String(city),
+                region: String(region),
+                lat: Number(row?.lat ?? 0),
+                lng: Number(row?.lon ?? 0),
+              };
+            }).filter((x: any) => x.address)
+          : [];
+        setLocationSuggestions(mapped);
+        setShowLocationSuggestions(mapped.length > 0);
+      } catch {
+        setLocationSuggestions([]);
+        setShowLocationSuggestions(false);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [locationSearch]);
+  const loadNearbySuggestions = useCallback(() => {
+    if (!navigator.geolocation) return;
+    setIsNearbyLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const reverseRes = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lng))}`,
+            { headers: { Accept: 'application/json' } },
+          );
+          const reverseRow = reverseRes.ok ? await reverseRes.json() : null;
+          const addr = reverseRow?.address ?? {};
+          const city = addr.city || addr.town || addr.village || addr.county || '';
+          const region = addr.state || addr.region || addr.province || '';
+          const seed = [city, region].filter(Boolean).join(', ') || String(reverseRow?.display_name ?? '');
+          if (!seed) {
+            setIsNearbyLoading(false);
+            return;
+          }
+          const searchRes = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=${encodeURIComponent(seed)}`,
+            { headers: { Accept: 'application/json' } },
+          );
+          const rows = searchRes.ok ? await searchRes.json() : [];
+          const mapped = Array.isArray(rows)
+            ? rows.map((row: any) => {
+                const a = row?.address ?? {};
+                return {
+                  address: String(row?.display_name ?? ''),
+                  city: String(a.city || a.town || a.village || a.county || ''),
+                  region: String(a.state || a.region || a.province || ''),
+                  lat: Number(row?.lat ?? 0),
+                  lng: Number(row?.lon ?? 0),
+                };
+              }).filter((x: any) => x.address)
+            : [];
+          setLocationSuggestions(mapped);
+          setShowLocationSuggestions(mapped.length > 0);
+        } catch {
+          setLocationSuggestions([]);
+          setShowLocationSuggestions(false);
+        } finally {
+          setIsNearbyLoading(false);
+        }
+      },
+      () => setIsNearbyLoading(false),
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 },
+    );
+  }, []);
   const handlePortfolioImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) { const files = Array.from(e.target.files) as File[]; if ((portfolioForm.imageUrls?.length || 0) + files.length > 10) { alert("Maximum 10 images allowed."); return; } const newUrls: string[] = []; for (const file of files) { if (file.size > 2 * 1024 * 1024) { alert(`File ${file.name} is too large. Max 2MB.`); continue; } if (!['image/png', 'image/jpeg'].includes(file.type)) { alert(`File ${file.name} is invalid format. PNG/JPG only.`); continue; } newUrls.push(URL.createObjectURL(file)); } setPortfolioForm(prev => ({ ...prev, imageUrls: [...(prev.imageUrls || []), ...newUrls] })); } };
   const handlePortfolioVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { const file = e.target.files[0]; if (file.size > 30 * 1024 * 1024) { alert("Video file too large. Max 30MB."); return; } setPortfolioForm(prev => ({ ...prev, videoUrl: URL.createObjectURL(file) })); } };
   const openPortfolioModal = (portfolio?: Portfolio) => { if (portfolio) { setPortfolioForm({ ...portfolio }); } else { setPortfolioForm({ title: '', description: '', category: currentProducer?.productionTypes[0] || '', imageUrls: [], isPublished: true }); } setShowPortfolioModal(true); };
@@ -231,7 +371,109 @@ export const ProducerProfile: React.FC = () => {
                 <div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('form.phone')}</label><input type="tel" name="phone" value={formData.phone ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
                 <div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('form.email')}</label><input type="email" name="email" value={formData.email ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
                 <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-2">{t('form.category')} (Multi-select)</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded-md bg-white">{PRODUCTION_TYPES.map(cat => { const isSelected = formData.productionTypes.includes(cat); return (<button key={cat} type="button" onClick={() => toggleCategory(cat)} className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${isSelected ? 'bg-primary-100 text-primary-800 ring-2 ring-primary-500 ring-offset-1' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}{isSelected && <X className="ml-1.5 h-3 w-3" />}</button>) })}</div></div>
-                <div className="sm:col-span-6 border-t border-gray-100 pt-4 mt-2"><h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center"><MapPin className="h-4 w-4 mr-1 text-primary-600" /> Operating Locations</h4><div className="space-y-2 mb-4">{formData.locations.map((loc, idx) => (<div key={idx} className="flex items-center justify-between bg-gray-50 p-3 rounded-md border border-gray-200"><div><p className="text-sm font-medium text-gray-900">{loc.address}</p><p className="text-xs text-gray-500">{loc.city}, {loc.region}</p></div><button type="button" onClick={() => removeLocation(idx)} className="text-gray-400 hover:text-red-500"><Trash2 className="h-4 w-4" /></button></div>))}</div><div className="bg-blue-50 p-3 rounded-md border border-blue-100"><p className="text-xs font-medium text-blue-700 mb-2">Add New Location</p><div className="grid grid-cols-1 gap-3 sm:grid-cols-3"><select value={newLoc.region} onChange={e => setNewLoc({ ...newLoc, region: e.target.value, city: CAMEROON_LOCATIONS[e.target.value]?.[0] || '' })} className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"><option value="">Region</option>{Object.keys(CAMEROON_LOCATIONS).map(r => <option key={r} value={r}>{r}</option>)}</select><select value={newLoc.city} onChange={e => setNewLoc({ ...newLoc, city: e.target.value })} disabled={!newLoc.region} className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 disabled:bg-gray-100 bg-white text-gray-900"><option value="">City</option>{newLoc.region && CAMEROON_LOCATIONS[newLoc.region]?.map(c => <option key={c} value={c}>{c}</option>)}</select><div className="flex gap-2"><input type="text" placeholder="Address" value={newLoc.address} onChange={e => setNewLoc({ ...newLoc, address: e.target.value })} className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900" /><button type="button" onClick={addLocation} disabled={!newLoc.region || !newLoc.city || !newLoc.address} className="inline-flex items-center p-2 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"><Plus className="h-5 w-5" /></button></div></div></div></div>
+                <div className="sm:col-span-6 border-t border-gray-100 pt-4 mt-2">
+                  <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center">
+                    <MapPin className="h-4 w-4 mr-1 text-primary-600" /> Operating Locations
+                  </h4>
+                  <div className="space-y-2 mb-4">
+                    {formData.locations.map((loc, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-gray-50 p-3 rounded-md border border-gray-200">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{loc.address}</p>
+                          <p className="text-xs text-gray-500">{loc.city}, {loc.region}</p>
+                        </div>
+                        <button type="button" onClick={() => removeLocation(idx)} className="text-gray-400 hover:text-red-500">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
+                    <p className="text-xs font-medium text-blue-700 mb-2">Add New Location</p>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <input
+                        ref={locationSearchRef}
+                        type="text"
+                        placeholder={
+                          placesStatus === 'ready'
+                            ? 'Search address (Google Places)'
+                            : placesStatus === 'loading'
+                              ? 'Loading Google Places...'
+                              : 'Type address manually.'
+                        }
+                        value={locationSearch}
+                        onChange={e => {
+                          const value = e.target.value;
+                          setLocationSearch(value);
+                          setNewLoc((prev) => ({ ...prev, address: value }));
+                          setShowLocationSuggestions(true);
+                        }}
+                        onFocus={() => {
+                          if (locationSuggestions.length > 0) setShowLocationSuggestions(true);
+                          else loadNearbySuggestions();
+                        }}
+                        className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900 sm:col-span-3"
+                      />
+                      {showLocationSuggestions && locationSuggestions.length > 0 && (
+                        <div className="sm:col-span-3 border border-gray-200 rounded-md bg-white shadow-sm max-h-56 overflow-auto">
+                          {locationSuggestions.map((item, idx) => (
+                            <button
+                              key={`${item.address}-${idx}`}
+                              type="button"
+                              onClick={() => {
+                                setLocationSearch(item.address);
+                                setNewLoc({
+                                  address: item.address,
+                                  city: item.city || '',
+                                  region: item.region || '',
+                                  lat: item.lat,
+                                  lng: item.lng,
+                                });
+                                setShowLocationSuggestions(false);
+                              }}
+                              className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                            >
+                              <p className="text-sm text-gray-900">{item.address}</p>
+                              <p className="text-xs text-gray-500">{[item.city, item.region].filter(Boolean).join(', ')}</p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {isNearbyLoading && (
+                        <p className="sm:col-span-3 text-xs text-gray-500">Finding nearby locations...</p>
+                      )}
+                      <input
+                        type="text"
+                        placeholder="Region"
+                        value={newLoc.region ?? ''}
+                        onChange={e => setNewLoc((prev) => ({ ...prev, region: e.target.value }))}
+                        className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"
+                      />
+                      <input
+                        type="text"
+                        placeholder="City"
+                        value={newLoc.city ?? ''}
+                        onChange={e => setNewLoc((prev) => ({ ...prev, city: e.target.value }))}
+                        className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"
+                      />
+                      {placesStatus === 'unavailable' && (
+                        <p className="sm:col-span-3 text-xs text-amber-700">
+                          Google autocomplete is unavailable. Type full address and click +.
+                        </p>
+                      )}
+                      <div className="sm:col-span-3 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={addLocation}
+                          disabled={!String(newLoc.address ?? '').trim()}
+                          className="inline-flex items-center p-2 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"
+                        >
+                          <Plus className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">{t('form.desc')}</label><textarea name="description" rows={3} value={formData.description} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
                 <div className="sm:col-span-6 border-t border-gray-100 pt-4"><h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center"><FileText className="h-4 w-4 mr-1 text-primary-600" /> Documents</h4><label className="block text-sm font-medium text-gray-700">{t('profile.uploadDocs')}</label><div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:bg-gray-50 transition-colors bg-white"><div className="space-y-1 text-center"><Upload className="mx-auto h-12 w-12 text-gray-400" /><div className="flex text-sm text-gray-600"><label className="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500"><span>Upload a file</span><input type="file" className="sr-only" accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf" onChange={(e) => handleFileUpload(e, 'certifications')} /></label><p className="pl-1">or drag and drop</p></div><p className="text-xs text-gray-500">PNG, JPG, PDF up to 10MB</p></div></div>{formData.certifications.length > 0 && (<ul className="mt-3 border border-gray-200 rounded-md divide-y divide-gray-200 bg-white">{formData.certifications.map((cert, idx) => (<li key={idx} className="pl-3 pr-4 py-3 flex items-center justify-between text-sm"><div className="w-0 flex-1 flex items-center"><FileText className="flex-shrink-0 h-5 w-5 text-gray-400" /><span className="ml-2 flex-1 w-0 truncate text-gray-900">{cert}</span></div></li>))}</ul>)}</div>
                 <div className="sm:col-span-6 pt-4 flex justify-end"><button type="submit" className="bg-primary-600 text-white px-6 py-2 rounded-md text-sm font-medium shadow hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">{t('form.save')}</button></div>

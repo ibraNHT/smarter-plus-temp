@@ -31,13 +31,14 @@ import { FAQ } from './pages/footer/FAQ';
 import { Jobs, Partners } from './pages/footer/Company';
 import { Terms, Privacy } from './pages/footer/Legal';
 
-import { StoreProvider, useStoreOptional } from './services/storeContext';
+import { StoreProvider, useStore, useStoreOptional } from './services/storeContext';
 import { I18nProvider } from './services/i18nContext';
 import { PublicRoute } from './components/PublicRoute';
 import { PwaInstallProvider } from './contexts/PwaInstallContext';
 import { InstallAppBanner } from './components/InstallAppBanner';
 import { getToken } from './services/apiService';
 import { isWebAppSessionBlocked } from './services/authRoles';
+import { UserRole } from './types';
 
 const RoleScopeBoundary: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const store = useStoreOptional();
@@ -53,6 +54,23 @@ const RoleScopeBoundary: React.FC<{ children: React.ReactNode }> = ({ children }
       </main>
     );
   }
+  return <>{children}</>;
+};
+
+const roleHome = (role: UserRole): string => {
+  if (role === UserRole.PRODUCER) return '/producer/dashboard';
+  if (role === UserRole.CLIENT) return '/client/profile';
+  return '/market/producers';
+};
+
+const GuardedRoute: React.FC<{ children: React.ReactNode; allowedRoles: UserRole[] }> = ({
+  children,
+  allowedRoles,
+}) => {
+  const { user } = useStore();
+
+  if (!user) return <Navigate to="/login" replace />;
+  if (!allowedRoles.includes(user.role)) return <Navigate to={roleHome(user.role)} replace />;
   return <>{children}</>;
 };
 
@@ -92,17 +110,17 @@ const App: React.FC = () => {
                 <Route path="/profile/client/:id" element={<PublicProfile role="CLIENT" />} />
 
                 {/* User Feature Routes */}
-                <Route path="/wallet" element={<WalletDashboard />} />
-                <Route path="/messages" element={<ChatPage />} />
-                <Route path="/messages/:chatId" element={<ChatPage />} />
-                <Route path="/client/profile" element={<ClientProfile />} />
+                <Route path="/wallet" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER]}><WalletDashboard /></GuardedRoute>} />
+                <Route path="/messages" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER]}><ChatPage /></GuardedRoute>} />
+                <Route path="/messages/:chatId" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER]}><ChatPage /></GuardedRoute>} />
+                <Route path="/client/profile" element={<GuardedRoute allowedRoles={[UserRole.CLIENT]}><ClientProfile /></GuardedRoute>} />
 
                 {/* Producer Routes */}
-                <Route path="/producer/dashboard" element={<ProducerDashboard />} />
-                <Route path="/producer/profile" element={<ProducerProfile />} />
-                <Route path="/producer/availability" element={<ProducerAvailability />} />
-                <Route path="/producer/offers/new" element={<CreateOffer />} />
-                <Route path="/producer/offers/edit/:offerId" element={<CreateOffer />} />
+                <Route path="/producer/dashboard" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><ProducerDashboard /></GuardedRoute>} />
+                <Route path="/producer/profile" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><ProducerProfile /></GuardedRoute>} />
+                <Route path="/producer/availability" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><ProducerAvailability /></GuardedRoute>} />
+                <Route path="/producer/offers/new" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><CreateOffer /></GuardedRoute>} />
+                <Route path="/producer/offers/edit/:offerId" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><CreateOffer /></GuardedRoute>} />
 
                 {/* Footer Routes */}
                 <Route path="/blog" element={<Blog />} />

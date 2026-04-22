@@ -65,6 +65,7 @@ export const RegisterClient: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [placesStatus, setPlacesStatus] = useState<'loading' | 'ready' | 'unavailable'>('loading');
 
   const addressInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -72,7 +73,12 @@ export const RegisterClient: React.FC = () => {
     let autocomplete: any;
     const setup = async () => {
       const ok = await loadGooglePlacesApi();
-      if (!ok || !addressInputRef.current) return;
+      if (!ok) {
+        setPlacesStatus('unavailable');
+        return;
+      }
+      setPlacesStatus('ready');
+      if (!addressInputRef.current) return;
       const g = (window as any).google;
       autocomplete = new g.maps.places.Autocomplete(addressInputRef.current, {
         fields: ['formatted_address', 'geometry', 'address_components', 'name'],
@@ -116,6 +122,11 @@ export const RegisterClient: React.FC = () => {
       return;
     }
 
+    const address = String(formData.address ?? '').trim();
+    const addressParts = address.split(',').map((x) => x.trim()).filter(Boolean);
+    const inferredCity = String(formData.city ?? '').trim() || addressParts[1] || addressParts[0] || 'Unknown';
+    const inferredRegion = String(formData.region ?? '').trim() || addressParts[2] || addressParts[1] || 'Unknown';
+
     setIsLoading(true);
     const result = await registerClient({
       name: `${formData.firstName} ${formData.lastName}`,
@@ -128,9 +139,9 @@ export const RegisterClient: React.FC = () => {
       locations: [{
         lat: Number(formData.lat) || 0,
         lng: Number(formData.lng) || 0,
-        address: formData.address,
-        region: formData.region,
-        city: formData.city
+        address,
+        region: inferredRegion,
+        city: inferredCity
       }],
       profileImageUrl: formData.profileImageUrl,
       favorites: [],
@@ -321,11 +332,10 @@ export const RegisterClient: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700">{t('profile.region')}</label>
             <input
               type="text"
-              required
               className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm text-gray-900"
               value={formData.region}
               onChange={e => setFormData({ ...formData, region: e.target.value })}
-              placeholder="Auto-filled from Google Places"
+              placeholder="Auto-filled (optional)"
             />
           </div>
 
@@ -333,11 +343,10 @@ export const RegisterClient: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700">{t('profile.city')}</label>
             <input
               type="text"
-              required
               className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm text-gray-900"
               value={formData.city}
               onChange={e => setFormData({ ...formData, city: e.target.value })}
-              placeholder="Auto-filled from Google Places"
+              placeholder="Auto-filled (optional)"
             />
           </div>
 
@@ -349,14 +358,18 @@ export const RegisterClient: React.FC = () => {
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <MapPin className="h-5 w-5 text-gray-400" />
               </div>
-              <input type="text" name="address" required placeholder="Google Maps location or street address"
+              <input type="text" name="address" required placeholder={placesStatus === 'ready' ? 'Search Google address' : placesStatus === 'loading' ? 'Loading Google Places...' : 'Type full address manually'}
                 className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
                 value={formData.address}
                 onChange={e => setFormData({ ...formData, address: e.target.value })}
                 ref={addressInputRef}
               />
             </div>
-            <p className="mt-1 text-xs text-gray-500">Start typing and select a Google place to auto-fill city/region and save latitude/longitude.</p>
+            <p className="mt-1 text-xs text-gray-500">
+              {placesStatus === 'ready'
+                ? 'Start typing and select a Google place to auto-fill city/region and save latitude/longitude.'
+                : 'Type full address manually.'}
+            </p>
           </div>
         </div>
 
