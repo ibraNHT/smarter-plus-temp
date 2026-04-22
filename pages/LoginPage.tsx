@@ -108,6 +108,18 @@ export const LoginPage: React.FC = () => {
     e.preventDefault();
     setError('');
     setPasswordResetBanner('');
+    if (loginMethod === 'email' && !email.trim()) {
+      setError('Email is required.');
+      return;
+    }
+    if (loginMethod === 'phone' && !phone.trim()) {
+      setError('Phone number is required.');
+      return;
+    }
+    if (!password.trim()) {
+      setError('Password is required.');
+      return;
+    }
     setIsLoading(true);
     try {
       const identifier = loginMethod === 'email' ? email : `${phoneCode}${phone}`;
@@ -237,7 +249,7 @@ export const LoginPage: React.FC = () => {
             </p>
           </div>
 
-          <form className="mt-8 space-y-6" onSubmit={handleStandardLogin}>
+          <form className="mt-8 space-y-6" onSubmit={handleStandardLogin} noValidate>
             {/* Login Method Toggle */}
             <div className="flex rounded-md shadow-sm border border-gray-300 p-1 bg-gray-50 mb-4">
               <button
@@ -259,7 +271,7 @@ export const LoginPage: React.FC = () => {
             <div className="rounded-md shadow-sm -space-y-px">
               {loginMethod === 'email' ? (
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-20">
                     <Mail className="h-5 w-5 text-gray-400" />
                   </div>
                   <input
@@ -298,7 +310,7 @@ export const LoginPage: React.FC = () => {
                 </div>
               )}
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-20">
                   <Lock className="h-5 w-5 text-gray-400" />
                 </div>
                 <input
@@ -312,10 +324,10 @@ export const LoginPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
+                  className="absolute inset-y-0 right-2 my-auto inline-flex h-8 w-8 items-center justify-center rounded text-gray-500 hover:text-gray-700 z-30 focus:outline-none"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
             </div>
@@ -482,10 +494,10 @@ export const LoginPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowForgotNewPassword((prev) => !prev)}
-                    className="absolute right-2 top-9 text-gray-500 hover:text-gray-700"
+                    className="absolute inset-y-0 right-2 my-auto inline-flex h-8 w-8 items-center justify-center rounded text-gray-500 hover:text-gray-700 z-30 focus:outline-none"
                     aria-label={showForgotNewPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showForgotNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showForgotNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
                 <div className="relative">
@@ -502,10 +514,10 @@ export const LoginPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowForgotConfirmPassword((prev) => !prev)}
-                    className="absolute right-2 top-9 text-gray-500 hover:text-gray-700"
+                    className="absolute inset-y-0 right-2 my-auto inline-flex h-8 w-8 items-center justify-center rounded text-gray-500 hover:text-gray-700 z-30 focus:outline-none"
                     aria-label={showForgotConfirmPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showForgotConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showForgotConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
                 <button
