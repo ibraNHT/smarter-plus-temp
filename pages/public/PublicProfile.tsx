@@ -6,6 +6,7 @@ import { useTranslation } from '../../services/i18nContext';
 import { ProducerStatus, Review } from '../../types';
 import { User, MapPin, ShieldCheck, Star, ArrowLeft, Package, Image as ImageIcon } from 'lucide-react';
 import { apiFetch } from '../../services/apiService';
+import { API_ENDPOINTS } from '../../api/endpoints';
 
 function mapReviewRow(r: any): Review {
   return {
@@ -50,7 +51,7 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
          return;
       }
       let cancelled = false;
-      apiFetch<any[]>(`/api/reviews/user/${uid}`)
+      apiFetch<any[]>(API_ENDPOINTS.reviews.byUser(uid))
          .then((rows) => {
             if (cancelled) return;
             setProfileReviews(Array.isArray(rows) ? rows.map(mapReviewRow) : []);

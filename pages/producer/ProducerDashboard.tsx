@@ -42,17 +42,22 @@ export const ProducerDashboard: React.FC = () => {
       return () => clearTimeout(timer);
    }, [isProducerProfileLoading]);
 
-   // Filter orders for this producer
-   const allMyOrders = orders.filter(o =>
-      o.producerId === currentProducer?.id ||
-      o.producerId === user?.producerId ||
-      o.clientId === user?.id ||
-      (user?.clientId ? o.clientId === user.clientId : false)
+   // Seller-side orders (producer can manage/confirm/reject these)
+   const producerOwnedOrders = orders.filter((o) =>
+      o.producerId === currentProducer?.id || o.producerId === user?.producerId,
+   );
+   // Buyer-side orders (producer may have placed orders as a client account)
+   const producerPurchaseOrders = orders.filter(
+      (o) => o.clientId === user?.id || (user?.clientId ? o.clientId === user.clientId : false),
+   );
+   // Unified list for history/details without duplicates
+   const allMyOrders = Array.from(
+      new Map([...producerOwnedOrders, ...producerPurchaseOrders].map((o) => [o.id, o])).values(),
    ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-   const pendingValidationOrders = allMyOrders.filter(o => o.status === OrderStatus.PENDING_VALIDATION);
-   const awaitingPaymentOrders = allMyOrders.filter(o => o.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT);
-   const ordersToShip = allMyOrders.filter(o => o.status === OrderStatus.PAID_IN_PREPARATION);
+   const pendingValidationOrders = producerOwnedOrders.filter(o => o.status === OrderStatus.PENDING_VALIDATION);
+   const awaitingPaymentOrders = producerOwnedOrders.filter(o => o.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT);
+   const ordersToShip = producerOwnedOrders.filter(o => o.status === OrderStatus.PAID_IN_PREPARATION);
 
    // Past Orders (Completed, Cancelled, Dispute, Delivered, In Transit) — always visible so producers can see full history
    const pastOrders = allMyOrders.filter(o =>

@@ -4,7 +4,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useStore } from '../services/storeContext';
 import { useTranslation } from '../services/i18nContext';
 import { apiFetch } from '../services/apiService';
-import { Sprout, Lock, Mail, X, Phone } from 'lucide-react';
+import { API_ENDPOINTS } from '../api/endpoints';
+import { Sprout, Lock, Mail, X, Phone, Eye, EyeOff } from 'lucide-react';
 
 const AFRICA_COUNTRY_CODES = [
   // Central Africa
@@ -56,6 +57,7 @@ export const LoginPage: React.FC = () => {
   const [phoneCode, setPhoneCode] = useState('+237');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('phone');
   const [isLoading, setIsLoading] = useState(false);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
@@ -68,6 +70,8 @@ export const LoginPage: React.FC = () => {
   const [forgotOtp, setForgotOtp] = useState('');
   const [forgotNewPassword, setForgotNewPassword] = useState('');
   const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+  const [showForgotNewPassword, setShowForgotNewPassword] = useState(false);
+  const [showForgotConfirmPassword, setShowForgotConfirmPassword] = useState(false);
   const [forgotResetToken, setForgotResetToken] = useState<string | null>(null);
   const [forgotError, setForgotError] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
@@ -133,7 +137,7 @@ export const LoginPage: React.FC = () => {
     }
     setForgotLoading(true);
     try {
-      await apiFetch<void>('/api/auth/forgot-password', {
+      await apiFetch<void>(API_ENDPOINTS.auth.forgotPassword, {
         method: 'POST',
         body: JSON.stringify({ phone: full }),
         silent401: true,
@@ -157,7 +161,7 @@ export const LoginPage: React.FC = () => {
     setForgotLoading(true);
     try {
       const res = await apiFetch<{ success: boolean; resetToken?: string; message: string }>(
-        '/api/auth/forgot-password/verify-otp',
+        API_ENDPOINTS.auth.forgotPasswordVerifyOtp,
         {
           method: 'POST',
           body: JSON.stringify({ phone: forgotFullPhone(), code }),
@@ -194,7 +198,7 @@ export const LoginPage: React.FC = () => {
     }
     setForgotLoading(true);
     try {
-      await apiFetch<void>('/api/auth/reset-password', {
+      await apiFetch<void>(API_ENDPOINTS.auth.resetPassword, {
         method: 'POST',
         body: JSON.stringify({ token: forgotResetToken, newPassword: forgotNewPassword }),
         silent401: true,
@@ -298,13 +302,21 @@ export const LoginPage: React.FC = () => {
                   <Lock className="h-5 w-5 text-gray-400" />
                 </div>
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
-                  className="appearance-none rounded-none relative block w-full px-3 py-3 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm bg-white"
+                  className="appearance-none rounded-none relative block w-full px-3 py-3 pl-10 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm bg-white"
                   placeholder={t('login.passwordPlaceholder')}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
             </div>
 
@@ -456,29 +468,45 @@ export const LoginPage: React.FC = () => {
                 {forgotError && (
                   <div className="text-red-600 text-sm bg-red-50 p-2 rounded">{forgotError}</div>
                 )}
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-1">{t('login.newPasswordLabel')}</label>
                   <input
-                    type="password"
+                    type={showForgotNewPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     required
                     minLength={8}
-                    className="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
+                    className="w-full border border-gray-300 rounded-md p-2 pr-10 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
                     value={forgotNewPassword}
                     onChange={(e) => setForgotNewPassword(e.target.value)}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotNewPassword((prev) => !prev)}
+                    className="absolute right-2 top-9 text-gray-500 hover:text-gray-700"
+                    aria-label={showForgotNewPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showForgotNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-1">{t('login.confirmNewPasswordLabel')}</label>
                   <input
-                    type="password"
+                    type={showForgotConfirmPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     required
                     minLength={8}
-                    className="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
+                    className="w-full border border-gray-300 rounded-md p-2 pr-10 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
                     value={forgotConfirmPassword}
                     onChange={(e) => setForgotConfirmPassword(e.target.value)}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotConfirmPassword((prev) => !prev)}
+                    className="absolute right-2 top-9 text-gray-500 hover:text-gray-700"
+                    aria-label={showForgotConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showForgotConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
                 <button
                   type="submit"

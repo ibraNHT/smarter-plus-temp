@@ -8,7 +8,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig({
   server: {
     proxy: {
-      '/api': {
+      '^/api/(?!.*\\.(?:ts|tsx|js|jsx|mjs|cjs|map|json)$)': {
         target: 'http://localhost:3000',
         changeOrigin: true,
       },

@@ -1,5 +1,6 @@
 import { apiFetch } from './apiService';
 import type { ActiveReferralProgramPublic, MyReferralsData } from '../types';
+import { API_ENDPOINTS } from '../api/endpoints';
 
 function normalizeActiveProgram(raw: unknown): ActiveReferralProgramPublic | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -55,7 +56,7 @@ export function normalizeMyReferrals(raw: unknown): MyReferralsData | null {
 /** Authenticated: loads referral code, count, referred users, and active program from the API. */
 export async function fetchMyReferrals(): Promise<MyReferralsData | null> {
   try {
-    const raw = await apiFetch<unknown>('/api/users/me/referrals', { silent401: true } as any);
+    const raw = await apiFetch<unknown>(API_ENDPOINTS.users.myReferrals, { silent401: true } as any);
     return normalizeMyReferrals(raw);
   } catch {
     return null;
@@ -65,7 +66,7 @@ export async function fetchMyReferrals(): Promise<MyReferralsData | null> {
 /** Public: active program for marketing (no auth). Same payload as `activeProgram` on me/referrals. */
 export async function fetchActiveReferralProgramPublic(): Promise<ActiveReferralProgramPublic | null> {
   try {
-    const raw = await apiFetch<unknown>('/api/referral-programs/active', { silent401: true } as any);
+    const raw = await apiFetch<unknown>(API_ENDPOINTS.referralPrograms.active, { silent401: true } as any);
     return normalizeActiveProgram(raw);
   } catch {
     return null;

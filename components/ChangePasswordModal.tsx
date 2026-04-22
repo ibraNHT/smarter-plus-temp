@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useTranslation } from '../services/i18nContext';
-import { X, Lock, CheckCircle, AlertCircle } from 'lucide-react';
+import { X, Lock, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useStore } from '../services/storeContext';
 
 interface ChangePasswordModalProps {
@@ -16,6 +16,9 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -106,36 +109,60 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
+                    <div className="relative">
                         <label className="block text-xs font-bold text-gray-700 mb-1">Current Password</label>
                         <input 
-                            type="password" 
+                            type={showCurrentPassword ? 'text' : 'password'} 
                             required
-                            className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-primary-500 focus:border-primary-500"
+                            className="w-full border border-gray-300 rounded-md p-2 pr-10 text-sm focus:ring-primary-500 focus:border-primary-500"
                             value={currentPassword}
                             onChange={(e) => setCurrentPassword(e.target.value)}
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowCurrentPassword((prev) => !prev)}
+                          className="absolute right-2 top-7 text-gray-500 hover:text-gray-700"
+                          aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
                     </div>
-                    <div>
+                    <div className="relative">
                         <label className="block text-xs font-bold text-gray-700 mb-1">New Password</label>
                         <input 
-                            type="password" 
+                            type={showNewPassword ? 'text' : 'password'} 
                             required
                             minLength={8}
-                            className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-primary-500 focus:border-primary-500"
+                            className="w-full border border-gray-300 rounded-md p-2 pr-10 text-sm focus:ring-primary-500 focus:border-primary-500"
                             value={newPassword}
                             onChange={(e) => setNewPassword(e.target.value)}
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword((prev) => !prev)}
+                          className="absolute right-2 top-7 text-gray-500 hover:text-gray-700"
+                          aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
                     </div>
-                    <div>
+                    <div className="relative">
                         <label className="block text-xs font-bold text-gray-700 mb-1">Confirm New Password</label>
                         <input 
-                            type="password" 
+                            type={showConfirmPassword ? 'text' : 'password'} 
                             required
-                            className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-primary-500 focus:border-primary-500"
+                            className="w-full border border-gray-300 rounded-md p-2 pr-10 text-sm focus:ring-primary-500 focus:border-primary-500"
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword((prev) => !prev)}
+                          className="absolute right-2 top-7 text-gray-500 hover:text-gray-700"
+                          aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
                     </div>
 
                     <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">

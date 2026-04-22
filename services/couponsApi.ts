@@ -2,6 +2,7 @@
  * Checkout coupon validation — must match Nest POST /api/coupons/validate.
  */
 import { apiFetch } from './apiService';
+import { API_ENDPOINTS } from '../api/endpoints';
 
 /** Must match API ValidateCouponDto.channel */
 export type CouponValidationChannel = 'MARKETPLACE' | 'RETAIL';
@@ -24,7 +25,7 @@ export async function validateCouponRemote(
   channel: CouponValidationChannel,
   clientProfileId?: string
 ): Promise<ValidatedCouponPayload> {
-  return apiFetch<ValidatedCouponPayload>('/api/coupons/validate', {
+  return apiFetch<ValidatedCouponPayload>(API_ENDPOINTS.coupons.validate, {
     method: 'POST',
     body: JSON.stringify({
       code: code.trim(),
