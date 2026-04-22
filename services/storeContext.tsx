@@ -256,11 +256,14 @@ const useStoreSnapshot = create<StoreSnapshotState>((set) => ({
   setSnapshot: (snapshot) => set({ snapshot }),
 }));
 
-const getOrdersEndpointForUser = (activeUser?: UserSession | null): string | null => {
-  if (!activeUser) return null;
-  if (activeUser.role === UserRole.PRODUCER) return '/api/orders/producer-orders';
-  if (activeUser.role === UserRole.CLIENT) return '/api/orders/my-orders';
-  return null;
+const getOrdersEndpointsForUser = (activeUser?: UserSession | null): string[] => {
+  if (!activeUser) return [];
+  if (activeUser.role === UserRole.CLIENT) return ['/api/orders/my-orders'];
+  if (activeUser.role === UserRole.PRODUCER) {
+    // Producers can sell and also place purchases; include both views.
+    return ['/api/orders/producer-orders', '/api/orders/my-orders'];
+  }
+  return [];
 };
 
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -413,21 +416,29 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           const resNotif = await apiFetch<Notification[]>('/api/notifications', { silent401: true } as any).catch((e) => { on401(e); return null; });
           if (resNotif && Array.isArray(resNotif)) setNotifications(resNotif);
 
-          const ordersEndpoint = getOrdersEndpointForUser(userRef.current);
-          if (ordersEndpoint) {
-            const resOrders = await apiFetch<any[]>(ordersEndpoint, { silent401: true } as any).catch((e) => { on401(e); return null; });
-            if (resOrders && Array.isArray(resOrders)) {
-              setOrders(resOrders.map((o: any) => ({
-                ...o,
-                items: Array.isArray(o.orderItems || o.items)
-                  ? (o.orderItems || o.items).map((item: any) => ({
-                    ...item,
-                    cartQuantity: item.cartQuantity || item.quantity || 1,
-                    id: item.offerId || item.id
-                  }))
-                  : []
-              })));
-            }
+          const orderEndpoints = getOrdersEndpointsForUser(userRef.current);
+          if (orderEndpoints.length > 0) {
+            const orderResults = await Promise.all(
+              orderEndpoints.map((endpoint) =>
+                apiFetch<any[]>(endpoint, { silent401: true } as any).catch((e) => {
+                  on401(e);
+                  return [];
+                }),
+              ),
+            );
+            const mergedOrders = Array.from(
+              new Map(orderResults.flat().map((o: any) => [o.id, o])).values(),
+            );
+            setOrders(mergedOrders.map((o: any) => ({
+              ...o,
+              items: Array.isArray(o.orderItems || o.items)
+                ? (o.orderItems || o.items).map((item: any) => ({
+                  ...item,
+                  cartQuantity: item.cartQuantity || item.quantity || 1,
+                  id: item.offerId || item.id
+                }))
+                : []
+            })));
           }
         } catch {
           // ignore background polling errors
@@ -449,7 +460,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const isClientUiRoute = hashPath.includes('/client/') || hashPath.includes('/register/client');
     const shouldFetchBuyerProfile = isClientSession || (isProducerSession && isClientUiRoute);
     const shouldFetchProducerPortfolios = isProducerSession && Boolean(activeUser?.producerId);
-    const ordersEndpoint = getOrdersEndpointForUser(activeUser);
+    const ordersEndpoints = getOrdersEndpointsForUser(activeUser);
     try {
       // Keep session on background/bootstrapping 401 responses from feature endpoints.
       const on401 = (_e: unknown) => {};
@@ -463,8 +474,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       // Only fetch orders, wallet, and referral stats when authenticated and we have a token (avoids 401 spam when token expired)
       if (activeUser && getToken()) {
         const [resOrders, resWallet, resWithdrawals, referralsPayload, resPortfolios, resMyReviews] = await Promise.all([
-          ordersEndpoint
-            ? apiFetch<any[]>(ordersEndpoint, { silent401: true } as any).catch((e) => { on401(e); return []; })
+          ordersEndpoints.length > 0
+            ? Promise.all(
+                ordersEndpoints.map((endpoint) =>
+                  apiFetch<any[]>(endpoint, { silent401: true } as any).catch((e) => { on401(e); return []; }),
+                ),
+              ).then((rows) => Array.from(new Map(rows.flat().map((o: any) => [o.id, o])).values()))
             : Promise.resolve([] as any[]),
           apiFetch<any>('/api/wallet/me', { silent401: true } as any).catch((e) => { on401(e); return null; }),
           apiFetch<any[]>('/api/wallet/me/withdrawals', { silent401: true } as any).catch((e) => { on401(e); return []; }),
@@ -986,6 +1001,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           : []
       }]);
       if (user) addNotification(user.id, `Order #${saved.id.substring(saved.id.length - 6).toUpperCase()} placed!`, 'SUCCESS');
+      if (user?.role === UserRole.PRODUCER && saved?.clientId) {
+        setUser(prev => {
+          if (!prev) return prev;
+          const next = { ...prev, clientId: saved.clientId };
+          localStorage.setItem('currentUser', JSON.stringify(next));
+          return next;
+        });
+      }
       // Refresh from server after a short delay to ensure both parties see the accurate state
       setTimeout(() => fetchData(user), 1500);
       clearCart();
@@ -1481,7 +1504,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // Polling for guest support messages when handed over to agent
   useEffect(() => {
-    if (!isHandedOver || user || !supportSessionId || !guestEmail) return;
+    if (!isSupportChatOpen || !isHandedOver || user || !supportSessionId || !guestEmail) return;
 
     const pollInterval = setInterval(async () => {
       try {
@@ -1505,14 +1528,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       } catch (err) {
         console.error('Error polling support messages:', err);
       }
-    }, 3000); // Poll every 3 seconds
+    }, 5000); // Poll every 5 seconds while chat is open
 
     return () => clearInterval(pollInterval);
-  }, [isHandedOver, user, supportSessionId, guestEmail]);
+  }, [isSupportChatOpen, isHandedOver, user, supportSessionId, guestEmail]);
 
   // Polling for authenticated users when handed over to agent
   useEffect(() => {
-    if (!isHandedOver || !user || !supportSessionId) return;
+    if (!isSupportChatOpen || !isHandedOver || !user || !supportSessionId) return;
 
     const pollInterval = setInterval(async () => {
       try {
@@ -1523,10 +1546,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       } catch (err) {
         console.error('Error polling support messages (auth):', err);
       }
-    }, 3000);
+    }, 5000);
 
     return () => clearInterval(pollInterval);
-  }, [isHandedOver, user, supportSessionId]);
+  }, [isSupportChatOpen, isHandedOver, user, supportSessionId]);
 
   // ─── CHAT & NEGOTIATION ───────────────────────────────────────────────────────
 

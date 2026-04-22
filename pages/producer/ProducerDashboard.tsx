@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, ProducerStatus, OrderStatus, Order, OfferType } from '../../types';
@@ -11,6 +11,7 @@ export const ProducerDashboard: React.FC = () => {
    const { t } = useTranslation();
    const navigate = useNavigate();
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+   const [profileLookupTimedOut, setProfileLookupTimedOut] = useState(false);
 
    // Review State
    const [showReviewModal, setShowReviewModal] = useState(false);
@@ -26,9 +27,28 @@ export const ProducerDashboard: React.FC = () => {
 
    const currentProducer = producers.find(p => p.id === user?.producerId);
    const myOffers = user?.producerId ? getProducerOffers(user.producerId) : [];
+   const isProducerProfileLoading =
+      user?.role === UserRole.PRODUCER &&
+      Boolean(user?.producerId) &&
+      !currentProducer &&
+      !profileLookupTimedOut;
+
+   useEffect(() => {
+      if (!isProducerProfileLoading) {
+         setProfileLookupTimedOut(false);
+         return;
+      }
+      const timer = setTimeout(() => setProfileLookupTimedOut(true), 2500);
+      return () => clearTimeout(timer);
+   }, [isProducerProfileLoading]);
 
    // Filter orders for this producer
-   const allMyOrders = orders.filter(o => o.producerId === currentProducer?.id || o.producerId === user?.producerId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+   const allMyOrders = orders.filter(o =>
+      o.producerId === currentProducer?.id ||
+      o.producerId === user?.producerId ||
+      o.clientId === user?.id ||
+      (user?.clientId ? o.clientId === user.clientId : false)
+   ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
    const pendingValidationOrders = allMyOrders.filter(o => o.status === OrderStatus.PENDING_VALIDATION);
    const awaitingPaymentOrders = allMyOrders.filter(o => o.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT);
@@ -50,8 +70,29 @@ export const ProducerDashboard: React.FC = () => {
      : [];
    const myAverageRating = user?.id ? getAverageRating(user.id) : 0;
 
-   if (!user || user.role !== UserRole.PRODUCER || !currentProducer) {
+   if (!user || user.role !== UserRole.PRODUCER) {
       return <div className="p-8 text-center">Access Denied</div>;
+   }
+
+   if (isProducerProfileLoading) {
+      return (
+         <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 px-4">
+            <SEO title="Producer Dashboard | AgriMarket" noindex={true} />
+            <div className="animate-pulse space-y-4">
+               <div className="h-8 bg-gray-200 rounded w-64" />
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="h-24 bg-gray-200 rounded" />
+                  <div className="h-24 bg-gray-200 rounded" />
+                  <div className="h-24 bg-gray-200 rounded" />
+               </div>
+               <div className="h-72 bg-gray-200 rounded" />
+            </div>
+         </div>
+      );
+   }
+
+   if (!currentProducer) {
+      return <div className="p-8 text-center">Producer profile not found. Please complete your producer profile setup.</div>;
    }
 
    const getClientDetails = (clientId: string) => {
