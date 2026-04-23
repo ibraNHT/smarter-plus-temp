@@ -34,6 +34,7 @@ export const ShoppingCart: React.FC = () => {
   const [deliveryMethod, setDeliveryMethod] = useState<'HOME' | 'PICKUP'>('HOME');
   const [selectedPickupCity, setSelectedPickupCity] = useState(''); // Only for Producer Market flow flexibility
   const [selectedPickupPointId, setSelectedPickupPointId] = useState('');
+  const [selectedHomeLocationIndex, setSelectedHomeLocationIndex] = useState(0);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
   const serviceFee = subtotal * 0.05;
@@ -46,16 +47,17 @@ export const ShoppingCart: React.FC = () => {
     ? producers.find(p => p.userId === user.id || p.id === user.producerId)
     : null;
 
-  /** Buyer profile location, or producer operating location as fallback for producers. */
-  const primaryHomeLocation =
-    currentClient?.locations?.[0] ??
-    (user?.role === UserRole.PRODUCER ? currentProducer?.locations?.[0] : undefined);
+  const homeLocations =
+    currentClient?.locations?.length
+      ? currentClient.locations
+      : (user?.role === UserRole.PRODUCER ? (currentProducer?.locations ?? []) : []);
+  const selectedHomeLocation = homeLocations[selectedHomeLocationIndex] ?? homeLocations[0];
 
   // Check if order contains ATI items
   const isAtiOrder = cart.length > 0 && cart[0].marketType === MarketType.ATI;
 
   // Client City from Profile
-  const clientCity = primaryHomeLocation?.city || '';
+  const clientCity = selectedHomeLocation?.city || '';
 
   // Location Validation for ATI
   // Rule: ATI delivers to cities where they operate. AND pickup must be in same city as User.
@@ -70,11 +72,17 @@ export const ShoppingCart: React.FC = () => {
     }
   }, [deliveryMethod, isAtiOrder, clientCity]);
 
+  useEffect(() => {
+    if (selectedHomeLocationIndex >= homeLocations.length) {
+      setSelectedHomeLocationIndex(0);
+    }
+  }, [homeLocations.length, selectedHomeLocationIndex]);
+
   // Filter Pickup Points based on selected city
   const availablePickupPoints = pickupPoints.filter(p => p.city === selectedPickupCity);
 
   // Validation Flags
-  const isHomeAddressValid = !!primaryHomeLocation;
+  const isHomeAddressValid = !!selectedHomeLocation;
   const isPickupValid = deliveryMethod === 'PICKUP' && !!selectedPickupPointId;
   const isDeliveryMethodValid = deliveryMethod === 'HOME' ? isHomeAddressValid : isPickupValid;
 
@@ -330,8 +338,24 @@ export const ShoppingCart: React.FC = () => {
                   <p className="font-bold text-gray-700 mb-1">Delivering to:</p>
                   {isHomeAddressValid ? (
                     <>
-                      <p className="text-gray-900">{primaryHomeLocation?.address}</p>
-                      <p className="text-gray-500">{primaryHomeLocation?.city}, {primaryHomeLocation?.region}</p>
+                      {homeLocations.length > 1 && (
+                        <div className="mb-2">
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Select saved address</label>
+                          <select
+                            value={selectedHomeLocationIndex}
+                            onChange={(e) => setSelectedHomeLocationIndex(Number(e.target.value))}
+                            className="block w-full border border-gray-300 rounded-md p-2 text-sm bg-white"
+                          >
+                            {homeLocations.map((loc, idx) => (
+                              <option key={`${loc.address}-${idx}`} value={idx}>
+                                {loc.address}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      <p className="text-gray-900">{selectedHomeLocation?.address}</p>
+                      <p className="text-gray-500">{selectedHomeLocation?.city}, {selectedHomeLocation?.region}</p>
                     </>
                   ) : (
                     <p className="text-red-500">
@@ -608,7 +632,7 @@ export const ShoppingCart: React.FC = () => {
                   {deliveryMethod === 'HOME' ? (
                     <p className="text-sm text-blue-900">
                       <span className="font-bold">Home Delivery:</span><br />
-                      {currentClient?.locations?.[0]?.address}, {currentClient?.locations?.[0]?.city}
+                      {selectedHomeLocation?.address}, {selectedHomeLocation?.city}
                     </p>
                   ) : (
                     <p className="text-sm text-blue-900">

@@ -716,6 +716,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           description: data.description || "",
           certifications: data.certifications || [],
           productionTypes: data.productionTypes || [],
+          locations: Array.isArray(data.locations)
+            ? data.locations.map((loc: any) => ({
+                region: String(loc?.region ?? ''),
+                city: String(loc?.city ?? ''),
+                address: String(loc?.address ?? ''),
+                lat: Number(loc?.lat ?? 0),
+                lng: Number(loc?.lng ?? 0),
+              }))
+            : [],
           ...(data.type === 'BUSINESS' || !data.type
             ? {
                 taxIdentificationNumber: data.taxIdentificationNumber || undefined,
@@ -765,7 +774,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           firstName: data.firstName || "Client",
           lastName: data.lastName || "",
           gender: data.gender || "OTHER",
-          dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth).toISOString() : new Date().toISOString()
+          dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth).toISOString() : new Date().toISOString(),
+          locations: Array.isArray(data.locations)
+            ? data.locations.map((loc: any) => ({
+                region: String(loc?.region ?? ''),
+                city: String(loc?.city ?? ''),
+                address: String(loc?.address ?? ''),
+                lat: Number(loc?.lat ?? 0),
+                lng: Number(loc?.lng ?? 0),
+              }))
+            : [],
         }),
       });
 

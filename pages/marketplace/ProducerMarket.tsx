@@ -1,30 +1,11 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { MarketType, UserRole } from '../../types';
 import { Tractor, Search, MapPin, ArrowLeft, MessageCircle, Truck, Heart, Star, Layers } from 'lucide-react';
 import { SEO } from '../../components/SEO';
-
-// Data for Autocomplete
-const CAMEROON_LOCATIONS: Record<string, string[]> = {
-  'West': ['Bafoussam', 'Dschang', 'Foumban', 'Mbouda', 'Bandjoun'],
-  'Center': ['Yaoundé', 'Mbalmayo', 'Bafia', 'Obala', 'Eseka'],
-  'Littoral': ['Douala', 'Edea', 'Nkongsamba', 'Loum', 'Mbanga'],
-  'North West': ['Bamenda', 'Kumbo', 'Ndop', 'Wum', 'Mbengwi'],
-  'South West': ['Buea', 'Limbe', 'Kumba', 'Tiko', 'Mamfe'],
-  'Adamaoua': ['Ngaoundere', 'Meiganga', 'Tibati'],
-  'North': ['Garoua', 'Guider', 'Figuil'],
-  'Far North': ['Maroua', 'Kousseri', 'Mokolo'],
-  'East': ['Bertoua', 'Batouri', 'Abong-Mbang'],
-  'South': ['Ebolowa', 'Kribi', 'Sangmelima']
-};
-
-// Flatten locations for easy searching: ["Bafoussam, West", "Yaoundé, Center", ...]
-const FLAT_LOCATIONS = Object.entries(CAMEROON_LOCATIONS).flatMap(([region, cities]) =>
-  cities.map(city => `${city}, ${region}`)
-);
 
 export const ProducerMarket: React.FC = () => {
   const { offers, producers, user, clients, trackUserSearch, toggleFavorite, getRecommendedOffers, getAverageRating, reviews, compareList, addToCompare, removeFromCompare } = useStore();
@@ -40,6 +21,17 @@ export const ProducerMarket: React.FC = () => {
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const locationWrapperRef = useRef<HTMLDivElement>(null);
+  const searchableLocations = useMemo(() => {
+    const values = new Set<string>();
+    for (const producer of producers) {
+      for (const loc of producer.locations || []) {
+        const cityRegion = [loc.city, loc.region].filter(Boolean).join(', ').trim();
+        if (cityRegion) values.add(cityRegion);
+        if (loc.address?.trim()) values.add(loc.address.trim());
+      }
+    }
+    return Array.from(values);
+  }, [producers]);
 
   // Get Current User Region and Favorites
   let clientRegion = '';
@@ -95,7 +87,7 @@ export const ProducerMarket: React.FC = () => {
     setLocationQuery(val);
 
     if (val.length > 0) {
-      const filtered = FLAT_LOCATIONS.filter(loc =>
+      const filtered = searchableLocations.filter(loc =>
         loc.toLowerCase().startsWith(val.toLowerCase()) ||
         loc.toLowerCase().includes(val.toLowerCase())
       ).slice(0, 5); // Limit to 5 suggestions

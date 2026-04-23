@@ -538,10 +538,10 @@ export const ClientProfile: React.FC = () => {
                                     type="text"
                                     placeholder={
                                        placesStatus === 'ready'
-                                          ? 'Search address (Google Places)'
+                                          ? 'Search for your full address (Google Places)'
                                           : placesStatus === 'loading'
                                              ? 'Loading Google Places...'
-                                             : 'Type full address manually'
+                                             : 'Type your full address'
                                     }
                                     value={locationSearch}
                                     onChange={e => {
@@ -584,20 +584,6 @@ export const ClientProfile: React.FC = () => {
                                  {isNearbyLoading && (
                                     <p className="sm:col-span-3 text-xs text-gray-500">Finding nearby locations...</p>
                                  )}
-                                 <input
-                                    type="text"
-                                    placeholder="Region"
-                                    value={newLoc.region ?? ''}
-                                    onChange={e => setNewLoc((prev) => ({ ...prev, region: e.target.value }))}
-                                    className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"
-                                 />
-                                 <input
-                                    type="text"
-                                    placeholder="City"
-                                    value={newLoc.city ?? ''}
-                                    onChange={e => setNewLoc((prev) => ({ ...prev, city: e.target.value }))}
-                                    className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"
-                                 />
                                  <div className="sm:col-span-3 flex gap-2">
                                     <button
                                        type="button"
@@ -611,8 +597,8 @@ export const ClientProfile: React.FC = () => {
                               </div>
                               <p className="mt-2 text-xs text-gray-500">
                                  {placesStatus === 'ready'
-                                    ? 'Select a place to auto-fill city/region and capture lat/lng.'
-                                    : 'Type full address and click +.'}
+                                    ? 'Start typing and select a Google place to auto-fill city/region.'
+                                    : 'Type your full address and click +.'}
                               </p>
                            </div>
                         </div>

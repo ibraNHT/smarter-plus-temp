@@ -514,10 +514,10 @@ export const RegisterProducer: React.FC = () => {
                   type="text"
                   placeholder={
                     placesStatus === 'ready'
-                      ? 'Search Google address'
+                      ? 'Search for your operating address (Google Places)'
                       : placesStatus === 'loading'
                         ? 'Loading Google Places...'
-                        : 'Type full address manually'
+                        : 'Type your full operating address'
                   }
                   className="flex-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 sm:text-sm bg-white text-gray-900"
                   value={currentLoc.address}
@@ -540,20 +540,6 @@ export const RegisterProducer: React.FC = () => {
                   <Plus className="h-5 w-5" />
                 </button>
               </div>
-              <input
-                type="text"
-                placeholder="Region"
-                value={currentLoc.region}
-                onChange={e => setCurrentLoc({ ...currentLoc, region: e.target.value })}
-                className="block w-full border border-gray-300 rounded-md shadow-sm p-2 sm:text-sm bg-white text-gray-900"
-              />
-              <input
-                type="text"
-                placeholder="City"
-                value={currentLoc.city}
-                onChange={e => setCurrentLoc({ ...currentLoc, city: e.target.value })}
-                className="block w-full border border-gray-300 rounded-md shadow-sm p-2 sm:text-sm bg-white text-gray-900"
-              />
             </div>
             {showSuggestions && suggestions.length > 0 && (
               <div className="mt-2 border border-gray-200 rounded-md bg-white shadow-sm max-h-56 overflow-auto">
@@ -586,8 +572,8 @@ export const RegisterProducer: React.FC = () => {
             )}
             <p className="mt-2 text-xs text-gray-500">
               {placesStatus === 'ready'
-                ? 'Select a Google place to auto-fill city/region and capture lat/lng.'
-                : 'Type full address and click +.'}
+                ? 'Start typing and select a Google place to auto-fill city/region.'
+                : 'Type your full address and click +.'}
             </p>
           </div>
 

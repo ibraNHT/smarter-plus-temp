@@ -396,10 +396,10 @@ export const ProducerProfile: React.FC = () => {
                         type="text"
                         placeholder={
                           placesStatus === 'ready'
-                            ? 'Search address (Google Places)'
+                            ? 'Search for your full address (Google Places)'
                             : placesStatus === 'loading'
                               ? 'Loading Google Places...'
-                              : 'Type address manually.'
+                              : 'Type your full address'
                         }
                         value={locationSearch}
                         onChange={e => {
@@ -442,20 +442,6 @@ export const ProducerProfile: React.FC = () => {
                       {isNearbyLoading && (
                         <p className="sm:col-span-3 text-xs text-gray-500">Finding nearby locations...</p>
                       )}
-                      <input
-                        type="text"
-                        placeholder="Region"
-                        value={newLoc.region ?? ''}
-                        onChange={e => setNewLoc((prev) => ({ ...prev, region: e.target.value }))}
-                        className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"
-                      />
-                      <input
-                        type="text"
-                        placeholder="City"
-                        value={newLoc.city ?? ''}
-                        onChange={e => setNewLoc((prev) => ({ ...prev, city: e.target.value }))}
-                        className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"
-                      />
                       {placesStatus === 'unavailable' && (
                         <p className="sm:col-span-3 text-xs text-amber-700">
                           Google autocomplete is unavailable. Type full address and click +.

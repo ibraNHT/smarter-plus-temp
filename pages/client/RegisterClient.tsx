@@ -328,28 +328,6 @@ export const RegisterClient: React.FC = () => {
             <h4 className="text-sm font-medium text-gray-900 mb-3">Location Details</h4>
           </div>
 
-          <div className="sm:col-span-3">
-            <label className="block text-sm font-medium text-gray-700">{t('profile.region')}</label>
-            <input
-              type="text"
-              className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm text-gray-900"
-              value={formData.region}
-              onChange={e => setFormData({ ...formData, region: e.target.value })}
-              placeholder="Auto-filled (optional)"
-            />
-          </div>
-
-          <div className="sm:col-span-3">
-            <label className="block text-sm font-medium text-gray-700">{t('profile.city')}</label>
-            <input
-              type="text"
-              className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm text-gray-900"
-              value={formData.city}
-              onChange={e => setFormData({ ...formData, city: e.target.value })}
-              placeholder="Auto-filled (optional)"
-            />
-          </div>
-
           <div className="sm:col-span-6">
             <label htmlFor="address" className="block text-sm font-medium text-gray-700">
               {t('form.address')}
@@ -358,7 +336,7 @@ export const RegisterClient: React.FC = () => {
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <MapPin className="h-5 w-5 text-gray-400" />
               </div>
-              <input type="text" name="address" required placeholder={placesStatus === 'ready' ? 'Search Google address' : placesStatus === 'loading' ? 'Loading Google Places...' : 'Type full address manually'}
+              <input type="text" name="address" required placeholder={placesStatus === 'ready' ? 'Search for your full address (Google Places)' : placesStatus === 'loading' ? 'Loading Google Places...' : 'Type your full address'}
                 className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
                 value={formData.address}
                 onChange={e => setFormData({ ...formData, address: e.target.value })}
@@ -367,8 +345,8 @@ export const RegisterClient: React.FC = () => {
             </div>
             <p className="mt-1 text-xs text-gray-500">
               {placesStatus === 'ready'
-                ? 'Start typing and select a Google place to auto-fill city/region and save latitude/longitude.'
-                : 'Type full address manually.'}
+                ? 'Start typing and select a Google place to auto-fill city/region.'
+                : 'Type your full address manually.'}
             </p>
           </div>
         </div>
