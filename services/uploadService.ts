@@ -1,29 +1,17 @@
+import { apiUpload } from './apiService';
+import { API_ENDPOINTS } from '../api/endpoints';
 
-const BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
-
-export const uploadFile = async (file: File): Promise<string> => {
+/** POST /api/upload/avatar — requires JWT; returns public URL for User.profileImageUrl. */
+export async function uploadAvatar(file: File): Promise<string> {
   const formData = new FormData();
   formData.append('file', file);
+  const res = await apiUpload<{ url: string }>(API_ENDPOINTS.upload.avatar, formData);
+  if (!res?.url) throw new Error('Upload did not return a URL');
+  return res.url;
+}
 
-  try {
-    const response = await fetch(`${BASE_URL}/api/upload`, {
-      method: 'POST',
-      body: formData,
-    });
+/** @deprecated Use `uploadAvatar` — kept for any legacy imports. */
+export const uploadFile = uploadAvatar;
 
-    if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.url; // Returns the server URL (e.g., "/uploads/filename.jpg")
-  } catch (error) {
-    console.error("File upload error:", error);
-    throw error;
-  }
-};
-
-export const uploadFiles = async (files: File[]): Promise<string[]> => {
-  const uploadPromises = files.map(file => uploadFile(file));
-  return Promise.all(uploadPromises);
-};
+export const uploadFiles = async (files: File[]): Promise<string[]> =>
+  Promise.all(files.map((f) => uploadAvatar(f)));

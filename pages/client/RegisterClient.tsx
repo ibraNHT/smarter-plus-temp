@@ -68,6 +68,7 @@ export const RegisterClient: React.FC = () => {
   const [placesStatus, setPlacesStatus] = useState<'loading' | 'ready' | 'unavailable'>('loading');
 
   const addressInputRef = useRef<HTMLInputElement | null>(null);
+  const avatarFileRef = useRef<File | null>(null);
 
   useEffect(() => {
     let autocomplete: any;
@@ -101,11 +102,11 @@ export const RegisterClient: React.FC = () => {
   }, []);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const fakeUrl = URL.createObjectURL(file);
-      setFormData({ ...formData, profileImageUrl: fakeUrl });
-    }
+    const file = e.target.files?.[0];
+    if (!file) return;
+    avatarFileRef.current = file;
+    const previewUrl = URL.createObjectURL(file);
+    setFormData({ ...formData, profileImageUrl: previewUrl });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -143,11 +144,10 @@ export const RegisterClient: React.FC = () => {
         region: inferredRegion,
         city: inferredCity
       }],
-      profileImageUrl: formData.profileImageUrl,
       favorites: [],
       searchHistory: [],
       referrerCode: refCode || undefined
-    }, formData.password);
+    }, formData.password, avatarFileRef.current);
     setIsLoading(false);
 
     if (result.success) {
@@ -184,7 +184,7 @@ export const RegisterClient: React.FC = () => {
             </div>
             <label className="absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white cursor-pointer hover:bg-primary-700 shadow-sm">
               <Camera className="h-4 w-4" />
-              <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={handleFileUpload} />
+              <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFileUpload} />
             </label>
           </div>
         </div>

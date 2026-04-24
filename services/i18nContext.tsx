@@ -131,6 +131,7 @@ const translations: Record<string, Record<Language, string>> = {
   'form.cancel': { en: 'Cancel', fr: 'Annuler' },
   'form.submit': { en: 'Submit', fr: 'Valider' },
   'form.save': { en: 'Save Changes', fr: 'Sauvegarder' },
+  'form.saving': { en: 'Saving…', fr: 'Enregistrement…' },
   'form.add': { en: 'Add', fr: 'Ajouter' },
   'form.delete': { en: 'Delete', fr: 'Supprimer' },
   'form.create': { en: 'Create Account', fr: 'Créer un Compte' },
@@ -231,6 +232,18 @@ const translations: Record<string, Record<Language, string>> = {
   'cart.confirmClear': { 
     en: 'Your cart contains items from another producer.\n\nA cart can only contain items from a single producer.\n\nDo you want to clear your cart and add this item?',
     fr: 'Votre panier contient des articles d\'un autre producteur.\n\nUn panier ne peut contenir que des articles d\'un seul producteur.\n\nVoulez-vous vider votre panier et ajouter cet article ?'
+  },
+  'cart.pickupSearchCity': { en: 'Search city or area (Google Places)', fr: 'Rechercher ville ou zone (Google Places)' },
+  'cart.pickupSearchPlaceholder': { en: 'Start typing a city…', fr: 'Saisissez une ville…' },
+  'cart.pickupProfileCity': { en: 'Your city (from profile)', fr: 'Votre ville (profil)' },
+  'cart.pickupProfileCityHint': { en: 'Pickup must be in this city. Update your profile to change it.', fr: 'Le retrait doit être dans cette ville. Modifiez votre profil pour changer.' },
+  'cart.pickupStation': { en: 'Select pickup station', fr: 'Choisir le point de retrait' },
+  'cart.pickupPlacesFallback': { en: 'Places unavailable — choose a city from the list.', fr: 'Places indisponible — choisissez une ville dans la liste.' },
+  'cart.pickupNoProfileCity': { en: 'Add your city in profile', fr: 'Ajoutez votre ville au profil' },
+  'cart.pickupPlacesLoading': { en: 'Loading Places…', fr: 'Chargement de Places…' },
+  'cart.pickupPlacesReadyHint': {
+    en: 'Pick a suggestion or leave the field to match a station city.',
+    fr: 'Choisissez une suggestion ou quittez le champ pour faire correspondre une ville.',
   },
   'cart.confirmOrder': { en: 'Confirm Order', fr: 'Confirmer la Commande' },
   'cart.recap': { en: 'Order Recap', fr: 'Récapitulatif de la Commande' },

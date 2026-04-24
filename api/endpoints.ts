@@ -97,6 +97,14 @@ export const API_ENDPOINTS = {
     verify: '/api/otp/verify',
   },
   cart: {
+    get: '/api/cart',
     sync: '/api/cart/sync-cart',
+  },
+  upload: {
+    avatar: '/api/upload/avatar',
+    offerImage: '/api/upload/offer-image',
+    portfolioImage: '/api/upload/portfolio-image',
+    portfolioVideo: '/api/upload/portfolio-video',
+    evidence: '/api/upload/evidence',
   },
 } as const;

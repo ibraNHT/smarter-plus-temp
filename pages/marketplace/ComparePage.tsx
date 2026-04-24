@@ -4,9 +4,11 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Star, X, ShoppingCart, Check, XCircle } from 'lucide-react';
+import { OfferType } from '../../types';
+import { comparePageAddQuantity, effectiveMinOrder } from '../../utils/offerCart';
 
 export const ComparePage: React.FC = () => {
-  const { compareList, offers, producers, getAverageRating, removeFromCompare, addToCart, clearCompare } = useStore();
+  const { compareList, offers, producers, getAverageRating, removeFromCompare, addToCart, clearCart, clearCompare } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -26,6 +28,25 @@ export const ComparePage: React.FC = () => {
   const getProducerName = (producerId: string) => {
      const p = producers.find(prod => prod.id === producerId);
      return p ? (p.type === 'BUSINESS' ? p.name : `${p.firstName} ${p.lastName}`) : 'Unknown';
+  };
+
+  const handleCompareAddToCart = (offer: (typeof selectedOffers)[number]) => {
+    const canonical = offers.find((o) => o.id === offer.id) ?? offer;
+    if (canonical.type === OfferType.SERVICE) {
+      navigate(`/product/${canonical.id}`);
+      return;
+    }
+    const qty = comparePageAddQuantity(canonical);
+    const result = addToCart(canonical, qty);
+    if (!result.success && result.error === 'PRODUCER_CONFLICT') {
+      if (window.confirm(t('cart.confirmClear'))) {
+        clearCart();
+        addToCart(canonical, qty);
+        navigate('/cart');
+      }
+    } else {
+      navigate('/cart');
+    }
   };
 
   return (
@@ -84,7 +105,7 @@ export const ComparePage: React.FC = () => {
                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-500 bg-gray-50">{t('compare.minOrder')}</td>
                    {selectedOffers.map(offer => (
                       <td key={offer.id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                         {offer.minQuantity} {t(`unit.${offer.unit}`)}
+                         {effectiveMinOrder(offer)} {t(`unit.${offer.unit}`)}
                       </td>
                    ))}
                 </tr>
@@ -132,7 +153,8 @@ export const ComparePage: React.FC = () => {
                    {selectedOffers.map(offer => (
                       <td key={offer.id} className="px-6 py-4 whitespace-nowrap text-sm">
                          <button 
-                           onClick={() => addToCart(offer, offer.minQuantity || 1)}
+                           type="button"
+                           onClick={() => handleCompareAddToCart(offer)}
                            className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700"
                          >
                             <ShoppingCart className="h-4 w-4 mr-2" /> {t('product.addToCart')}

@@ -4,11 +4,13 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order } from '../../types';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle } from 'lucide-react';
+import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle, Loader2 } from 'lucide-react';
+import { useUpdateClientProfileMutation } from '../../api/hooks/useUpdateClientProfileMutation';
 import { SEO } from '../../components/SEO';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 import { loadGooglePlacesApi, parseGooglePlace } from '../../services/googlePlaces';
+import { uploadAvatar } from '../../services/uploadService';
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
@@ -31,7 +33,8 @@ function normalizeDob(dobRaw: unknown): string {
 }
 
 export const ClientProfile: React.FC = () => {
-   const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, updateClientProfile, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals } = useStore();
+   const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals } = useStore();
+   const updateClientMutation = useUpdateClientProfileMutation();
    const { t } = useTranslation();
    const navigate = useNavigate();
    const [activeTab, setActiveTab] = useState<'info' | 'orders' | 'security' | 'favorites' | 'reputation' | 'referrals'>('orders');
@@ -70,6 +73,7 @@ export const ClientProfile: React.FC = () => {
    const [showPasswordModal, setShowPasswordModal] = useState(false);
    const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+   const [avatarUploading, setAvatarUploading] = useState(false);
 
    const currentClient = useMemo(
       () => (user?.id ? clients.find(c => c.userId === user.id || c.id === user.id) : undefined),
@@ -249,6 +253,7 @@ export const ClientProfile: React.FC = () => {
             dateOfBirth: normalizeDob((currentClient as any).dateOfBirth),
             locations: normalizeClientLocations(currentClient.locations),
             favorites: Array.isArray(currentClient.favorites) ? currentClient.favorites : [],
+            profileImageUrl: (clientUser?.profileImageUrl ?? (currentClient as any).profileImageUrl ?? '').toString() || undefined,
             referralCode: ((currentClient as any).referralCode ?? (clientUser as any)?.referralCode ?? '').toString(),
             referrals: Array.isArray((currentClient as any).referrals) ? (currentClient as any).referrals : [],
             searchHistory: Array.isArray((currentClient as any).searchHistory) ? (currentClient as any).searchHistory : [],
@@ -333,8 +338,34 @@ export const ClientProfile: React.FC = () => {
       setLocationSearch('');
    };
    const removeLocation = (index: number) => { if (!formData) return; setFormData({ ...formData, locations: formData.locations.filter((_, i) => i !== index) }); };
-   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (formData && e.target.files && e.target.files[0]) { const file = e.target.files[0]; const fakeUrl = URL.createObjectURL(file); setFormData({ ...formData, profileImageUrl: fakeUrl }); } };
-   const savePersonalInfo = (e: React.FormEvent) => { e.preventDefault(); if (formData) { updateClientProfile({ ...formData, name: `${formData.firstName} ${formData.lastName}` }); } };
+   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!formData || !file) return;
+      const maxBytes = 2 * 1024 * 1024;
+      if (file.size > maxBytes) {
+         alert('Image must be 2 MB or less.');
+         return;
+      }
+      const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+      if (!allowed.includes(file.type)) {
+         alert('Use JPG, PNG, or WebP.');
+         return;
+      }
+      setAvatarUploading(true);
+      try {
+         const url = await uploadAvatar(file);
+         setFormData({ ...formData, profileImageUrl: url });
+      } catch (err: unknown) {
+         alert(err instanceof Error ? err.message : 'Upload failed.');
+      } finally {
+         setAvatarUploading(false);
+      }
+   };
+   const savePersonalInfo = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!formData) return;
+      updateClientMutation.mutate({ ...formData, name: `${formData.firstName} ${formData.lastName}` });
+   };
    const toggleUpgradeCategory = (cat: string) => { const current = upgradeData.productionTypes; if (current.includes(cat)) { setUpgradeData({ ...upgradeData, productionTypes: current.filter(c => c !== cat) }); } else { setUpgradeData({ ...upgradeData, productionTypes: [...current, cat] }); } };
    const handleUpgradeSubmit = (e: React.FormEvent) => { e.preventDefault(); if (!user) return; upgradeClientToProducer(user.id, { type: upgradeData.type, name: upgradeData.type === 'BUSINESS' ? upgradeData.farmName : undefined, description: upgradeData.description, productionTypes: upgradeData.productionTypes }); setShowUpgradeModal(false); navigate('/producer/dashboard'); };
    const performLogout = async () => {
@@ -476,14 +507,14 @@ export const ClientProfile: React.FC = () => {
                                  <User className="h-12 w-12 text-gray-400" />
                               )}
                            </div>
-                           <label className="absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white cursor-pointer hover:bg-primary-700 shadow-sm">
+                           <label className={`absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white shadow-sm ${avatarUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-primary-700'}`}>
                               <Camera className="h-4 w-4" />
-                              <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={handleFileUpload} />
+                              <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={avatarUploading} onChange={handleFileUpload} />
                            </label>
                         </div>
                         <div className="ml-4">
                            <p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p>
-                           <p className="text-xs text-gray-500">JPG or PNG. Max 10MB.</p>
+                           <p className="text-xs text-gray-500">{avatarUploading ? 'Uploading…' : 'JPG, PNG, or WebP. Max 2 MB.'}</p>
                         </div>
                      </div>
                      <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
@@ -603,8 +634,19 @@ export const ClientProfile: React.FC = () => {
                            </div>
                         </div>
                         <div className="sm:col-span-6 pt-4 flex justify-end">
-                           <button type="submit" className="bg-primary-600 text-white px-6 py-2 rounded-md text-sm font-medium shadow hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                              {t('form.save')}
+                           <button
+                              type="submit"
+                              disabled={updateClientMutation.isPending}
+                              className="inline-flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-2 rounded-md text-sm font-medium shadow hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                           >
+                              {updateClientMutation.isPending ? (
+                                 <>
+                                    <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+                                    {t('form.saving')}
+                                 </>
+                              ) : (
+                                 t('form.save')
+                              )}
                            </button>
                         </div>
                      </div>

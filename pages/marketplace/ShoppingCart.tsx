@@ -6,6 +6,7 @@ import { useTranslation } from '../../services/i18nContext';
 import { Trash2, ArrowLeft, ShoppingBag, CheckCircle, Calendar, X, MapPin, Heart, Tag, ChevronLeft, ChevronRight, Truck, Home } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { OfferType, MarketType, UserRole } from '../../types';
+import { loadGooglePlacesApi, parseGooglePlace, citiesLooselyMatch } from '../../services/googlePlaces';
 
 export const ShoppingCart: React.FC = () => {
   const { cart, removeFromCart, placeOrder, user, clearCart, clients, producers, moveToFavorites, validateCoupon, pickupPoints, guestEmail, setGuestEmail } = useStore();
@@ -35,6 +36,9 @@ export const ShoppingCart: React.FC = () => {
   const [selectedPickupCity, setSelectedPickupCity] = useState(''); // Only for Producer Market flow flexibility
   const [selectedPickupPointId, setSelectedPickupPointId] = useState('');
   const [selectedHomeLocationIndex, setSelectedHomeLocationIndex] = useState(0);
+  const [pickupCitySearch, setPickupCitySearch] = useState('');
+  const [pickupPlacesStatus, setPickupPlacesStatus] = useState<'idle' | 'loading' | 'ready' | 'unavailable'>('idle');
+  const pickupCityInputRef = useRef<HTMLInputElement | null>(null);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
   const serviceFee = subtotal * 0.05;
@@ -66,11 +70,12 @@ export const ShoppingCart: React.FC = () => {
   useEffect(() => {
     if (isAtiOrder && deliveryMethod === 'PICKUP' && clientCity) {
       setSelectedPickupCity(clientCity);
+      setPickupCitySearch(clientCity);
     } else if (!isAtiOrder && clientCity && !selectedPickupCity) {
-      // For producer market, default to client city for convenience but allow change if logic permits
       setSelectedPickupCity(clientCity);
+      setPickupCitySearch(clientCity);
     }
-  }, [deliveryMethod, isAtiOrder, clientCity]);
+  }, [deliveryMethod, isAtiOrder, clientCity, selectedPickupCity]);
 
   useEffect(() => {
     if (selectedHomeLocationIndex >= homeLocations.length) {
@@ -78,8 +83,71 @@ export const ShoppingCart: React.FC = () => {
     }
   }, [homeLocations.length, selectedHomeLocationIndex]);
 
-  // Filter Pickup Points based on selected city
-  const availablePickupPoints = pickupPoints.filter(p => p.city === selectedPickupCity);
+  // Google Places autocomplete for producer-market pickup city (when API key present)
+  useEffect(() => {
+    if (deliveryMethod !== 'PICKUP' || isAtiOrder) {
+      setPickupPlacesStatus('idle');
+      return;
+    }
+    let canceled = false;
+    const w = window as unknown as { google?: { maps?: { places?: { Autocomplete: new (el: HTMLInputElement, opts: object) => unknown }; event?: { clearInstanceListeners: (x: unknown) => void } } } };
+    let autocomplete: unknown = null;
+    const input = pickupCityInputRef.current;
+
+    const run = async () => {
+      setPickupPlacesStatus('loading');
+      const ok = await loadGooglePlacesApi();
+      if (canceled) return;
+      if (!ok || !input) {
+        setPickupPlacesStatus('unavailable');
+        return;
+      }
+      if (!w.google?.maps?.places?.Autocomplete) {
+        setPickupPlacesStatus('unavailable');
+        return;
+      }
+      setPickupPlacesStatus('ready');
+      autocomplete = new w.google.maps.places.Autocomplete(input, {
+        fields: ['formatted_address', 'geometry', 'address_components', 'name'],
+        types: ['geocode'],
+      });
+      (autocomplete as { addListener: (ev: string, fn: () => void) => void }).addListener('place_changed', () => {
+        const place = (autocomplete as { getPlace: () => unknown }).getPlace();
+        const parsed = parseGooglePlace(place);
+        if (!parsed) return;
+        const city = (parsed.city || parsed.region || '').trim() || parsed.address.split(',')[0]?.trim() || '';
+        setPickupCitySearch(parsed.address || city);
+        setSelectedPickupCity(city || parsed.address);
+        setSelectedPickupPointId('');
+      });
+    };
+
+    void run();
+    return () => {
+      canceled = true;
+      if (autocomplete && w.google?.maps?.event) {
+        w.google.maps.event.clearInstanceListeners(autocomplete);
+      }
+    };
+  }, [deliveryMethod, isAtiOrder]);
+
+  const syncPickupCityFromTypedSearch = () => {
+    const q = pickupCitySearch.trim();
+    if (!q) return;
+    const hit = pickupPoints.find(
+      (p) => citiesLooselyMatch(p.city, q) || citiesLooselyMatch(p.region, q),
+    );
+    if (hit) {
+      setSelectedPickupCity(hit.city);
+      setPickupCitySearch(hit.city);
+      setSelectedPickupPointId('');
+    }
+  };
+
+  // Filter pickup points by city (tolerant match vs Places / profile spelling)
+  const availablePickupPoints = pickupPoints
+    .filter((p) => selectedPickupCity && citiesLooselyMatch(p.city, selectedPickupCity))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   // Validation Flags
   const isHomeAddressValid = !!selectedHomeLocation;
@@ -185,7 +253,7 @@ export const ShoppingCart: React.FC = () => {
     // Additional Check for ATI Pickup Rule
     if (isAtiOrder && deliveryMethod === 'PICKUP') {
       const point = pickupPoints.find(p => p.id === selectedPickupPointId);
-      if (point && point.city !== clientCity) {
+      if (point && !citiesLooselyMatch(point.city, clientCity)) {
         alert(`ATI Store policy: Pickup must be in your registered city (${clientCity}).`);
         return;
       }
@@ -370,45 +438,79 @@ export const ShoppingCart: React.FC = () => {
 
               {deliveryMethod === 'PICKUP' && (
                 <div className="space-y-3">
-                  {/* City Filter (Fixed for ATI) */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Select City</label>
                     {isAtiOrder ? (
-                      <input
-                        type="text"
-                        disabled
-                        value={clientCity || "Update Profile City"}
-                        className="block w-full border border-gray-200 bg-gray-100 rounded-md p-2 text-sm text-gray-500 cursor-not-allowed"
-                      />
+                      <>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">{t('cart.pickupProfileCity')}</label>
+                        <input
+                          type="text"
+                          disabled
+                          value={clientCity || t('cart.pickupNoProfileCity')}
+                          className="block w-full border border-gray-200 bg-gray-100 rounded-md p-2 text-sm text-gray-600 cursor-not-allowed"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">{t('cart.pickupProfileCityHint')}</p>
+                      </>
                     ) : (
-                      // For Producer orders, allow choosing city if needed, but keeping simple for now
-                      <select
-                        value={selectedPickupCity}
-                        onChange={(e) => { setSelectedPickupCity(e.target.value); setSelectedPickupPointId(''); }}
-                        className="block w-full border border-gray-300 rounded-md p-2 text-sm"
-                      >
-                        <option value="">-- Select City --</option>
-                        {[...new Set(pickupPoints.map(p => p.city))].map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
+                      <>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">{t('cart.pickupSearchCity')}</label>
+                        {pickupPlacesStatus === 'unavailable' ? (
+                          <>
+                            <p className="text-xs text-amber-700 mb-1">{t('cart.pickupPlacesFallback')}</p>
+                            <select
+                              value={selectedPickupCity}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setSelectedPickupCity(v);
+                                setPickupCitySearch(v);
+                                setSelectedPickupPointId('');
+                              }}
+                              className="block w-full border border-gray-300 rounded-md p-2 text-sm bg-white"
+                            >
+                              <option value="">--</option>
+                              {[...new Set(pickupPoints.map((p) => p.city))].sort().map((c) => (
+                                <option key={c} value={c}>{c}</option>
+                              ))}
+                            </select>
+                          </>
+                        ) : (
+                          <>
+                            <input
+                              ref={pickupCityInputRef}
+                              type="text"
+                              value={pickupCitySearch}
+                              onChange={(e) => setPickupCitySearch(e.target.value)}
+                              onBlur={() => syncPickupCityFromTypedSearch()}
+                              placeholder={t('cart.pickupSearchPlaceholder')}
+                              autoComplete="off"
+                              className="block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900 placeholder:text-gray-400"
+                            />
+                            {pickupPlacesStatus === 'loading' && (
+                              <p className="text-xs text-gray-500 mt-1">{t('cart.pickupPlacesLoading')}</p>
+                            )}
+                            {pickupPlacesStatus === 'ready' && (
+                              <p className="text-xs text-gray-500 mt-1">{t('cart.pickupPlacesReadyHint')}</p>
+                            )}
+                          </>
+                        )}
+                      </>
                     )}
                   </div>
 
-                  {/* Pickup Point Select */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Select Pickup Point</label>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">{t('cart.pickupStation')}</label>
                     <select
                       value={selectedPickupPointId}
                       onChange={(e) => setSelectedPickupPointId(e.target.value)}
                       className="block w-full border border-gray-300 rounded-md p-2 text-sm bg-white"
-                      disabled={!selectedPickupCity}
+                      disabled={availablePickupPoints.length === 0}
                     >
-                      <option value="">-- Select Station --</option>
-                      {availablePickupPoints.map(p => (
-                        <option key={p.id} value={p.id}>{p.name} - {p.address}</option>
+                      <option value="">--</option>
+                      {availablePickupPoints.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name} — {p.address}, {p.city}</option>
                       ))}
                     </select>
                     {selectedPickupCity && availablePickupPoints.length === 0 && (
-                      <p className="text-xs text-red-500 mt-1">No pickup points available in {selectedPickupCity}.</p>
+                      <p className="text-xs text-red-500 mt-1">No pickup points in this area. Try another city or pick from the list if Places is off.</p>
                     )}
                   </div>
                 </div>

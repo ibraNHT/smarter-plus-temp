@@ -12,7 +12,7 @@ import {
 } from './supportSessionsApi';
 const defaultSchedule: WeeklySchedule = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
 import { apiFetch, apiUpload, setToken, clearToken, getToken, setRefreshToken } from './apiService';
-// asda
+import { uploadAvatar } from './uploadService';
 /** Map Prisma withdrawal row (+ nested paymentMethod) to app `WithdrawalRequest`. */
 function mapWithdrawalFromApi(d: any): WithdrawalRequest {
   const pm = d.paymentMethod ?? {};
@@ -174,13 +174,13 @@ interface StoreContextType {
   login: (identifier: string, password: string) => Promise<{ success: boolean; message: string }>;
   logout: () => Promise<void>;
   registerProducer: (data: Omit<ProducerProfile, 'id' | 'status' | 'joinedDate' | 'paymentMethods' | 'favorites' | 'searchHistory' | 'referrals' | 'referralCode'> & { referrerCode?: string }, password: string) => Promise<{ success: boolean; message: string }>;
-  updateProducerProfile: (producer: ProducerProfile, otpToken?: string) => Promise<void>;
+  updateProducerProfile: (producer: ProducerProfile, otpToken?: string) => Promise<boolean>;
   requestOtp: (action: 'PROFILE_UPDATE' | 'WITHDRAWAL') => Promise<{ success: boolean; message: string }>;
   verifyOtp: (action: 'PROFILE_UPDATE' | 'WITHDRAWAL', code: string) => Promise<{ success: boolean; token?: string; message: string }>;
   updateProducerAvailability: (producerId: string, schedule: WeeklySchedule, exceptions: AvailabilityException[]) => Promise<void>;
-  registerClient: (data: Omit<ClientProfile, 'id' | 'joinedDate' | 'referrals' | 'referralCode'> & { referrerCode?: string }, password: string) => Promise<{ success: boolean; message: string }>;
+  registerClient: (data: Omit<ClientProfile, 'id' | 'joinedDate' | 'referrals' | 'referralCode'> & { referrerCode?: string }, password: string, avatarFile?: File | null) => Promise<{ success: boolean; message: string }>;
   verifyEmail: (code: string) => Promise<boolean>;
-  updateClientProfile: (client: ClientProfile) => Promise<void>;
+  updateClientProfile: (client: ClientProfile) => Promise<boolean>;
   upgradeClientToProducer: (clientId: string, producerDetails: Partial<ProducerProfile>) => void;
   validateProducer: (id: string, status: ProducerStatus) => Promise<void>;
   saveProducerPaymentMethod: (producerId: string, method: PaymentMethod) => void;
@@ -271,7 +271,17 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [producers, setProducers] = useState<ProducerProfile[]>([]);
   const [clients, setClients] = useState<ClientProfile[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem('cart');
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
   const [orders, setOrders] = useState<Order[]>([]);
   const [wallets, setWallets] = useState<Record<string, Wallet>>({});
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -317,10 +327,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           parsedUser = null;
         }
       } catch (e) { }
-    }
-    const savedCart = localStorage.getItem('cart');
-    if (savedCart) {
-      try { setCart(JSON.parse(savedCart)); } catch (e) { }
     }
     const savedGuestEmail = localStorage.getItem('guestEmail');
     if (savedGuestEmail) setGuestEmail(savedGuestEmail);
@@ -541,6 +547,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         return {
           ...p,
           name: displayName || 'Unknown',
+          profileImageUrl: (p as any).user?.profileImageUrl ?? (p as any).profileImageUrl,
           locations: p.locations || [],
           certifications: p.certifications || [],
           paymentMethods: p.paymentMethods || [],
@@ -556,6 +563,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         return {
           ...c,
           name: displayName || 'Unknown',
+          profileImageUrl: (c as any).user?.profileImageUrl ?? (c as any).profileImageUrl,
           locations: c.locations || [],
           favorites: c.favorites || [],
           referrals: c.referrals || [],
@@ -580,8 +588,34 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
       }
       setClients(clientRows);
-      setOffers(Array.isArray(resOffers) ? resOffers : ((resOffers as any)?.data || []));
+      const offersList = Array.isArray(resOffers) ? resOffers : ((resOffers as any)?.data || []);
+      setOffers(offersList);
       setPickupPoints(Array.isArray(resPickup) ? resPickup : []);
+
+      if (activeUser && getToken() && offersList.length > 0) {
+        const cartPayload = await apiFetch<{ items?: Array<{ offerId: string; quantity: number; bookingDate?: string }> }>(
+          API_ENDPOINTS.cart.get,
+          { silent401: true } as any,
+        ).catch(() => null);
+        const rows = cartPayload?.items;
+        if (Array.isArray(rows) && rows.length > 0) {
+          setCart((prev) => {
+            if (prev.length > 0) return prev;
+            const hydrated = rows
+              .map((row) => {
+                const off = offersList.find((o: any) => o.id === row.offerId) as Offer | undefined;
+                if (!off) return null;
+                return {
+                  ...off,
+                  cartQuantity: Math.max(1, Math.floor(Number(row.quantity)) || 1),
+                  bookingDate: row.bookingDate ? new Date(row.bookingDate).toISOString() : undefined,
+                } as CartItem;
+              })
+              .filter(Boolean) as CartItem[];
+            return hydrated.length ? hydrated : prev;
+          });
+        }
+      }
     } catch (error) {
       console.error('Could not fetch data from API:', error);
     }
@@ -751,7 +785,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const registerClient = async (data: any, password: string): Promise<{ success: boolean; message: string }> => {
+  const registerClient = async (data: any, password: string, avatarFile?: File | null): Promise<{ success: boolean; message: string }> => {
     try {
       const session = await apiFetch<AuthSessionPayload>(API_ENDPOINTS.auth.register, {
         method: 'POST',
@@ -786,6 +820,18 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             : [],
         }),
       });
+
+      if (clientProfile?.id && avatarFile) {
+        try {
+          const url = await uploadAvatar(avatarFile);
+          await apiFetch(API_ENDPOINTS.clients.update(clientProfile.id), {
+            method: 'PUT',
+            body: JSON.stringify({ profileImageUrl: url }),
+          });
+        } catch (avatarErr) {
+          console.warn('Client avatar upload failed', avatarErr);
+        }
+      }
 
       if (clientProfile?.id) {
         setUser(prev => {
@@ -837,7 +883,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── PRODUCER PROFILE ────────────────────────────────────────────────────────
 
-  const updateProducerProfile = async (updatedProducer: ProducerProfile, otpToken?: string) => {
+  const updateProducerProfile = async (updatedProducer: ProducerProfile, otpToken?: string): Promise<boolean> => {
     try {
       const headers: Record<string, string> = {};
       if (otpToken) headers['X-OTP-Verification'] = otpToken;
@@ -847,10 +893,25 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         headers,
       });
       setProducers(prev => prev.map(p => p.id === saved.id ? { ...saved, user: saved.user ?? (p as any).user } : p));
-      addNotification(updatedProducer.id, 'Profile updated', 'SUCCESS');
+      if (saved?.user && user && user.id === saved.user.id) {
+        const nextUser: UserSession = {
+          ...user,
+          email: saved.user.email ?? user.email,
+          phone: saved.user.phone ?? user.phone,
+          displayName: saved.user.displayName ?? user.displayName,
+          name: saved.user.displayName ?? user.name,
+          profileImageUrl: saved.user.profileImageUrl ?? user.profileImageUrl,
+        };
+        setUser(nextUser);
+        useSessionStore.getState().setUser(nextUser);
+        localStorage.setItem('currentUser', JSON.stringify(nextUser));
+      }
+      if (user) addNotification(user.id, 'Profile updated', 'SUCCESS');
+      return true;
     } catch (error) {
       console.error('Failed to update producer profile', error);
-      throw error;
+      if (user) addNotification(user.id, 'Failed to save changes.', 'ERROR');
+      return false;
     }
   };
 
@@ -877,7 +938,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify({ schedule, exceptions }),
       });
       setProducers(prev => prev.map(p => p.id === producerId ? { ...p, availability: schedule, exceptions } : p));
-      addNotification(producerId, 'Availability updated', 'SUCCESS');
+      if (user) addNotification(user.id, 'Availability updated', 'SUCCESS');
     } catch (error) {
       console.error('Failed to update availability', error);
     }
@@ -922,16 +983,32 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── CLIENT PROFILE ──────────────────────────────────────────────────────────
 
-  const updateClientProfile = async (updatedClient: ClientProfile) => {
+  const updateClientProfile = async (updatedClient: ClientProfile): Promise<boolean> => {
     try {
       const saved = await apiFetch<any>(API_ENDPOINTS.clients.update(updatedClient.id), {
         method: 'PUT',
         body: JSON.stringify(updatedClient),
       });
       setClients(prev => prev.map(c => c.id === saved.id ? { ...saved, user: saved.user ?? (c as any).user } : c));
-      addNotification(updatedClient.id, 'Profile updated', 'SUCCESS');
+      if (saved?.user && user && user.id === saved.user.id) {
+        const nextUser: UserSession = {
+          ...user,
+          email: saved.user.email ?? user.email,
+          phone: saved.user.phone ?? user.phone,
+          displayName: saved.user.displayName ?? user.displayName,
+          name: saved.user.displayName ?? user.name,
+          profileImageUrl: saved.user.profileImageUrl ?? user.profileImageUrl,
+        };
+        setUser(nextUser);
+        useSessionStore.getState().setUser(nextUser);
+        localStorage.setItem('currentUser', JSON.stringify(nextUser));
+      }
+      if (user) addNotification(user.id, 'Profile updated', 'SUCCESS');
+      return true;
     } catch (error) {
       console.error('Failed to update client profile', error);
+      if (user) addNotification(user.id, 'Failed to save changes.', 'ERROR');
+      return false;
     }
   };
 
@@ -947,10 +1024,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(offerData),
       });
       setOffers(prev => [...prev, newOffer]);
+      addNotification(user.id, 'Offer created successfully.', 'SUCCESS');
       return { success: true };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to create offer.';
       console.error('Failed to create offer:', err);
+      addNotification(user.id, message, 'ERROR');
       return { success: false, error: message };
     }
   };
@@ -962,10 +1041,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(updatedOffer),
       });
       setOffers(prev => prev.map(o => o.id === saved.id ? saved : o));
+      addNotification(user?.id || saved.producerId, 'Offer updated successfully.', 'SUCCESS');
       return { success: true };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to update offer.';
       console.error('Failed to update offer', error);
+      if (user) addNotification(user.id, message, 'ERROR');
       return { success: false, error: message };
     }
   };
@@ -1395,10 +1476,58 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const toggleFavorite = (offerId: string) => {
     if (!user) return;
+
     if (user.role === UserRole.CLIENT) {
-      setClients(prev => prev.map(c => clientProfileMatchesSession(c, user) ? { ...c, favorites: c.favorites.includes(offerId) ? c.favorites.filter(id => id !== offerId) : [...c.favorites, offerId] } : c));
-    } else if (user.role === UserRole.PRODUCER && user.producerId) {
-      setProducers(prev => prev.map(p => p.id === user.producerId ? { ...p, favorites: p.favorites?.includes(offerId) ? p.favorites.filter(id => id !== offerId) : [...(p.favorites || []), offerId] } : p));
+      const client = clients.find(c => clientProfileMatchesSession(c, user));
+      if (!client) return;
+      const previousFavorites = [...(client.favorites || [])];
+      const nextFavorites = previousFavorites.includes(offerId)
+        ? previousFavorites.filter(id => id !== offerId)
+        : [...previousFavorites, offerId];
+      const added = !previousFavorites.includes(offerId);
+
+      setClients(prev => prev.map(c => c.id === client.id ? { ...c, favorites: nextFavorites } : c));
+
+      void (async () => {
+        try {
+          await apiFetch(API_ENDPOINTS.clients.update(client.id), {
+            method: 'PUT',
+            body: JSON.stringify({ favorites: nextFavorites }),
+          });
+          addNotification(user.id, added ? 'Added to favorites.' : 'Removed from favorites.', 'SUCCESS');
+        } catch (error) {
+          setClients(prev => prev.map(c => c.id === client.id ? { ...c, favorites: previousFavorites } : c));
+          addNotification(user.id, 'Failed to update favorites. Please try again.', 'ERROR');
+          console.error('Failed to persist client favorites:', error);
+        }
+      })();
+      return;
+    }
+
+    if (user.role === UserRole.PRODUCER && user.producerId) {
+      const producer = producers.find(p => p.id === user.producerId);
+      if (!producer) return;
+      const previousFavorites = [...(producer.favorites || [])];
+      const nextFavorites = previousFavorites.includes(offerId)
+        ? previousFavorites.filter(id => id !== offerId)
+        : [...previousFavorites, offerId];
+      const added = !previousFavorites.includes(offerId);
+
+      setProducers(prev => prev.map(p => p.id === producer.id ? { ...p, favorites: nextFavorites } : p));
+
+      void (async () => {
+        try {
+          await apiFetch(API_ENDPOINTS.producers.update(producer.id), {
+            method: 'PUT',
+            body: JSON.stringify({ favorites: nextFavorites }),
+          });
+          addNotification(user.id, added ? 'Added to favorites.' : 'Removed from favorites.', 'SUCCESS');
+        } catch (error) {
+          setProducers(prev => prev.map(p => p.id === producer.id ? { ...p, favorites: previousFavorites } : p));
+          addNotification(user.id, 'Failed to update favorites. Please try again.', 'ERROR');
+          console.error('Failed to persist producer favorites:', error);
+        }
+      })();
     }
   };
 

@@ -4,11 +4,13 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, PaymentMethod, ProducerProfile as ProducerProfileType, Location, Portfolio } from '../../types';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Wallet, Shield, Tractor, CreditCard, Trash2, Plus, Camera, Upload, MapPin, FileText, X, LogOut, Image as ImageIcon, Video, Eye, Edit, CheckCircle, Heart, ArrowLeft, Search, Users, Copy } from 'lucide-react';
+import { User, Wallet, Shield, Tractor, CreditCard, Trash2, Plus, Camera, Upload, MapPin, FileText, X, LogOut, Image as ImageIcon, Video, Eye, Edit, CheckCircle, Heart, ArrowLeft, Search, Users, Copy, Loader2 } from 'lucide-react';
+import { useUpdateProducerProfileMutation } from '../../api/hooks/useUpdateProducerProfileMutation';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 import { OtpVerificationModal } from '../../components/OtpVerificationModal';
 import { loadGooglePlacesApi, parseGooglePlace } from '../../services/googlePlaces';
+import { uploadAvatar } from '../../services/uploadService';
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
@@ -26,7 +28,8 @@ function isHostedHttpUrl(url: string | undefined): boolean {
 }
 
 export const ProducerProfile: React.FC = () => {
-  const { user, producers, saveProducerPaymentMethod, deleteProducerPaymentMethod, updateProducerProfile, requestOtp, verifyOtp, logout, getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio, offers, toggleFavorite, myReferrals, refreshMyReferrals } = useStore();
+  const { user, producers, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, logout, getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio, offers, toggleFavorite, myReferrals, refreshMyReferrals } = useStore();
+  const updateProducerMutation = useUpdateProducerProfileMutation();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'info' | 'security' | 'payment' | 'portfolio' | 'favorites' | 'referrals'>('info');
@@ -61,6 +64,7 @@ export const ProducerProfile: React.FC = () => {
   // OTP for profile name/phone change
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [pendingProfileUpdate, setPendingProfileUpdate] = useState<ProducerProfileType | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   // ... [Existing Logic for form init, favorites, handlers] ...
   const currentProducer = producers.find(p => p.id === user?.producerId || p.userId === user?.id);
@@ -89,6 +93,7 @@ export const ProducerProfile: React.FC = () => {
         firstName: (currentProducer.firstName ?? '').toString(),
         lastName: (currentProducer.lastName ?? '').toString(),
         description: (currentProducer.description ?? '').toString(),
+        profileImageUrl: (producerUser?.profileImageUrl ?? (currentProducer as any).profileImageUrl ?? '').toString() || undefined,
         locations: Array.isArray(currentProducer.locations) ? currentProducer.locations : [],
         productionTypes: Array.isArray(currentProducer.productionTypes) ? currentProducer.productionTypes : [],
         certifications: Array.isArray(currentProducer.certifications) ? currentProducer.certifications : [],
@@ -129,36 +134,68 @@ export const ProducerProfile: React.FC = () => {
     setLocationSearch('');
   };
   const removeLocation = (index: number) => { if (!formData) return; setFormData({ ...formData, locations: formData.locations.filter((_, i) => i !== index) }); };
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'profileImageUrl' | 'certifications') => { if (!formData || !e.target.files || e.target.files.length === 0) return; const file = e.target.files[0]; if (file.size > 10 * 1024 * 1024) { alert("File size exceeds 10MB limit."); return; } const allowedTypes = field === 'profileImageUrl' ? ['image/png', 'image/jpeg'] : ['image/png', 'image/jpeg', 'application/pdf']; if (!allowedTypes.includes(file.type)) { alert(field === 'profileImageUrl' ? "Only PNG and JPG formats are allowed." : "Only PNG, JPG, and PDF formats are allowed."); return; } const fakeUrl = URL.createObjectURL(file); if (field === 'profileImageUrl') { setFormData({ ...formData, profileImageUrl: fakeUrl }); } else { setFormData({ ...formData, certifications: [...formData.certifications, file.name] }); } };
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'profileImageUrl' | 'certifications') => {
+    if (!formData || !e.target.files?.length) return;
+    const file = e.target.files[0];
+    if (field === 'profileImageUrl') {
+      const maxBytes = 2 * 1024 * 1024;
+      if (file.size > maxBytes) {
+        alert('Image must be 2 MB or less.');
+        return;
+      }
+      const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        alert('Only PNG, JPG, and WebP are allowed for profile photos.');
+        return;
+      }
+      setAvatarUploading(true);
+      try {
+        const url = await uploadAvatar(file);
+        setFormData({ ...formData, profileImageUrl: url });
+      } catch (err: unknown) {
+        alert(err instanceof Error ? err.message : 'Upload failed.');
+      } finally {
+        setAvatarUploading(false);
+      }
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size exceeds 10MB limit.');
+      return;
+    }
+    const allowedTypes = ['image/png', 'image/jpeg', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Only PNG, JPG, and PDF formats are allowed.');
+      return;
+    }
+    setFormData({ ...formData, certifications: [...formData.certifications, file.name] });
+  };
   const savePersonalInfo = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData) return;
     let displayName = formData.name;
     if (formData.type === 'INDIVIDUAL' && formData.firstName && formData.lastName) displayName = `${formData.firstName} ${formData.lastName}`;
     const payload = { ...formData, name: displayName };
-    // Production: OTP before save (API enforces when APP_ENV=production). Dev: save without modal.
     if (import.meta.env.PROD) {
       setPendingProfileUpdate(payload);
       setShowOtpModal(true);
       return;
     }
-    void (async () => {
-      try {
-        await updateProducerProfile(payload);
-      } catch (err: any) {
-        alert(err?.message || 'Profile update failed. Please try again.');
-      }
-    })();
+    updateProducerMutation.mutate({ producer: payload });
   };
-  const handleOtpVerifiedForProfile = async (token: string) => {
+  const handleOtpVerifiedForProfile = (token: string) => {
     if (!pendingProfileUpdate) return;
-    try {
-      await updateProducerProfile(pendingProfileUpdate, token);
-      setPendingProfileUpdate(null);
-      setShowOtpModal(false);
-    } catch (err: any) {
-      alert(err?.message || 'Profile update failed. Please try again.');
-    }
+    updateProducerMutation.mutate(
+      { producer: pendingProfileUpdate, otpToken: token },
+      {
+        onSuccess: (ok) => {
+          if (ok) {
+            setPendingProfileUpdate(null);
+            setShowOtpModal(false);
+          }
+        },
+      },
+    );
   };
   const copyReferralLink = () => {
     if (!referralCodeDisplay) return;
@@ -364,7 +401,7 @@ export const ProducerProfile: React.FC = () => {
               {/* ... [Existing Info Form Code] ... */}
               <div className="flex justify-between items-center border-b border-gray-200 pb-4 mb-4"><h3 className="text-lg font-medium text-gray-900">{t('profile.tabs.info')}</h3></div>
               {/* Simplified view for brevity, functionality preserved */}
-              <div className="flex items-center mb-6"><div className="relative"><div className="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">{formData.profileImageUrl ? (<img src={formData.profileImageUrl} alt="Profile" className="h-full w-full object-cover" />) : (<User className="h-12 w-12 text-gray-400" />)}</div><label className="absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white cursor-pointer hover:bg-primary-700 shadow-sm"><Camera className="h-4 w-4" /><input type="file" accept="image/png, image/jpeg" className="hidden" onChange={(e) => handleFileUpload(e, 'profileImageUrl')} /></label></div><div className="ml-4"><p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p><p className="text-xs text-gray-500">JPG or PNG. Max 10MB.</p></div></div>
+              <div className="flex items-center mb-6"><div className="relative"><div className="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">{formData.profileImageUrl ? (<img src={formData.profileImageUrl} alt="Profile" className="h-full w-full object-cover" />) : (<User className="h-12 w-12 text-gray-400" />)}</div><label className={`absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white shadow-sm ${avatarUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-primary-700'}`}><Camera className="h-4 w-4" /><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={avatarUploading} onChange={(e) => void handleFileUpload(e, 'profileImageUrl')} /></label></div><div className="ml-4"><p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p><p className="text-xs text-gray-500">{avatarUploading ? 'Uploading…' : 'JPG, PNG, or WebP. Max 2 MB.'}</p></div></div>
               <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
                 <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-2">{t('profile.type')}</label><div className="flex space-x-4"><label className="flex items-center"><input type="radio" name="type" value="BUSINESS" checked={formData.type === 'BUSINESS'} onChange={() => setFormData({ ...formData!, type: 'BUSINESS' })} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">{t('profile.business')}</span></label><label className="flex items-center"><input type="radio" name="type" value="INDIVIDUAL" checked={formData.type === 'INDIVIDUAL'} onChange={() => setFormData({ ...formData!, type: 'INDIVIDUAL' })} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">{t('profile.individual')}</span></label></div></div>
                 {formData.type === 'BUSINESS' ? (<><div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">{t('form.farmName')}</label><input type="text" name="name" value={formData.name ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">Tax ID (TIN / NIU)</label><input type="text" name="taxIdentificationNumber" value={formData.taxIdentificationNumber ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">Tax clearance certificate URL</label><input type="url" name="taxClearanceCertificateUrl" placeholder="https://..." value={formData.taxClearanceCertificateUrl ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div></>) : (<><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.firstName')}</label><input type="text" name="firstName" value={formData.firstName || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.lastName')}</label><input type="text" name="lastName" value={formData.lastName || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.gender')}</label><select name="gender" value={formData.gender || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900"><option value="">Select Gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.dob')}</label><input type="date" name="dateOfBirth" value={formData.dateOfBirth || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div></>)}
@@ -462,7 +499,22 @@ export const ProducerProfile: React.FC = () => {
                 </div>
                 <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">{t('form.desc')}</label><textarea name="description" rows={3} value={formData.description} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
                 <div className="sm:col-span-6 border-t border-gray-100 pt-4"><h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center"><FileText className="h-4 w-4 mr-1 text-primary-600" /> Documents</h4><label className="block text-sm font-medium text-gray-700">{t('profile.uploadDocs')}</label><div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:bg-gray-50 transition-colors bg-white"><div className="space-y-1 text-center"><Upload className="mx-auto h-12 w-12 text-gray-400" /><div className="flex text-sm text-gray-600"><label className="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500"><span>Upload a file</span><input type="file" className="sr-only" accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf" onChange={(e) => handleFileUpload(e, 'certifications')} /></label><p className="pl-1">or drag and drop</p></div><p className="text-xs text-gray-500">PNG, JPG, PDF up to 10MB</p></div></div>{formData.certifications.length > 0 && (<ul className="mt-3 border border-gray-200 rounded-md divide-y divide-gray-200 bg-white">{formData.certifications.map((cert, idx) => (<li key={idx} className="pl-3 pr-4 py-3 flex items-center justify-between text-sm"><div className="w-0 flex-1 flex items-center"><FileText className="flex-shrink-0 h-5 w-5 text-gray-400" /><span className="ml-2 flex-1 w-0 truncate text-gray-900">{cert}</span></div></li>))}</ul>)}</div>
-                <div className="sm:col-span-6 pt-4 flex justify-end"><button type="submit" className="bg-primary-600 text-white px-6 py-2 rounded-md text-sm font-medium shadow hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">{t('form.save')}</button></div>
+                <div className="sm:col-span-6 pt-4 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={updateProducerMutation.isPending}
+                    className="inline-flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-2 rounded-md text-sm font-medium shadow hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {updateProducerMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+                        {t('form.saving')}
+                      </>
+                    ) : (
+                      t('form.save')
+                    )}
+                  </button>
+                </div>
               </div>
             </form>
           )}

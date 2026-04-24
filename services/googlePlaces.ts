@@ -54,6 +54,24 @@ export type ParsedPlace = {
   lng: number;
 };
 
+/** Normalize for comparing city/region strings from profile vs Places vs pickup points. */
+export function foldLocationToken(s: string): string {
+  return String(s ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+/** True when two place labels likely refer to the same city (accents, partial match). */
+export function citiesLooselyMatch(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const fa = foldLocationToken(a);
+  const fb = foldLocationToken(b);
+  if (!fa || !fb) return false;
+  return fa === fb || fa.includes(fb) || fb.includes(fa);
+}
+
 export function parseGooglePlace(place: any): ParsedPlace | null {
   const address = place?.formatted_address || place?.name || '';
   const lat = place?.geometry?.location?.lat?.();
