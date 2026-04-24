@@ -25,6 +25,7 @@ export const ChatPage: React.FC = () => {
 
    const messagesEndRef = useRef<HTMLDivElement>(null);
    const messageInputRef = useRef<HTMLTextAreaElement>(null);
+   const proposalModalWasOpenRef = useRef(false);
 
    const TEXTAREA_MAX_PX = 160;
 
@@ -78,6 +79,10 @@ export const ChatPage: React.FC = () => {
          if (interval) clearInterval(interval);
       };
    }, [chatId, user?.id]);
+
+   useEffect(() => {
+      proposalModalWasOpenRef.current = false;
+   }, [chatId]);
 
    // Variables hoisted above for scroll calculation
 
@@ -161,14 +166,36 @@ export const ChatPage: React.FC = () => {
       setCounterTargetMsgId(null);
    };
 
-   // Initialize proposal form with offer defaults if available
+   // Initialize proposal form only when the modal opens (not on every poll / message update).
+   // Prefill from the latest proposal for this offer in the thread so API/curl updates match the form;
+   // otherwise fall back to listing price.
    useEffect(() => {
-      if (!showProposalModal || !activeChat?.offerId) return;
+      if (!showProposalModal || !activeChat?.offerId || !activeChat.id) {
+         proposalModalWasOpenRef.current = false;
+         return;
+      }
+      const justOpened = !proposalModalWasOpenRef.current;
+      proposalModalWasOpenRef.current = true;
+      if (!justOpened) return;
+
       const offer = getOfferById(activeChat.offerId);
       if (!offer) return;
-      setProposalPrice(Number(offer.price) || 0);
-      setProposalQty(1);
-   }, [showProposalModal, activeChat?.offerId, getOfferById]);
+
+      const threadMsgs = messages
+         .filter((m) => m.chatId === activeChat.id)
+         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      const lastForOffer = [...threadMsgs]
+         .reverse()
+         .find((m) => m.proposal?.offerId === activeChat.offerId);
+
+      if (lastForOffer?.proposal) {
+         setProposalPrice(Number(lastForOffer.proposal.pricePerUnit) || 0);
+         setProposalQty(Number(lastForOffer.proposal.quantity) || 1);
+      } else {
+         setProposalPrice(Number(offer.price) || 0);
+         setProposalQty(1);
+      }
+   }, [showProposalModal, activeChat?.offerId, activeChat?.id, messages]);
 
    if (!user) return <div className="p-8 text-center">Login required.</div>;
 
