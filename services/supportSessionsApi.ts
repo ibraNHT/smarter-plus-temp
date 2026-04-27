@@ -4,8 +4,8 @@
 
 import type { SupportMessage } from '../types';
 import { apiFetch, getToken } from './apiService';
-import { apiGet, apiPost } from '../client-api/http';
-import { API_ENDPOINTS } from '../client-api/endpoints';
+import { apiGet, apiPost } from '../api/http';
+import { API_ENDPOINTS } from '../api/endpoints';
 
 export type SupportMessageDto = {
   id: string;

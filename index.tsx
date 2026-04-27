@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { HelmetProvider } from 'react-helmet-async';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { queryClient } from './client-api/queryClient';
+import { queryClient } from './api/queryClient';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

@@ -3,8 +3,8 @@
 
 import { apiFetch } from './apiService';
 import { getToken } from './apiService';
-import { API_ENDPOINTS } from '../client-api/endpoints';
-import { sendSupportChatMessage } from '../client-api/endpoints/support';
+import { API_ENDPOINTS } from '../api/endpoints';
+import { sendSupportChatMessage } from '../api/endpoints/support';
 
 /**
  * Generate a product description using AI

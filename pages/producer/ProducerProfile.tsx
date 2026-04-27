@@ -5,7 +5,7 @@ import { useTranslation } from '../../services/i18nContext';
 import { UserRole, PaymentMethod, ProducerProfile as ProducerProfileType, Location, Portfolio } from '../../types';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Wallet, Shield, Tractor, CreditCard, Trash2, Plus, Camera, Upload, MapPin, FileText, X, LogOut, Image as ImageIcon, Video, Eye, Edit, CheckCircle, Heart, ArrowLeft, Search, Users, Copy, Loader2 } from 'lucide-react';
-import { useUpdateProducerProfileMutation } from '../../client-api/hooks/useUpdateProducerProfileMutation';
+import { useUpdateProducerProfileMutation } from '../../api/hooks/useUpdateProducerProfileMutation';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 import { OtpVerificationModal } from '../../components/OtpVerificationModal';
@@ -13,7 +13,7 @@ import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/
 import { LocationMapPicker } from '../../components/LocationMapPicker';
 import { uploadAvatar } from '../../services/uploadService';
 import { apiFetch } from '../../services/apiService';
-import { API_ENDPOINTS } from '../../client-api/endpoints';
+import { API_ENDPOINTS } from '../../api/endpoints';
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 

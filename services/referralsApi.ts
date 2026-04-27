@@ -1,6 +1,6 @@
 import { apiFetch } from './apiService';
 import type { ActiveReferralProgramPublic, MyReferralsData } from '../types';
-import { API_ENDPOINTS } from '../client-api/endpoints';
+import { API_ENDPOINTS } from '../api/endpoints';
 
 function normalizeActiveProgram(raw: unknown): ActiveReferralProgramPublic | null {
   if (!raw || typeof raw !== 'object') return null;

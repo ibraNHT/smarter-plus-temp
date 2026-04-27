@@ -124,7 +124,7 @@ import { validateCouponRemote, type CouponValidationChannel } from './couponsApi
 import { io, Socket } from 'socket.io-client';
 import { isWebAppAllowedRole, isWebAppSessionBlocked } from './authRoles';
 import { useSessionStore } from '../stores/sessionStore';
-import { API_ENDPOINTS } from '../client-api/endpoints';
+import { API_ENDPOINTS } from '../api/endpoints';
 
 interface StoreContextType {
   user: UserSession | null;
