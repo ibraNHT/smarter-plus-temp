@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, PaymentMethod, ProducerProfile as ProducerProfileType, Location, Portfolio } from '../../types';
@@ -9,8 +9,11 @@ import { useUpdateProducerProfileMutation } from '../../api/hooks/useUpdateProdu
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 import { OtpVerificationModal } from '../../components/OtpVerificationModal';
-import { loadGooglePlacesApi, parseGooglePlace } from '../../services/googlePlaces';
+import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
+import { LocationMapPicker } from '../../components/LocationMapPicker';
 import { uploadAvatar } from '../../services/uploadService';
+import { apiFetch } from '../../services/apiService';
+import { API_ENDPOINTS } from '../../api/endpoints';
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
@@ -28,7 +31,7 @@ function isHostedHttpUrl(url: string | undefined): boolean {
 }
 
 export const ProducerProfile: React.FC = () => {
-  const { user, producers, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, logout, getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio, offers, toggleFavorite, myReferrals, refreshMyReferrals } = useStore();
+  const { user, producers, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, logout, getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio, offers, toggleFavorite, myReferrals, refreshMyReferrals, isInitialCatalogLoading } = useStore();
   const updateProducerMutation = useUpdateProducerProfileMutation();
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -42,13 +45,13 @@ export const ProducerProfile: React.FC = () => {
   const [formData, setFormData] = useState<ProducerProfileType | null>(null);
 
   // Temp Location State for adding new ones
-  const [newLoc, setNewLoc] = useState<Partial<Location>>({ region: '', city: '', address: '' });
+  const [newLoc, setNewLoc] = useState<Partial<Location>>({ region: '', city: '', address: '', lat: 0, lng: 0 });
   const [locationSearch, setLocationSearch] = useState('');
-  const [placesStatus, setPlacesStatus] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [locationSuggestions, setLocationSuggestions] = useState<Array<{ address: string; city: string; region: string; lat: number; lng: number }>>([]);
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const [isNearbyLoading, setIsNearbyLoading] = useState(false);
-  const locationSearchRef = useRef<HTMLInputElement | null>(null);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [editingLocationIndex, setEditingLocationIndex] = useState<number | null>(null);
 
   // Portfolio State
   const [showPortfolioModal, setShowPortfolioModal] = useState(false);
@@ -65,6 +68,7 @@ export const ProducerProfile: React.FC = () => {
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [pendingProfileUpdate, setPendingProfileUpdate] = useState<ProducerProfileType | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [profileHydrating, setProfileHydrating] = useState(false);
 
   // ... [Existing Logic for form init, favorites, handlers] ...
   const currentProducer = producers.find(p => p.id === user?.producerId || p.userId === user?.id);
@@ -81,28 +85,79 @@ export const ProducerProfile: React.FC = () => {
     if (activeTab === 'referrals') void refreshMyReferrals();
   }, [activeTab, refreshMyReferrals]);
   useEffect(() => {
-    if (currentProducer && !formData) {
-      const producerUser = (currentProducer as any).user;
-      const sessionEmail = (user as any)?.email ?? '';
-      const sessionPhone = (user as any)?.phone ?? '';
-      setFormData({
-        ...currentProducer,
-        email: (producerUser?.email ?? (currentProducer as any).email ?? sessionEmail).toString(),
-        phone: (producerUser?.phone ?? (currentProducer as any).phone ?? sessionPhone).toString(),
-        name: (producerUser?.displayName ?? (currentProducer as any).name ?? ((currentProducer.type === 'INDIVIDUAL' ? `${currentProducer.firstName ?? ''} ${currentProducer.lastName ?? ''}`.trim() : currentProducer.name) || '')).toString(),
-        firstName: (currentProducer.firstName ?? '').toString(),
-        lastName: (currentProducer.lastName ?? '').toString(),
-        description: (currentProducer.description ?? '').toString(),
-        profileImageUrl: (producerUser?.profileImageUrl ?? (currentProducer as any).profileImageUrl ?? '').toString() || undefined,
-        locations: Array.isArray(currentProducer.locations) ? currentProducer.locations : [],
-        productionTypes: Array.isArray(currentProducer.productionTypes) ? currentProducer.productionTypes : [],
-        certifications: Array.isArray(currentProducer.certifications) ? currentProducer.certifications : [],
-        favorites: Array.isArray(currentProducer.favorites) ? currentProducer.favorites : [],
-        taxIdentificationNumber: (currentProducer as any).taxIdentificationNumber ?? '',
-        taxClearanceCertificateUrl: (currentProducer as any).taxClearanceCertificateUrl ?? '',
-      });
-    }
-  }, [currentProducer, formData, user]);
+    if (!currentProducer) return;
+    const producerUser = (currentProducer as any).user;
+    const sessionEmail = (user as any)?.email ?? '';
+    const sessionPhone = (user as any)?.phone ?? '';
+    const normalized: ProducerProfileType = {
+      ...currentProducer,
+      email: (producerUser?.email ?? (currentProducer as any).email ?? sessionEmail).toString(),
+      phone: (producerUser?.phone ?? (currentProducer as any).phone ?? sessionPhone).toString(),
+      name: (producerUser?.displayName ?? (currentProducer as any).name ?? ((currentProducer.type === 'INDIVIDUAL' ? `${currentProducer.firstName ?? ''} ${currentProducer.lastName ?? ''}`.trim() : currentProducer.name) || '')).toString(),
+      firstName: (currentProducer.firstName ?? '').toString(),
+      lastName: (currentProducer.lastName ?? '').toString(),
+      description: (currentProducer.description ?? '').toString(),
+      profileImageUrl: (producerUser?.profileImageUrl ?? (currentProducer as any).profileImageUrl ?? '').toString() || undefined,
+      locations: Array.isArray(currentProducer.locations) ? currentProducer.locations : [],
+      productionTypes: Array.isArray(currentProducer.productionTypes) ? currentProducer.productionTypes : [],
+      certifications: Array.isArray(currentProducer.certifications) ? currentProducer.certifications : [],
+      favorites: Array.isArray(currentProducer.favorites) ? currentProducer.favorites : [],
+      taxIdentificationNumber: (currentProducer as any).taxIdentificationNumber ?? '',
+      taxClearanceCertificateUrl: (currentProducer as any).taxClearanceCertificateUrl ?? '',
+    };
+    setFormData((prev) => {
+      if (!prev) return normalized;
+      if (prev.id !== normalized.id) return normalized;
+      return prev;
+    });
+  }, [currentProducer, user]);
+  useEffect(() => {
+    if (!user || user.role !== UserRole.PRODUCER) return;
+    let cancelled = false;
+    const hydrateMyProducerProfile = async () => {
+      setProfileHydrating(true);
+      try {
+        const rows = await apiFetch<any[]>(API_ENDPOINTS.producers.list, { silent401: true } as any).catch(() => []);
+        if (cancelled || !Array.isArray(rows)) return;
+        const mine = rows.find((p: any) => p?.id === user.producerId || p?.userId === user.id);
+        if (!mine) return;
+        const producerUser = (mine as any).user;
+        const sessionEmail = (user as any)?.email ?? '';
+        const sessionPhone = (user as any)?.phone ?? '';
+        const normalized: ProducerProfileType = {
+          ...mine,
+          email: (producerUser?.email ?? (mine as any).email ?? sessionEmail).toString(),
+          phone: (producerUser?.phone ?? (mine as any).phone ?? sessionPhone).toString(),
+          name: (producerUser?.displayName ?? (mine as any).name ?? ((mine.type === 'INDIVIDUAL' ? `${mine.firstName ?? ''} ${mine.lastName ?? ''}`.trim() : mine.name) || '')).toString(),
+          firstName: (mine.firstName ?? '').toString(),
+          lastName: (mine.lastName ?? '').toString(),
+          description: (mine.description ?? '').toString(),
+          profileImageUrl: (producerUser?.profileImageUrl ?? (mine as any).profileImageUrl ?? '').toString() || undefined,
+          locations: Array.isArray(mine.locations) ? mine.locations : [],
+          productionTypes: Array.isArray(mine.productionTypes) ? mine.productionTypes : [],
+          certifications: Array.isArray(mine.certifications) ? mine.certifications : [],
+          favorites: Array.isArray(mine.favorites) ? mine.favorites : [],
+          taxIdentificationNumber: (mine as any).taxIdentificationNumber ?? '',
+          taxClearanceCertificateUrl: (mine as any).taxClearanceCertificateUrl ?? '',
+        } as ProducerProfileType;
+        setFormData((prev) => (prev?.id === normalized.id ? prev : normalized));
+      } finally {
+        if (!cancelled) setProfileHydrating(false);
+      }
+    };
+    void hydrateMyProducerProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+  useEffect(() => {
+    if (!formData || formData.locations.length === 0) return;
+    if (String(newLoc.address ?? '').trim()) return;
+    const first = formData.locations[0];
+    setNewLoc({ ...first });
+    setLocationSearch(first.address ?? '');
+    setEditingLocationIndex(0);
+  }, [formData, newLoc.address]);
   const favoriteOffers = currentProducer?.favorites.map(id => offers.find(o => o.id === id)).filter(Boolean) as any[];
   const unavailableFavoriteIds = currentProducer?.favorites.filter(id => !offers.find(o => o.id === id));
   const performLogout = async () => {
@@ -129,11 +184,26 @@ export const ProducerProfile: React.FC = () => {
       city: inferredCity,
       address,
     };
-    setFormData({ ...formData, locations: [...formData.locations, locationToAdd] });
-    setNewLoc({ region: '', city: '', address: '' });
+    const nextLocations =
+      editingLocationIndex != null && editingLocationIndex >= 0 && editingLocationIndex < formData.locations.length
+        ? formData.locations.map((loc, idx) => (idx === editingLocationIndex ? locationToAdd : loc))
+        : [...formData.locations, locationToAdd];
+    setFormData({ ...formData, locations: nextLocations });
+    setNewLoc({ region: '', city: '', address: '', lat: 0, lng: 0 });
     setLocationSearch('');
+    setEditingLocationIndex(null);
   };
-  const removeLocation = (index: number) => { if (!formData) return; setFormData({ ...formData, locations: formData.locations.filter((_, i) => i !== index) }); };
+  const removeLocation = (index: number) => {
+    if (!formData) return;
+    setFormData({ ...formData, locations: formData.locations.filter((_, i) => i !== index) });
+    if (editingLocationIndex === index) {
+      setEditingLocationIndex(null);
+      setNewLoc({ region: '', city: '', address: '', lat: 0, lng: 0 });
+      setLocationSearch('');
+    } else if (editingLocationIndex != null && editingLocationIndex > index) {
+      setEditingLocationIndex(editingLocationIndex - 1);
+    }
+  };
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'profileImageUrl' | 'certifications') => {
     if (!formData || !e.target.files?.length) return;
     const file = e.target.files[0];
@@ -203,41 +273,6 @@ export const ProducerProfile: React.FC = () => {
     void navigator.clipboard.writeText(link);
     alert('Referral link copied!');
   };
-  useEffect(() => {
-    let canceled = false;
-    let autocomplete: any = null;
-    const initAutocomplete = async () => {
-      const ok = await loadGooglePlacesApi();
-      if (canceled) return;
-      if (!ok) {
-        setPlacesStatus('unavailable');
-        return;
-      }
-      setPlacesStatus('ready');
-      const input = locationSearchRef.current;
-      const g = (window as any).google;
-      if (!input || !g?.maps?.places) return;
-      autocomplete = new g.maps.places.Autocomplete(input, {
-        fields: ['formatted_address', 'address_components', 'geometry', 'name'],
-      });
-      autocomplete.addListener('place_changed', () => {
-        const parsed = parseGooglePlace(autocomplete.getPlace());
-        if (!parsed) return;
-        setLocationSearch(parsed.address);
-        setNewLoc({
-          region: parsed.region,
-          city: parsed.city,
-          address: parsed.address,
-          lat: parsed.lat,
-          lng: parsed.lng,
-        });
-      });
-    };
-    void initAutocomplete();
-    return () => {
-      canceled = true;
-    };
-  }, []);
   useEffect(() => {
     const query = String(locationSearch ?? '').trim();
     if (query.length < 3) {
@@ -331,6 +366,42 @@ export const ProducerProfile: React.FC = () => {
       { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 },
     );
   }, []);
+
+  const handleProfileMapPositionChange = useCallback(async (lat: number, lng: number) => {
+    setNewLoc((prev) => ({ ...prev, lat, lng }));
+    const rev = await nominatimReverseGeocode(lat, lng);
+    if (!rev) return;
+    setNewLoc((prev) => ({
+      ...prev,
+      lat,
+      lng,
+      address: rev.address || prev.address,
+      city: rev.city || prev.city,
+      region: rev.region || prev.region,
+    }));
+    setLocationSearch(rev.address);
+  }, []);
+
+  const handleUseMyLocationProfile = async () => {
+    setGeoLoading(true);
+    try {
+      const { lat, lng } = await requestBrowserLocation();
+      const rev = await nominatimReverseGeocode(lat, lng);
+      setNewLoc({
+        address: rev?.address || '',
+        city: rev?.city || '',
+        region: rev?.region || '',
+        lat,
+        lng,
+      });
+      setLocationSearch(rev?.address || '');
+    } catch {
+      alert('Could not read your location. Allow permission or set the pin on the map.');
+    } finally {
+      setGeoLoading(false);
+    }
+  };
+
   const handlePortfolioImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) { const files = Array.from(e.target.files) as File[]; if ((portfolioForm.imageUrls?.length || 0) + files.length > 10) { alert("Maximum 10 images allowed."); return; } const newUrls: string[] = []; for (const file of files) { if (file.size > 2 * 1024 * 1024) { alert(`File ${file.name} is too large. Max 2MB.`); continue; } if (!['image/png', 'image/jpeg'].includes(file.type)) { alert(`File ${file.name} is invalid format. PNG/JPG only.`); continue; } newUrls.push(URL.createObjectURL(file)); } setPortfolioForm(prev => ({ ...prev, imageUrls: [...(prev.imageUrls || []), ...newUrls] })); } };
   const handlePortfolioVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { const file = e.target.files[0]; if (file.size > 30 * 1024 * 1024) { alert("Video file too large. Max 30MB."); return; } setPortfolioForm(prev => ({ ...prev, videoUrl: URL.createObjectURL(file) })); } };
   const openPortfolioModal = (portfolio?: Portfolio) => { if (portfolio) { setPortfolioForm({ ...portfolio }); } else { setPortfolioForm({ title: '', description: '', category: currentProducer?.productionTypes[0] || '', imageUrls: [], isPublished: true }); } setShowPortfolioModal(true); };
@@ -345,7 +416,17 @@ export const ProducerProfile: React.FC = () => {
   if (!user || user.role !== UserRole.PRODUCER) {
     return <div className="p-8 text-center">Access Denied</div>;
   }
-  if (!formData) return <div>Loading...</div>;
+  if (!currentProducer && (isInitialCatalogLoading || profileHydrating)) {
+    return <div className="p-8 text-center text-gray-600">Loading your profile...</div>;
+  }
+  if (!currentProducer && !isInitialCatalogLoading) {
+    return (
+      <div className="p-8 text-center text-gray-700">
+        No producer profile was found for your account.
+      </div>
+    );
+  }
+  if (!formData) return <div className="p-8 text-center text-gray-600">Loading your profile...</div>;
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
@@ -414,7 +495,15 @@ export const ProducerProfile: React.FC = () => {
                   </h4>
                   <div className="space-y-2 mb-4">
                     {formData.locations.map((loc, idx) => (
-                      <div key={idx} className="flex items-center justify-between bg-gray-50 p-3 rounded-md border border-gray-200">
+                      <div
+                        key={idx}
+                        className={`flex items-center justify-between bg-gray-50 p-3 rounded-md border cursor-pointer ${editingLocationIndex === idx ? 'border-primary-400 ring-1 ring-primary-300' : 'border-gray-200'}`}
+                        onClick={() => {
+                          setEditingLocationIndex(idx);
+                          setNewLoc({ ...loc });
+                          setLocationSearch(loc.address ?? '');
+                        }}
+                      >
                         <div>
                           <p className="text-sm font-medium text-gray-900">{loc.address}</p>
                           <p className="text-xs text-gray-500">{loc.city}, {loc.region}</p>
@@ -425,34 +514,47 @@ export const ProducerProfile: React.FC = () => {
                       </div>
                     ))}
                   </div>
-                  <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
-                    <p className="text-xs font-medium text-blue-700 mb-2">Add New Location</p>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      <input
-                        ref={locationSearchRef}
-                        type="text"
-                        placeholder={
-                          placesStatus === 'ready'
-                            ? 'Search for your full address (Google Places)'
-                            : placesStatus === 'loading'
-                              ? 'Loading Google Places...'
-                              : 'Type your full address'
-                        }
-                        value={locationSearch}
-                        onChange={e => {
-                          const value = e.target.value;
-                          setLocationSearch(value);
-                          setNewLoc((prev) => ({ ...prev, address: value }));
-                          setShowLocationSuggestions(true);
-                        }}
-                        onFocus={() => {
-                          if (locationSuggestions.length > 0) setShowLocationSuggestions(true);
-                          else loadNearbySuggestions();
-                        }}
-                        className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900 sm:col-span-3"
-                      />
+                  <div className="bg-blue-50 p-3 rounded-md border border-blue-100 space-y-3">
+                    <p className="text-xs font-medium text-blue-700">Add new location</p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleUseMyLocationProfile()}
+                        disabled={geoLoading}
+                        className="text-sm px-3 py-1.5 rounded-md border border-primary-200 bg-white text-primary-700 hover:bg-primary-50 disabled:opacity-50"
+                      >
+                        {geoLoading ? 'Getting location…' : 'Use my current location'}
+                      </button>
+                    </div>
+                    <LocationMapPicker
+                      latitude={Number(newLoc.lat) || 0}
+                      longitude={Number(newLoc.lng) || 0}
+                      onPositionChange={handleProfileMapPositionChange}
+                      height="min(240px, 45vh)"
+                    />
+                    <p className="text-xs text-gray-500">Drag the pin or tap the map to set coordinates. Address fields update from the pin when possible.</p>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Search address</label>
+                        <input
+                          type="text"
+                          placeholder="Type to search (OpenStreetMap)"
+                          value={locationSearch}
+                          onChange={e => {
+                            const value = e.target.value;
+                            setLocationSearch(value);
+                            setNewLoc((prev) => ({ ...prev, address: value }));
+                            setShowLocationSuggestions(true);
+                          }}
+                          onFocus={() => {
+                            if (locationSuggestions.length > 0) setShowLocationSuggestions(true);
+                            else loadNearbySuggestions();
+                          }}
+                          className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"
+                        />
+                      </div>
                       {showLocationSuggestions && locationSuggestions.length > 0 && (
-                        <div className="sm:col-span-3 border border-gray-200 rounded-md bg-white shadow-sm max-h-56 overflow-auto">
+                        <div className="sm:col-span-2 border border-gray-200 rounded-md bg-white shadow-sm max-h-56 overflow-auto">
                           {locationSuggestions.map((item, idx) => (
                             <button
                               key={`${item.address}-${idx}`}
@@ -477,23 +579,50 @@ export const ProducerProfile: React.FC = () => {
                         </div>
                       )}
                       {isNearbyLoading && (
-                        <p className="sm:col-span-3 text-xs text-gray-500">Finding nearby locations...</p>
+                        <p className="sm:col-span-2 text-xs text-gray-500">Finding nearby locations...</p>
                       )}
-                      {placesStatus === 'unavailable' && (
-                        <p className="sm:col-span-3 text-xs text-amber-700">
-                          Google autocomplete is unavailable. Type full address and click +.
-                        </p>
-                      )}
-                      <div className="sm:col-span-3 flex gap-2">
-                        <button
-                          type="button"
-                          onClick={addLocation}
-                          disabled={!String(newLoc.address ?? '').trim()}
-                          className="inline-flex items-center p-2 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"
-                        >
-                          <Plus className="h-5 w-5" />
-                        </button>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
+                        <input
+                          type="text"
+                          value={newLoc.city ?? ''}
+                          onChange={e => setNewLoc((prev) => ({ ...prev, city: e.target.value }))}
+                          className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900"
+                        />
                       </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Region</label>
+                        <input
+                          type="text"
+                          value={newLoc.region ?? ''}
+                          onChange={e => setNewLoc((prev) => ({ ...prev, region: e.target.value }))}
+                          className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Full address</label>
+                        <input
+                          type="text"
+                          value={newLoc.address ?? ''}
+                          onChange={e => {
+                            const v = e.target.value;
+                            setNewLoc((prev) => ({ ...prev, address: v }));
+                            setLocationSearch(v);
+                          }}
+                          className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <button
+                        type="button"
+                        onClick={addLocation}
+                        disabled={!String(newLoc.address ?? '').trim()}
+                        className="inline-flex items-center gap-1 px-3 py-2 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-sm font-medium"
+                      >
+                        <Plus className="h-4 w-4" />
+                        {editingLocationIndex != null ? 'Update location' : 'Add to list'}
+                      </button>
                     </div>
                   </div>
                 </div>

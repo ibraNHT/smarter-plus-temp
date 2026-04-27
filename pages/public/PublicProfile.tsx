@@ -7,6 +7,7 @@ import { ProducerStatus, Review } from '../../types';
 import { User, MapPin, ShieldCheck, Star, ArrowLeft, Package, Image as ImageIcon } from 'lucide-react';
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../api/endpoints';
+import { PublicProfileSkeleton } from '../../components/skeletons/PublicProfileSkeleton';
 
 function mapReviewRow(r: any): Review {
   return {
@@ -28,7 +29,7 @@ interface PublicProfileProps {
 export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
    const { id } = useParams<{ id: string }>();
    const navigate = useNavigate();
-   const { producers, clients, getProducerOffers, getProducerPortfolios } = useStore();
+   const { producers, clients, getProducerOffers, getProducerPortfolios, isInitialCatalogLoading } = useStore();
    const { t } = useTranslation();
 
    const [profileData, setProfileData] = useState<any>(null);
@@ -63,6 +64,10 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
          cancelled = true;
       };
    }, [profileData?.userId]);
+
+   if (isInitialCatalogLoading && !profileData) {
+      return <PublicProfileSkeleton />;
+   }
 
    if (!profileData) {
       return <div className="p-8 text-center">User not found</div>;

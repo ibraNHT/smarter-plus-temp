@@ -152,7 +152,7 @@ interface StoreContextType {
   fetchMessages: (chatId: string) => Promise<void>;
   startNegotiation: (producerId: string, offerId: string) => Promise<string>;
   sendMessage: (chatId: string, text: string, proposal?: Proposal) => Promise<boolean>;
-  respondToProposal: (chatId: string, messageId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', counterPrice?: number, counterQty?: number) => void;
+  respondToProposal: (chatId: string, messageId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', counterPrice?: number, counterQty?: number) => Promise<boolean>;
 
   // Support Chat (Client Side)
   supportMessages: SupportMessage[];
@@ -193,7 +193,7 @@ interface StoreContextType {
   addToCart: (offer: Offer, quantity: number, bookingDate?: string) => { success: boolean; error?: 'PRODUCER_CONFLICT' };
   removeFromCart: (offerId: string) => void;
   clearCart: () => void;
-  placeOrder: (couponId?: string, discountAmount?: number, deliveryDate?: string, deliveryMethod?: 'HOME' | 'PICKUP', pickupPointId?: string) => Promise<void>;
+  placeOrder: (couponId?: string, discountAmount?: number, deliveryDate?: string, deliveryMethod?: 'HOME' | 'PICKUP', pickupPointId?: string) => Promise<boolean>;
   confirmOrder: (orderId: string) => Promise<void>;
   rejectOrder: (orderId: string) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
@@ -246,6 +246,9 @@ interface StoreContextType {
   /** From GET /api/users/me/referrals — null when logged out or not loaded. */
   myReferrals: MyReferralsData | null;
   refreshMyReferrals: () => Promise<void>;
+
+  /** True until the first bootstrap fetch that loads offers (and related catalog data) finishes. */
+  isInitialCatalogLoading: boolean;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -292,6 +295,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [coupons, _setCoupons] = useState<Coupon[]>([]);
   const [pickupPoints, setPickupPoints] = useState<PickupPoint[]>([]);
   const [myReferrals, setMyReferrals] = useState<MyReferralsData | null>(null);
+  const initialCatalogLoadDoneRef = useRef(false);
+  const [isInitialCatalogLoading, setIsInitialCatalogLoading] = useState(true);
 
   // Chat State
   const [chats, setChats] = useState<ChatSession[]>([]);
@@ -618,6 +623,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }
     } catch (error) {
       console.error('Could not fetch data from API:', error);
+    } finally {
+      if (!initialCatalogLoadDoneRef.current) {
+        initialCatalogLoadDoneRef.current = true;
+        setIsInitialCatalogLoading(false);
+      }
     }
   };
 
@@ -674,7 +684,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       } as any).catch(() => {});
     }
 
-    await fetchData(data.user);
+    // Do not block route transitions (post-login/onboarding) on full catalog/profile fetch.
+    // This prevents the UI from feeling like a full app reload.
+    void fetchData(data.user);
   };
 
   // ─── AUTHENTICATION ──────────────────────────────────────────────────────────
@@ -721,20 +733,78 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setMyReferrals(data);
   }, [user]);
 
+  /**
+   * Backend allows one optional leading + and digits. Pasting a full number in the local
+   * field while also using the country dropdown can yield "+237+2376..." — invalid and
+   * was never possible with the old single-field Google flow.
+   */
+  const normalizeRegisterPhone = (phone: string | undefined) => {
+    let s = String(phone ?? '').replace(/\s+/g, '').trim();
+    if (!s) return s;
+    const secondPlus = s.indexOf('+', 1);
+    if (secondPlus !== -1) {
+      s = s.slice(secondPlus);
+    }
+    return s;
+  };
+
+  /** Avoid RangeError from Invalid Date (e.g. empty date string) breaking registration. */
+  const toIsoDateOfBirthSafe = (dob: unknown): string => {
+    if (dob == null || String(dob).trim() === '') return new Date().toISOString();
+    const d = new Date(String(dob));
+    if (Number.isNaN(d.getTime())) return new Date().toISOString();
+    return d.toISOString();
+  };
+
+  /**
+   * Backend DTOs require non-empty region, city, address on each location.
+   * Browser geolocation / Nominatim can leave blanks; Google Places used to fill everything.
+   */
+  const sanitizeProfileLocationsForApi = (
+    raw: unknown,
+  ): Array<{ region: string; city: string; address: string; lat: number; lng: number }> => {
+    if (!Array.isArray(raw) || raw.length === 0) return [];
+    const out: Array<{ region: string; city: string; address: string; lat: number; lng: number }> = [];
+    for (const loc of raw) {
+      const region = String(loc?.region ?? '').trim() || 'Unknown';
+      const city = String(loc?.city ?? '').trim() || 'Unknown';
+      let address = String(loc?.address ?? '').trim();
+      let lat = Number(loc?.lat);
+      let lng = Number(loc?.lng);
+      if (!Number.isFinite(lat)) lat = 0;
+      if (!Number.isFinite(lng)) lng = 0;
+      if (!address) {
+        address =
+          lat !== 0 || lng !== 0
+            ? `Map pin (${lat.toFixed(5)}, ${lng.toFixed(5)})`
+            : 'Address to be completed';
+      }
+      out.push({ region, city, address, lat, lng });
+    }
+    return out;
+  };
+
   const registerProducer = async (data: any, password: string): Promise<{ success: boolean; message: string }> => {
     try {
+      const producerRegisterBody: Record<string, string> = {
+        email: String(data.email ?? '').trim(),
+        phone: normalizeRegisterPhone(data.phone),
+        password,
+        displayName: data.name || 'Producer',
+        role: UserRole.PRODUCER,
+        producerAccountType: data.type === 'INDIVIDUAL' ? 'INDIVIDUAL' : 'BUSINESS',
+      };
+      const refP = data.referrerCode;
+      if (refP != null && String(refP).trim() !== '') {
+        producerRegisterBody.referralCode = String(refP).trim();
+      }
+      const otpP = data.phoneVerificationToken;
+      if (otpP != null && String(otpP).trim() !== '') {
+        producerRegisterBody.phoneVerificationToken = String(otpP).trim();
+      }
       const session = await apiFetch<AuthSessionPayload>(API_ENDPOINTS.auth.register, {
         method: 'POST',
-        body: JSON.stringify({
-          email: data.email,
-          phone: data.phone,
-          password,
-          displayName: data.name || 'Producer',
-          role: UserRole.PRODUCER,
-          producerAccountType: data.type === 'INDIVIDUAL' ? 'INDIVIDUAL' : 'BUSINESS',
-          referralCode: data.referrerCode,
-          phoneVerificationToken: data.phoneVerificationToken,
-        }),
+        body: JSON.stringify(producerRegisterBody),
       });
 
       await establishSession(session);
@@ -747,18 +817,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           lastName: "Owner",
           gender: "OTHER",
           dateOfBirth: new Date().toISOString(),
-          description: data.description || "",
+          description: String(data.description ?? '').trim() || 'Producer',
           certifications: data.certifications || [],
           productionTypes: data.productionTypes || [],
-          locations: Array.isArray(data.locations)
-            ? data.locations.map((loc: any) => ({
-                region: String(loc?.region ?? ''),
-                city: String(loc?.city ?? ''),
-                address: String(loc?.address ?? ''),
-                lat: Number(loc?.lat ?? 0),
-                lng: Number(loc?.lng ?? 0),
-              }))
-            : [],
+          locations: sanitizeProfileLocationsForApi(data.locations),
           ...(data.type === 'BUSINESS' || !data.type
             ? {
                 taxIdentificationNumber: data.taxIdentificationNumber || undefined,
@@ -787,17 +849,24 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const registerClient = async (data: any, password: string, avatarFile?: File | null): Promise<{ success: boolean; message: string }> => {
     try {
+      const clientRegisterBody: Record<string, string> = {
+        email: String(data.email ?? '').trim(),
+        phone: normalizeRegisterPhone(data.phone),
+        password,
+        displayName: data.name || `${data.firstName} ${data.lastName}`,
+        role: UserRole.CLIENT,
+      };
+      const refC = data.referrerCode;
+      if (refC != null && String(refC).trim() !== '') {
+        clientRegisterBody.referralCode = String(refC).trim();
+      }
+      const otpC = data.phoneVerificationToken;
+      if (otpC != null && String(otpC).trim() !== '') {
+        clientRegisterBody.phoneVerificationToken = String(otpC).trim();
+      }
       const session = await apiFetch<AuthSessionPayload>(API_ENDPOINTS.auth.register, {
         method: 'POST',
-        body: JSON.stringify({
-          email: data.email,
-          phone: data.phone,
-          password,
-          displayName: data.name || `${data.firstName} ${data.lastName}`,
-          role: UserRole.CLIENT,
-          referralCode: data.referrerCode,
-          phoneVerificationToken: data.phoneVerificationToken,
-        }),
+        body: JSON.stringify(clientRegisterBody),
       });
 
       await establishSession(session);
@@ -808,16 +877,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           firstName: data.firstName || "Client",
           lastName: data.lastName || "",
           gender: data.gender || "OTHER",
-          dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth).toISOString() : new Date().toISOString(),
-          locations: Array.isArray(data.locations)
-            ? data.locations.map((loc: any) => ({
-                region: String(loc?.region ?? ''),
-                city: String(loc?.city ?? ''),
-                address: String(loc?.address ?? ''),
-                lat: Number(loc?.lat ?? 0),
-                lng: Number(loc?.lng ?? 0),
-              }))
-            : [],
+          dateOfBirth: toIsoDateOfBirthSafe(data.dateOfBirth),
+          locations: sanitizeProfileLocationsForApi(data.locations),
         }),
       });
 
@@ -1071,8 +1132,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── ORDERS ──────────────────────────────────────────────────────────────────
 
-  const placeOrder = async (couponId?: string, _discountAmount: number = 0, deliveryDate?: string, deliveryMethod: 'HOME' | 'PICKUP' = 'HOME', pickupPointId?: string) => {
-    if (cart.length === 0 || (!user && !guestEmail)) return;
+  const placeOrder = async (couponId?: string, _discountAmount: number = 0, deliveryDate?: string, deliveryMethod: 'HOME' | 'PICKUP' = 'HOME', pickupPointId?: string): Promise<boolean> => {
+    if (cart.length === 0 || (!user && !guestEmail)) return false;
 
     const payload = {
       items: cart.map(item => ({
@@ -1114,10 +1175,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       // Refresh from server after a short delay to ensure both parties see the accurate state
       setTimeout(() => fetchData(user), 1500);
       clearCart();
+      return true;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to place order. Please try again.';
       console.error('Failed to place order:', error);
       if (user) addNotification(user.id, message, 'ERROR');
+      return false;
     }
   };
 
@@ -1791,13 +1854,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const respondToProposal = async (chatId: string, msgId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', price?: number, qty?: number) => {
-    if (!user) return;
+  const respondToProposal = async (chatId: string, msgId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', price?: number, qty?: number): Promise<boolean> => {
+    if (!user) return false;
 
     if (action === 'COUNTER') {
-      // Counter-offer: send a new proposal message — no backend proposal-respond needed
       const original = messages.find(m => m.id === msgId);
-      await sendMessage(
+      return sendMessage(
         chatId,
         `Counter-offer: ${qty} units @ ${price?.toLocaleString()} XAF each`,
         {
@@ -1807,7 +1869,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           status: ProposalStatus.PENDING
         }
       );
-      return;
     }
 
     // Optimistic UI update immediately
@@ -1850,27 +1911,25 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         addNotification(user.id, '❌ Proposal rejected. The buyer has been notified.', 'WARNING');
       }
 
-      // Confirm the real server proposal status by refreshing this chat's messages
       fetchMessages(chatId);
-
+      return true;
     } catch (err: any) {
       console.error('Failed to respond to proposal:', err);
-      // Revert optimistic update on error
       setMessages(prev => prev.map(m =>
         m.id === msgId && m.proposal
           ? { ...m, proposal: { ...m.proposal, status: ProposalStatus.PENDING } }
           : m
       ));
-      
-      // Provide user-friendly error messages
+
       let errorMessage = err?.message || 'Failed to respond to proposal';
       if (errorMessage.toLowerCase().includes('profile')) {
         errorMessage = '❌ Unable to process proposal: One or both parties have incomplete profiles. Please complete your profile and try again.';
       } else if (errorMessage.toLowerCase().includes('order')) {
         errorMessage = '❌ Proposal accepted but failed to create order. Please contact support.';
       }
-      
+
       addNotification(user.id, errorMessage, 'ERROR');
+      return false;
     }
   };
 
@@ -1957,6 +2016,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         errorMessage = '❌ This offer is not open for negotiation.';
       } else if (errorMessage.toLowerCase().includes('offer') && errorMessage.toLowerCase().includes('not exist')) {
         errorMessage = '❌ The offer no longer exists.';
+      } else if (errorMessage.toLowerCase().includes('exceed') && errorMessage.toLowerCase().includes('listing')) {
+        errorMessage = '❌ Proposed price per unit cannot be higher than the listing price.';
       } else if (errorMessage.toLowerCase().includes('price') || errorMessage.toLowerCase().includes('quantity')) {
         errorMessage = '❌ Price per unit and quantity must be greater than 0.';
       } else if (e?.status === 400) {
@@ -1987,7 +2048,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     addPickupPoint, deletePickupPoint,
     changePassword,
     myReferrals,
-    refreshMyReferrals
+    refreshMyReferrals,
+    isInitialCatalogLoading,
   };
 
   return <StoreContext.Provider value={storeValue}>{children}</StoreContext.Provider>;

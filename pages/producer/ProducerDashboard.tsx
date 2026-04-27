@@ -5,6 +5,7 @@ import { UserRole, ProducerStatus, OrderStatus, Order, OfferType } from '../../t
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp } from 'lucide-react';
 import { SEO } from '../../components/SEO';
+import { Spinner } from '../../components/Spinner';
 
 export const ProducerDashboard: React.FC = () => {
    const { user, getProducerOffers, producers, clients, orders, confirmOrder, rejectOrder, startDelivery, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating } = useStore();
@@ -24,6 +25,7 @@ export const ProducerDashboard: React.FC = () => {
    const [showEvidenceModal, setShowEvidenceModal] = useState(false);
    const [evidenceOrderId, setEvidenceOrderId] = useState<string | null>(null);
    const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+   const [orderActionBusy, setOrderActionBusy] = useState<string | null>(null);
 
    const currentProducer = producers.find(p => p.id === user?.producerId);
    const myOffers = user?.producerId ? getProducerOffers(user.producerId) : [];
@@ -332,16 +334,28 @@ export const ProducerDashboard: React.FC = () => {
 
                            <div className="flex space-x-2">
                               <button
-                                 onClick={() => confirmOrder(order.id)}
-                                 className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700"
+                                 type="button"
+                                 disabled={!!orderActionBusy}
+                                 onClick={() => {
+                                    setOrderActionBusy(`${order.id}:confirm`);
+                                    void confirmOrder(order.id).finally(() => setOrderActionBusy(null));
+                                 }}
+                                 className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700 disabled:opacity-60"
                               >
-                                 <CheckCircle className="h-4 w-4 mr-1" /> {t('dash.confirm')}
+                                 {orderActionBusy === `${order.id}:confirm` ? <Spinner className="h-4 w-4 mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+                                 {t('dash.confirm')}
                               </button>
                               <button
-                                 onClick={() => rejectOrder(order.id)}
-                                 className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-red-600 hover:bg-red-700"
+                                 type="button"
+                                 disabled={!!orderActionBusy}
+                                 onClick={() => {
+                                    setOrderActionBusy(`${order.id}:reject`);
+                                    void rejectOrder(order.id).finally(() => setOrderActionBusy(null));
+                                 }}
+                                 className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-red-600 hover:bg-red-700 disabled:opacity-60"
                               >
-                                 <XCircle className="h-4 w-4 mr-1" /> {t('dash.reject')}
+                                 {orderActionBusy === `${order.id}:reject` ? <Spinner className="h-4 w-4 mr-1" /> : <XCircle className="h-4 w-4 mr-1" />}
+                                 {t('dash.reject')}
                               </button>
                            </div>
                         </div>

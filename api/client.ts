@@ -68,7 +68,9 @@ apiClient.interceptors.response.use(
       if (!silent401) {
         clearToken();
         localStorage.removeItem('currentUser');
-        window.location.assign('/#/login');
+        if (window.location.hash !== '#/login') {
+          window.location.hash = '#/login';
+        }
       }
     }
 

@@ -128,8 +128,10 @@ export const apiFetch = async <T = unknown>(
             if (!silent401) {
                 clearToken();
                 localStorage.removeItem('currentUser');
-                // HashRouter app: route via hash to avoid landing on a blank/non-hash URL.
-                window.location.assign('/#/login');
+                // Use hash navigation to avoid full-page reload flicker.
+                if (window.location.hash !== '#/login') {
+                    window.location.hash = '#/login';
+                }
             }
         }
 

@@ -1,11 +1,11 @@
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { MapPin, X, Plus, Lock, Phone, Eye, EyeOff } from 'lucide-react';
 import { ProducerType, Location } from '../../types';
-import { loadGooglePlacesApi, parseGooglePlace } from '../../services/googlePlaces';
+import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 
 const AFRICA_COUNTRY_CODES = [
   // Central Africa
@@ -63,45 +63,32 @@ export const RegisterProducer: React.FC = () => {
   // Locations State
   const [locations, setLocations] = useState<Location[]>([]);
   const [currentLoc, setCurrentLoc] = useState({ region: '', city: '', address: '', lat: 0, lng: 0 });
-  const [placesStatus, setPlacesStatus] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [suggestions, setSuggestions] = useState<Array<{ address: string; city: string; region: string; lat: number; lng: number }>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isNearbyLoading, setIsNearbyLoading] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const locationInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    let autocomplete: any;
-    const setup = async () => {
-      const ok = await loadGooglePlacesApi();
-      if (!ok) {
-        setPlacesStatus('unavailable');
-        return;
-      }
-      setPlacesStatus('ready');
-      if (!locationInputRef.current) return;
-      const g = (window as any).google;
-      autocomplete = new g.maps.places.Autocomplete(locationInputRef.current, {
-        fields: ['formatted_address', 'geometry', 'address_components', 'name'],
-        types: ['geocode'],
+  const handleUseMyLocationSignup = async () => {
+    setGeoLoading(true);
+    try {
+      const { lat, lng } = await requestBrowserLocation();
+      const rev = await nominatimReverseGeocode(lat, lng);
+      setCurrentLoc({
+        address: rev?.address || '',
+        city: rev?.city || '',
+        region: rev?.region || '',
+        lat,
+        lng,
       });
-      autocomplete.addListener('place_changed', () => {
-        const parsed = parseGooglePlace(autocomplete.getPlace());
-        if (!parsed) return;
-        setCurrentLoc(prev => ({
-          ...prev,
-          address: parsed.address,
-          city: parsed.city || prev.city,
-          region: parsed.region || prev.region,
-          lat: parsed.lat,
-          lng: parsed.lng,
-        }));
-      });
-    };
-    void setup();
-  }, []);
+    } catch {
+      setError('Could not read your location. Allow permission or enter the address manually.');
+    } finally {
+      setGeoLoading(false);
+    }
+  };
 
   useEffect(() => {
     const query = String(currentLoc.address ?? '').trim();
@@ -503,22 +490,35 @@ export const RegisterProducer: React.FC = () => {
         {/* Location Manager */}
         <div className="border-t border-gray-200 pt-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-            <MapPin className="h-5 w-5 mr-2 text-primary-600" /> Operating Locations
+            <MapPin className="h-5 w-5 mr-2 text-primary-600" /> Location Details
           </h3>
 
           {/* Add Location Form */}
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4">
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4 space-y-3">
+            <p className="text-xs text-gray-500">
+              Use your device location (browser permission). We do not load Google Places on signup. You can edit the address fields below.
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleUseMyLocationSignup()}
+              disabled={geoLoading}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-60"
+            >
+              <MapPin className="h-4 w-4" />
+              {geoLoading ? 'Getting location…' : 'Use my current location'}
+            </button>
+            {currentLoc.lat !== 0 && currentLoc.lng !== 0 ? (
+              <p className="text-xs text-gray-600">
+                Coordinates: {currentLoc.lat.toFixed(5)}, {currentLoc.lng.toFixed(5)}
+              </p>
+            ) : null}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="sm:col-span-3 flex gap-2">
+              <div className="sm:col-span-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder={
-                    placesStatus === 'ready'
-                      ? 'Search for your operating address (Google Places)'
-                      : placesStatus === 'loading'
-                        ? 'Loading Google Places...'
-                        : 'Type your full operating address'
-                  }
+                  placeholder="Street, area, or full address"
                   className="flex-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 sm:text-sm bg-white text-gray-900"
                   value={currentLoc.address}
                   onChange={e => {
@@ -529,7 +529,6 @@ export const RegisterProducer: React.FC = () => {
                     if (suggestions.length > 0) setShowSuggestions(true);
                     else loadNearbySuggestions();
                   }}
-                  ref={locationInputRef}
                 />
                 <button
                   type="button"
@@ -539,6 +538,25 @@ export const RegisterProducer: React.FC = () => {
                 >
                   <Plus className="h-5 w-5" />
                 </button>
+              </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                <input
+                  type="text"
+                  value={currentLoc.city}
+                  onChange={(e) => setCurrentLoc(prev => ({ ...prev, city: e.target.value }))}
+                  className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Region / State</label>
+                <input
+                  type="text"
+                  value={currentLoc.region}
+                  onChange={(e) => setCurrentLoc(prev => ({ ...prev, region: e.target.value }))}
+                  className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900"
+                />
               </div>
             </div>
             {showSuggestions && suggestions.length > 0 && (
@@ -571,9 +589,7 @@ export const RegisterProducer: React.FC = () => {
               <p className="mt-2 text-xs text-gray-500">Finding nearby locations...</p>
             )}
             <p className="mt-2 text-xs text-gray-500">
-              {placesStatus === 'ready'
-                ? 'Start typing and select a Google place to auto-fill city/region.'
-                : 'Type your full address and click +.'}
+              Type your full address, pick a suggestion, or drag the map pin. Click + to add this location.
             </p>
           </div>
 

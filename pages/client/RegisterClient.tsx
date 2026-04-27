@@ -1,10 +1,10 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { User, Mail, Phone, MapPin, Camera, Lock, Eye, EyeOff } from 'lucide-react';
-import { loadGooglePlacesApi, parseGooglePlace } from '../../services/googlePlaces';
+import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 
 const AFRICA_COUNTRY_CODES = [
   // Central Africa
@@ -65,41 +65,35 @@ export const RegisterClient: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [placesStatus, setPlacesStatus] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoError, setGeoError] = useState('');
 
-  const addressInputRef = useRef<HTMLInputElement | null>(null);
   const avatarFileRef = useRef<File | null>(null);
 
-  useEffect(() => {
-    let autocomplete: any;
-    const setup = async () => {
-      const ok = await loadGooglePlacesApi();
-      if (!ok) {
-        setPlacesStatus('unavailable');
-        return;
-      }
-      setPlacesStatus('ready');
-      if (!addressInputRef.current) return;
-      const g = (window as any).google;
-      autocomplete = new g.maps.places.Autocomplete(addressInputRef.current, {
-        fields: ['formatted_address', 'geometry', 'address_components', 'name'],
-        types: ['geocode'],
-      });
-      autocomplete.addListener('place_changed', () => {
-        const parsed = parseGooglePlace(autocomplete.getPlace());
-        if (!parsed) return;
-        setFormData((prev) => ({
-          ...prev,
-          address: parsed.address,
-          city: parsed.city || prev.city,
-          region: parsed.region || prev.region,
-          lat: parsed.lat,
-          lng: parsed.lng,
-        }));
-      });
-    };
-    void setup();
-  }, []);
+  const fillLocationFromCoords = async (lat: number, lng: number) => {
+    const rev = await nominatimReverseGeocode(lat, lng);
+    setFormData((prev) => ({
+      ...prev,
+      lat,
+      lng,
+      address: rev?.address || prev.address,
+      city: rev?.city || prev.city,
+      region: rev?.region || prev.region,
+    }));
+  };
+
+  const handleUseMyLocation = async () => {
+    setGeoError('');
+    setGeoLoading(true);
+    try {
+      const { lat, lng } = await requestBrowserLocation();
+      await fillLocationFromCoords(lat, lng);
+    } catch (e: unknown) {
+      setGeoError(e instanceof Error ? e.message : 'Could not get your location.');
+    } finally {
+      setGeoLoading(false);
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -326,6 +320,24 @@ export const RegisterClient: React.FC = () => {
           {/* Location Section */}
           <div className="sm:col-span-6 border-t border-gray-100 pt-4">
             <h4 className="text-sm font-medium text-gray-900 mb-3">Location Details</h4>
+            <p className="text-xs text-gray-500 mb-3">
+              Use your device location (browser permission). We do not load Google Places on signup. You can edit the address fields below.
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleUseMyLocation()}
+              disabled={geoLoading}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-60"
+            >
+              <MapPin className="h-4 w-4" />
+              {geoLoading ? 'Getting location…' : 'Use my current location'}
+            </button>
+            {geoError ? <p className="mt-2 text-xs text-red-600">{geoError}</p> : null}
+            {formData.lat !== 0 && formData.lng !== 0 && (
+              <p className="mt-2 text-xs text-gray-600">
+                Coordinates: {formData.lat.toFixed(5)}, {formData.lng.toFixed(5)}
+              </p>
+            )}
           </div>
 
           <div className="sm:col-span-6">
@@ -336,18 +348,34 @@ export const RegisterClient: React.FC = () => {
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <MapPin className="h-5 w-5 text-gray-400" />
               </div>
-              <input type="text" name="address" required placeholder={placesStatus === 'ready' ? 'Search for your full address (Google Places)' : placesStatus === 'loading' ? 'Loading Google Places...' : 'Type your full address'}
+              <input
+                type="text"
+                name="address"
+                required
+                placeholder="Street, area, or full address"
                 className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
                 value={formData.address}
                 onChange={e => setFormData({ ...formData, address: e.target.value })}
-                ref={addressInputRef}
               />
             </div>
-            <p className="mt-1 text-xs text-gray-500">
-              {placesStatus === 'ready'
-                ? 'Start typing and select a Google place to auto-fill city/region.'
-                : 'Type your full address manually.'}
-            </p>
+          </div>
+          <div className="sm:col-span-3">
+            <label className="block text-sm font-medium text-gray-700">City</label>
+            <input
+              type="text"
+              className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900"
+              value={formData.city}
+              onChange={e => setFormData({ ...formData, city: e.target.value })}
+            />
+          </div>
+          <div className="sm:col-span-3">
+            <label className="block text-sm font-medium text-gray-700">Region / State</label>
+            <input
+              type="text"
+              className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900"
+              value={formData.region}
+              onChange={e => setFormData({ ...formData, region: e.target.value })}
+            />
           </div>
         </div>
 

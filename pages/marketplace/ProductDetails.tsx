@@ -6,6 +6,8 @@ import { useTranslation } from '../../services/i18nContext';
 import { ArrowLeft, ShoppingCart, MessageCircle, MapPin, ShieldCheck, Package, Plus, Minus, User, Lock, Truck, AlertCircle, Calendar, Clock, Star, Image as ImageIcon, PlayCircle, X, Heart, Layers } from 'lucide-react';
 import { MarketType, OfferType, UserRole } from '../../types';
 import { SEO } from '../../components/SEO';
+import { ProductDetailsSkeleton } from '../../components/skeletons/ProductDetailsSkeleton';
+import { Spinner } from '../../components/Spinner';
 
 /** Parse `YYYY-MM-DD` from `<input type="date">` as a local calendar day (avoids UTC weekday shifts). */
 function parseLocalYmd(ymd: string): Date {
@@ -16,7 +18,7 @@ function parseLocalYmd(ymd: string): Date {
 
 export const ProductDetails: React.FC = () => {
   const { offerId } = useParams<{ offerId: string }>();
-  const { getOfferById, producers, addToCart, clearCart, startNegotiation, user, getAvailableSlots, getAverageRating, getProducerPortfolios, toggleFavorite, clients, reviews, compareList, addToCompare, removeFromCompare } = useStore();
+  const { getOfferById, producers, addToCart, clearCart, startNegotiation, user, getAvailableSlots, getAverageRating, getProducerPortfolios, toggleFavorite, clients, reviews, compareList, addToCompare, removeFromCompare, isInitialCatalogLoading } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -34,6 +36,7 @@ export const ProductDetails: React.FC = () => {
   // Portfolio State
   const [relevantPortfolios, setRelevantPortfolios] = useState<any[]>([]);
   const [activePortfolioMedia, setActivePortfolioMedia] = useState<string | null>(null); // For Lightbox
+  const [negotiateLoading, setNegotiateLoading] = useState(false);
 
   // Get Favorites (session id is auth-user id; profiles use separate ids)
   let favorites: string[] = [];
@@ -73,6 +76,10 @@ export const ProductDetails: React.FC = () => {
       setRelevantPortfolios(matches);
     }
   }, [offer, producer]);
+
+  if (isInitialCatalogLoading && !offer) {
+    return <ProductDetailsSkeleton />;
+  }
 
   if (!offer) {
     return (
@@ -133,9 +140,15 @@ export const ProductDetails: React.FC = () => {
       }
       return;
     }
-    const producerUserId = producer?.userId || producer?.id || offer.producerId;
-    const chatId = await startNegotiation(producerUserId, offer.id);
-    navigate(`/messages/${chatId}`);
+    if (negotiateLoading) return;
+    setNegotiateLoading(true);
+    try {
+      const producerUserId = producer?.userId || producer?.id || offer.producerId;
+      const chatId = await startNegotiation(producerUserId, offer.id);
+      navigate(`/messages/${chatId}`);
+    } finally {
+      setNegotiateLoading(false);
+    }
   };
 
   const handleCompareToggle = () => {
@@ -445,11 +458,13 @@ export const ProductDetails: React.FC = () => {
 
                 {isProducerMarket && !offer.reservedClientId && (
                   <button
-                    onClick={handleNegotiate}
-                    className="flex items-center justify-center bg-white text-primary-600 border-2 border-primary-600 px-6 py-3 rounded-xl font-bold hover:bg-primary-50 transition-colors"
+                    type="button"
+                    disabled={negotiateLoading}
+                    onClick={() => void handleNegotiate()}
+                    className="flex items-center justify-center bg-white text-primary-600 border-2 border-primary-600 px-6 py-3 rounded-xl font-bold hover:bg-primary-50 transition-colors disabled:opacity-60"
                   >
-                    <MessageCircle className="h-5 w-5 mr-2" />
-                    Chat / {t('product.negotiate')}
+                    {negotiateLoading ? <Spinner className="h-5 w-5 mr-2" label="Opening chat" /> : <MessageCircle className="h-5 w-5 mr-2" />}
+                    {negotiateLoading ? 'Opening…' : `Chat / ${t('product.negotiate')}`}
                   </button>
                 )}
               </div>

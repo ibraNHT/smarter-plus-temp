@@ -6,13 +6,22 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Star, X, ShoppingCart, Check, XCircle } from 'lucide-react';
 import { OfferType } from '../../types';
 import { comparePageAddQuantity, effectiveMinOrder } from '../../utils/offerCart';
+import { ComparePageSkeleton } from '../../components/skeletons/ComparePageSkeleton';
 
 export const ComparePage: React.FC = () => {
-  const { compareList, offers, producers, getAverageRating, removeFromCompare, addToCart, clearCart, clearCompare } = useStore();
+  const { compareList, offers, producers, getAverageRating, removeFromCompare, addToCart, clearCart, clearCompare, isInitialCatalogLoading } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
 
   const selectedOffers = compareList.map(id => offers.find(o => o.id === id)).filter(Boolean) as any[];
+  const compareStillLoading =
+    isInitialCatalogLoading && compareList.length > 0 && selectedOffers.length < compareList.length;
+
+  if (compareStillLoading) {
+    return (
+      <ComparePageSkeleton onBack={() => navigate(-1)} title={t('compare.page.title')} />
+    );
+  }
 
   if (selectedOffers.length === 0) {
     return (

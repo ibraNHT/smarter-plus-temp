@@ -5,6 +5,7 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { Trash2, ArrowLeft, ShoppingBag, CheckCircle, Calendar, X, MapPin, Heart, Tag, ChevronLeft, ChevronRight, Truck, Home } from 'lucide-react';
 import { SEO } from '../../components/SEO';
+import { Spinner } from '../../components/Spinner';
 import { OfferType, MarketType, UserRole } from '../../types';
 import { loadGooglePlacesApi, parseGooglePlace, citiesLooselyMatch } from '../../services/googlePlaces';
 
@@ -24,6 +25,7 @@ export const ShoppingCart: React.FC = () => {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [couponError, setCouponError] = useState('');
   const [couponApplying, setCouponApplying] = useState(false);
+  const [orderPlacing, setOrderPlacing] = useState(false);
 
   // Delivery Date State (ATI Only)
   const [deliveryDate, setDeliveryDate] = useState('');
@@ -262,10 +264,23 @@ export const ShoppingCart: React.FC = () => {
     setShowRecap(true);
   };
 
-  const confirmPlacement = () => {
-    placeOrder(appliedCouponId || undefined, discountAmount, isAtiOrder ? deliveryDate : undefined, deliveryMethod, selectedPickupPointId);
-    setShowRecap(false);
-    navigate('/');
+  const confirmPlacement = async () => {
+    setOrderPlacing(true);
+    try {
+      const ok = await placeOrder(
+        appliedCouponId || undefined,
+        discountAmount,
+        isAtiOrder ? deliveryDate : undefined,
+        deliveryMethod,
+        selectedPickupPointId,
+      );
+      if (ok) {
+        setShowRecap(false);
+        navigate('/');
+      }
+    } finally {
+      setOrderPlacing(false);
+    }
   };
 
   const handleGuestEmailSubmit = (e: React.FormEvent) => {
@@ -665,7 +680,8 @@ export const ShoppingCart: React.FC = () => {
 
               <div className="mt-6">
                 <button
-                  onClick={handleInitialPlaceOrder}
+                  type="button"
+                  onClick={() => void handleInitialPlaceOrder()}
                   disabled={!canPlaceOrder}
                   className="w-full bg-primary-600 border border-transparent rounded-md shadow-sm py-3 px-4 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -758,12 +774,22 @@ export const ShoppingCart: React.FC = () => {
               </div>
 
               <div className="flex justify-end gap-3">
-                <button onClick={() => setShowRecap(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">{t('form.cancel')}</button>
                 <button
-                  onClick={confirmPlacement}
-                  className="px-4 py-2 bg-primary-600 text-white rounded-md text-sm font-bold hover:bg-primary-700"
+                  type="button"
+                  disabled={orderPlacing}
+                  onClick={() => setShowRecap(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:opacity-50"
                 >
-                  {t('cart.validate')}
+                  {t('form.cancel')}
+                </button>
+                <button
+                  type="button"
+                  disabled={orderPlacing}
+                  onClick={() => void confirmPlacement()}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-md text-sm font-bold hover:bg-primary-700 disabled:opacity-60 inline-flex items-center justify-center gap-2 min-w-[8rem]"
+                >
+                  {orderPlacing && <Spinner className="h-4 w-4" label="Submitting order" />}
+                  {orderPlacing ? t('wallet.processing') : t('cart.validate')}
                 </button>
               </div>
             </div>

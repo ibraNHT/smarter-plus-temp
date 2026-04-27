@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order } from '../../types';
@@ -9,8 +9,11 @@ import { useUpdateClientProfileMutation } from '../../api/hooks/useUpdateClientP
 import { SEO } from '../../components/SEO';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
-import { loadGooglePlacesApi, parseGooglePlace } from '../../services/googlePlaces';
+import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
+import { LocationMapPicker } from '../../components/LocationMapPicker';
 import { uploadAvatar } from '../../services/uploadService';
+import { apiFetch } from '../../services/apiService';
+import { API_ENDPOINTS } from '../../api/endpoints';
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
@@ -33,7 +36,7 @@ function normalizeDob(dobRaw: unknown): string {
 }
 
 export const ClientProfile: React.FC = () => {
-   const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals } = useStore();
+   const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, isInitialCatalogLoading } = useStore();
    const updateClientMutation = useUpdateClientProfileMutation();
    const { t } = useTranslation();
    const navigate = useNavigate();
@@ -41,13 +44,13 @@ export const ClientProfile: React.FC = () => {
 
    const [formData, setFormData] = useState<ClientProfileType | null>(null);
    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-   const [newLoc, setNewLoc] = useState<Partial<Location>>({ region: '', city: '', address: '' });
+   const [newLoc, setNewLoc] = useState<Partial<Location>>({ region: '', city: '', address: '', lat: 0, lng: 0 });
    const [locationSearch, setLocationSearch] = useState('');
-   const [placesStatus, setPlacesStatus] = useState<'loading' | 'ready' | 'unavailable'>('loading');
    const [locationSuggestions, setLocationSuggestions] = useState<Array<{ address: string; city: string; region: string; lat: number; lng: number }>>([]);
    const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
    const [isNearbyLoading, setIsNearbyLoading] = useState(false);
-   const locationSearchRef = useRef<HTMLInputElement | null>(null);
+   const [geoLoading, setGeoLoading] = useState(false);
+   const [editingLocationIndex, setEditingLocationIndex] = useState<number | null>(null);
 
    const [upgradeData, setUpgradeData] = useState({
       type: 'INDIVIDUAL' as 'INDIVIDUAL' | 'BUSINESS',
@@ -69,11 +72,13 @@ export const ClientProfile: React.FC = () => {
 
    const [showPaymentRecap, setShowPaymentRecap] = useState(false);
    const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
+   const [paymentProcessing, setPaymentProcessing] = useState(false);
 
    const [showPasswordModal, setShowPasswordModal] = useState(false);
    const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
    const [avatarUploading, setAvatarUploading] = useState(false);
+   const [profileHydrating, setProfileHydrating] = useState(false);
 
    const currentClient = useMemo(
       () => (user?.id ? clients.find(c => c.userId === user.id || c.id === user.id) : undefined),
@@ -91,41 +96,6 @@ export const ClientProfile: React.FC = () => {
    useEffect(() => {
       if (activeTab === 'referrals') void refreshMyReferrals();
    }, [activeTab, refreshMyReferrals]);
-   useEffect(() => {
-      let canceled = false;
-      let autocomplete: any = null;
-      const initAutocomplete = async () => {
-         const ok = await loadGooglePlacesApi();
-         if (canceled) return;
-         if (!ok) {
-            setPlacesStatus('unavailable');
-            return;
-         }
-         setPlacesStatus('ready');
-         const input = locationSearchRef.current;
-         const g = (window as any).google;
-         if (!input || !g?.maps?.places) return;
-         autocomplete = new g.maps.places.Autocomplete(input, {
-            fields: ['formatted_address', 'address_components', 'geometry', 'name'],
-         });
-         autocomplete.addListener('place_changed', () => {
-            const parsed = parseGooglePlace(autocomplete.getPlace());
-            if (!parsed) return;
-            setLocationSearch(parsed.address);
-            setNewLoc({
-               address: parsed.address,
-               city: parsed.city,
-               region: parsed.region,
-               lat: parsed.lat,
-               lng: parsed.lng,
-            });
-         });
-      };
-      void initAutocomplete();
-      return () => {
-         canceled = true;
-      };
-   }, []);
    useEffect(() => {
       const query = String(locationSearch ?? '').trim();
       if (query.length < 3) {
@@ -220,6 +190,41 @@ export const ClientProfile: React.FC = () => {
       );
    }, []);
 
+   const handleProfileMapPositionChange = useCallback(async (lat: number, lng: number) => {
+      setNewLoc((prev) => ({ ...prev, lat, lng }));
+      const rev = await nominatimReverseGeocode(lat, lng);
+      if (!rev) return;
+      setNewLoc((prev) => ({
+         ...prev,
+         lat,
+         lng,
+         address: rev.address || prev.address,
+         city: rev.city || prev.city,
+         region: rev.region || prev.region,
+      }));
+      setLocationSearch(rev.address);
+   }, []);
+
+   const handleUseMyLocationProfile = async () => {
+      setGeoLoading(true);
+      try {
+         const { lat, lng } = await requestBrowserLocation();
+         const rev = await nominatimReverseGeocode(lat, lng);
+         setNewLoc({
+            address: rev?.address || '',
+            city: rev?.city || '',
+            region: rev?.region || '',
+            lat,
+            lng,
+         });
+         setLocationSearch(rev?.address || '');
+      } catch {
+         alert('Could not read your location. Allow permission or set the pin on the map.');
+      } finally {
+         setGeoLoading(false);
+      }
+   };
+
    const copyReferralLink = () => {
       if (!referralCodeDisplay) return;
       const link = `${window.location.origin}/#/register/client?ref=${referralCodeDisplay}`;
@@ -233,7 +238,6 @@ export const ClientProfile: React.FC = () => {
    useEffect(() => {
       const rowId = (currentClient as any)?.id;
       if (!currentClient || !rowId) {
-         setFormData(null);
          return;
       }
       setFormData(prev => {
@@ -261,6 +265,54 @@ export const ClientProfile: React.FC = () => {
       });
    }, [currentClient, user]);
 
+   useEffect(() => {
+      if (!user || user.role !== UserRole.CLIENT) return;
+      let cancelled = false;
+      const hydrateMyClientProfile = async () => {
+         setProfileHydrating(true);
+         try {
+            const meClient = await apiFetch<any>(API_ENDPOINTS.profiles.meClient, { silent401: true } as any).catch(() =>
+               apiFetch<any>(API_ENDPOINTS.clients.me, { silent401: true } as any).catch(() => null),
+            );
+            if (cancelled || !meClient?.id) return;
+            const clientUser = (meClient as any).user;
+            const normalized: ClientProfileType = {
+               ...meClient,
+               id: String(meClient.id),
+               firstName: (meClient.firstName ?? '').toString(),
+               lastName: (meClient.lastName ?? '').toString(),
+               email: (clientUser?.email ?? meClient.email ?? (user as any)?.email ?? '').toString(),
+               phone: (clientUser?.phone ?? meClient.phone ?? (user as any)?.phone ?? '').toString(),
+               name: (clientUser?.displayName ?? meClient.name ?? (`${meClient.firstName ?? ''} ${meClient.lastName ?? ''}`.trim() || '')).toString(),
+               gender: ((meClient as any).gender === 'MALE' || (meClient as any).gender === 'FEMALE' ? (meClient as any).gender : undefined),
+               dateOfBirth: normalizeDob((meClient as any).dateOfBirth),
+               locations: normalizeClientLocations(meClient.locations),
+               favorites: Array.isArray(meClient.favorites) ? meClient.favorites : [],
+               profileImageUrl: (clientUser?.profileImageUrl ?? meClient.profileImageUrl ?? '').toString() || undefined,
+               referralCode: ((meClient as any).referralCode ?? (clientUser as any)?.referralCode ?? '').toString(),
+               referrals: Array.isArray((meClient as any).referrals) ? (meClient as any).referrals : [],
+               searchHistory: Array.isArray((meClient as any).searchHistory) ? (meClient as any).searchHistory : [],
+            } as ClientProfileType;
+            setFormData((prev) => (prev?.id === normalized.id ? prev : normalized));
+         } finally {
+            if (!cancelled) setProfileHydrating(false);
+         }
+      };
+      void hydrateMyClientProfile();
+      return () => {
+         cancelled = true;
+      };
+   }, [user]);
+
+   useEffect(() => {
+      if (!formData || formData.locations.length === 0) return;
+      if (String(newLoc.address ?? '').trim()) return;
+      const first = formData.locations[0];
+      setNewLoc({ ...first });
+      setLocationSearch(first.address ?? '');
+      setEditingLocationIndex(0);
+   }, [formData, newLoc.address]);
+
    if (!user) {
       return (
          <div className="max-w-7xl mx-auto py-8 px-4">
@@ -275,6 +327,18 @@ export const ClientProfile: React.FC = () => {
          <div className="max-w-7xl mx-auto py-8 px-4">
             <SEO title="Client Profile | AgriMarket" noindex={true} />
             <p className="p-8 text-center">Access Denied</p>
+         </div>
+      );
+   }
+
+   if (!currentClient?.id && user.role === UserRole.CLIENT && (isInitialCatalogLoading || profileHydrating)) {
+      return (
+         <div className="max-w-7xl mx-auto py-8 px-4">
+            <SEO title="Client Profile | AgriMarket" noindex={true} />
+            <div className="p-8 text-center max-w-lg mx-auto space-y-2 text-gray-600">
+               <p>Loading your profile…</p>
+               <p className="text-sm text-gray-500">Please wait while we fetch your account data.</p>
+            </div>
          </div>
       );
    }
@@ -315,7 +379,20 @@ export const ClientProfile: React.FC = () => {
    const unavailableFavoriteIds = currentClient?.favorites.filter(id => !offers.find(o => o.id === id));
 
    const initiatePayment = (orderId: string) => { setPaymentOrderId(orderId); setShowPaymentRecap(true); };
-   const confirmPayment = async () => { if (!paymentOrderId) return; const result = await payForOrder(paymentOrderId); if (!result.success && result.error === 'INSUFFICIENT_FUNDS') { alert(t('order.insufficient')); } setShowPaymentRecap(false); setPaymentOrderId(null); };
+   const confirmPayment = async () => {
+      if (!paymentOrderId || paymentProcessing) return;
+      setPaymentProcessing(true);
+      try {
+         const result = await payForOrder(paymentOrderId);
+         if (!result.success && result.error === 'INSUFFICIENT_FUNDS') {
+            alert(t('order.insufficient'));
+         }
+         setShowPaymentRecap(false);
+         setPaymentOrderId(null);
+      } finally {
+         setPaymentProcessing(false);
+      }
+   };
    const handleInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { if (!formData) return; const { name, value } = e.target; setFormData({ ...formData, [name]: value ?? '' }); };
    const addLocation = () => {
       if (!formData || !newLoc.address) return;
@@ -333,11 +410,26 @@ export const ClientProfile: React.FC = () => {
          city: inferredCity,
          address,
       };
-      setFormData({ ...formData, locations: [...formData.locations, locationToAdd] });
-      setNewLoc({ region: '', city: '', address: '' });
+      const nextLocations =
+         editingLocationIndex != null && editingLocationIndex >= 0 && editingLocationIndex < formData.locations.length
+            ? formData.locations.map((loc, idx) => (idx === editingLocationIndex ? locationToAdd : loc))
+            : [...formData.locations, locationToAdd];
+      setFormData({ ...formData, locations: nextLocations });
+      setNewLoc({ region: '', city: '', address: '', lat: 0, lng: 0 });
       setLocationSearch('');
+      setEditingLocationIndex(null);
    };
-   const removeLocation = (index: number) => { if (!formData) return; setFormData({ ...formData, locations: formData.locations.filter((_, i) => i !== index) }); };
+   const removeLocation = (index: number) => {
+      if (!formData) return;
+      setFormData({ ...formData, locations: formData.locations.filter((_, i) => i !== index) });
+      if (editingLocationIndex === index) {
+         setEditingLocationIndex(null);
+         setNewLoc({ region: '', city: '', address: '', lat: 0, lng: 0 });
+         setLocationSearch('');
+      } else if (editingLocationIndex != null && editingLocationIndex > index) {
+         setEditingLocationIndex(editingLocationIndex - 1);
+      }
+   };
    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!formData || !file) return;
@@ -550,7 +642,15 @@ export const ClientProfile: React.FC = () => {
                            <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center"><MapPin className="h-4 w-4 mr-1 text-primary-600" /> My Locations</h4>
                            <div className="space-y-2 mb-4">
                               {(formData.locations || []).map((loc, idx) => (
-                                 <div key={idx} className="flex items-center justify-between bg-gray-50 p-3 rounded-md border border-gray-200">
+                                 <div
+                                    key={idx}
+                                    className={`flex items-center justify-between bg-gray-50 p-3 rounded-md border cursor-pointer ${editingLocationIndex === idx ? 'border-primary-400 ring-1 ring-primary-300' : 'border-gray-200'}`}
+                                    onClick={() => {
+                                       setEditingLocationIndex(idx);
+                                       setNewLoc({ ...loc });
+                                       setLocationSearch(loc.address ?? '');
+                                    }}
+                                 >
                                     <div>
                                        <p className="text-sm font-medium text-gray-900">{loc.address}</p>
                                        <p className="text-xs text-gray-500">{loc.city}, {loc.region}</p>
@@ -561,34 +661,51 @@ export const ClientProfile: React.FC = () => {
                                  </div>
                               ))}
                            </div>
-                           <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
-                              <p className="text-xs font-medium text-blue-700 mb-2">Add New Location</p>
-                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                                 <input
-                                    ref={locationSearchRef}
-                                    type="text"
-                                    placeholder={
-                                       placesStatus === 'ready'
-                                          ? 'Search for your full address (Google Places)'
-                                          : placesStatus === 'loading'
-                                             ? 'Loading Google Places...'
-                                             : 'Type your full address'
-                                    }
-                                    value={locationSearch}
-                                    onChange={e => {
-                                       const value = e.target.value;
-                                       setLocationSearch(value);
-                                       setNewLoc((prev) => ({ ...prev, address: value }));
-                                       setShowLocationSuggestions(true);
-                                    }}
-                                    onFocus={() => {
-                                       if (locationSuggestions.length > 0) setShowLocationSuggestions(true);
-                                       else loadNearbySuggestions();
-                                    }}
-                                    className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900 sm:col-span-3"
-                                 />
+                           <div className="bg-blue-50 p-3 rounded-md border border-blue-100 space-y-3">
+                              <p className="text-xs font-medium text-blue-700">Add new location</p>
+                              <div className="flex flex-wrap gap-2">
+                                 <button
+                                    type="button"
+                                    onClick={() => void handleUseMyLocationProfile()}
+                                    disabled={geoLoading}
+                                    className="text-sm px-3 py-1.5 rounded-md border border-primary-200 bg-white text-primary-700 hover:bg-primary-50 disabled:opacity-50"
+                                 >
+                                    {geoLoading ? 'Getting location…' : 'Use my current location'}
+                                 </button>
+                              </div>
+                              <LocationMapPicker
+                                 latitude={Number(newLoc.lat) || 0}
+                                 longitude={Number(newLoc.lng) || 0}
+                                 onPositionChange={handleProfileMapPositionChange}
+                                 height="min(240px, 45vh)"
+                              />
+                              <p className="text-xs text-gray-500">
+                                 {editingLocationIndex != null
+                                    ? `Editing location #${editingLocationIndex + 1}. Drag pin or update fields, then save.`
+                                    : 'Drag the pin or tap the map to set coordinates. Address fields update from the pin when possible.'}
+                              </p>
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                 <div className="sm:col-span-2">
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Search address</label>
+                                    <input
+                                       type="text"
+                                       placeholder="Type to search (OpenStreetMap)"
+                                       value={locationSearch}
+                                       onChange={e => {
+                                          const value = e.target.value;
+                                          setLocationSearch(value);
+                                          setNewLoc((prev) => ({ ...prev, address: value }));
+                                          setShowLocationSuggestions(true);
+                                       }}
+                                       onFocus={() => {
+                                          if (locationSuggestions.length > 0) setShowLocationSuggestions(true);
+                                          else loadNearbySuggestions();
+                                       }}
+                                       className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"
+                                    />
+                                 </div>
                                  {showLocationSuggestions && locationSuggestions.length > 0 && (
-                                    <div className="sm:col-span-3 border border-gray-200 rounded-md bg-white shadow-sm max-h-56 overflow-auto">
+                                    <div className="sm:col-span-2 border border-gray-200 rounded-md bg-white shadow-sm max-h-56 overflow-auto">
                                        {locationSuggestions.map((item, idx) => (
                                           <button
                                              key={`${item.address}-${idx}`}
@@ -613,24 +730,51 @@ export const ClientProfile: React.FC = () => {
                                     </div>
                                  )}
                                  {isNearbyLoading && (
-                                    <p className="sm:col-span-3 text-xs text-gray-500">Finding nearby locations...</p>
+                                    <p className="sm:col-span-2 text-xs text-gray-500">Finding nearby locations...</p>
                                  )}
-                                 <div className="sm:col-span-3 flex gap-2">
-                                    <button
-                                       type="button"
-                                       onClick={addLocation}
-                                       disabled={!String(newLoc.address ?? '').trim()}
-                                       className="inline-flex items-center p-2 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"
-                                    >
-                                       <Plus className="h-5 w-5" />
-                                    </button>
+                                 <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
+                                    <input
+                                       type="text"
+                                       value={newLoc.city ?? ''}
+                                       onChange={e => setNewLoc((prev) => ({ ...prev, city: e.target.value }))}
+                                       className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900"
+                                    />
+                                 </div>
+                                 <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Region</label>
+                                    <input
+                                       type="text"
+                                       value={newLoc.region ?? ''}
+                                       onChange={e => setNewLoc((prev) => ({ ...prev, region: e.target.value }))}
+                                       className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900"
+                                    />
+                                 </div>
+                                 <div className="sm:col-span-2">
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Full address</label>
+                                    <input
+                                       type="text"
+                                       value={newLoc.address ?? ''}
+                                       onChange={e => {
+                                          const v = e.target.value;
+                                          setNewLoc((prev) => ({ ...prev, address: v }));
+                                          setLocationSearch(v);
+                                       }}
+                                       className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900"
+                                    />
                                  </div>
                               </div>
-                              <p className="mt-2 text-xs text-gray-500">
-                                 {placesStatus === 'ready'
-                                    ? 'Start typing and select a Google place to auto-fill city/region.'
-                                    : 'Type your full address and click +.'}
-                              </p>
+                              <div className="flex gap-2 items-center">
+                                 <button
+                                    type="button"
+                                    onClick={addLocation}
+                                    disabled={!String(newLoc.address ?? '').trim()}
+                                    className="inline-flex items-center gap-1 px-3 py-2 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-sm font-medium"
+                                 >
+                                    <Plus className="h-4 w-4" />
+                                    {editingLocationIndex != null ? 'Update location' : 'Add to list'}
+                                 </button>
+                              </div>
                            </div>
                         </div>
                         <div className="sm:col-span-6 pt-4 flex justify-end">
@@ -969,12 +1113,13 @@ export const ClientProfile: React.FC = () => {
                         {/* Actions */}
                         <div className="flex flex-col gap-3">
                            <button
-                              onClick={confirmPayment}
-                              disabled={!hasSufficientFunds}
+                              type="button"
+                              onClick={() => void confirmPayment()}
+                              disabled={!hasSufficientFunds || paymentProcessing}
                               className="w-full bg-primary-600 text-white rounded-lg py-3 font-bold hover:bg-primary-700 shadow-md transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                            >
-                              <CreditCard className="h-4 w-4" />
-                              {t('order.confirmPayment')} — {payOrder.totalAmount.toLocaleString()} XAF
+                              {paymentProcessing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CreditCard className="h-4 w-4" />}
+                              {paymentProcessing ? t('wallet.processing') : `${t('order.confirmPayment')} — ${payOrder.totalAmount.toLocaleString()} XAF`}
                            </button>
                            <button onClick={() => setShowPaymentRecap(false)} className="w-full text-gray-500 text-sm hover:underline py-1">
                               {t('form.cancel')}

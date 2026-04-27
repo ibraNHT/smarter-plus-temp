@@ -5,6 +5,7 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { Send, MessageCircle, ChevronLeft, Gavel, ArrowLeft } from 'lucide-react';
 import { ProposalStatus } from '../../types';
+import { Spinner } from '../../components/Spinner';
 
 export const ChatPage: React.FC = () => {
    const { chatId } = useParams<{ chatId: string }>();
@@ -17,11 +18,22 @@ export const ChatPage: React.FC = () => {
    const [showCounterModal, setShowCounterModal] = useState(false);
    const [counterTargetMsgId, setCounterTargetMsgId] = useState<string | null>(null);
 
-   // Proposal Form State
-   const [proposalPrice, setProposalPrice] = useState<number>(0);
-   const [proposalQty, setProposalQty] = useState<number>(0);
+   // Proposal form: string inputs only (no API pre-fill — avoids store fn re-renders overwriting fields)
+   const [proposalPriceStr, setProposalPriceStr] = useState('');
+   const [proposalQtyStr, setProposalQtyStr] = useState('');
    const [counterPrice, setCounterPrice] = useState<number>(0);
    const [counterQty, setCounterQty] = useState<number>(0);
+
+   const [proposalModalError, setProposalModalError] = useState('');
+   const [proposalPriceError, setProposalPriceError] = useState('');
+   const [proposalQtyError, setProposalQtyError] = useState('');
+   const [counterPriceError, setCounterPriceError] = useState('');
+   const [counterQtyError, setCounterQtyError] = useState('');
+
+   const [messageSending, setMessageSending] = useState(false);
+   const [proposalSending, setProposalSending] = useState(false);
+   const [counterSending, setCounterSending] = useState(false);
+   const [proposalActionBusy, setProposalActionBusy] = useState<string | null>(null);
 
    const messagesEndRef = useRef<HTMLDivElement>(null);
    const messageInputRef = useRef<HTMLTextAreaElement>(null);
@@ -106,98 +118,140 @@ export const ChatPage: React.FC = () => {
 
    const handleSendMessage = async (e?: React.FormEvent) => {
       e?.preventDefault();
-      if (!inputText.trim() || !chatId) return;
-      const sent = await sendMessage(chatId, inputText);
-      if (sent) {
-         setInputText('');
-         requestAnimationFrame(() => {
-            adjustMessageInputHeight();
-         });
+      if (!inputText.trim() || !chatId || messageSending) return;
+      setMessageSending(true);
+      try {
+         const sent = await sendMessage(chatId, inputText);
+         if (sent) {
+            setInputText('');
+            requestAnimationFrame(() => {
+               adjustMessageInputHeight();
+            });
+         }
+      } finally {
+         setMessageSending(false);
       }
    };
 
-   const handleSendProposal = () => {
+   const handleSendProposal = async () => {
       if (!activeChat || !activeChat.offerId) return;
-      
-      // Check if offer exists and is negotiable
+
+      setProposalModalError('');
+      setProposalPriceError('');
+      setProposalQtyError('');
+
       const offer = getOfferById(activeChat.offerId);
       if (!offer) {
-         alert("Offer not found");
+         setProposalModalError('Offer not found.');
          return;
       }
       if (!offer.isNegotiable) {
-         alert("This offer is not open for negotiation");
+         setProposalModalError('This offer is not open for negotiation.');
          return;
       }
-      
-      // Validate price and quantity
-      if (proposalPrice <= 0 || proposalQty <= 0) {
-         alert("Price per unit and quantity must be greater than 0");
+
+      const price = parseFloat(String(proposalPriceStr).replace(',', '.').trim());
+      const qty = parseFloat(String(proposalQtyStr).replace(',', '.').trim());
+      let hasFieldError = false;
+      if (!Number.isFinite(price) || price <= 0) {
+         setProposalPriceError('Enter a valid price per unit (greater than 0).');
+         hasFieldError = true;
+      }
+      if (!Number.isFinite(qty) || qty <= 0) {
+         setProposalQtyError('Enter a valid quantity (greater than 0).');
+         hasFieldError = true;
+      }
+      if (hasFieldError) return;
+
+      const listCap = Number(offer.price);
+      if (Number.isFinite(listCap) && price > listCap) {
+         setProposalPriceError(`Cannot exceed listing price (${listCap.toLocaleString()} XAF).`);
          return;
       }
-      
-      sendMessage(activeChat.id, "Formal Proposal Sent", {
-         offerId: activeChat.offerId,
-         pricePerUnit: Number(proposalPrice),
-         quantity: Number(proposalQty),
-         status: ProposalStatus.PENDING
-      });
-      setShowProposalModal(false);
+
+      setProposalSending(true);
+      try {
+         const ok = await sendMessage(activeChat.id, 'Formal Proposal Sent', {
+            offerId: activeChat.offerId,
+            pricePerUnit: price,
+            quantity: qty,
+            status: ProposalStatus.PENDING,
+         });
+         if (ok) {
+            setProposalModalError('');
+            setProposalPriceError('');
+            setProposalQtyError('');
+            setShowProposalModal(false);
+         }
+      } finally {
+         setProposalSending(false);
+      }
    };
 
    const handleOpenCounter = (msgId: string, currentPrice: number | string, currentQty: number | string) => {
+      setCounterPriceError('');
+      setCounterQtyError('');
       setCounterTargetMsgId(msgId);
       setCounterPrice(Number(currentPrice) || 0);
       setCounterQty(Number(currentQty) || 0);
       setShowCounterModal(true);
    };
 
-   const handleSendCounter = () => {
-      if (!counterTargetMsgId || !chatId) return;
-      
-      // Validate counter offer values
-      if (counterPrice <= 0 || counterQty <= 0) { 
-         alert('Price per unit and quantity must be greater than 0'); 
-         return; 
+   const handleSendCounter = async () => {
+      if (!counterTargetMsgId || !chatId || counterSending) return;
+
+      setCounterPriceError('');
+      setCounterQtyError('');
+
+      let hasFieldError = false;
+      if (counterPrice <= 0) {
+         setCounterPriceError('Enter a valid price per unit (greater than 0).');
+         hasFieldError = true;
       }
-      
-      respondToProposal(chatId, counterTargetMsgId, 'COUNTER', counterPrice, counterQty);
-      setShowCounterModal(false);
-      setCounterTargetMsgId(null);
+      if (counterQty <= 0) {
+         setCounterQtyError('Enter a valid quantity (greater than 0).');
+         hasFieldError = true;
+      }
+      if (hasFieldError) return;
+
+      const capOffer = activeChat?.offerId ? getOfferById(activeChat.offerId) : null;
+      if (capOffer) {
+         const listCap = Number(capOffer.price);
+         if (Number.isFinite(listCap) && counterPrice > listCap) {
+            setCounterPriceError(`Cannot exceed listing price (${listCap.toLocaleString()} XAF).`);
+            return;
+         }
+      }
+
+      setCounterSending(true);
+      try {
+         const ok = await respondToProposal(chatId, counterTargetMsgId, 'COUNTER', counterPrice, counterQty);
+         if (ok) {
+            setCounterPriceError('');
+            setCounterQtyError('');
+            setShowCounterModal(false);
+            setCounterTargetMsgId(null);
+         }
+      } finally {
+         setCounterSending(false);
+      }
    };
 
-   // Initialize proposal form only when the modal opens (not on every poll / message update).
-   // Prefill from the latest proposal for this offer in the thread so API/curl updates match the form;
-   // otherwise fall back to listing price.
-   useEffect(() => {
-      if (!showProposalModal || !activeChat?.offerId || !activeChat.id) {
-         proposalModalWasOpenRef.current = false;
-         return;
-      }
-      const justOpened = !proposalModalWasOpenRef.current;
-      proposalModalWasOpenRef.current = true;
-      if (!justOpened) return;
-
-      const offer = getOfferById(activeChat.offerId);
-      if (!offer) return;
-
-      const threadMsgs = messages
-         .filter((m) => m.chatId === activeChat.id)
-         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      const lastForOffer = [...threadMsgs]
-         .reverse()
-         .find((m) => m.proposal?.offerId === activeChat.offerId);
-
-      if (lastForOffer?.proposal) {
-         setProposalPrice(Number(lastForOffer.proposal.pricePerUnit) || 0);
-         setProposalQty(Number(lastForOffer.proposal.quantity) || 1);
-      } else {
-         setProposalPrice(Number(offer.price) || 0);
-         setProposalQty(1);
-      }
-   }, [showProposalModal, activeChat?.offerId, activeChat?.id, messages]);
-
    if (!user) return <div className="p-8 text-center">Login required.</div>;
+
+   const listingOffer = activeChat?.offerId ? getOfferById(activeChat.offerId) ?? null : null;
+   const maxPricePerUnit =
+      listingOffer != null && Number.isFinite(Number(listingOffer.price))
+         ? Number(listingOffer.price)
+         : null;
+
+   const proposalTotalPreview =
+      (() => {
+         const p = parseFloat(String(proposalPriceStr).replace(',', '.').trim());
+         const q = parseFloat(String(proposalQtyStr).replace(',', '.').trim());
+         if (!Number.isFinite(p) || !Number.isFinite(q)) return null;
+         return p * q;
+      })();
 
    return (
       <div className="flex h-[calc(100vh-4rem)] bg-gray-100 overflow-hidden">
@@ -317,21 +371,35 @@ export const ChatPage: React.FC = () => {
                                        {!isMe && msg.proposal.status === ProposalStatus.PENDING && (
                                           <div className="mt-3 flex gap-2 flex-wrap">
                                              <button
-                                                onClick={() => respondToProposal(msg.chatId, msg.id, 'ACCEPT')}
-                                                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded font-bold transition-colors min-w-[60px]"
+                                                type="button"
+                                                disabled={!!proposalActionBusy}
+                                                onClick={() => {
+                                                   setProposalActionBusy(`${msg.id}:accept`);
+                                                   void respondToProposal(msg.chatId, msg.id, 'ACCEPT').finally(() => setProposalActionBusy(null));
+                                                }}
+                                                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded font-bold transition-colors min-w-[60px] disabled:opacity-60 inline-flex items-center justify-center gap-1"
                                              >
+                                                {proposalActionBusy === `${msg.id}:accept` ? <Spinner className="h-3.5 w-3.5" /> : null}
                                                 {t('chat.accept')}
                                              </button>
                                              <button
+                                                type="button"
+                                                disabled={!!proposalActionBusy || counterSending}
                                                 onClick={() => handleOpenCounter(msg.id, msg.proposal!.pricePerUnit, msg.proposal!.quantity)}
-                                                className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-2 rounded font-bold transition-colors min-w-[60px]"
+                                                className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-2 rounded font-bold transition-colors min-w-[60px] disabled:opacity-60"
                                              >
                                                 Counter
                                              </button>
                                              <button
-                                                onClick={() => respondToProposal(msg.chatId, msg.id, 'REJECT')}
-                                                className="w-full bg-red-600 hover:bg-red-700 text-white text-xs py-2 rounded font-bold transition-colors"
+                                                type="button"
+                                                disabled={!!proposalActionBusy}
+                                                onClick={() => {
+                                                   setProposalActionBusy(`${msg.id}:reject`);
+                                                   void respondToProposal(msg.chatId, msg.id, 'REJECT').finally(() => setProposalActionBusy(null));
+                                                }}
+                                                className="w-full bg-red-600 hover:bg-red-700 text-white text-xs py-2 rounded font-bold transition-colors disabled:opacity-60 inline-flex items-center justify-center gap-1"
                                              >
+                                                {proposalActionBusy === `${msg.id}:reject` ? <Spinner className="h-3.5 w-3.5" /> : null}
                                                 {t('chat.reject')}
                                              </button>
                                           </div>
@@ -355,7 +423,14 @@ export const ChatPage: React.FC = () => {
                      <form onSubmit={handleSendMessage} className="flex items-end gap-2">
                         <button
                            type="button"
-                           onClick={() => setShowProposalModal(true)}
+                           onClick={() => {
+                              setProposalPriceStr('');
+                              setProposalQtyStr('');
+                              setProposalModalError('');
+                              setProposalPriceError('');
+                              setProposalQtyError('');
+                              setShowProposalModal(true);
+                           }}
                            disabled={!activeChat?.offerId || !(getOfferById(activeChat?.offerId || '')?.isNegotiable ?? false)}
                            className="mb-1 p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                            title={!activeChat?.offerId ? 'Select an offer first' : (getOfferById(activeChat?.offerId || '')?.isNegotiable ? 'Make Proposal' : 'This offer is not open for negotiation')}
@@ -380,10 +455,10 @@ export const ChatPage: React.FC = () => {
                         />
                         <button
                            type="submit"
-                           disabled={!inputText.trim()}
-                           className="mb-1 p-2 bg-primary-600 text-white rounded-full hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                           disabled={!inputText.trim() || messageSending}
+                           className="mb-1 p-2 bg-primary-600 text-white rounded-full hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 inline-flex items-center justify-center"
                         >
-                           <Send className="h-5 w-5" />
+                           {messageSending ? <Spinner className="h-5 w-5" label="Sending message" /> : <Send className="h-5 w-5" />}
                         </button>
                      </form>
                      <p className="mt-1.5 text-[11px] text-gray-400 hidden sm:block">
@@ -404,47 +479,89 @@ export const ChatPage: React.FC = () => {
          {showProposalModal && (
             <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
                <div className="bg-white rounded-lg max-w-sm w-full p-6 shadow-xl">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">{t('chat.makeProposal')}</h3>
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">{t('chat.makeProposal')}</h3>
+                  {maxPricePerUnit != null && (
+                     <p className="text-xs text-gray-500 mb-3">
+                        Listing: {maxPricePerUnit.toLocaleString()} XAF per unit — your price cannot be higher.
+                     </p>
+                  )}
+                  {proposalModalError ? (
+                     <p className="text-sm text-red-600 mb-3" role="alert">
+                        {proposalModalError}
+                     </p>
+                  ) : null}
 
                   <div className="space-y-4">
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">{t('chat.pricePerUnit')} (XAF)</label>
                         <input
-                           type="number" min="0.01" step="0.01"
-                           value={proposalPrice || ''}
-                           onChange={(e) => setProposalPrice(Number(e.target.value) || 0)}
-                           className="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900"
+                           type="text"
+                           inputMode="decimal"
+                           autoComplete="off"
+                           placeholder={maxPricePerUnit != null ? `max ${maxPricePerUnit.toLocaleString()}` : 'e.g. 2500'}
+                           value={proposalPriceStr}
+                           onChange={(e) => {
+                              setProposalPriceStr(e.target.value.replace(/[^\d.,]/g, ''));
+                              setProposalPriceError('');
+                              setProposalModalError('');
+                           }}
+                           aria-invalid={!!proposalPriceError}
+                           className={`w-full border rounded-md p-2 bg-white text-gray-900 ${proposalPriceError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
                         />
+                        {proposalPriceError ? (
+                           <p className="text-xs text-red-600 mt-1" role="alert">{proposalPriceError}</p>
+                        ) : null}
                      </div>
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">{t('form.quantity')}</label>
                         <input
-                           type="number" min="0.01" step="0.01"
-                           value={proposalQty || ''}
-                           onChange={(e) => setProposalQty(Number(e.target.value) || 0)}
-                           className="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900"
+                           type="text"
+                           inputMode="decimal"
+                           autoComplete="off"
+                           placeholder="e.g. 10"
+                           value={proposalQtyStr}
+                           onChange={(e) => {
+                              setProposalQtyStr(e.target.value.replace(/[^\d.,]/g, ''));
+                              setProposalQtyError('');
+                              setProposalModalError('');
+                           }}
+                           aria-invalid={!!proposalQtyError}
+                           className={`w-full border rounded-md p-2 bg-white text-gray-900 ${proposalQtyError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
                         />
+                        {proposalQtyError ? (
+                           <p className="text-xs text-red-600 mt-1" role="alert">{proposalQtyError}</p>
+                        ) : null}
                      </div>
-                     <div className="bg-gray-50 p-3 rounded text-sm">
-                        <div className="flex justify-between font-bold text-gray-900">
-                           <span>Total:</span>
-                           <span>{(Number(proposalPrice) * Number(proposalQty)).toLocaleString()} XAF</span>
+                     {proposalTotalPreview != null && (
+                        <div className="bg-gray-50 p-3 rounded text-sm">
+                           <div className="flex justify-between font-bold text-gray-900">
+                              <span>Total:</span>
+                              <span>{Math.round(proposalTotalPreview).toLocaleString()} XAF</span>
+                           </div>
                         </div>
-                     </div>
+                     )}
                   </div>
 
                   <div className="mt-6 flex justify-end gap-3">
                      <button
-                        onClick={() => setShowProposalModal(false)}
+                        onClick={() => {
+                           setShowProposalModal(false);
+                           setProposalModalError('');
+                           setProposalPriceError('');
+                           setProposalQtyError('');
+                        }}
                         className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md text-sm font-medium"
                      >
                         {t('form.cancel')}
                      </button>
                      <button
-                        onClick={handleSendProposal}
-                        className="px-4 py-2 bg-primary-600 text-white rounded-md text-sm font-bold hover:bg-primary-700"
+                        type="button"
+                        disabled={proposalSending}
+                        onClick={() => void handleSendProposal()}
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md text-sm font-bold hover:bg-primary-700 disabled:opacity-60 inline-flex items-center justify-center gap-2"
                      >
-                        {t('chat.proposed')}
+                        {proposalSending && <Spinner className="h-4 w-4" label="Sending proposal" />}
+                        {proposalSending ? 'Sending…' : t('chat.proposed')}
                      </button>
                   </div>
                </div>
@@ -456,25 +573,47 @@ export const ChatPage: React.FC = () => {
             <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
                <div className="bg-white rounded-lg max-w-sm w-full p-6 shadow-xl">
                   <h3 className="text-lg font-bold text-gray-900 mb-1">Send a Counter-Offer</h3>
-                  <p className="text-sm text-gray-500 mb-4">Propose your own price and quantity. The other party will receive it as a new proposal.</p>
+                  <p className="text-sm text-gray-500 mb-4">
+                     Propose your own price and quantity. The other party will receive it as a new proposal.
+                     {maxPricePerUnit != null && (
+                        <> Price per unit cannot exceed {maxPricePerUnit.toLocaleString()} XAF (listing).</>
+                     )}
+                  </p>
                   <div className="space-y-4">
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">{t('chat.pricePerUnit')} (XAF)</label>
                         <input
-                           type="number" min="0.01" step="0.01"
+                           type="number"
+                           min="0.01"
+                           step="0.01"
+                           {...(maxPricePerUnit != null ? { max: maxPricePerUnit } : {})}
                            value={counterPrice || ''}
-                           onChange={(e) => setCounterPrice(Number(e.target.value) || 0)}
-                           className="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900"
+                           onChange={(e) => {
+                              setCounterPrice(Number(e.target.value) || 0);
+                              setCounterPriceError('');
+                           }}
+                           aria-invalid={!!counterPriceError}
+                           className={`w-full border rounded-md p-2 bg-white text-gray-900 ${counterPriceError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
                         />
+                        {counterPriceError ? (
+                           <p className="text-xs text-red-600 mt-1" role="alert">{counterPriceError}</p>
+                        ) : null}
                      </div>
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">{t('form.quantity')}</label>
                         <input
                            type="number" min="0.01" step="0.01"
                            value={counterQty || ''}
-                           onChange={(e) => setCounterQty(Number(e.target.value) || 0)}
-                           className="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900"
+                           onChange={(e) => {
+                              setCounterQty(Number(e.target.value) || 0);
+                              setCounterQtyError('');
+                           }}
+                           aria-invalid={!!counterQtyError}
+                           className={`w-full border rounded-md p-2 bg-white text-gray-900 ${counterQtyError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
                         />
+                        {counterQtyError ? (
+                           <p className="text-xs text-red-600 mt-1" role="alert">{counterQtyError}</p>
+                        ) : null}
                      </div>
                      <div className="bg-gray-50 p-3 rounded text-sm">
                         <div className="flex justify-between font-bold text-gray-900">
@@ -485,16 +624,24 @@ export const ChatPage: React.FC = () => {
                   </div>
                   <div className="mt-6 flex justify-end gap-3">
                      <button
-                        onClick={() => { setShowCounterModal(false); setCounterTargetMsgId(null); }}
+                        onClick={() => {
+                           setShowCounterModal(false);
+                           setCounterTargetMsgId(null);
+                           setCounterPriceError('');
+                           setCounterQtyError('');
+                        }}
                         className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md text-sm font-medium"
                      >
                         {t('form.cancel')}
                      </button>
                      <button
-                        onClick={handleSendCounter}
-                        className="px-4 py-2 bg-yellow-500 text-white rounded-md text-sm font-bold hover:bg-yellow-600"
+                        type="button"
+                        disabled={counterSending}
+                        onClick={() => void handleSendCounter()}
+                        className="px-4 py-2 bg-yellow-500 text-white rounded-md text-sm font-bold hover:bg-yellow-600 disabled:opacity-60 inline-flex items-center justify-center gap-2"
                      >
-                        Send Counter-Offer
+                        {counterSending && <Spinner className="h-4 w-4" label="Sending counter-offer" />}
+                        {counterSending ? 'Sending…' : 'Send Counter-Offer'}
                      </button>
                   </div>
                </div>
