@@ -1,24 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { MapPin, X, Plus, Lock, Phone, Eye, EyeOff } from 'lucide-react';
 import { ProducerType, Location } from '../../types';
-
-// Mock Data for Regions/Cities
-const CAMEROON_LOCATIONS: Record<string, string[]> = {
-  'West': ['Bafoussam', 'Dschang', 'Foumban', 'Mbouda', 'Bandjoun'],
-  'Center': ['Yaoundé', 'Mbalmayo', 'Bafia', 'Obala', 'Eseka'],
-  'Littoral': ['Douala', 'Edea', 'Nkongsamba', 'Loum', 'Mbanga'],
-  'North West': ['Bamenda', 'Kumbo', 'Ndop', 'Wum', 'Mbengwi'],
-  'South West': ['Buea', 'Limbe', 'Kumba', 'Tiko', 'Mamfe'],
-  'Adamaoua': ['Ngaoundere', 'Meiganga', 'Tibati'],
-  'North': ['Garoua', 'Guider', 'Figuil'],
-  'Far North': ['Maroua', 'Kousseri', 'Mokolo'],
-  'East': ['Bertoua', 'Batouri', 'Abong-Mbang'],
-  'South': ['Ebolowa', 'Kribi', 'Sangmelima']
-};
+import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 
 const AFRICA_COUNTRY_CODES = [
   // Central Africa
@@ -75,16 +62,154 @@ export const RegisterProducer: React.FC = () => {
 
   // Locations State
   const [locations, setLocations] = useState<Location[]>([]);
-  const [currentLoc, setCurrentLoc] = useState({ region: '', city: '', address: '' });
+  const [currentLoc, setCurrentLoc] = useState({ region: '', city: '', address: '', lat: 0, lng: 0 });
+  const [suggestions, setSuggestions] = useState<Array<{ address: string; city: string; region: string; lat: number; lng: number }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isNearbyLoading, setIsNearbyLoading] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const addLocation = () => {
-    if (currentLoc.region && currentLoc.city && currentLoc.address) {
-      setLocations([...locations, { ...currentLoc, lat: 0, lng: 0 }]);
-      setCurrentLoc({ region: '', city: '', address: '' });
+  const handleUseMyLocationSignup = async () => {
+    setGeoLoading(true);
+    try {
+      const { lat, lng } = await requestBrowserLocation();
+      const rev = await nominatimReverseGeocode(lat, lng);
+      setCurrentLoc({
+        address: rev?.address || '',
+        city: rev?.city || '',
+        region: rev?.region || '',
+        lat,
+        lng,
+      });
+    } catch {
+      setError('Could not read your location. Allow permission or enter the address manually.');
+    } finally {
+      setGeoLoading(false);
     }
+  };
+
+  useEffect(() => {
+    const query = String(currentLoc.address ?? '').trim();
+    if (query.length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=${encodeURIComponent(query)}`,
+          {
+            headers: { Accept: 'application/json' },
+          },
+        );
+        if (!response.ok) {
+          setSuggestions([]);
+          setShowSuggestions(false);
+          return;
+        }
+        const rows = await response.json();
+        const mapped = Array.isArray(rows)
+          ? rows.map((row: any) => {
+              const addr = row?.address ?? {};
+              const city = addr.city || addr.town || addr.village || addr.county || '';
+              const region = addr.state || addr.region || addr.province || '';
+              return {
+                address: String(row?.display_name ?? ''),
+                city: String(city),
+                region: String(region),
+                lat: Number(row?.lat ?? 0),
+                lng: Number(row?.lon ?? 0),
+              };
+            }).filter((x: any) => x.address)
+          : [];
+        setSuggestions(mapped);
+        setShowSuggestions(mapped.length > 0);
+      } catch {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [currentLoc.address]);
+
+  const loadNearbySuggestions = useCallback(() => {
+    if (!navigator.geolocation) return;
+    setIsNearbyLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const reverseRes = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lng))}`,
+            { headers: { Accept: 'application/json' } },
+          );
+          const reverseRow = reverseRes.ok ? await reverseRes.json() : null;
+          const addr = reverseRow?.address ?? {};
+          const city = addr.city || addr.town || addr.village || addr.county || '';
+          const region = addr.state || addr.region || addr.province || '';
+          const seed = [city, region].filter(Boolean).join(', ') || String(reverseRow?.display_name ?? '');
+          if (!seed) {
+            setIsNearbyLoading(false);
+            return;
+          }
+          const searchRes = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=${encodeURIComponent(seed)}`,
+            { headers: { Accept: 'application/json' } },
+          );
+          const rows = searchRes.ok ? await searchRes.json() : [];
+          const mapped = Array.isArray(rows)
+            ? rows.map((row: any) => {
+                const a = row?.address ?? {};
+                return {
+                  address: String(row?.display_name ?? ''),
+                  city: String(a.city || a.town || a.village || a.county || ''),
+                  region: String(a.state || a.region || a.province || ''),
+                  lat: Number(row?.lat ?? 0),
+                  lng: Number(row?.lon ?? 0),
+                };
+              }).filter((x: any) => x.address)
+            : [];
+          setSuggestions(mapped);
+          setShowSuggestions(mapped.length > 0);
+        } catch {
+          setSuggestions([]);
+          setShowSuggestions(false);
+        } finally {
+          setIsNearbyLoading(false);
+        }
+      },
+      () => setIsNearbyLoading(false),
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 },
+    );
+  }, []);
+
+  const handleTaxDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0]) return;
+    const file = e.target.files[0];
+    const allowedTypes = ['image/png', 'image/jpeg', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Tax document must be PNG, JPG, JPEG, or PDF.');
+      return;
+    }
+    const fakeUrl = URL.createObjectURL(file);
+    setFormData(prev => ({ ...prev, taxClearanceCertificateUrl: fakeUrl }));
+    setError('');
+  };
+
+  const addLocation = () => {
+    const address = String(currentLoc.address ?? '').trim();
+    if (!address) return;
+    const addressParts = address.split(',').map((x) => x.trim()).filter(Boolean);
+    const city = String(currentLoc.city ?? '').trim() || addressParts[1] || addressParts[0] || 'Unknown';
+    const region = String(currentLoc.region ?? '').trim() || addressParts[2] || addressParts[1] || 'Unknown';
+    setLocations([...locations, { ...currentLoc, address, city, region }]);
+    setCurrentLoc({ region: '', city: '', address: '', lat: 0, lng: 0 });
   };
 
   const removeLocation = (index: number) => {
@@ -219,18 +344,20 @@ export const RegisterProducer: React.FC = () => {
               </div>
               <div className="sm:col-span-6">
                 <label htmlFor="taxCert" className="block text-sm font-medium text-gray-700">
-                  Tax clearance certificate URL
+                  Tax clearance certificate (PNG, JPG, PDF)
                 </label>
-                <p className="text-xs text-gray-500 mt-0.5">Link to your uploaded Attestation de non-redevance (e.g. from document upload).</p>
+                <p className="text-xs text-gray-500 mt-0.5">Upload your Attestation de non-redevance document.</p>
                 <input
                   id="taxCert"
-                  type="url"
+                  type="file"
                   name="taxClearanceCertificateUrl"
-                  placeholder="https://..."
+                  accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf"
                   className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
-                  value={formData.taxClearanceCertificateUrl}
-                  onChange={e => setFormData({ ...formData, taxClearanceCertificateUrl: e.target.value })}
+                  onChange={handleTaxDocumentUpload}
                 />
+                {formData.taxClearanceCertificateUrl && (
+                  <p className="text-xs text-green-600 mt-1">Document selected successfully.</p>
+                )}
               </div>
             </>
           )}
@@ -363,51 +490,107 @@ export const RegisterProducer: React.FC = () => {
         {/* Location Manager */}
         <div className="border-t border-gray-200 pt-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-            <MapPin className="h-5 w-5 mr-2 text-primary-600" /> Operating Locations
+            <MapPin className="h-5 w-5 mr-2 text-primary-600" /> Location Details
           </h3>
 
           {/* Add Location Form */}
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4">
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4 space-y-3">
+            <p className="text-xs text-gray-500">
+              Use your device location (browser permission). We do not load Google Places on signup. You can edit the address fields below.
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleUseMyLocationSignup()}
+              disabled={geoLoading}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-60"
+            >
+              <MapPin className="h-4 w-4" />
+              {geoLoading ? 'Getting location…' : 'Use my current location'}
+            </button>
+            {currentLoc.lat !== 0 && currentLoc.lng !== 0 ? (
+              <p className="text-xs text-gray-600">
+                Coordinates: {currentLoc.lat.toFixed(5)}, {currentLoc.lng.toFixed(5)}
+              </p>
+            ) : null}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div>
-                <select
-                  className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 sm:text-sm text-gray-900"
-                  value={currentLoc.region}
-                  onChange={e => setCurrentLoc({ ...currentLoc, region: e.target.value, city: CAMEROON_LOCATIONS[e.target.value]?.[0] || '' })}
-                >
-                  <option value="">Select Region</option>
-                  {Object.keys(CAMEROON_LOCATIONS).map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-              <div>
-                <select
-                  className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 sm:text-sm text-gray-900"
-                  value={currentLoc.city}
-                  onChange={e => setCurrentLoc({ ...currentLoc, city: e.target.value })}
-                  disabled={!currentLoc.region}
-                >
-                  <option value="">Select City</option>
-                  {currentLoc.region && CAMEROON_LOCATIONS[currentLoc.region]?.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div className="flex gap-2">
+              <div className="sm:col-span-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Address/Street"
+                  placeholder="Street, area, or full address"
                   className="flex-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 sm:text-sm bg-white text-gray-900"
                   value={currentLoc.address}
-                  onChange={e => setCurrentLoc({ ...currentLoc, address: e.target.value })}
+                  onChange={e => {
+                    setCurrentLoc({ ...currentLoc, address: e.target.value });
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => {
+                    if (suggestions.length > 0) setShowSuggestions(true);
+                    else loadNearbySuggestions();
+                  }}
                 />
                 <button
                   type="button"
                   onClick={addLocation}
-                  disabled={!currentLoc.region || !currentLoc.city || !currentLoc.address}
+                  disabled={!String(currentLoc.address ?? '').trim()}
                   className="inline-flex items-center p-2 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"
                 >
                   <Plus className="h-5 w-5" />
                 </button>
               </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                <input
+                  type="text"
+                  value={currentLoc.city}
+                  onChange={(e) => setCurrentLoc(prev => ({ ...prev, city: e.target.value }))}
+                  className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Region / State</label>
+                <input
+                  type="text"
+                  value={currentLoc.region}
+                  onChange={(e) => setCurrentLoc(prev => ({ ...prev, region: e.target.value }))}
+                  className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900"
+                />
+              </div>
             </div>
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="mt-2 border border-gray-200 rounded-md bg-white shadow-sm max-h-56 overflow-auto">
+                {suggestions.map((item, idx) => (
+                  <button
+                    key={`${item.address}-${idx}`}
+                    type="button"
+                    onClick={() => {
+                      setCurrentLoc({
+                        address: item.address,
+                        city: item.city || currentLoc.city,
+                        region: item.region || currentLoc.region,
+                        lat: item.lat,
+                        lng: item.lng,
+                      });
+                      setShowSuggestions(false);
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                  >
+                    <p className="text-sm text-gray-900">{item.address}</p>
+                    <p className="text-xs text-gray-500">
+                      {[item.city, item.region].filter(Boolean).join(', ')}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+            {isNearbyLoading && (
+              <p className="mt-2 text-xs text-gray-500">Finding nearby locations...</p>
+            )}
+            <p className="mt-2 text-xs text-gray-500">
+              Type your full address, pick a suggestion, or drag the map pin. Click + to add this location.
+            </p>
           </div>
 
           {/* Locations List */}

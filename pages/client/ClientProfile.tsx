@@ -1,26 +1,19 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order } from '../../types';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle } from 'lucide-react';
+import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle, Loader2 } from 'lucide-react';
+import { useUpdateClientProfileMutation } from '../../api/hooks/useUpdateClientProfileMutation';
 import { SEO } from '../../components/SEO';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
-
-const CAMEROON_LOCATIONS: Record<string, string[]> = {
-   'West': ['Bafoussam', 'Dschang', 'Foumban', 'Mbouda', 'Bandjoun'],
-   'Center': ['Yaoundé', 'Mbalmayo', 'Bafia', 'Obala', 'Eseka'],
-   'Littoral': ['Douala', 'Edea', 'Nkongsamba', 'Loum', 'Mbanga'],
-   'North West': ['Bamenda', 'Kumbo', 'Ndop', 'Wum', 'Mbengwi'],
-   'South West': ['Buea', 'Limbe', 'Kumba', 'Tiko', 'Mamfe'],
-   'Adamaoua': ['Ngaoundere', 'Meiganga', 'Tibati'],
-   'North': ['Garoua', 'Guider', 'Figuil'],
-   'Far North': ['Maroua', 'Kousseri', 'Mokolo'],
-   'East': ['Bertoua', 'Batouri', 'Abong-Mbang'],
-   'South': ['Ebolowa', 'Kribi', 'Sangmelima']
-};
+import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
+import { LocationMapPicker } from '../../components/LocationMapPicker';
+import { uploadAvatar } from '../../services/uploadService';
+import { apiFetch } from '../../services/apiService';
+import { API_ENDPOINTS } from '../../api/endpoints';
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
@@ -43,14 +36,21 @@ function normalizeDob(dobRaw: unknown): string {
 }
 
 export const ClientProfile: React.FC = () => {
-   const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, updateClientProfile, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals } = useStore();
+   const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, isInitialCatalogLoading } = useStore();
+   const updateClientMutation = useUpdateClientProfileMutation();
    const { t } = useTranslation();
    const navigate = useNavigate();
    const [activeTab, setActiveTab] = useState<'info' | 'orders' | 'security' | 'favorites' | 'reputation' | 'referrals'>('orders');
 
    const [formData, setFormData] = useState<ClientProfileType | null>(null);
    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-   const [newLoc, setNewLoc] = useState<Partial<Location>>({ region: '', city: '', address: '' });
+   const [newLoc, setNewLoc] = useState<Partial<Location>>({ region: '', city: '', address: '', lat: 0, lng: 0 });
+   const [locationSearch, setLocationSearch] = useState('');
+   const [locationSuggestions, setLocationSuggestions] = useState<Array<{ address: string; city: string; region: string; lat: number; lng: number }>>([]);
+   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
+   const [isNearbyLoading, setIsNearbyLoading] = useState(false);
+   const [geoLoading, setGeoLoading] = useState(false);
+   const [editingLocationIndex, setEditingLocationIndex] = useState<number | null>(null);
 
    const [upgradeData, setUpgradeData] = useState({
       type: 'INDIVIDUAL' as 'INDIVIDUAL' | 'BUSINESS',
@@ -72,10 +72,13 @@ export const ClientProfile: React.FC = () => {
 
    const [showPaymentRecap, setShowPaymentRecap] = useState(false);
    const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
+   const [paymentProcessing, setPaymentProcessing] = useState(false);
 
    const [showPasswordModal, setShowPasswordModal] = useState(false);
    const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+   const [avatarUploading, setAvatarUploading] = useState(false);
+   const [profileHydrating, setProfileHydrating] = useState(false);
 
    const currentClient = useMemo(
       () => (user?.id ? clients.find(c => c.userId === user.id || c.id === user.id) : undefined),
@@ -93,6 +96,134 @@ export const ClientProfile: React.FC = () => {
    useEffect(() => {
       if (activeTab === 'referrals') void refreshMyReferrals();
    }, [activeTab, refreshMyReferrals]);
+   useEffect(() => {
+      const query = String(locationSearch ?? '').trim();
+      if (query.length < 3) {
+         setLocationSuggestions([]);
+         setShowLocationSuggestions(false);
+         return;
+      }
+      const timer = setTimeout(async () => {
+         try {
+            const response = await fetch(
+               `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=${encodeURIComponent(query)}`,
+               { headers: { Accept: 'application/json' } },
+            );
+            if (!response.ok) {
+               setLocationSuggestions([]);
+               setShowLocationSuggestions(false);
+               return;
+            }
+            const rows = await response.json();
+            const mapped = Array.isArray(rows)
+               ? rows.map((row: any) => {
+                    const addr = row?.address ?? {};
+                    const city = addr.city || addr.town || addr.village || addr.county || '';
+                    const region = addr.state || addr.region || addr.province || '';
+                    return {
+                       address: String(row?.display_name ?? ''),
+                       city: String(city),
+                       region: String(region),
+                       lat: Number(row?.lat ?? 0),
+                       lng: Number(row?.lon ?? 0),
+                    };
+                 }).filter((x: any) => x.address)
+               : [];
+            setLocationSuggestions(mapped);
+            setShowLocationSuggestions(mapped.length > 0);
+         } catch {
+            setLocationSuggestions([]);
+            setShowLocationSuggestions(false);
+         }
+      }, 250);
+      return () => clearTimeout(timer);
+   }, [locationSearch]);
+   const loadNearbySuggestions = useCallback(() => {
+      if (!navigator.geolocation) return;
+      setIsNearbyLoading(true);
+      navigator.geolocation.getCurrentPosition(
+         async (pos) => {
+            try {
+               const lat = pos.coords.latitude;
+               const lng = pos.coords.longitude;
+               const reverseRes = await fetch(
+                  `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lng))}`,
+                  { headers: { Accept: 'application/json' } },
+               );
+               const reverseRow = reverseRes.ok ? await reverseRes.json() : null;
+               const addr = reverseRow?.address ?? {};
+               const city = addr.city || addr.town || addr.village || addr.county || '';
+               const region = addr.state || addr.region || addr.province || '';
+               const seed = [city, region].filter(Boolean).join(', ') || String(reverseRow?.display_name ?? '');
+               if (!seed) {
+                  setIsNearbyLoading(false);
+                  return;
+               }
+               const searchRes = await fetch(
+                  `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=${encodeURIComponent(seed)}`,
+                  { headers: { Accept: 'application/json' } },
+               );
+               const rows = searchRes.ok ? await searchRes.json() : [];
+               const mapped = Array.isArray(rows)
+                  ? rows.map((row: any) => {
+                       const a = row?.address ?? {};
+                       return {
+                          address: String(row?.display_name ?? ''),
+                          city: String(a.city || a.town || a.village || a.county || ''),
+                          region: String(a.state || a.region || a.province || ''),
+                          lat: Number(row?.lat ?? 0),
+                          lng: Number(row?.lon ?? 0),
+                       };
+                    }).filter((x: any) => x.address)
+                  : [];
+               setLocationSuggestions(mapped);
+               setShowLocationSuggestions(mapped.length > 0);
+            } catch {
+               setLocationSuggestions([]);
+               setShowLocationSuggestions(false);
+            } finally {
+               setIsNearbyLoading(false);
+            }
+         },
+         () => setIsNearbyLoading(false),
+         { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 },
+      );
+   }, []);
+
+   const handleProfileMapPositionChange = useCallback(async (lat: number, lng: number) => {
+      setNewLoc((prev) => ({ ...prev, lat, lng }));
+      const rev = await nominatimReverseGeocode(lat, lng);
+      if (!rev) return;
+      setNewLoc((prev) => ({
+         ...prev,
+         lat,
+         lng,
+         address: rev.address || prev.address,
+         city: rev.city || prev.city,
+         region: rev.region || prev.region,
+      }));
+      setLocationSearch(rev.address);
+   }, []);
+
+   const handleUseMyLocationProfile = async () => {
+      setGeoLoading(true);
+      try {
+         const { lat, lng } = await requestBrowserLocation();
+         const rev = await nominatimReverseGeocode(lat, lng);
+         setNewLoc({
+            address: rev?.address || '',
+            city: rev?.city || '',
+            region: rev?.region || '',
+            lat,
+            lng,
+         });
+         setLocationSearch(rev?.address || '');
+      } catch {
+         alert('Could not read your location. Allow permission or set the pin on the map.');
+      } finally {
+         setGeoLoading(false);
+      }
+   };
 
    const copyReferralLink = () => {
       if (!referralCodeDisplay) return;
@@ -107,7 +238,6 @@ export const ClientProfile: React.FC = () => {
    useEffect(() => {
       const rowId = (currentClient as any)?.id;
       if (!currentClient || !rowId) {
-         setFormData(null);
          return;
       }
       setFormData(prev => {
@@ -127,12 +257,61 @@ export const ClientProfile: React.FC = () => {
             dateOfBirth: normalizeDob((currentClient as any).dateOfBirth),
             locations: normalizeClientLocations(currentClient.locations),
             favorites: Array.isArray(currentClient.favorites) ? currentClient.favorites : [],
+            profileImageUrl: (clientUser?.profileImageUrl ?? (currentClient as any).profileImageUrl ?? '').toString() || undefined,
             referralCode: ((currentClient as any).referralCode ?? (clientUser as any)?.referralCode ?? '').toString(),
             referrals: Array.isArray((currentClient as any).referrals) ? (currentClient as any).referrals : [],
             searchHistory: Array.isArray((currentClient as any).searchHistory) ? (currentClient as any).searchHistory : [],
          } as ClientProfileType;
       });
    }, [currentClient, user]);
+
+   useEffect(() => {
+      if (!user || user.role !== UserRole.CLIENT) return;
+      let cancelled = false;
+      const hydrateMyClientProfile = async () => {
+         setProfileHydrating(true);
+         try {
+            const meClient = await apiFetch<any>(API_ENDPOINTS.profiles.meClient, { silent401: true } as any).catch(() =>
+               apiFetch<any>(API_ENDPOINTS.clients.me, { silent401: true } as any).catch(() => null),
+            );
+            if (cancelled || !meClient?.id) return;
+            const clientUser = (meClient as any).user;
+            const normalized: ClientProfileType = {
+               ...meClient,
+               id: String(meClient.id),
+               firstName: (meClient.firstName ?? '').toString(),
+               lastName: (meClient.lastName ?? '').toString(),
+               email: (clientUser?.email ?? meClient.email ?? (user as any)?.email ?? '').toString(),
+               phone: (clientUser?.phone ?? meClient.phone ?? (user as any)?.phone ?? '').toString(),
+               name: (clientUser?.displayName ?? meClient.name ?? (`${meClient.firstName ?? ''} ${meClient.lastName ?? ''}`.trim() || '')).toString(),
+               gender: ((meClient as any).gender === 'MALE' || (meClient as any).gender === 'FEMALE' ? (meClient as any).gender : undefined),
+               dateOfBirth: normalizeDob((meClient as any).dateOfBirth),
+               locations: normalizeClientLocations(meClient.locations),
+               favorites: Array.isArray(meClient.favorites) ? meClient.favorites : [],
+               profileImageUrl: (clientUser?.profileImageUrl ?? meClient.profileImageUrl ?? '').toString() || undefined,
+               referralCode: ((meClient as any).referralCode ?? (clientUser as any)?.referralCode ?? '').toString(),
+               referrals: Array.isArray((meClient as any).referrals) ? (meClient as any).referrals : [],
+               searchHistory: Array.isArray((meClient as any).searchHistory) ? (meClient as any).searchHistory : [],
+            } as ClientProfileType;
+            setFormData((prev) => (prev?.id === normalized.id ? prev : normalized));
+         } finally {
+            if (!cancelled) setProfileHydrating(false);
+         }
+      };
+      void hydrateMyClientProfile();
+      return () => {
+         cancelled = true;
+      };
+   }, [user]);
+
+   useEffect(() => {
+      if (!formData || formData.locations.length === 0) return;
+      if (String(newLoc.address ?? '').trim()) return;
+      const first = formData.locations[0];
+      setNewLoc({ ...first });
+      setLocationSearch(first.address ?? '');
+      setEditingLocationIndex(0);
+   }, [formData, newLoc.address]);
 
    if (!user) {
       return (
@@ -143,7 +322,7 @@ export const ClientProfile: React.FC = () => {
       );
    }
 
-   if (user.role !== UserRole.CLIENT && user.role !== UserRole.PRODUCER) {
+   if (user.role !== UserRole.CLIENT) {
       return (
          <div className="max-w-7xl mx-auto py-8 px-4">
             <SEO title="Client Profile | AgriMarket" noindex={true} />
@@ -152,14 +331,13 @@ export const ClientProfile: React.FC = () => {
       );
    }
 
-   if (!currentClient?.id && user.role === UserRole.PRODUCER) {
+   if (!currentClient?.id && user.role === UserRole.CLIENT && (isInitialCatalogLoading || profileHydrating)) {
       return (
-         <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-            <SEO title="Delivery profile | AgriMarket" noindex={true} />
-            <div className="p-8 text-center max-w-lg mx-auto space-y-4 bg-white rounded-lg shadow border border-gray-100">
-               <p className="text-gray-700">Your buyer (delivery) profile could not be loaded yet.</p>
-               <p className="text-sm text-gray-500">Try refreshing the page. If you just signed up, finish producer onboarding first.</p>
-               <Link to="/producer/profile" className="inline-block text-primary-600 font-medium hover:underline">Go to producer profile</Link>
+         <div className="max-w-7xl mx-auto py-8 px-4">
+            <SEO title="Client Profile | AgriMarket" noindex={true} />
+            <div className="p-8 text-center max-w-lg mx-auto space-y-2 text-gray-600">
+               <p>Loading your profile…</p>
+               <p className="text-sm text-gray-500">Please wait while we fetch your account data.</p>
             </div>
          </div>
       );
@@ -201,12 +379,85 @@ export const ClientProfile: React.FC = () => {
    const unavailableFavoriteIds = currentClient?.favorites.filter(id => !offers.find(o => o.id === id));
 
    const initiatePayment = (orderId: string) => { setPaymentOrderId(orderId); setShowPaymentRecap(true); };
-   const confirmPayment = async () => { if (!paymentOrderId) return; const result = await payForOrder(paymentOrderId); if (!result.success && result.error === 'INSUFFICIENT_FUNDS') { alert(t('order.insufficient')); } setShowPaymentRecap(false); setPaymentOrderId(null); };
+   const confirmPayment = async () => {
+      if (!paymentOrderId || paymentProcessing) return;
+      setPaymentProcessing(true);
+      try {
+         const result = await payForOrder(paymentOrderId);
+         if (!result.success && result.error === 'INSUFFICIENT_FUNDS') {
+            alert(t('order.insufficient'));
+         }
+         setShowPaymentRecap(false);
+         setPaymentOrderId(null);
+      } finally {
+         setPaymentProcessing(false);
+      }
+   };
    const handleInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { if (!formData) return; const { name, value } = e.target; setFormData({ ...formData, [name]: value ?? '' }); };
-   const addLocation = () => { if (!formData || !newLoc.region || !newLoc.city || !newLoc.address) return; const locationToAdd: Location = { lat: 0, lng: 0, region: newLoc.region, city: newLoc.city, address: newLoc.address }; setFormData({ ...formData, locations: [...formData.locations, locationToAdd] }); setNewLoc({ region: '', city: '', address: '' }); };
-   const removeLocation = (index: number) => { if (!formData) return; setFormData({ ...formData, locations: formData.locations.filter((_, i) => i !== index) }); };
-   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (formData && e.target.files && e.target.files[0]) { const file = e.target.files[0]; const fakeUrl = URL.createObjectURL(file); setFormData({ ...formData, profileImageUrl: fakeUrl }); } };
-   const savePersonalInfo = (e: React.FormEvent) => { e.preventDefault(); if (formData) { updateClientProfile({ ...formData, name: `${formData.firstName} ${formData.lastName}` }); } };
+   const addLocation = () => {
+      if (!formData || !newLoc.address) return;
+      const address = String(newLoc.address).trim();
+      if (!address) return;
+      const city = String(newLoc.city ?? '').trim();
+      const region = String(newLoc.region ?? '').trim();
+      const fallbackParts = address.split(',').map((x) => x.trim()).filter(Boolean);
+      const inferredCity = city || fallbackParts[1] || fallbackParts[0] || 'Unknown';
+      const inferredRegion = region || fallbackParts[2] || fallbackParts[1] || 'Unknown';
+      const locationToAdd: Location = {
+         lat: Number(newLoc.lat ?? 0),
+         lng: Number(newLoc.lng ?? 0),
+         region: inferredRegion,
+         city: inferredCity,
+         address,
+      };
+      const nextLocations =
+         editingLocationIndex != null && editingLocationIndex >= 0 && editingLocationIndex < formData.locations.length
+            ? formData.locations.map((loc, idx) => (idx === editingLocationIndex ? locationToAdd : loc))
+            : [...formData.locations, locationToAdd];
+      setFormData({ ...formData, locations: nextLocations });
+      setNewLoc({ region: '', city: '', address: '', lat: 0, lng: 0 });
+      setLocationSearch('');
+      setEditingLocationIndex(null);
+   };
+   const removeLocation = (index: number) => {
+      if (!formData) return;
+      setFormData({ ...formData, locations: formData.locations.filter((_, i) => i !== index) });
+      if (editingLocationIndex === index) {
+         setEditingLocationIndex(null);
+         setNewLoc({ region: '', city: '', address: '', lat: 0, lng: 0 });
+         setLocationSearch('');
+      } else if (editingLocationIndex != null && editingLocationIndex > index) {
+         setEditingLocationIndex(editingLocationIndex - 1);
+      }
+   };
+   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!formData || !file) return;
+      const maxBytes = 2 * 1024 * 1024;
+      if (file.size > maxBytes) {
+         alert('Image must be 2 MB or less.');
+         return;
+      }
+      const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+      if (!allowed.includes(file.type)) {
+         alert('Use JPG, PNG, or WebP.');
+         return;
+      }
+      setAvatarUploading(true);
+      try {
+         const url = await uploadAvatar(file);
+         setFormData({ ...formData, profileImageUrl: url });
+      } catch (err: unknown) {
+         alert(err instanceof Error ? err.message : 'Upload failed.');
+      } finally {
+         setAvatarUploading(false);
+      }
+   };
+   const savePersonalInfo = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!formData) return;
+      updateClientMutation.mutate({ ...formData, name: `${formData.firstName} ${formData.lastName}` });
+   };
    const toggleUpgradeCategory = (cat: string) => { const current = upgradeData.productionTypes; if (current.includes(cat)) { setUpgradeData({ ...upgradeData, productionTypes: current.filter(c => c !== cat) }); } else { setUpgradeData({ ...upgradeData, productionTypes: [...current, cat] }); } };
    const handleUpgradeSubmit = (e: React.FormEvent) => { e.preventDefault(); if (!user) return; upgradeClientToProducer(user.id, { type: upgradeData.type, name: upgradeData.type === 'BUSINESS' ? upgradeData.farmName : undefined, description: upgradeData.description, productionTypes: upgradeData.productionTypes }); setShowUpgradeModal(false); navigate('/producer/dashboard'); };
    const performLogout = async () => {
@@ -348,14 +599,14 @@ export const ClientProfile: React.FC = () => {
                                  <User className="h-12 w-12 text-gray-400" />
                               )}
                            </div>
-                           <label className="absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white cursor-pointer hover:bg-primary-700 shadow-sm">
+                           <label className={`absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white shadow-sm ${avatarUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-primary-700'}`}>
                               <Camera className="h-4 w-4" />
-                              <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={handleFileUpload} />
+                              <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={avatarUploading} onChange={handleFileUpload} />
                            </label>
                         </div>
                         <div className="ml-4">
                            <p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p>
-                           <p className="text-xs text-gray-500">JPG or PNG. Max 10MB.</p>
+                           <p className="text-xs text-gray-500">{avatarUploading ? 'Uploading…' : 'JPG, PNG, or WebP. Max 2 MB.'}</p>
                         </div>
                      </div>
                      <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
@@ -391,7 +642,15 @@ export const ClientProfile: React.FC = () => {
                            <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center"><MapPin className="h-4 w-4 mr-1 text-primary-600" /> My Locations</h4>
                            <div className="space-y-2 mb-4">
                               {(formData.locations || []).map((loc, idx) => (
-                                 <div key={idx} className="flex items-center justify-between bg-gray-50 p-3 rounded-md border border-gray-200">
+                                 <div
+                                    key={idx}
+                                    className={`flex items-center justify-between bg-gray-50 p-3 rounded-md border cursor-pointer ${editingLocationIndex === idx ? 'border-primary-400 ring-1 ring-primary-300' : 'border-gray-200'}`}
+                                    onClick={() => {
+                                       setEditingLocationIndex(idx);
+                                       setNewLoc({ ...loc });
+                                       setLocationSearch(loc.address ?? '');
+                                    }}
+                                 >
                                     <div>
                                        <p className="text-sm font-medium text-gray-900">{loc.address}</p>
                                        <p className="text-xs text-gray-500">{loc.city}, {loc.region}</p>
@@ -402,49 +661,136 @@ export const ClientProfile: React.FC = () => {
                                  </div>
                               ))}
                            </div>
-                           <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
-                              <p className="text-xs font-medium text-blue-700 mb-2">Add New Location</p>
-                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                                 <select
-                                    value={newLoc.region ?? ''}
-                                    onChange={e => setNewLoc({ ...newLoc, region: e.target.value, city: CAMEROON_LOCATIONS[e.target.value]?.[0] || '' })}
-                                    className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"
+                           <div className="bg-blue-50 p-3 rounded-md border border-blue-100 space-y-3">
+                              <p className="text-xs font-medium text-blue-700">Add new location</p>
+                              <div className="flex flex-wrap gap-2">
+                                 <button
+                                    type="button"
+                                    onClick={() => void handleUseMyLocationProfile()}
+                                    disabled={geoLoading}
+                                    className="text-sm px-3 py-1.5 rounded-md border border-primary-200 bg-white text-primary-700 hover:bg-primary-50 disabled:opacity-50"
                                  >
-                                    <option value="">Region</option>
-                                    {Object.keys(CAMEROON_LOCATIONS).map(r => <option key={r} value={r}>{r}</option>)}
-                                 </select>
-                                 <select
-                                    value={newLoc.city ?? ''}
-                                    onChange={e => setNewLoc({ ...newLoc, city: e.target.value })}
-                                    disabled={!newLoc.region}
-                                    className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 disabled:bg-gray-100 bg-white text-gray-900"
-                                 >
-                                    <option value="">City</option>
-                                    {newLoc.region && CAMEROON_LOCATIONS[newLoc.region]?.map(c => <option key={c} value={c}>{c}</option>)}
-                                 </select>
-                                 <div className="flex gap-2">
+                                    {geoLoading ? 'Getting location…' : 'Use my current location'}
+                                 </button>
+                              </div>
+                              <LocationMapPicker
+                                 latitude={Number(newLoc.lat) || 0}
+                                 longitude={Number(newLoc.lng) || 0}
+                                 onPositionChange={handleProfileMapPositionChange}
+                                 height="min(240px, 45vh)"
+                              />
+                              <p className="text-xs text-gray-500">
+                                 {editingLocationIndex != null
+                                    ? `Editing location #${editingLocationIndex + 1}. Drag pin or update fields, then save.`
+                                    : 'Drag the pin or tap the map to set coordinates. Address fields update from the pin when possible.'}
+                              </p>
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                 <div className="sm:col-span-2">
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Search address</label>
                                     <input
                                        type="text"
-                                       placeholder="Address"
-                                       value={newLoc.address ?? ''}
-                                       onChange={e => setNewLoc({ ...newLoc, address: e.target.value })}
+                                       placeholder="Type to search (OpenStreetMap)"
+                                       value={locationSearch}
+                                       onChange={e => {
+                                          const value = e.target.value;
+                                          setLocationSearch(value);
+                                          setNewLoc((prev) => ({ ...prev, address: value }));
+                                          setShowLocationSuggestions(true);
+                                       }}
+                                       onFocus={() => {
+                                          if (locationSuggestions.length > 0) setShowLocationSuggestions(true);
+                                          else loadNearbySuggestions();
+                                       }}
                                        className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"
                                     />
-                                    <button
-                                       type="button"
-                                       onClick={addLocation}
-                                       disabled={!newLoc.region || !newLoc.city || !newLoc.address}
-                                       className="inline-flex items-center p-2 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"
-                                    >
-                                       <Plus className="h-5 w-5" />
-                                    </button>
                                  </div>
+                                 {showLocationSuggestions && locationSuggestions.length > 0 && (
+                                    <div className="sm:col-span-2 border border-gray-200 rounded-md bg-white shadow-sm max-h-56 overflow-auto">
+                                       {locationSuggestions.map((item, idx) => (
+                                          <button
+                                             key={`${item.address}-${idx}`}
+                                             type="button"
+                                             onClick={() => {
+                                                setLocationSearch(item.address);
+                                                setNewLoc({
+                                                   address: item.address,
+                                                   city: item.city || '',
+                                                   region: item.region || '',
+                                                   lat: item.lat,
+                                                   lng: item.lng,
+                                                });
+                                                setShowLocationSuggestions(false);
+                                             }}
+                                             className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                                          >
+                                             <p className="text-sm text-gray-900">{item.address}</p>
+                                             <p className="text-xs text-gray-500">{[item.city, item.region].filter(Boolean).join(', ')}</p>
+                                          </button>
+                                       ))}
+                                    </div>
+                                 )}
+                                 {isNearbyLoading && (
+                                    <p className="sm:col-span-2 text-xs text-gray-500">Finding nearby locations...</p>
+                                 )}
+                                 <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
+                                    <input
+                                       type="text"
+                                       value={newLoc.city ?? ''}
+                                       onChange={e => setNewLoc((prev) => ({ ...prev, city: e.target.value }))}
+                                       className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900"
+                                    />
+                                 </div>
+                                 <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Region</label>
+                                    <input
+                                       type="text"
+                                       value={newLoc.region ?? ''}
+                                       onChange={e => setNewLoc((prev) => ({ ...prev, region: e.target.value }))}
+                                       className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900"
+                                    />
+                                 </div>
+                                 <div className="sm:col-span-2">
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Full address</label>
+                                    <input
+                                       type="text"
+                                       value={newLoc.address ?? ''}
+                                       onChange={e => {
+                                          const v = e.target.value;
+                                          setNewLoc((prev) => ({ ...prev, address: v }));
+                                          setLocationSearch(v);
+                                       }}
+                                       className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900"
+                                    />
+                                 </div>
+                              </div>
+                              <div className="flex gap-2 items-center">
+                                 <button
+                                    type="button"
+                                    onClick={addLocation}
+                                    disabled={!String(newLoc.address ?? '').trim()}
+                                    className="inline-flex items-center gap-1 px-3 py-2 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-sm font-medium"
+                                 >
+                                    <Plus className="h-4 w-4" />
+                                    {editingLocationIndex != null ? 'Update location' : 'Add to list'}
+                                 </button>
                               </div>
                            </div>
                         </div>
                         <div className="sm:col-span-6 pt-4 flex justify-end">
-                           <button type="submit" className="bg-primary-600 text-white px-6 py-2 rounded-md text-sm font-medium shadow hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                              {t('form.save')}
+                           <button
+                              type="submit"
+                              disabled={updateClientMutation.isPending}
+                              className="inline-flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-2 rounded-md text-sm font-medium shadow hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                           >
+                              {updateClientMutation.isPending ? (
+                                 <>
+                                    <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+                                    {t('form.saving')}
+                                 </>
+                              ) : (
+                                 t('form.save')
+                              )}
                            </button>
                         </div>
                      </div>
@@ -767,12 +1113,13 @@ export const ClientProfile: React.FC = () => {
                         {/* Actions */}
                         <div className="flex flex-col gap-3">
                            <button
-                              onClick={confirmPayment}
-                              disabled={!hasSufficientFunds}
+                              type="button"
+                              onClick={() => void confirmPayment()}
+                              disabled={!hasSufficientFunds || paymentProcessing}
                               className="w-full bg-primary-600 text-white rounded-lg py-3 font-bold hover:bg-primary-700 shadow-md transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                            >
-                              <CreditCard className="h-4 w-4" />
-                              {t('order.confirmPayment')} — {payOrder.totalAmount.toLocaleString()} XAF
+                              {paymentProcessing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CreditCard className="h-4 w-4" />}
+                              {paymentProcessing ? t('wallet.processing') : `${t('order.confirmPayment')} — ${payOrder.totalAmount.toLocaleString()} XAF`}
                            </button>
                            <button onClick={() => setShowPaymentRecap(false)} className="w-full text-gray-500 text-sm hover:underline py-1">
                               {t('form.cancel')}

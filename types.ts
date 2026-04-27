@@ -392,6 +392,7 @@ export interface UserSession {
   displayName?: string;
   email?: string;
   phone?: string;
+  profileImageUrl?: string;
   producerId?: string; // If role is PRODUCER
   clientId?: string;   // If role is CLIENT
 }

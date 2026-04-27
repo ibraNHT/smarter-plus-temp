@@ -1,33 +1,15 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { MarketType, UserRole } from '../../types';
 import { Tractor, Search, MapPin, ArrowLeft, MessageCircle, Truck, Heart, Star, Layers } from 'lucide-react';
 import { SEO } from '../../components/SEO';
-
-// Data for Autocomplete
-const CAMEROON_LOCATIONS: Record<string, string[]> = {
-  'West': ['Bafoussam', 'Dschang', 'Foumban', 'Mbouda', 'Bandjoun'],
-  'Center': ['Yaoundé', 'Mbalmayo', 'Bafia', 'Obala', 'Eseka'],
-  'Littoral': ['Douala', 'Edea', 'Nkongsamba', 'Loum', 'Mbanga'],
-  'North West': ['Bamenda', 'Kumbo', 'Ndop', 'Wum', 'Mbengwi'],
-  'South West': ['Buea', 'Limbe', 'Kumba', 'Tiko', 'Mamfe'],
-  'Adamaoua': ['Ngaoundere', 'Meiganga', 'Tibati'],
-  'North': ['Garoua', 'Guider', 'Figuil'],
-  'Far North': ['Maroua', 'Kousseri', 'Mokolo'],
-  'East': ['Bertoua', 'Batouri', 'Abong-Mbang'],
-  'South': ['Ebolowa', 'Kribi', 'Sangmelima']
-};
-
-// Flatten locations for easy searching: ["Bafoussam, West", "Yaoundé, Center", ...]
-const FLAT_LOCATIONS = Object.entries(CAMEROON_LOCATIONS).flatMap(([region, cities]) =>
-  cities.map(city => `${city}, ${region}`)
-);
+import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 
 export const ProducerMarket: React.FC = () => {
-  const { offers, producers, user, clients, trackUserSearch, toggleFavorite, getRecommendedOffers, getAverageRating, reviews, compareList, addToCompare, removeFromCompare } = useStore();
+  const { offers, producers, user, clients, trackUserSearch, toggleFavorite, getRecommendedOffers, getAverageRating, reviews, compareList, addToCompare, removeFromCompare, isInitialCatalogLoading } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -40,6 +22,17 @@ export const ProducerMarket: React.FC = () => {
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const locationWrapperRef = useRef<HTMLDivElement>(null);
+  const searchableLocations = useMemo(() => {
+    const values = new Set<string>();
+    for (const producer of producers) {
+      for (const loc of producer.locations || []) {
+        const cityRegion = [loc.city, loc.region].filter(Boolean).join(', ').trim();
+        if (cityRegion) values.add(cityRegion);
+        if (loc.address?.trim()) values.add(loc.address.trim());
+      }
+    }
+    return Array.from(values);
+  }, [producers]);
 
   // Get Current User Region and Favorites
   let clientRegion = '';
@@ -95,7 +88,7 @@ export const ProducerMarket: React.FC = () => {
     setLocationQuery(val);
 
     if (val.length > 0) {
-      const filtered = FLAT_LOCATIONS.filter(loc =>
+      const filtered = searchableLocations.filter(loc =>
         loc.toLowerCase().startsWith(val.toLowerCase()) ||
         loc.toLowerCase().includes(val.toLowerCase())
       ).slice(0, 5); // Limit to 5 suggestions
@@ -408,56 +401,69 @@ export const ProducerMarket: React.FC = () => {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
 
-        {/* Recommended Section */}
-        {recommendedOffers.length > 0 && searchQuery === '' && selectedCategory === 'All' && (
-          <div className="mb-12">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center">
-              <Star className="h-6 w-6 text-yellow-500 mr-2 fill-current" />
-              {t('market.recommended')}
-            </h2>
-            <div className="flex overflow-x-auto pb-8 pt-2 space-x-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent px-1">
-              {recommendedOffers.map(offer => renderOfferCard(offer))}
+        {isInitialCatalogLoading ? (
+          <div className="space-y-12">
+            <div>
+              <div className="h-8 bg-gray-200 rounded w-64 mb-4 animate-pulse" />
+              <OfferRowSkeleton count={6} variant="producer" />
+            </div>
+            <div>
+              <div className="h-8 bg-gray-200 rounded w-48 mb-4 animate-pulse" />
+              <OfferRowSkeleton count={6} variant="producer" />
             </div>
           </div>
-        )}
-
-        {/* Results */}
-        {filteredOffers.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg shadow">
-            <Tractor className="mx-auto h-12 w-12 text-gray-300 mb-4" />
-            <p className="text-gray-500 text-lg">{t('market.noResults')}</p>
-            <button
-              onClick={() => { setSearchQuery(''); setSelectedCategory('All'); setLocationQuery(''); }}
-              className="mt-4 text-primary-600 font-medium hover:underline"
-            >
-              {t('market.clear')}
-            </button>
-          </div>
         ) : (
-          <div className="space-y-12">
-            {sortedCategories.map(category => {
-              // Sort offers in this category: Client's region first
-              const sortedCategoryOffers = sortOffersByRegion([...groupedOffers[category]]);
-
-              return (
-                <div key={category} className="space-y-4">
-                  <div className="flex items-center justify-between border-b border-gray-200 pb-2">
-                    <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-                      <span className="bg-primary-100 text-primary-800 text-sm font-bold px-2 py-1 rounded mr-2 uppercase shadow-sm">
-                        {t(`category.${category}`)}
-                      </span>
-                    </h2>
-                    <span className="text-sm text-gray-500">{sortedCategoryOffers.length} results</span>
-                  </div>
-
-                  {/* Horizontal Scroll Container */}
-                  <div className="flex overflow-x-auto pb-8 pt-2 space-x-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent px-1">
-                    {sortedCategoryOffers.map((offer) => renderOfferCard(offer))}
-                  </div>
+          <>
+            {/* Recommended Section */}
+            {recommendedOffers.length > 0 && searchQuery === '' && selectedCategory === 'All' && (
+              <div className="mb-12">
+                <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center">
+                  <Star className="h-6 w-6 text-yellow-500 mr-2 fill-current" />
+                  {t('market.recommended')}
+                </h2>
+                <div className="flex overflow-x-auto pb-8 pt-2 space-x-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent px-1">
+                  {recommendedOffers.map(offer => renderOfferCard(offer))}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            )}
+
+            {/* Results */}
+            {filteredOffers.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded-lg shadow">
+                <Tractor className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+                <p className="text-gray-500 text-lg">{t('market.noResults')}</p>
+                <button
+                  onClick={() => { setSearchQuery(''); setSelectedCategory('All'); setLocationQuery(''); }}
+                  className="mt-4 text-primary-600 font-medium hover:underline"
+                >
+                  {t('market.clear')}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-12">
+                {sortedCategories.map(category => {
+                  const sortedCategoryOffers = sortOffersByRegion([...groupedOffers[category]]);
+
+                  return (
+                    <div key={category} className="space-y-4">
+                      <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+                        <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+                          <span className="bg-primary-100 text-primary-800 text-sm font-bold px-2 py-1 rounded mr-2 uppercase shadow-sm">
+                            {t(`category.${category}`)}
+                          </span>
+                        </h2>
+                        <span className="text-sm text-gray-500">{sortedCategoryOffers.length} results</span>
+                      </div>
+
+                      <div className="flex overflow-x-auto pb-8 pt-2 space-x-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent px-1">
+                        {sortedCategoryOffers.map((offer) => renderOfferCard(offer))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

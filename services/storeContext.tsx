@@ -1,9 +1,10 @@
 
-import React, { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback } from 'react';
+import React, { useState, ReactNode, useEffect, useRef, useCallback, createContext, useContext } from 'react';
 import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerStatus, OfferType, CartItem, Order, OrderStatus, Wallet, Notification, WithdrawalRequest, WithdrawalStatus, PaymentMethod, ChatSession, ChatMessage, Proposal, ProposalStatus, WeeklySchedule, AvailabilityException, Review, SupportMessage, Portfolio, DisputeEvidence, Coupon, PickupPoint, MyReferralsData } from '../types';
 import { generateSupportResponse } from './geminiService';
 import {
   getSupportMessages,
+  getGuestSupportMessages,
   mapDtoToSupportMessage,
   mergeIncomingSupportMessages,
   postGuestSupportMessage,
@@ -11,7 +12,7 @@ import {
 } from './supportSessionsApi';
 const defaultSchedule: WeeklySchedule = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
 import { apiFetch, apiUpload, setToken, clearToken, getToken, setRefreshToken } from './apiService';
-
+import { uploadAvatar } from './uploadService';
 /** Map Prisma withdrawal row (+ nested paymentMethod) to app `WithdrawalRequest`. */
 function mapWithdrawalFromApi(d: any): WithdrawalRequest {
   const pm = d.paymentMethod ?? {};
@@ -122,6 +123,8 @@ import { fetchMyReferrals } from './referralsApi';
 import { validateCouponRemote, type CouponValidationChannel } from './couponsApi';
 import { io, Socket } from 'socket.io-client';
 import { isWebAppAllowedRole, isWebAppSessionBlocked } from './authRoles';
+import { useSessionStore } from '../stores/sessionStore';
+import { API_ENDPOINTS } from '../api/endpoints';
 
 interface StoreContextType {
   user: UserSession | null;
@@ -149,7 +152,7 @@ interface StoreContextType {
   fetchMessages: (chatId: string) => Promise<void>;
   startNegotiation: (producerId: string, offerId: string) => Promise<string>;
   sendMessage: (chatId: string, text: string, proposal?: Proposal) => Promise<boolean>;
-  respondToProposal: (chatId: string, messageId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', counterPrice?: number, counterQty?: number) => void;
+  respondToProposal: (chatId: string, messageId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', counterPrice?: number, counterQty?: number) => Promise<boolean>;
 
   // Support Chat (Client Side)
   supportMessages: SupportMessage[];
@@ -171,13 +174,13 @@ interface StoreContextType {
   login: (identifier: string, password: string) => Promise<{ success: boolean; message: string }>;
   logout: () => Promise<void>;
   registerProducer: (data: Omit<ProducerProfile, 'id' | 'status' | 'joinedDate' | 'paymentMethods' | 'favorites' | 'searchHistory' | 'referrals' | 'referralCode'> & { referrerCode?: string }, password: string) => Promise<{ success: boolean; message: string }>;
-  updateProducerProfile: (producer: ProducerProfile, otpToken?: string) => Promise<void>;
+  updateProducerProfile: (producer: ProducerProfile, otpToken?: string) => Promise<boolean>;
   requestOtp: (action: 'PROFILE_UPDATE' | 'WITHDRAWAL') => Promise<{ success: boolean; message: string }>;
   verifyOtp: (action: 'PROFILE_UPDATE' | 'WITHDRAWAL', code: string) => Promise<{ success: boolean; token?: string; message: string }>;
   updateProducerAvailability: (producerId: string, schedule: WeeklySchedule, exceptions: AvailabilityException[]) => Promise<void>;
-  registerClient: (data: Omit<ClientProfile, 'id' | 'joinedDate' | 'referrals' | 'referralCode'> & { referrerCode?: string }, password: string) => Promise<{ success: boolean; message: string }>;
+  registerClient: (data: Omit<ClientProfile, 'id' | 'joinedDate' | 'referrals' | 'referralCode'> & { referrerCode?: string }, password: string, avatarFile?: File | null) => Promise<{ success: boolean; message: string }>;
   verifyEmail: (code: string) => Promise<boolean>;
-  updateClientProfile: (client: ClientProfile) => Promise<void>;
+  updateClientProfile: (client: ClientProfile) => Promise<boolean>;
   upgradeClientToProducer: (clientId: string, producerDetails: Partial<ProducerProfile>) => void;
   validateProducer: (id: string, status: ProducerStatus) => Promise<void>;
   saveProducerPaymentMethod: (producerId: string, method: PaymentMethod) => void;
@@ -190,7 +193,7 @@ interface StoreContextType {
   addToCart: (offer: Offer, quantity: number, bookingDate?: string) => { success: boolean; error?: 'PRODUCER_CONFLICT' };
   removeFromCart: (offerId: string) => void;
   clearCart: () => void;
-  placeOrder: (couponId?: string, discountAmount?: number, deliveryDate?: string, deliveryMethod?: 'HOME' | 'PICKUP', pickupPointId?: string) => Promise<void>;
+  placeOrder: (couponId?: string, discountAmount?: number, deliveryDate?: string, deliveryMethod?: 'HOME' | 'PICKUP', pickupPointId?: string) => Promise<boolean>;
   confirmOrder: (orderId: string) => Promise<void>;
   rejectOrder: (orderId: string) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
@@ -243,9 +246,22 @@ interface StoreContextType {
   /** From GET /api/users/me/referrals — null when logged out or not loaded. */
   myReferrals: MyReferralsData | null;
   refreshMyReferrals: () => Promise<void>;
+
+  /** True until the first bootstrap fetch that loads offers (and related catalog data) finishes. */
+  isInitialCatalogLoading: boolean;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
+
+const getOrdersEndpointsForUser = (activeUser?: UserSession | null): string[] => {
+  if (!activeUser) return [];
+  if (activeUser.role === UserRole.CLIENT) return [API_ENDPOINTS.orders.my];
+  if (activeUser.role === UserRole.PRODUCER) {
+    // Producers can sell and also place purchases; include both views.
+    return [API_ENDPOINTS.orders.producer, API_ENDPOINTS.orders.my];
+  }
+  return [];
+};
 
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserSession | null>(null);
@@ -258,7 +274,17 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [producers, setProducers] = useState<ProducerProfile[]>([]);
   const [clients, setClients] = useState<ClientProfile[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem('cart');
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
   const [orders, setOrders] = useState<Order[]>([]);
   const [wallets, setWallets] = useState<Record<string, Wallet>>({});
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -269,6 +295,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [coupons, _setCoupons] = useState<Coupon[]>([]);
   const [pickupPoints, setPickupPoints] = useState<PickupPoint[]>([]);
   const [myReferrals, setMyReferrals] = useState<MyReferralsData | null>(null);
+  const initialCatalogLoadDoneRef = useRef(false);
+  const [isInitialCatalogLoading, setIsInitialCatalogLoading] = useState(true);
 
   // Chat State
   const [chats, setChats] = useState<ChatSession[]>([]);
@@ -296,16 +324,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         parsedUser = JSON.parse(savedUser);
         if (isWebAppAllowedRole(parsedUser?.role)) {
           setUser(parsedUser);
+          useSessionStore.getState().setUser(parsedUser);
         } else {
           clearToken();
           localStorage.removeItem('currentUser');
+          useSessionStore.getState().clear();
           parsedUser = null;
         }
       } catch (e) { }
-    }
-    const savedCart = localStorage.getItem('cart');
-    if (savedCart) {
-      try { setCart(JSON.parse(savedCart)); } catch (e) { }
     }
     const savedGuestEmail = localStorage.getItem('guestEmail');
     if (savedGuestEmail) setGuestEmail(savedGuestEmail);
@@ -319,6 +345,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       clearToken();
       localStorage.removeItem('currentUser');
       setUser(null);
+      useSessionStore.getState().clear();
     }
   }, [user]);
 
@@ -330,7 +357,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     if (user && cart.length > 0) {
       const timer = setTimeout(() => {
-        apiFetch('/api/cart/sync-cart', {
+        apiFetch(API_ENDPOINTS.cart.sync, {
           method: 'POST',
           silent401: true,
           body: JSON.stringify({
@@ -391,15 +418,26 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           // (e.g. missing client profile) even when token is valid.
           // Do not drop the session here; let interactive auth flows handle logout.
           const on401 = (_e: unknown) => {};
-          const resSessions = await apiFetch<ChatSession[]>('/api/chat/sessions', { silent401: true } as any).catch((e) => { on401(e); return null; });
+          const resSessions = await apiFetch<ChatSession[]>(API_ENDPOINTS.chat.sessions, { silent401: true } as any).catch((e) => { on401(e); return null; });
           if (resSessions && Array.isArray(resSessions)) setChats(normalizeChatSessionsFromApi(resSessions));
 
-          const resNotif = await apiFetch<Notification[]>('/api/notifications', { silent401: true } as any).catch((e) => { on401(e); return null; });
+          const resNotif = await apiFetch<Notification[]>(API_ENDPOINTS.notifications.list, { silent401: true } as any).catch((e) => { on401(e); return null; });
           if (resNotif && Array.isArray(resNotif)) setNotifications(resNotif);
 
-          const resOrders = await apiFetch<any[]>('/api/orders', { silent401: true } as any).catch((e) => { on401(e); return null; });
-          if (resOrders && Array.isArray(resOrders)) {
-            setOrders(resOrders.map((o: any) => ({
+          const orderEndpoints = getOrdersEndpointsForUser(userRef.current);
+          if (orderEndpoints.length > 0) {
+            const orderResults = await Promise.all(
+              orderEndpoints.map((endpoint) =>
+                apiFetch<any[]>(endpoint, { silent401: true } as any).catch((e) => {
+                  on401(e);
+                  return [];
+                }),
+              ),
+            );
+            const mergedOrders = Array.from(
+              new Map(orderResults.flat().map((o: any) => [o.id, o])).values(),
+            );
+            setOrders(mergedOrders.map((o: any) => ({
               ...o,
               items: Array.isArray(o.orderItems || o.items)
                 ? (o.orderItems || o.items).map((item: any) => ({
@@ -424,25 +462,40 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const fetchData = async (currentUser?: typeof user) => {
     const activeUser = currentUser ?? user;
+    const isClientSession = activeUser?.role === UserRole.CLIENT;
+    const isProducerSession = activeUser?.role === UserRole.PRODUCER;
+    const hashPath = typeof window !== 'undefined' ? window.location.hash : '';
+    const isClientUiRoute = hashPath.includes('/client/') || hashPath.includes('/register/client');
+    const shouldFetchBuyerProfile = isClientSession || (isProducerSession && isClientUiRoute);
+    const shouldFetchProducerPortfolios = isProducerSession && Boolean(activeUser?.producerId);
+    const ordersEndpoints = getOrdersEndpointsForUser(activeUser);
     try {
       // Keep session on background/bootstrapping 401 responses from feature endpoints.
       const on401 = (_e: unknown) => {};
       if (activeUser && getToken()) await fetchChats().catch(on401);
       const [resProducers, resClients, resOffers, resPickup] = await Promise.all([
-        apiFetch<ProducerProfile[]>('/api/producers', { silent401: true } as any).catch((e) => { on401(e); return []; }),
-        apiFetch<ClientProfile[]>('/api/clients', { silent401: true } as any).catch((e) => { on401(e); return []; }),
-        apiFetch<Offer[]>('/api/offers', { silent401: true } as any).catch((e) => { on401(e); return []; }),
-        apiFetch<PickupPoint[]>('/api/pickup-points', { silent401: true } as any).catch((e) => { on401(e); return []; }),
+        apiFetch<ProducerProfile[]>(API_ENDPOINTS.producers.list, { silent401: true } as any).catch((e) => { on401(e); return []; }),
+        apiFetch<ClientProfile[]>(API_ENDPOINTS.clients.list, { silent401: true } as any).catch((e) => { on401(e); return []; }),
+        apiFetch<Offer[]>(API_ENDPOINTS.offers.list, { silent401: true } as any).catch((e) => { on401(e); return []; }),
+        apiFetch<PickupPoint[]>(API_ENDPOINTS.pickupPoints.list, { silent401: true } as any).catch((e) => { on401(e); return []; }),
       ]);
       // Only fetch orders, wallet, and referral stats when authenticated and we have a token (avoids 401 spam when token expired)
       if (activeUser && getToken()) {
         const [resOrders, resWallet, resWithdrawals, referralsPayload, resPortfolios, resMyReviews] = await Promise.all([
-          apiFetch<any[]>('/api/orders', { silent401: true } as any).catch((e) => { on401(e); return []; }),
-          apiFetch<any>('/api/wallet/me', { silent401: true } as any).catch((e) => { on401(e); return null; }),
-          apiFetch<any[]>('/api/wallet/me/withdrawals', { silent401: true } as any).catch((e) => { on401(e); return []; }),
+          ordersEndpoints.length > 0
+            ? Promise.all(
+                ordersEndpoints.map((endpoint) =>
+                  apiFetch<any[]>(endpoint, { silent401: true } as any).catch((e) => { on401(e); return []; }),
+                ),
+              ).then((rows) => Array.from(new Map(rows.flat().map((o: any) => [o.id, o])).values()))
+            : Promise.resolve([] as any[]),
+          apiFetch<any>(API_ENDPOINTS.wallet.me, { silent401: true } as any).catch((e) => { on401(e); return null; }),
+          apiFetch<any[]>(API_ENDPOINTS.wallet.withdrawals, { silent401: true } as any).catch((e) => { on401(e); return []; }),
           fetchMyReferrals(),
-          apiFetch<Portfolio[]>('/api/portfolios', { silent401: true } as any).catch((e) => { on401(e); return []; }),
-          apiFetch<any[]>(`/api/reviews/user/${activeUser.id}`, { silent401: true } as any).catch((e) => {
+          shouldFetchProducerPortfolios
+            ? apiFetch<Portfolio[]>(API_ENDPOINTS.portfolios.list, { silent401: true } as any).catch((e) => { on401(e); return []; })
+            : Promise.resolve([] as Portfolio[]),
+          apiFetch<any[]>(API_ENDPOINTS.reviews.byUser(activeUser.id), { silent401: true } as any).catch((e) => {
             on401(e);
             return [];
           }),
@@ -499,6 +552,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         return {
           ...p,
           name: displayName || 'Unknown',
+          profileImageUrl: (p as any).user?.profileImageUrl ?? (p as any).profileImageUrl,
           locations: p.locations || [],
           certifications: p.certifications || [],
           paymentMethods: p.paymentMethods || [],
@@ -514,6 +568,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         return {
           ...c,
           name: displayName || 'Unknown',
+          profileImageUrl: (c as any).user?.profileImageUrl ?? (c as any).profileImageUrl,
           locations: c.locations || [],
           favorites: c.favorites || [],
           referrals: c.referrals || [],
@@ -521,9 +576,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         };
       };
       let clientRows = Array.isArray(resClients) ? resClients.map(mapClientRow) : [];
-      if (activeUser && getToken()) {
-        const meClient = await apiFetch<any>('/api/profiles/me/client', { silent401: true } as any).catch(() =>
-          apiFetch<any>('/api/clients/me', { silent401: true } as any).catch(() => null),
+      if (activeUser && getToken() && shouldFetchBuyerProfile) {
+        const meClient = await apiFetch<any>(API_ENDPOINTS.profiles.meClient, { silent401: true } as any).catch(() =>
+          apiFetch<any>(API_ENDPOINTS.clients.me, { silent401: true } as any).catch(() => null),
         );
         if (meClient && typeof meClient === 'object' && meClient.id) {
           const mapped = mapClientRow(meClient);
@@ -538,10 +593,41 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
       }
       setClients(clientRows);
-      setOffers(Array.isArray(resOffers) ? resOffers : ((resOffers as any)?.data || []));
+      const offersList = Array.isArray(resOffers) ? resOffers : ((resOffers as any)?.data || []);
+      setOffers(offersList);
       setPickupPoints(Array.isArray(resPickup) ? resPickup : []);
+
+      if (activeUser && getToken() && offersList.length > 0) {
+        const cartPayload = await apiFetch<{ items?: Array<{ offerId: string; quantity: number; bookingDate?: string }> }>(
+          API_ENDPOINTS.cart.get,
+          { silent401: true } as any,
+        ).catch(() => null);
+        const rows = cartPayload?.items;
+        if (Array.isArray(rows) && rows.length > 0) {
+          setCart((prev) => {
+            if (prev.length > 0) return prev;
+            const hydrated = rows
+              .map((row) => {
+                const off = offersList.find((o: any) => o.id === row.offerId) as Offer | undefined;
+                if (!off) return null;
+                return {
+                  ...off,
+                  cartQuantity: Math.max(1, Math.floor(Number(row.quantity)) || 1),
+                  bookingDate: row.bookingDate ? new Date(row.bookingDate).toISOString() : undefined,
+                } as CartItem;
+              })
+              .filter(Boolean) as CartItem[];
+            return hydrated.length ? hydrated : prev;
+          });
+        }
+      }
     } catch (error) {
       console.error('Could not fetch data from API:', error);
+    } finally {
+      if (!initialCatalogLoadDoneRef.current) {
+        initialCatalogLoadDoneRef.current = true;
+        setIsInitialCatalogLoading(false);
+      }
     }
   };
 
@@ -558,7 +644,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const markNotificationsAsRead = async () => {
     if (!user) return;
     try {
-      await apiFetch('/api/notifications/read', { method: 'PATCH', silent401: true } as any);
+      await apiFetch(API_ENDPOINTS.notifications.markRead, { method: 'PATCH', silent401: true } as any);
       setNotifications(prev => prev.map(n => n.userId === user.id ? { ...n, isRead: true } : n));
     } catch (e) {
       console.error('Failed to mark notifications as read:', e);
@@ -586,25 +672,28 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setRefreshToken(data.refreshToken);
     }
     setUser(data.user);
+    useSessionStore.getState().setUser(data.user);
     localStorage.setItem('currentUser', JSON.stringify(data.user));
 
     const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
     if (localCart.length > 0) {
-      apiFetch('/api/cart/sync-cart', {
+      apiFetch(API_ENDPOINTS.cart.sync, {
         method: 'POST',
         silent401: true,
         body: JSON.stringify({ items: localCart.map((i: any) => ({ offerId: i.id, quantity: i.cartQuantity || 1 })) }),
       } as any).catch(() => {});
     }
 
-    await fetchData(data.user);
+    // Do not block route transitions (post-login/onboarding) on full catalog/profile fetch.
+    // This prevents the UI from feeling like a full app reload.
+    void fetchData(data.user);
   };
 
   // ─── AUTHENTICATION ──────────────────────────────────────────────────────────
 
   const login = async (identifier: string, password: string): Promise<{ success: boolean; message: string }> => {
     try {
-      const data = await apiFetch<AuthSessionPayload>('/api/auth/login', {
+      const data = await apiFetch<AuthSessionPayload>(API_ENDPOINTS.auth.login, {
         method: 'POST',
         body: JSON.stringify({ identifier, password }),
       });
@@ -613,6 +702,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     } catch (err: any) {
       clearToken();
       localStorage.removeItem('currentUser');
+      useSessionStore.getState().clear();
       return { success: false, message: err.message || 'Login failed.' };
     }
   };
@@ -620,13 +710,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const logout = async () => {
     try {
       if (getToken()) {
-        await apiFetch('/api/auth/logout', { method: 'POST' });
+        await apiFetch(API_ENDPOINTS.auth.logout, { method: 'POST' });
       }
     } catch {
       // Ignore logout errors — always clear local state
     }
     clearToken();
     setUser(null);
+    useSessionStore.getState().clear();
     setMyReferrals(null);
     setReviews([]);
     setCart([]);
@@ -642,25 +733,83 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setMyReferrals(data);
   }, [user]);
 
+  /**
+   * Backend allows one optional leading + and digits. Pasting a full number in the local
+   * field while also using the country dropdown can yield "+237+2376..." — invalid and
+   * was never possible with the old single-field Google flow.
+   */
+  const normalizeRegisterPhone = (phone: string | undefined) => {
+    let s = String(phone ?? '').replace(/\s+/g, '').trim();
+    if (!s) return s;
+    const secondPlus = s.indexOf('+', 1);
+    if (secondPlus !== -1) {
+      s = s.slice(secondPlus);
+    }
+    return s;
+  };
+
+  /** Avoid RangeError from Invalid Date (e.g. empty date string) breaking registration. */
+  const toIsoDateOfBirthSafe = (dob: unknown): string => {
+    if (dob == null || String(dob).trim() === '') return new Date().toISOString();
+    const d = new Date(String(dob));
+    if (Number.isNaN(d.getTime())) return new Date().toISOString();
+    return d.toISOString();
+  };
+
+  /**
+   * Backend DTOs require non-empty region, city, address on each location.
+   * Browser geolocation / Nominatim can leave blanks; Google Places used to fill everything.
+   */
+  const sanitizeProfileLocationsForApi = (
+    raw: unknown,
+  ): Array<{ region: string; city: string; address: string; lat: number; lng: number }> => {
+    if (!Array.isArray(raw) || raw.length === 0) return [];
+    const out: Array<{ region: string; city: string; address: string; lat: number; lng: number }> = [];
+    for (const loc of raw) {
+      const region = String(loc?.region ?? '').trim() || 'Unknown';
+      const city = String(loc?.city ?? '').trim() || 'Unknown';
+      let address = String(loc?.address ?? '').trim();
+      let lat = Number(loc?.lat);
+      let lng = Number(loc?.lng);
+      if (!Number.isFinite(lat)) lat = 0;
+      if (!Number.isFinite(lng)) lng = 0;
+      if (!address) {
+        address =
+          lat !== 0 || lng !== 0
+            ? `Map pin (${lat.toFixed(5)}, ${lng.toFixed(5)})`
+            : 'Address to be completed';
+      }
+      out.push({ region, city, address, lat, lng });
+    }
+    return out;
+  };
+
   const registerProducer = async (data: any, password: string): Promise<{ success: boolean; message: string }> => {
     try {
-      const session = await apiFetch<AuthSessionPayload>('/api/auth/register', {
+      const producerRegisterBody: Record<string, string> = {
+        email: String(data.email ?? '').trim(),
+        phone: normalizeRegisterPhone(data.phone),
+        password,
+        displayName: data.name || 'Producer',
+        role: UserRole.PRODUCER,
+        producerAccountType: data.type === 'INDIVIDUAL' ? 'INDIVIDUAL' : 'BUSINESS',
+      };
+      const refP = data.referrerCode;
+      if (refP != null && String(refP).trim() !== '') {
+        producerRegisterBody.referralCode = String(refP).trim();
+      }
+      const otpP = data.phoneVerificationToken;
+      if (otpP != null && String(otpP).trim() !== '') {
+        producerRegisterBody.phoneVerificationToken = String(otpP).trim();
+      }
+      const session = await apiFetch<AuthSessionPayload>(API_ENDPOINTS.auth.register, {
         method: 'POST',
-        body: JSON.stringify({
-          email: data.email,
-          phone: data.phone,
-          password,
-          displayName: data.name || 'Producer',
-          role: UserRole.PRODUCER,
-          producerAccountType: data.type === 'INDIVIDUAL' ? 'INDIVIDUAL' : 'BUSINESS',
-          referralCode: data.referrerCode,
-          phoneVerificationToken: data.phoneVerificationToken,
-        }),
+        body: JSON.stringify(producerRegisterBody),
       });
 
       await establishSession(session);
 
-      const producerProfile = await apiFetch<{ id: string }>('/api/profiles/producer', {
+      const producerProfile = await apiFetch<{ id: string }>(API_ENDPOINTS.profiles.producer, {
         method: 'POST',
         body: JSON.stringify({
           type: data.type || "BUSINESS",
@@ -668,9 +817,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           lastName: "Owner",
           gender: "OTHER",
           dateOfBirth: new Date().toISOString(),
-          description: data.description || "",
+          description: String(data.description ?? '').trim() || 'Producer',
           certifications: data.certifications || [],
           productionTypes: data.productionTypes || [],
+          locations: sanitizeProfileLocationsForApi(data.locations),
           ...(data.type === 'BUSINESS' || !data.type
             ? {
                 taxIdentificationNumber: data.taxIdentificationNumber || undefined,
@@ -684,6 +834,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setUser(prev => {
           if (!prev) return prev;
           const next = { ...prev, producerId: producerProfile.id };
+          useSessionStore.getState().setUser(next);
           localStorage.setItem('currentUser', JSON.stringify(next));
           return next;
         });
@@ -696,37 +847,58 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const registerClient = async (data: any, password: string): Promise<{ success: boolean; message: string }> => {
+  const registerClient = async (data: any, password: string, avatarFile?: File | null): Promise<{ success: boolean; message: string }> => {
     try {
-      const session = await apiFetch<AuthSessionPayload>('/api/auth/register', {
+      const clientRegisterBody: Record<string, string> = {
+        email: String(data.email ?? '').trim(),
+        phone: normalizeRegisterPhone(data.phone),
+        password,
+        displayName: data.name || `${data.firstName} ${data.lastName}`,
+        role: UserRole.CLIENT,
+      };
+      const refC = data.referrerCode;
+      if (refC != null && String(refC).trim() !== '') {
+        clientRegisterBody.referralCode = String(refC).trim();
+      }
+      const otpC = data.phoneVerificationToken;
+      if (otpC != null && String(otpC).trim() !== '') {
+        clientRegisterBody.phoneVerificationToken = String(otpC).trim();
+      }
+      const session = await apiFetch<AuthSessionPayload>(API_ENDPOINTS.auth.register, {
         method: 'POST',
-        body: JSON.stringify({
-          email: data.email,
-          phone: data.phone,
-          password,
-          displayName: data.name || `${data.firstName} ${data.lastName}`,
-          role: UserRole.CLIENT,
-          referralCode: data.referrerCode,
-          phoneVerificationToken: data.phoneVerificationToken,
-        }),
+        body: JSON.stringify(clientRegisterBody),
       });
 
       await establishSession(session);
 
-      const clientProfile = await apiFetch<{ id: string }>('/api/profiles/client', {
+      const clientProfile = await apiFetch<{ id: string }>(API_ENDPOINTS.profiles.client, {
         method: 'POST',
         body: JSON.stringify({
           firstName: data.firstName || "Client",
           lastName: data.lastName || "",
           gender: data.gender || "OTHER",
-          dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth).toISOString() : new Date().toISOString()
+          dateOfBirth: toIsoDateOfBirthSafe(data.dateOfBirth),
+          locations: sanitizeProfileLocationsForApi(data.locations),
         }),
       });
+
+      if (clientProfile?.id && avatarFile) {
+        try {
+          const url = await uploadAvatar(avatarFile);
+          await apiFetch(API_ENDPOINTS.clients.update(clientProfile.id), {
+            method: 'PUT',
+            body: JSON.stringify({ profileImageUrl: url }),
+          });
+        } catch (avatarErr) {
+          console.warn('Client avatar upload failed', avatarErr);
+        }
+      }
 
       if (clientProfile?.id) {
         setUser(prev => {
           if (!prev) return prev;
           const next = { ...prev, clientId: clientProfile.id };
+          useSessionStore.getState().setUser(next);
           localStorage.setItem('currentUser', JSON.stringify(next));
           return next;
         });
@@ -742,12 +914,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const verifyEmail = async (code: string): Promise<boolean> => {
     if (!pendingRegistration) return false;
     try {
-      const data = await apiFetch<{ token: string; user: UserSession }>('/api/auth/verify-email', {
+      const data = await apiFetch<{ token: string; user: UserSession }>(API_ENDPOINTS.auth.verifyEmail, {
         method: 'POST',
         body: JSON.stringify({ email: pendingRegistration.email, code }),
       });
       setToken(data.token);
       setUser(data.user);
+      useSessionStore.getState().setUser(data.user);
       localStorage.setItem('currentUser', JSON.stringify(data.user));
       setPendingRegistration(null);
       return true;
@@ -759,7 +932,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const changePassword = async (currentPass: string, newPass: string): Promise<{ success: boolean; message: string }> => {
     if (!user) return { success: false, message: 'User not logged in.' };
     try {
-      await apiFetch('/api/auth/change-password', {
+      await apiFetch(API_ENDPOINTS.auth.changePassword, {
         method: 'POST',
         body: JSON.stringify({ userId: user.id, role: user.role, currentPassword: currentPass, newPassword: newPass }),
       });
@@ -771,25 +944,40 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── PRODUCER PROFILE ────────────────────────────────────────────────────────
 
-  const updateProducerProfile = async (updatedProducer: ProducerProfile, otpToken?: string) => {
+  const updateProducerProfile = async (updatedProducer: ProducerProfile, otpToken?: string): Promise<boolean> => {
     try {
       const headers: Record<string, string> = {};
       if (otpToken) headers['X-OTP-Verification'] = otpToken;
-      const saved = await apiFetch<any>(`/api/producers/${updatedProducer.id}`, {
+      const saved = await apiFetch<any>(API_ENDPOINTS.producers.update(updatedProducer.id), {
         method: 'PUT',
         body: JSON.stringify(updatedProducer),
         headers,
       });
       setProducers(prev => prev.map(p => p.id === saved.id ? { ...saved, user: saved.user ?? (p as any).user } : p));
-      addNotification(updatedProducer.id, 'Profile updated', 'SUCCESS');
+      if (saved?.user && user && user.id === saved.user.id) {
+        const nextUser: UserSession = {
+          ...user,
+          email: saved.user.email ?? user.email,
+          phone: saved.user.phone ?? user.phone,
+          displayName: saved.user.displayName ?? user.displayName,
+          name: saved.user.displayName ?? user.name,
+          profileImageUrl: saved.user.profileImageUrl ?? user.profileImageUrl,
+        };
+        setUser(nextUser);
+        useSessionStore.getState().setUser(nextUser);
+        localStorage.setItem('currentUser', JSON.stringify(nextUser));
+      }
+      if (user) addNotification(user.id, 'Profile updated', 'SUCCESS');
+      return true;
     } catch (error) {
       console.error('Failed to update producer profile', error);
-      throw error;
+      if (user) addNotification(user.id, 'Failed to save changes.', 'ERROR');
+      return false;
     }
   };
 
   const requestOtp = async (action: 'PROFILE_UPDATE' | 'WITHDRAWAL') => {
-    const res = await apiFetch<{ success: boolean; message: string }>('/api/otp/request', {
+    const res = await apiFetch<{ success: boolean; message: string }>(API_ENDPOINTS.otp.request, {
       method: 'POST',
       body: JSON.stringify({ action }),
     });
@@ -797,7 +985,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const verifyOtp = async (action: 'PROFILE_UPDATE' | 'WITHDRAWAL', code: string) => {
-    const res = await apiFetch<{ success: boolean; token?: string; message: string }>('/api/otp/verify', {
+    const res = await apiFetch<{ success: boolean; token?: string; message: string }>(API_ENDPOINTS.otp.verify, {
       method: 'POST',
       body: JSON.stringify({ action, code }),
     });
@@ -806,12 +994,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const updateProducerAvailability = async (producerId: string, schedule: WeeklySchedule, exceptions: AvailabilityException[]) => {
     try {
-      await apiFetch(`/api/producers/${producerId}/availability`, {
+      await apiFetch(API_ENDPOINTS.producers.availability(producerId), {
         method: 'PUT',
         body: JSON.stringify({ schedule, exceptions }),
       });
       setProducers(prev => prev.map(p => p.id === producerId ? { ...p, availability: schedule, exceptions } : p));
-      addNotification(producerId, 'Availability updated', 'SUCCESS');
+      if (user) addNotification(user.id, 'Availability updated', 'SUCCESS');
     } catch (error) {
       console.error('Failed to update availability', error);
     }
@@ -819,7 +1007,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const validateProducer = async (id: string, status: ProducerStatus) => {
     try {
-      await apiFetch(`/api/producers/${id}/validate`, {
+      await apiFetch(API_ENDPOINTS.producers.validate(id), {
         method: 'PATCH',
         body: JSON.stringify({ status }),
       });
@@ -856,16 +1044,32 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── CLIENT PROFILE ──────────────────────────────────────────────────────────
 
-  const updateClientProfile = async (updatedClient: ClientProfile) => {
+  const updateClientProfile = async (updatedClient: ClientProfile): Promise<boolean> => {
     try {
-      const saved = await apiFetch<any>(`/api/clients/${updatedClient.id}`, {
+      const saved = await apiFetch<any>(API_ENDPOINTS.clients.update(updatedClient.id), {
         method: 'PUT',
         body: JSON.stringify(updatedClient),
       });
       setClients(prev => prev.map(c => c.id === saved.id ? { ...saved, user: saved.user ?? (c as any).user } : c));
-      addNotification(updatedClient.id, 'Profile updated', 'SUCCESS');
+      if (saved?.user && user && user.id === saved.user.id) {
+        const nextUser: UserSession = {
+          ...user,
+          email: saved.user.email ?? user.email,
+          phone: saved.user.phone ?? user.phone,
+          displayName: saved.user.displayName ?? user.displayName,
+          name: saved.user.displayName ?? user.name,
+          profileImageUrl: saved.user.profileImageUrl ?? user.profileImageUrl,
+        };
+        setUser(nextUser);
+        useSessionStore.getState().setUser(nextUser);
+        localStorage.setItem('currentUser', JSON.stringify(nextUser));
+      }
+      if (user) addNotification(user.id, 'Profile updated', 'SUCCESS');
+      return true;
     } catch (error) {
       console.error('Failed to update client profile', error);
+      if (user) addNotification(user.id, 'Failed to save changes.', 'ERROR');
+      return false;
     }
   };
 
@@ -876,30 +1080,34 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return { success: false, error: 'You must be signed in as a producer to publish an offer.' };
     }
     try {
-      const newOffer = await apiFetch<Offer>('/api/offers', {
+      const newOffer = await apiFetch<Offer>(API_ENDPOINTS.offers.create, {
         method: 'POST',
         body: JSON.stringify(offerData),
       });
       setOffers(prev => [...prev, newOffer]);
+      addNotification(user.id, 'Offer created successfully.', 'SUCCESS');
       return { success: true };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to create offer.';
       console.error('Failed to create offer:', err);
+      addNotification(user.id, message, 'ERROR');
       return { success: false, error: message };
     }
   };
 
   const updateOffer = async (updatedOffer: Offer): Promise<{ success: boolean; error?: string }> => {
     try {
-      const saved = await apiFetch<Offer>(`/api/offers/${updatedOffer.id}`, {
+      const saved = await apiFetch<Offer>(API_ENDPOINTS.offers.update(updatedOffer.id), {
         method: 'PUT',
         body: JSON.stringify(updatedOffer),
       });
       setOffers(prev => prev.map(o => o.id === saved.id ? saved : o));
+      addNotification(user?.id || saved.producerId, 'Offer updated successfully.', 'SUCCESS');
       return { success: true };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to update offer.';
       console.error('Failed to update offer', error);
+      if (user) addNotification(user.id, message, 'ERROR');
       return { success: false, error: message };
     }
   };
@@ -924,8 +1132,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── ORDERS ──────────────────────────────────────────────────────────────────
 
-  const placeOrder = async (couponId?: string, _discountAmount: number = 0, deliveryDate?: string, deliveryMethod: 'HOME' | 'PICKUP' = 'HOME', pickupPointId?: string) => {
-    if (cart.length === 0 || (!user && !guestEmail)) return;
+  const placeOrder = async (couponId?: string, _discountAmount: number = 0, deliveryDate?: string, deliveryMethod: 'HOME' | 'PICKUP' = 'HOME', pickupPointId?: string): Promise<boolean> => {
+    if (cart.length === 0 || (!user && !guestEmail)) return false;
 
     const payload = {
       items: cart.map(item => ({
@@ -940,7 +1148,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
 
     try {
-      const saved = await apiFetch<Order>('/api/orders', {
+      const saved = await apiFetch<Order>(API_ENDPOINTS.orders.create, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
@@ -956,22 +1164,37 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           : []
       }]);
       if (user) addNotification(user.id, `Order #${saved.id.substring(saved.id.length - 6).toUpperCase()} placed!`, 'SUCCESS');
+      if (user?.role === UserRole.PRODUCER && saved?.clientId) {
+        setUser(prev => {
+          if (!prev) return prev;
+          const next = { ...prev, clientId: saved.clientId };
+          localStorage.setItem('currentUser', JSON.stringify(next));
+          return next;
+        });
+      }
       // Refresh from server after a short delay to ensure both parties see the accurate state
       setTimeout(() => fetchData(user), 1500);
       clearCart();
+      return true;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to place order. Please try again.';
       console.error('Failed to place order:', error);
       if (user) addNotification(user.id, message, 'ERROR');
+      return false;
     }
   };
 
   const confirmOrder = async (orderId: string) => {
+    const targetOrder = orders.find((o) => o.id === orderId);
+    if (!targetOrder || !user) return;
+    if (user.role !== UserRole.PRODUCER || targetOrder.producerId !== user.producerId) {
+      addNotification(user.id, 'You can only confirm orders assigned to your producer profile.', 'ERROR');
+      return;
+    }
     try {
-      await apiFetch(`/api/orders/${orderId}/confirm`, { method: 'PATCH' });
+      await apiFetch(API_ENDPOINTS.orders.confirm(orderId), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CONFIRMED_AWAITING_PAYMENT } : o));
-      const order = orders.find(o => o.id === orderId);
-      if (order) addNotification(order.clientId, `Order #${order.id.substring(order.id.length - 6).toUpperCase()} confirmed.`, 'SUCCESS');
+      addNotification(targetOrder.clientId, `Order #${targetOrder.id.substring(targetOrder.id.length - 6).toUpperCase()} confirmed.`, 'SUCCESS');
     } catch (error) {
       console.error('Failed to confirm order', error);
     }
@@ -984,7 +1207,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       addNotification(user!.id, 'Cannot cancel paid order. Contact support.', 'ERROR'); return;
     }
     try {
-      await apiFetch(`/api/orders/${orderId}/reject`, { method: 'PATCH' });
+      await apiFetch(API_ENDPOINTS.orders.reject(orderId), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CANCELLED } : o));
       addNotification(order.clientId, `Order #${orderId.substring(orderId.length - 6).toUpperCase()} cancelled by producer.`, 'WARNING');
     } catch (error) {
@@ -999,7 +1222,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       addNotification(user!.id, 'Cannot cancel paid order. Contact support.', 'ERROR'); return;
     }
     try {
-      await apiFetch(`/api/orders/${orderId}/cancel`, { method: 'PATCH' });
+      await apiFetch(API_ENDPOINTS.orders.cancel(orderId), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CANCELLED } : o));
       addNotification(order.producerId, `Order #${orderId.substring(orderId.length - 6).toUpperCase()} cancelled by client.`, 'WARNING');
     } catch (error) {
@@ -1012,7 +1235,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const order = orders.find(o => o.id === orderId);
     if (!order) return { success: false };
     try {
-      const result = await apiFetch<{ success: boolean; error?: string; wallet?: Wallet }>(`/api/orders/${orderId}/pay`, { method: 'POST' });
+      const result = await apiFetch<{ success: boolean; error?: string; wallet?: Wallet }>(API_ENDPOINTS.orders.pay(orderId), { method: 'POST' });
       if (!result.success) return { success: false, error: result.error === 'INSUFFICIENT_FUNDS' ? 'INSUFFICIENT_FUNDS' : undefined };
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.PAID_IN_PREPARATION } : o));
       if (result.wallet) setWallets(prev => ({ ...prev, [user.id]: result.wallet! }));
@@ -1026,7 +1249,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const startDelivery = async (id: string) => {
     try {
-      await apiFetch(`/api/orders/${id}/deliver`, { method: 'PATCH' });
+      await apiFetch(API_ENDPOINTS.orders.deliver(id), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status: OrderStatus.IN_TRANSIT } : o));
       const order = orders.find(o => o.id === id);
       if (order) addNotification(order.clientId, 'Order in transit', 'INFO');
@@ -1037,7 +1260,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const confirmReceipt = async (id: string) => {
     try {
-      await apiFetch(`/api/orders/${id}/confirm-receipt`, { method: 'PATCH' });
+      await apiFetch(API_ENDPOINTS.orders.confirmReceipt(id), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status: OrderStatus.DELIVERED } : o));
       const order = orders.find(o => o.id === id);
       if (order) {
@@ -1056,7 +1279,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     files.forEach(f => formData.append('files', f));
     let evidence: DisputeEvidence[] = [];
     try {
-      const result = await apiUpload<{ evidence: DisputeEvidence[] }>(`/api/orders/${orderId}/dispute`, formData);
+      const result = await apiUpload<{ evidence: DisputeEvidence[] }>(API_ENDPOINTS.orders.dispute(orderId), formData);
       evidence = result.evidence;
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.DISPUTE, disputeReason: reason, disputeEvidence: evidence } : o));
       const order = orders.find(o => o.id === orderId);
@@ -1080,7 +1303,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const submitReview = async (data: Omit<Review, 'id' | 'createdAt'>) => {
     try {
-      const saved = await apiFetch<Review>('/api/reviews', {
+      const saved = await apiFetch<Review>(API_ENDPOINTS.reviews.create, {
         method: 'POST',
         body: JSON.stringify({
           orderId: data.orderId,
@@ -1131,7 +1354,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const fundWallet = async (amount: number, provider: string, refId: string): Promise<{ success: boolean; message: string }> => {
     if (!user) return { success: false, message: 'No user' };
     try {
-      const result = await apiFetch<{ success: boolean; message: string; wallet: Wallet }>('/api/wallet/fund', {
+      const result = await apiFetch<{ success: boolean; message: string; wallet: Wallet }>(API_ENDPOINTS.wallet.fund, {
         method: 'POST',
         body: JSON.stringify({ amount, provider, referenceId: refId }),
       });
@@ -1148,12 +1371,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       const headers: Record<string, string> = {};
       if (otpToken) headers['X-OTP-Verification'] = otpToken;
-      const result = await apiFetch<{ success: boolean; message: string }>('/api/wallet/withdraw', {
+      const result = await apiFetch<{ success: boolean; message: string }>(API_ENDPOINTS.wallet.withdraw, {
         method: 'POST',
         body: JSON.stringify({ amount, paymentMethodId: method.id }),
         headers,
       });
-      const list = await apiFetch<any[]>('/api/wallet/me/withdrawals', { silent401: true } as any).catch(() => []);
+      const list = await apiFetch<any[]>(API_ENDPOINTS.wallet.withdrawals, { silent401: true } as any).catch(() => []);
       setWithdrawalRequests(Array.isArray(list) ? list.map(mapWithdrawalFromApi) : []);
       return { success: result.success, message: result.message };
     } catch (error: any) {
@@ -1171,7 +1394,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const { producerId: _producerId, ...payload } = data as Omit<Portfolio, 'id' | 'createdAt'> & {
         producerId?: string;
       };
-      const saved = await apiFetch<Portfolio>('/api/portfolios', {
+      const saved = await apiFetch<Portfolio>(API_ENDPOINTS.portfolios.create, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
@@ -1183,7 +1406,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const updatePortfolio = async (updated: Portfolio) => {
     try {
-      const saved = await apiFetch<Portfolio>(`/api/portfolios/${updated.id}`, {
+      const saved = await apiFetch<Portfolio>(API_ENDPOINTS.portfolios.update(updated.id), {
         method: 'PUT',
         body: JSON.stringify(updated),
       });
@@ -1195,7 +1418,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const deletePortfolio = async (id: string) => {
     try {
-      await apiFetch(`/api/portfolios/${id}`, { method: 'DELETE' });
+      await apiFetch(API_ENDPOINTS.portfolios.remove(id), { method: 'DELETE' });
       setPortfolios(prev => prev.filter(p => p.id !== id));
     } catch (error) {
       console.error('Failed to delete portfolio', error);
@@ -1316,10 +1539,58 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const toggleFavorite = (offerId: string) => {
     if (!user) return;
+
     if (user.role === UserRole.CLIENT) {
-      setClients(prev => prev.map(c => clientProfileMatchesSession(c, user) ? { ...c, favorites: c.favorites.includes(offerId) ? c.favorites.filter(id => id !== offerId) : [...c.favorites, offerId] } : c));
-    } else if (user.role === UserRole.PRODUCER && user.producerId) {
-      setProducers(prev => prev.map(p => p.id === user.producerId ? { ...p, favorites: p.favorites?.includes(offerId) ? p.favorites.filter(id => id !== offerId) : [...(p.favorites || []), offerId] } : p));
+      const client = clients.find(c => clientProfileMatchesSession(c, user));
+      if (!client) return;
+      const previousFavorites = [...(client.favorites || [])];
+      const nextFavorites = previousFavorites.includes(offerId)
+        ? previousFavorites.filter(id => id !== offerId)
+        : [...previousFavorites, offerId];
+      const added = !previousFavorites.includes(offerId);
+
+      setClients(prev => prev.map(c => c.id === client.id ? { ...c, favorites: nextFavorites } : c));
+
+      void (async () => {
+        try {
+          await apiFetch(API_ENDPOINTS.clients.update(client.id), {
+            method: 'PUT',
+            body: JSON.stringify({ favorites: nextFavorites }),
+          });
+          addNotification(user.id, added ? 'Added to favorites.' : 'Removed from favorites.', 'SUCCESS');
+        } catch (error) {
+          setClients(prev => prev.map(c => c.id === client.id ? { ...c, favorites: previousFavorites } : c));
+          addNotification(user.id, 'Failed to update favorites. Please try again.', 'ERROR');
+          console.error('Failed to persist client favorites:', error);
+        }
+      })();
+      return;
+    }
+
+    if (user.role === UserRole.PRODUCER && user.producerId) {
+      const producer = producers.find(p => p.id === user.producerId);
+      if (!producer) return;
+      const previousFavorites = [...(producer.favorites || [])];
+      const nextFavorites = previousFavorites.includes(offerId)
+        ? previousFavorites.filter(id => id !== offerId)
+        : [...previousFavorites, offerId];
+      const added = !previousFavorites.includes(offerId);
+
+      setProducers(prev => prev.map(p => p.id === producer.id ? { ...p, favorites: nextFavorites } : p));
+
+      void (async () => {
+        try {
+          await apiFetch(API_ENDPOINTS.producers.update(producer.id), {
+            method: 'PUT',
+            body: JSON.stringify({ favorites: nextFavorites }),
+          });
+          addNotification(user.id, added ? 'Added to favorites.' : 'Removed from favorites.', 'SUCCESS');
+        } catch (error) {
+          setProducers(prev => prev.map(p => p.id === producer.id ? { ...p, favorites: previousFavorites } : p));
+          addNotification(user.id, 'Failed to update favorites. Please try again.', 'ERROR');
+          console.error('Failed to persist producer favorites:', error);
+        }
+      })();
     }
   };
 
@@ -1451,38 +1722,33 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // Polling for guest support messages when handed over to agent
   useEffect(() => {
-    if (!isHandedOver || user || !supportSessionId || !guestEmail) return;
+    if (!isSupportChatOpen || !isHandedOver || user || !supportSessionId || !guestEmail) return;
 
     const pollInterval = setInterval(async () => {
       try {
-        const baseURL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '' : 'http://localhost:3000');
-        const response = await fetch(`${baseURL}/api/support/guest/sessions/${supportSessionId}/messages?guestEmail=${encodeURIComponent(guestEmail)}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.messages && Array.isArray(data.messages)) {
-            // Map backend messages to local format and update state
-            const backendMessages = data.messages.map((msg: any) =>
-              mapDtoToSupportMessage({
-                id: msg.id,
-                sender: msg.sender,
-                text: msg.text,
-                timestamp: msg.timestamp,
-              })
-            );
-            setSupportMessages((prev) => mergeIncomingSupportMessages(prev, backendMessages));
-          }
+        const data = await getGuestSupportMessages(supportSessionId, guestEmail);
+        if (data && Array.isArray(data)) {
+          const backendMessages = data.map((msg: any) =>
+            mapDtoToSupportMessage({
+              id: msg.id,
+              sender: msg.sender,
+              text: msg.text,
+              timestamp: msg.timestamp,
+            })
+          );
+          setSupportMessages((prev) => mergeIncomingSupportMessages(prev, backendMessages));
         }
       } catch (err) {
         console.error('Error polling support messages:', err);
       }
-    }, 3000); // Poll every 3 seconds
+    }, 5000); // Poll every 5 seconds while chat is open
 
     return () => clearInterval(pollInterval);
-  }, [isHandedOver, user, supportSessionId, guestEmail]);
+  }, [isSupportChatOpen, isHandedOver, user, supportSessionId, guestEmail]);
 
   // Polling for authenticated users when handed over to agent
   useEffect(() => {
-    if (!isHandedOver || !user || !supportSessionId) return;
+    if (!isSupportChatOpen || !isHandedOver || !user || !supportSessionId) return;
 
     const pollInterval = setInterval(async () => {
       try {
@@ -1493,17 +1759,17 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       } catch (err) {
         console.error('Error polling support messages (auth):', err);
       }
-    }, 3000);
+    }, 5000);
 
     return () => clearInterval(pollInterval);
-  }, [isHandedOver, user, supportSessionId]);
+  }, [isSupportChatOpen, isHandedOver, user, supportSessionId]);
 
   // ─── CHAT & NEGOTIATION ───────────────────────────────────────────────────────
 
   const fetchChats = async () => {
     if (!user) return;
     try {
-      const res = await apiFetch<any[]>('/api/chat/sessions', { silent401: true } as any);
+      const res = await apiFetch<any[]>(API_ENDPOINTS.chat.sessions, { silent401: true } as any);
       if (Array.isArray(res)) setChats(normalizeChatSessionsFromApi(res));
     } catch (e) {
       console.error('Failed to fetch chats:', e);
@@ -1513,7 +1779,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const fetchMessages = async (chatId: string) => {
     if (!user) return;
     try {
-      const res = await apiFetch<any[]>(`/api/chat/sessions/${chatId}/messages`, { silent401: true } as any);
+      const res = await apiFetch<any[]>(API_ENDPOINTS.chat.sessionMessages(chatId), { silent401: true } as any);
 
       const mappedMessages: ChatMessage[] = res.map(m => ({
         id: m.id,
@@ -1557,7 +1823,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     // First refresh chats from server to check for an existing session
     try {
-      const freshChatsRaw = await apiFetch<any[]>('/api/chat/sessions', { silent401: true } as any);
+      const freshChatsRaw = await apiFetch<any[]>(API_ENDPOINTS.chat.sessions, { silent401: true } as any);
       if (Array.isArray(freshChatsRaw)) {
         const freshChats = normalizeChatSessionsFromApi(freshChatsRaw);
         setChats(freshChats);
@@ -1573,7 +1839,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
 
     try {
-      const res = await apiFetch<any>('/api/chat/sessions', {
+      const res = await apiFetch<any>(API_ENDPOINTS.chat.sessions, {
         method: 'POST',
         body: JSON.stringify({ participantIds: [pid], offerId: oid })
       });
@@ -1588,13 +1854,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const respondToProposal = async (chatId: string, msgId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', price?: number, qty?: number) => {
-    if (!user) return;
+  const respondToProposal = async (chatId: string, msgId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', price?: number, qty?: number): Promise<boolean> => {
+    if (!user) return false;
 
     if (action === 'COUNTER') {
-      // Counter-offer: send a new proposal message — no backend proposal-respond needed
       const original = messages.find(m => m.id === msgId);
-      await sendMessage(
+      return sendMessage(
         chatId,
         `Counter-offer: ${qty} units @ ${price?.toLocaleString()} XAF each`,
         {
@@ -1604,7 +1869,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           status: ProposalStatus.PENDING
         }
       );
-      return;
     }
 
     // Optimistic UI update immediately
@@ -1616,7 +1880,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     try {
       const res = await apiFetch<{ message: any; order?: any }>(
-        `/api/chat/messages/${msgId}/proposal`,
+        API_ENDPOINTS.chat.proposalAction(msgId),
         {
           method: 'PATCH',
           body: JSON.stringify({ response: action === 'ACCEPT' ? 'ACCEPTED' : 'REJECTED' }),
@@ -1647,27 +1911,25 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         addNotification(user.id, '❌ Proposal rejected. The buyer has been notified.', 'WARNING');
       }
 
-      // Confirm the real server proposal status by refreshing this chat's messages
       fetchMessages(chatId);
-
+      return true;
     } catch (err: any) {
       console.error('Failed to respond to proposal:', err);
-      // Revert optimistic update on error
       setMessages(prev => prev.map(m =>
         m.id === msgId && m.proposal
           ? { ...m, proposal: { ...m.proposal, status: ProposalStatus.PENDING } }
           : m
       ));
-      
-      // Provide user-friendly error messages
+
       let errorMessage = err?.message || 'Failed to respond to proposal';
       if (errorMessage.toLowerCase().includes('profile')) {
         errorMessage = '❌ Unable to process proposal: One or both parties have incomplete profiles. Please complete your profile and try again.';
       } else if (errorMessage.toLowerCase().includes('order')) {
         errorMessage = '❌ Proposal accepted but failed to create order. Please contact support.';
       }
-      
+
       addNotification(user.id, errorMessage, 'ERROR');
+      return false;
     }
   };
 
@@ -1718,7 +1980,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body.proposalQuantity = proposal.quantity;
       }
 
-      const res = await apiFetch<any>(`/api/chat/sessions/${chatId}/messages`, {
+      const res = await apiFetch<any>(API_ENDPOINTS.chat.sessionMessages(chatId), {
         method: 'POST',
         body: JSON.stringify(body),
       });
@@ -1754,6 +2016,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         errorMessage = '❌ This offer is not open for negotiation.';
       } else if (errorMessage.toLowerCase().includes('offer') && errorMessage.toLowerCase().includes('not exist')) {
         errorMessage = '❌ The offer no longer exists.';
+      } else if (errorMessage.toLowerCase().includes('exceed') && errorMessage.toLowerCase().includes('listing')) {
+        errorMessage = '❌ Proposed price per unit cannot be higher than the listing price.';
       } else if (errorMessage.toLowerCase().includes('price') || errorMessage.toLowerCase().includes('quantity')) {
         errorMessage = '❌ Price per unit and quantity must be greater than 0.';
       } else if (e?.status === 400) {
@@ -1765,42 +2029,38 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return false;
     }
   };
+  const storeValue: StoreContextType = {
+    user, pendingRegistration, guestEmail, setGuestEmail, producers, clients, offers, cart, orders, wallets, notifications, withdrawalRequests, reviews, portfolios, coupons, pickupPoints,
+    chats,
+    messages,
+    fetchChats,
+    fetchMessages,
+    startNegotiation,
+    sendMessage, respondToProposal,
+    login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, getProducerOffers, getOfferById,
+    addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, confirmReceipt, reportProblem, addDisputeEvidence, revealContactInfo,
+    getWallet, fundWallet, requestWithdrawal, markNotificationsAsRead, getAvailableSlots, submitReview, getAverageRating,
+    getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,
+    trackUserSearch, toggleFavorite, moveToFavorites, getRecommendedOffers,
+    compareList, addToCompare, removeFromCompare, clearCompare,
+    supportMessages, isSupportChatOpen, toggleSupportChat, sendSupportMessage, showGuestForm, setShowGuestForm, guestEmailInput, setGuestEmailInput, guestNameInput, setGuestNameInput, guestName, setGuestName, submitGuestForm, supportSessionId, setSupportSessionId,
+    validateCoupon,
+    addPickupPoint, deletePickupPoint,
+    changePassword,
+    myReferrals,
+    refreshMyReferrals,
+    isInitialCatalogLoading,
+  };
 
-
-
-  return (
-    <StoreContext.Provider value={{
-      user, pendingRegistration, guestEmail, setGuestEmail, producers, clients, offers, cart, orders, wallets, notifications, withdrawalRequests, reviews, portfolios, coupons, pickupPoints,
-      chats,
-      messages,
-      fetchChats,
-      fetchMessages,
-      startNegotiation,
-      sendMessage, respondToProposal,
-      login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, getProducerOffers, getOfferById,
-      addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, confirmReceipt, reportProblem, addDisputeEvidence, revealContactInfo,
-      getWallet, fundWallet, requestWithdrawal, markNotificationsAsRead, getAvailableSlots, submitReview, getAverageRating,
-      getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,
-      trackUserSearch, toggleFavorite, moveToFavorites, getRecommendedOffers,
-      compareList, addToCompare, removeFromCompare, clearCompare,
-      supportMessages, isSupportChatOpen, toggleSupportChat, sendSupportMessage, showGuestForm, setShowGuestForm, guestEmailInput, setGuestEmailInput, guestNameInput, setGuestNameInput, guestName, setGuestName, submitGuestForm, supportSessionId, setSupportSessionId,
-      validateCoupon,
-      addPickupPoint, deletePickupPoint,
-      changePassword,
-      myReferrals,
-      refreshMyReferrals
-    }}>
-      {children}
-    </StoreContext.Provider>
-  );
+  return <StoreContext.Provider value={storeValue}>{children}</StoreContext.Provider>;
 };
 
-export const useStore = () => {
-  const context = useContext(StoreContext);
-  if (!context) {
+export const useStore = (): StoreContextType => {
+  const snapshot = useContext(StoreContext);
+  if (!snapshot) {
     throw new Error('useStore must be used within a StoreProvider');
   }
-  return context;
+  return snapshot;
 };
 
 /** Use when component may render outside StoreProvider (e.g. global widgets). Returns undefined when outside provider. */

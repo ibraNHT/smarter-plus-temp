@@ -1,27 +1,19 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, PaymentMethod, ProducerProfile as ProducerProfileType, Location, Portfolio } from '../../types';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Wallet, Shield, Tractor, CreditCard, Trash2, Plus, Camera, Upload, MapPin, FileText, X, LogOut, Image as ImageIcon, Video, Eye, Edit, CheckCircle, Heart, ArrowLeft, Search, Users, Copy } from 'lucide-react';
+import { User, Wallet, Shield, Tractor, CreditCard, Trash2, Plus, Camera, Upload, MapPin, FileText, X, LogOut, Image as ImageIcon, Video, Eye, Edit, CheckCircle, Heart, ArrowLeft, Search, Users, Copy, Loader2 } from 'lucide-react';
+import { useUpdateProducerProfileMutation } from '../../api/hooks/useUpdateProducerProfileMutation';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 import { OtpVerificationModal } from '../../components/OtpVerificationModal';
-
-// Mock Data for Regions/Cities in Cameroon
-const CAMEROON_LOCATIONS: Record<string, string[]> = {
-  'West': ['Bafoussam', 'Dschang', 'Foumban', 'Mbouda', 'Bandjoun'],
-  'Center': ['Yaoundé', 'Mbalmayo', 'Bafia', 'Obala', 'Eseka'],
-  'Littoral': ['Douala', 'Edea', 'Nkongsamba', 'Loum', 'Mbanga'],
-  'North West': ['Bamenda', 'Kumbo', 'Ndop', 'Wum', 'Mbengwi'],
-  'South West': ['Buea', 'Limbe', 'Kumba', 'Tiko', 'Mamfe'],
-  'Adamaoua': ['Ngaoundere', 'Meiganga', 'Tibati'],
-  'North': ['Garoua', 'Guider', 'Figuil'],
-  'Far North': ['Maroua', 'Kousseri', 'Mokolo'],
-  'East': ['Bertoua', 'Batouri', 'Abong-Mbang'],
-  'South': ['Ebolowa', 'Kribi', 'Sangmelima']
-};
+import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
+import { LocationMapPicker } from '../../components/LocationMapPicker';
+import { uploadAvatar } from '../../services/uploadService';
+import { apiFetch } from '../../services/apiService';
+import { API_ENDPOINTS } from '../../api/endpoints';
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
@@ -39,7 +31,8 @@ function isHostedHttpUrl(url: string | undefined): boolean {
 }
 
 export const ProducerProfile: React.FC = () => {
-  const { user, producers, saveProducerPaymentMethod, deleteProducerPaymentMethod, updateProducerProfile, requestOtp, verifyOtp, logout, getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio, offers, toggleFavorite, myReferrals, refreshMyReferrals } = useStore();
+  const { user, producers, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, logout, getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio, offers, toggleFavorite, myReferrals, refreshMyReferrals, isInitialCatalogLoading } = useStore();
+  const updateProducerMutation = useUpdateProducerProfileMutation();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'info' | 'security' | 'payment' | 'portfolio' | 'favorites' | 'referrals'>('info');
@@ -52,7 +45,13 @@ export const ProducerProfile: React.FC = () => {
   const [formData, setFormData] = useState<ProducerProfileType | null>(null);
 
   // Temp Location State for adding new ones
-  const [newLoc, setNewLoc] = useState<Partial<Location>>({ region: '', city: '', address: '' });
+  const [newLoc, setNewLoc] = useState<Partial<Location>>({ region: '', city: '', address: '', lat: 0, lng: 0 });
+  const [locationSearch, setLocationSearch] = useState('');
+  const [locationSuggestions, setLocationSuggestions] = useState<Array<{ address: string; city: string; region: string; lat: number; lng: number }>>([]);
+  const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
+  const [isNearbyLoading, setIsNearbyLoading] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [editingLocationIndex, setEditingLocationIndex] = useState<number | null>(null);
 
   // Portfolio State
   const [showPortfolioModal, setShowPortfolioModal] = useState(false);
@@ -68,6 +67,8 @@ export const ProducerProfile: React.FC = () => {
   // OTP for profile name/phone change
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [pendingProfileUpdate, setPendingProfileUpdate] = useState<ProducerProfileType | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [profileHydrating, setProfileHydrating] = useState(false);
 
   // ... [Existing Logic for form init, favorites, handlers] ...
   const currentProducer = producers.find(p => p.id === user?.producerId || p.userId === user?.id);
@@ -84,27 +85,79 @@ export const ProducerProfile: React.FC = () => {
     if (activeTab === 'referrals') void refreshMyReferrals();
   }, [activeTab, refreshMyReferrals]);
   useEffect(() => {
-    if (currentProducer && !formData) {
-      const producerUser = (currentProducer as any).user;
-      const sessionEmail = (user as any)?.email ?? '';
-      const sessionPhone = (user as any)?.phone ?? '';
-      setFormData({
-        ...currentProducer,
-        email: (producerUser?.email ?? (currentProducer as any).email ?? sessionEmail).toString(),
-        phone: (producerUser?.phone ?? (currentProducer as any).phone ?? sessionPhone).toString(),
-        name: (producerUser?.displayName ?? (currentProducer as any).name ?? ((currentProducer.type === 'INDIVIDUAL' ? `${currentProducer.firstName ?? ''} ${currentProducer.lastName ?? ''}`.trim() : currentProducer.name) || '')).toString(),
-        firstName: (currentProducer.firstName ?? '').toString(),
-        lastName: (currentProducer.lastName ?? '').toString(),
-        description: (currentProducer.description ?? '').toString(),
-        locations: Array.isArray(currentProducer.locations) ? currentProducer.locations : [],
-        productionTypes: Array.isArray(currentProducer.productionTypes) ? currentProducer.productionTypes : [],
-        certifications: Array.isArray(currentProducer.certifications) ? currentProducer.certifications : [],
-        favorites: Array.isArray(currentProducer.favorites) ? currentProducer.favorites : [],
-        taxIdentificationNumber: (currentProducer as any).taxIdentificationNumber ?? '',
-        taxClearanceCertificateUrl: (currentProducer as any).taxClearanceCertificateUrl ?? '',
-      });
-    }
-  }, [currentProducer, formData, user]);
+    if (!currentProducer) return;
+    const producerUser = (currentProducer as any).user;
+    const sessionEmail = (user as any)?.email ?? '';
+    const sessionPhone = (user as any)?.phone ?? '';
+    const normalized: ProducerProfileType = {
+      ...currentProducer,
+      email: (producerUser?.email ?? (currentProducer as any).email ?? sessionEmail).toString(),
+      phone: (producerUser?.phone ?? (currentProducer as any).phone ?? sessionPhone).toString(),
+      name: (producerUser?.displayName ?? (currentProducer as any).name ?? ((currentProducer.type === 'INDIVIDUAL' ? `${currentProducer.firstName ?? ''} ${currentProducer.lastName ?? ''}`.trim() : currentProducer.name) || '')).toString(),
+      firstName: (currentProducer.firstName ?? '').toString(),
+      lastName: (currentProducer.lastName ?? '').toString(),
+      description: (currentProducer.description ?? '').toString(),
+      profileImageUrl: (producerUser?.profileImageUrl ?? (currentProducer as any).profileImageUrl ?? '').toString() || undefined,
+      locations: Array.isArray(currentProducer.locations) ? currentProducer.locations : [],
+      productionTypes: Array.isArray(currentProducer.productionTypes) ? currentProducer.productionTypes : [],
+      certifications: Array.isArray(currentProducer.certifications) ? currentProducer.certifications : [],
+      favorites: Array.isArray(currentProducer.favorites) ? currentProducer.favorites : [],
+      taxIdentificationNumber: (currentProducer as any).taxIdentificationNumber ?? '',
+      taxClearanceCertificateUrl: (currentProducer as any).taxClearanceCertificateUrl ?? '',
+    };
+    setFormData((prev) => {
+      if (!prev) return normalized;
+      if (prev.id !== normalized.id) return normalized;
+      return prev;
+    });
+  }, [currentProducer, user]);
+  useEffect(() => {
+    if (!user || user.role !== UserRole.PRODUCER) return;
+    let cancelled = false;
+    const hydrateMyProducerProfile = async () => {
+      setProfileHydrating(true);
+      try {
+        const rows = await apiFetch<any[]>(API_ENDPOINTS.producers.list, { silent401: true } as any).catch(() => []);
+        if (cancelled || !Array.isArray(rows)) return;
+        const mine = rows.find((p: any) => p?.id === user.producerId || p?.userId === user.id);
+        if (!mine) return;
+        const producerUser = (mine as any).user;
+        const sessionEmail = (user as any)?.email ?? '';
+        const sessionPhone = (user as any)?.phone ?? '';
+        const normalized: ProducerProfileType = {
+          ...mine,
+          email: (producerUser?.email ?? (mine as any).email ?? sessionEmail).toString(),
+          phone: (producerUser?.phone ?? (mine as any).phone ?? sessionPhone).toString(),
+          name: (producerUser?.displayName ?? (mine as any).name ?? ((mine.type === 'INDIVIDUAL' ? `${mine.firstName ?? ''} ${mine.lastName ?? ''}`.trim() : mine.name) || '')).toString(),
+          firstName: (mine.firstName ?? '').toString(),
+          lastName: (mine.lastName ?? '').toString(),
+          description: (mine.description ?? '').toString(),
+          profileImageUrl: (producerUser?.profileImageUrl ?? (mine as any).profileImageUrl ?? '').toString() || undefined,
+          locations: Array.isArray(mine.locations) ? mine.locations : [],
+          productionTypes: Array.isArray(mine.productionTypes) ? mine.productionTypes : [],
+          certifications: Array.isArray(mine.certifications) ? mine.certifications : [],
+          favorites: Array.isArray(mine.favorites) ? mine.favorites : [],
+          taxIdentificationNumber: (mine as any).taxIdentificationNumber ?? '',
+          taxClearanceCertificateUrl: (mine as any).taxClearanceCertificateUrl ?? '',
+        } as ProducerProfileType;
+        setFormData((prev) => (prev?.id === normalized.id ? prev : normalized));
+      } finally {
+        if (!cancelled) setProfileHydrating(false);
+      }
+    };
+    void hydrateMyProducerProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+  useEffect(() => {
+    if (!formData || formData.locations.length === 0) return;
+    if (String(newLoc.address ?? '').trim()) return;
+    const first = formData.locations[0];
+    setNewLoc({ ...first });
+    setLocationSearch(first.address ?? '');
+    setEditingLocationIndex(0);
+  }, [formData, newLoc.address]);
   const favoriteOffers = currentProducer?.favorites.map(id => offers.find(o => o.id === id)).filter(Boolean) as any[];
   const unavailableFavoriteIds = currentProducer?.favorites.filter(id => !offers.find(o => o.id === id));
   const performLogout = async () => {
@@ -115,38 +168,104 @@ export const ProducerProfile: React.FC = () => {
   const handleAddPayment = (e: React.FormEvent) => { e.preventDefault(); if (user?.producerId && newPayment.provider && newPayment.accountNumber && newPayment.accountName) { saveProducerPaymentMethod(user.producerId, { id: `pm-${Date.now()}`, provider: newPayment.provider, accountNumber: newPayment.accountNumber, accountName: newPayment.accountName }); setShowAddPayment(false); setNewPayment({ provider: 'ORANGE', accountNumber: '', accountName: '' }); } };
   const handleInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => { if (!formData) return; const { name, value } = e.target; setFormData(prev => prev ? ({ ...prev, [name]: value }) : null); };
   const toggleCategory = (cat: string) => { if (!formData) return; if (formData.productionTypes.includes(cat)) { setFormData({ ...formData, productionTypes: formData.productionTypes.filter(c => c !== cat) }); } else { setFormData({ ...formData, productionTypes: [...formData.productionTypes, cat] }); } };
-  const addLocation = () => { if (!formData || !newLoc.region || !newLoc.city || !newLoc.address) return; const locationToAdd: Location = { lat: 0, lng: 0, region: newLoc.region, city: newLoc.city, address: newLoc.address }; setFormData({ ...formData, locations: [...formData.locations, locationToAdd] }); setNewLoc({ region: '', city: '', address: '' }); };
-  const removeLocation = (index: number) => { if (!formData) return; setFormData({ ...formData, locations: formData.locations.filter((_, i) => i !== index) }); };
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'profileImageUrl' | 'certifications') => { if (!formData || !e.target.files || e.target.files.length === 0) return; const file = e.target.files[0]; if (file.size > 10 * 1024 * 1024) { alert("File size exceeds 10MB limit."); return; } if (!['image/png', 'image/jpeg'].includes(file.type)) { alert("Only PNG and JPG formats are allowed."); return; } const fakeUrl = URL.createObjectURL(file); if (field === 'profileImageUrl') { setFormData({ ...formData, profileImageUrl: fakeUrl }); } else { setFormData({ ...formData, certifications: [...formData.certifications, file.name] }); } };
+  const addLocation = () => {
+    if (!formData || !newLoc.address) return;
+    const address = String(newLoc.address).trim();
+    if (!address) return;
+    const city = String(newLoc.city ?? '').trim();
+    const region = String(newLoc.region ?? '').trim();
+    const fallbackParts = address.split(',').map((x) => x.trim()).filter(Boolean);
+    const inferredCity = city || fallbackParts[1] || fallbackParts[0] || 'Unknown';
+    const inferredRegion = region || fallbackParts[2] || fallbackParts[1] || 'Unknown';
+    const locationToAdd: Location = {
+      lat: Number(newLoc.lat ?? 0),
+      lng: Number(newLoc.lng ?? 0),
+      region: inferredRegion,
+      city: inferredCity,
+      address,
+    };
+    const nextLocations =
+      editingLocationIndex != null && editingLocationIndex >= 0 && editingLocationIndex < formData.locations.length
+        ? formData.locations.map((loc, idx) => (idx === editingLocationIndex ? locationToAdd : loc))
+        : [...formData.locations, locationToAdd];
+    setFormData({ ...formData, locations: nextLocations });
+    setNewLoc({ region: '', city: '', address: '', lat: 0, lng: 0 });
+    setLocationSearch('');
+    setEditingLocationIndex(null);
+  };
+  const removeLocation = (index: number) => {
+    if (!formData) return;
+    setFormData({ ...formData, locations: formData.locations.filter((_, i) => i !== index) });
+    if (editingLocationIndex === index) {
+      setEditingLocationIndex(null);
+      setNewLoc({ region: '', city: '', address: '', lat: 0, lng: 0 });
+      setLocationSearch('');
+    } else if (editingLocationIndex != null && editingLocationIndex > index) {
+      setEditingLocationIndex(editingLocationIndex - 1);
+    }
+  };
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'profileImageUrl' | 'certifications') => {
+    if (!formData || !e.target.files?.length) return;
+    const file = e.target.files[0];
+    if (field === 'profileImageUrl') {
+      const maxBytes = 2 * 1024 * 1024;
+      if (file.size > maxBytes) {
+        alert('Image must be 2 MB or less.');
+        return;
+      }
+      const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        alert('Only PNG, JPG, and WebP are allowed for profile photos.');
+        return;
+      }
+      setAvatarUploading(true);
+      try {
+        const url = await uploadAvatar(file);
+        setFormData({ ...formData, profileImageUrl: url });
+      } catch (err: unknown) {
+        alert(err instanceof Error ? err.message : 'Upload failed.');
+      } finally {
+        setAvatarUploading(false);
+      }
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size exceeds 10MB limit.');
+      return;
+    }
+    const allowedTypes = ['image/png', 'image/jpeg', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Only PNG, JPG, and PDF formats are allowed.');
+      return;
+    }
+    setFormData({ ...formData, certifications: [...formData.certifications, file.name] });
+  };
   const savePersonalInfo = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData) return;
     let displayName = formData.name;
     if (formData.type === 'INDIVIDUAL' && formData.firstName && formData.lastName) displayName = `${formData.firstName} ${formData.lastName}`;
     const payload = { ...formData, name: displayName };
-    // Production: OTP before save (API enforces when APP_ENV=production). Dev: save without modal.
     if (import.meta.env.PROD) {
       setPendingProfileUpdate(payload);
       setShowOtpModal(true);
       return;
     }
-    void (async () => {
-      try {
-        await updateProducerProfile(payload);
-      } catch (err: any) {
-        alert(err?.message || 'Profile update failed. Please try again.');
-      }
-    })();
+    updateProducerMutation.mutate({ producer: payload });
   };
-  const handleOtpVerifiedForProfile = async (token: string) => {
+  const handleOtpVerifiedForProfile = (token: string) => {
     if (!pendingProfileUpdate) return;
-    try {
-      await updateProducerProfile(pendingProfileUpdate, token);
-      setPendingProfileUpdate(null);
-      setShowOtpModal(false);
-    } catch (err: any) {
-      alert(err?.message || 'Profile update failed. Please try again.');
-    }
+    updateProducerMutation.mutate(
+      { producer: pendingProfileUpdate, otpToken: token },
+      {
+        onSuccess: (ok) => {
+          if (ok) {
+            setPendingProfileUpdate(null);
+            setShowOtpModal(false);
+          }
+        },
+      },
+    );
   };
   const copyReferralLink = () => {
     if (!referralCodeDisplay) return;
@@ -154,6 +273,135 @@ export const ProducerProfile: React.FC = () => {
     void navigator.clipboard.writeText(link);
     alert('Referral link copied!');
   };
+  useEffect(() => {
+    const query = String(locationSearch ?? '').trim();
+    if (query.length < 3) {
+      setLocationSuggestions([]);
+      setShowLocationSuggestions(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=${encodeURIComponent(query)}`,
+          { headers: { Accept: 'application/json' } },
+        );
+        if (!response.ok) {
+          setLocationSuggestions([]);
+          setShowLocationSuggestions(false);
+          return;
+        }
+        const rows = await response.json();
+        const mapped = Array.isArray(rows)
+          ? rows.map((row: any) => {
+              const addr = row?.address ?? {};
+              const city = addr.city || addr.town || addr.village || addr.county || '';
+              const region = addr.state || addr.region || addr.province || '';
+              return {
+                address: String(row?.display_name ?? ''),
+                city: String(city),
+                region: String(region),
+                lat: Number(row?.lat ?? 0),
+                lng: Number(row?.lon ?? 0),
+              };
+            }).filter((x: any) => x.address)
+          : [];
+        setLocationSuggestions(mapped);
+        setShowLocationSuggestions(mapped.length > 0);
+      } catch {
+        setLocationSuggestions([]);
+        setShowLocationSuggestions(false);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [locationSearch]);
+  const loadNearbySuggestions = useCallback(() => {
+    if (!navigator.geolocation) return;
+    setIsNearbyLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const reverseRes = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lng))}`,
+            { headers: { Accept: 'application/json' } },
+          );
+          const reverseRow = reverseRes.ok ? await reverseRes.json() : null;
+          const addr = reverseRow?.address ?? {};
+          const city = addr.city || addr.town || addr.village || addr.county || '';
+          const region = addr.state || addr.region || addr.province || '';
+          const seed = [city, region].filter(Boolean).join(', ') || String(reverseRow?.display_name ?? '');
+          if (!seed) {
+            setIsNearbyLoading(false);
+            return;
+          }
+          const searchRes = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=${encodeURIComponent(seed)}`,
+            { headers: { Accept: 'application/json' } },
+          );
+          const rows = searchRes.ok ? await searchRes.json() : [];
+          const mapped = Array.isArray(rows)
+            ? rows.map((row: any) => {
+                const a = row?.address ?? {};
+                return {
+                  address: String(row?.display_name ?? ''),
+                  city: String(a.city || a.town || a.village || a.county || ''),
+                  region: String(a.state || a.region || a.province || ''),
+                  lat: Number(row?.lat ?? 0),
+                  lng: Number(row?.lon ?? 0),
+                };
+              }).filter((x: any) => x.address)
+            : [];
+          setLocationSuggestions(mapped);
+          setShowLocationSuggestions(mapped.length > 0);
+        } catch {
+          setLocationSuggestions([]);
+          setShowLocationSuggestions(false);
+        } finally {
+          setIsNearbyLoading(false);
+        }
+      },
+      () => setIsNearbyLoading(false),
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 },
+    );
+  }, []);
+
+  const handleProfileMapPositionChange = useCallback(async (lat: number, lng: number) => {
+    setNewLoc((prev) => ({ ...prev, lat, lng }));
+    const rev = await nominatimReverseGeocode(lat, lng);
+    if (!rev) return;
+    setNewLoc((prev) => ({
+      ...prev,
+      lat,
+      lng,
+      address: rev.address || prev.address,
+      city: rev.city || prev.city,
+      region: rev.region || prev.region,
+    }));
+    setLocationSearch(rev.address);
+  }, []);
+
+  const handleUseMyLocationProfile = async () => {
+    setGeoLoading(true);
+    try {
+      const { lat, lng } = await requestBrowserLocation();
+      const rev = await nominatimReverseGeocode(lat, lng);
+      setNewLoc({
+        address: rev?.address || '',
+        city: rev?.city || '',
+        region: rev?.region || '',
+        lat,
+        lng,
+      });
+      setLocationSearch(rev?.address || '');
+    } catch {
+      alert('Could not read your location. Allow permission or set the pin on the map.');
+    } finally {
+      setGeoLoading(false);
+    }
+  };
+
   const handlePortfolioImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) { const files = Array.from(e.target.files) as File[]; if ((portfolioForm.imageUrls?.length || 0) + files.length > 10) { alert("Maximum 10 images allowed."); return; } const newUrls: string[] = []; for (const file of files) { if (file.size > 2 * 1024 * 1024) { alert(`File ${file.name} is too large. Max 2MB.`); continue; } if (!['image/png', 'image/jpeg'].includes(file.type)) { alert(`File ${file.name} is invalid format. PNG/JPG only.`); continue; } newUrls.push(URL.createObjectURL(file)); } setPortfolioForm(prev => ({ ...prev, imageUrls: [...(prev.imageUrls || []), ...newUrls] })); } };
   const handlePortfolioVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { const file = e.target.files[0]; if (file.size > 30 * 1024 * 1024) { alert("Video file too large. Max 30MB."); return; } setPortfolioForm(prev => ({ ...prev, videoUrl: URL.createObjectURL(file) })); } };
   const openPortfolioModal = (portfolio?: Portfolio) => { if (portfolio) { setPortfolioForm({ ...portfolio }); } else { setPortfolioForm({ title: '', description: '', category: currentProducer?.productionTypes[0] || '', imageUrls: [], isPublished: true }); } setShowPortfolioModal(true); };
@@ -168,7 +416,17 @@ export const ProducerProfile: React.FC = () => {
   if (!user || user.role !== UserRole.PRODUCER) {
     return <div className="p-8 text-center">Access Denied</div>;
   }
-  if (!formData) return <div>Loading...</div>;
+  if (!currentProducer && (isInitialCatalogLoading || profileHydrating)) {
+    return <div className="p-8 text-center text-gray-600">Loading your profile...</div>;
+  }
+  if (!currentProducer && !isInitialCatalogLoading) {
+    return (
+      <div className="p-8 text-center text-gray-700">
+        No producer profile was found for your account.
+      </div>
+    );
+  }
+  if (!formData) return <div className="p-8 text-center text-gray-600">Loading your profile...</div>;
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
@@ -224,17 +482,168 @@ export const ProducerProfile: React.FC = () => {
               {/* ... [Existing Info Form Code] ... */}
               <div className="flex justify-between items-center border-b border-gray-200 pb-4 mb-4"><h3 className="text-lg font-medium text-gray-900">{t('profile.tabs.info')}</h3></div>
               {/* Simplified view for brevity, functionality preserved */}
-              <div className="flex items-center mb-6"><div className="relative"><div className="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">{formData.profileImageUrl ? (<img src={formData.profileImageUrl} alt="Profile" className="h-full w-full object-cover" />) : (<User className="h-12 w-12 text-gray-400" />)}</div><label className="absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white cursor-pointer hover:bg-primary-700 shadow-sm"><Camera className="h-4 w-4" /><input type="file" accept="image/png, image/jpeg" className="hidden" onChange={(e) => handleFileUpload(e, 'profileImageUrl')} /></label></div><div className="ml-4"><p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p><p className="text-xs text-gray-500">JPG or PNG. Max 10MB.</p></div></div>
+              <div className="flex items-center mb-6"><div className="relative"><div className="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">{formData.profileImageUrl ? (<img src={formData.profileImageUrl} alt="Profile" className="h-full w-full object-cover" />) : (<User className="h-12 w-12 text-gray-400" />)}</div><label className={`absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white shadow-sm ${avatarUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-primary-700'}`}><Camera className="h-4 w-4" /><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={avatarUploading} onChange={(e) => void handleFileUpload(e, 'profileImageUrl')} /></label></div><div className="ml-4"><p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p><p className="text-xs text-gray-500">{avatarUploading ? 'Uploading…' : 'JPG, PNG, or WebP. Max 2 MB.'}</p></div></div>
               <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
                 <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-2">{t('profile.type')}</label><div className="flex space-x-4"><label className="flex items-center"><input type="radio" name="type" value="BUSINESS" checked={formData.type === 'BUSINESS'} onChange={() => setFormData({ ...formData!, type: 'BUSINESS' })} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">{t('profile.business')}</span></label><label className="flex items-center"><input type="radio" name="type" value="INDIVIDUAL" checked={formData.type === 'INDIVIDUAL'} onChange={() => setFormData({ ...formData!, type: 'INDIVIDUAL' })} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">{t('profile.individual')}</span></label></div></div>
                 {formData.type === 'BUSINESS' ? (<><div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">{t('form.farmName')}</label><input type="text" name="name" value={formData.name ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">Tax ID (TIN / NIU)</label><input type="text" name="taxIdentificationNumber" value={formData.taxIdentificationNumber ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">Tax clearance certificate URL</label><input type="url" name="taxClearanceCertificateUrl" placeholder="https://..." value={formData.taxClearanceCertificateUrl ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div></>) : (<><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.firstName')}</label><input type="text" name="firstName" value={formData.firstName || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.lastName')}</label><input type="text" name="lastName" value={formData.lastName || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.gender')}</label><select name="gender" value={formData.gender || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900"><option value="">Select Gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.dob')}</label><input type="date" name="dateOfBirth" value={formData.dateOfBirth || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div></>)}
                 <div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('form.phone')}</label><input type="tel" name="phone" value={formData.phone ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
                 <div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('form.email')}</label><input type="email" name="email" value={formData.email ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
                 <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-2">{t('form.category')} (Multi-select)</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded-md bg-white">{PRODUCTION_TYPES.map(cat => { const isSelected = formData.productionTypes.includes(cat); return (<button key={cat} type="button" onClick={() => toggleCategory(cat)} className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${isSelected ? 'bg-primary-100 text-primary-800 ring-2 ring-primary-500 ring-offset-1' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}{isSelected && <X className="ml-1.5 h-3 w-3" />}</button>) })}</div></div>
-                <div className="sm:col-span-6 border-t border-gray-100 pt-4 mt-2"><h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center"><MapPin className="h-4 w-4 mr-1 text-primary-600" /> Operating Locations</h4><div className="space-y-2 mb-4">{formData.locations.map((loc, idx) => (<div key={idx} className="flex items-center justify-between bg-gray-50 p-3 rounded-md border border-gray-200"><div><p className="text-sm font-medium text-gray-900">{loc.address}</p><p className="text-xs text-gray-500">{loc.city}, {loc.region}</p></div><button type="button" onClick={() => removeLocation(idx)} className="text-gray-400 hover:text-red-500"><Trash2 className="h-4 w-4" /></button></div>))}</div><div className="bg-blue-50 p-3 rounded-md border border-blue-100"><p className="text-xs font-medium text-blue-700 mb-2">Add New Location</p><div className="grid grid-cols-1 gap-3 sm:grid-cols-3"><select value={newLoc.region} onChange={e => setNewLoc({ ...newLoc, region: e.target.value, city: CAMEROON_LOCATIONS[e.target.value]?.[0] || '' })} className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"><option value="">Region</option>{Object.keys(CAMEROON_LOCATIONS).map(r => <option key={r} value={r}>{r}</option>)}</select><select value={newLoc.city} onChange={e => setNewLoc({ ...newLoc, city: e.target.value })} disabled={!newLoc.region} className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 disabled:bg-gray-100 bg-white text-gray-900"><option value="">City</option>{newLoc.region && CAMEROON_LOCATIONS[newLoc.region]?.map(c => <option key={c} value={c}>{c}</option>)}</select><div className="flex gap-2"><input type="text" placeholder="Address" value={newLoc.address} onChange={e => setNewLoc({ ...newLoc, address: e.target.value })} className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900" /><button type="button" onClick={addLocation} disabled={!newLoc.region || !newLoc.city || !newLoc.address} className="inline-flex items-center p-2 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"><Plus className="h-5 w-5" /></button></div></div></div></div>
+                <div className="sm:col-span-6 border-t border-gray-100 pt-4 mt-2">
+                  <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center">
+                    <MapPin className="h-4 w-4 mr-1 text-primary-600" /> Operating Locations
+                  </h4>
+                  <div className="space-y-2 mb-4">
+                    {formData.locations.map((loc, idx) => (
+                      <div
+                        key={idx}
+                        className={`flex items-center justify-between bg-gray-50 p-3 rounded-md border cursor-pointer ${editingLocationIndex === idx ? 'border-primary-400 ring-1 ring-primary-300' : 'border-gray-200'}`}
+                        onClick={() => {
+                          setEditingLocationIndex(idx);
+                          setNewLoc({ ...loc });
+                          setLocationSearch(loc.address ?? '');
+                        }}
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{loc.address}</p>
+                          <p className="text-xs text-gray-500">{loc.city}, {loc.region}</p>
+                        </div>
+                        <button type="button" onClick={() => removeLocation(idx)} className="text-gray-400 hover:text-red-500">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="bg-blue-50 p-3 rounded-md border border-blue-100 space-y-3">
+                    <p className="text-xs font-medium text-blue-700">Add new location</p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleUseMyLocationProfile()}
+                        disabled={geoLoading}
+                        className="text-sm px-3 py-1.5 rounded-md border border-primary-200 bg-white text-primary-700 hover:bg-primary-50 disabled:opacity-50"
+                      >
+                        {geoLoading ? 'Getting location…' : 'Use my current location'}
+                      </button>
+                    </div>
+                    <LocationMapPicker
+                      latitude={Number(newLoc.lat) || 0}
+                      longitude={Number(newLoc.lng) || 0}
+                      onPositionChange={handleProfileMapPositionChange}
+                      height="min(240px, 45vh)"
+                    />
+                    <p className="text-xs text-gray-500">Drag the pin or tap the map to set coordinates. Address fields update from the pin when possible.</p>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Search address</label>
+                        <input
+                          type="text"
+                          placeholder="Type to search (OpenStreetMap)"
+                          value={locationSearch}
+                          onChange={e => {
+                            const value = e.target.value;
+                            setLocationSearch(value);
+                            setNewLoc((prev) => ({ ...prev, address: value }));
+                            setShowLocationSuggestions(true);
+                          }}
+                          onFocus={() => {
+                            if (locationSuggestions.length > 0) setShowLocationSuggestions(true);
+                            else loadNearbySuggestions();
+                          }}
+                          className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-primary-500 bg-white text-gray-900"
+                        />
+                      </div>
+                      {showLocationSuggestions && locationSuggestions.length > 0 && (
+                        <div className="sm:col-span-2 border border-gray-200 rounded-md bg-white shadow-sm max-h-56 overflow-auto">
+                          {locationSuggestions.map((item, idx) => (
+                            <button
+                              key={`${item.address}-${idx}`}
+                              type="button"
+                              onClick={() => {
+                                setLocationSearch(item.address);
+                                setNewLoc({
+                                  address: item.address,
+                                  city: item.city || '',
+                                  region: item.region || '',
+                                  lat: item.lat,
+                                  lng: item.lng,
+                                });
+                                setShowLocationSuggestions(false);
+                              }}
+                              className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                            >
+                              <p className="text-sm text-gray-900">{item.address}</p>
+                              <p className="text-xs text-gray-500">{[item.city, item.region].filter(Boolean).join(', ')}</p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {isNearbyLoading && (
+                        <p className="sm:col-span-2 text-xs text-gray-500">Finding nearby locations...</p>
+                      )}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
+                        <input
+                          type="text"
+                          value={newLoc.city ?? ''}
+                          onChange={e => setNewLoc((prev) => ({ ...prev, city: e.target.value }))}
+                          className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Region</label>
+                        <input
+                          type="text"
+                          value={newLoc.region ?? ''}
+                          onChange={e => setNewLoc((prev) => ({ ...prev, region: e.target.value }))}
+                          className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Full address</label>
+                        <input
+                          type="text"
+                          value={newLoc.address ?? ''}
+                          onChange={e => {
+                            const v = e.target.value;
+                            setNewLoc((prev) => ({ ...prev, address: v }));
+                            setLocationSearch(v);
+                          }}
+                          className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <button
+                        type="button"
+                        onClick={addLocation}
+                        disabled={!String(newLoc.address ?? '').trim()}
+                        className="inline-flex items-center gap-1 px-3 py-2 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-sm font-medium"
+                      >
+                        <Plus className="h-4 w-4" />
+                        {editingLocationIndex != null ? 'Update location' : 'Add to list'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
                 <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">{t('form.desc')}</label><textarea name="description" rows={3} value={formData.description} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
-                <div className="sm:col-span-6 border-t border-gray-100 pt-4"><h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center"><FileText className="h-4 w-4 mr-1 text-primary-600" /> Documents</h4><label className="block text-sm font-medium text-gray-700">{t('profile.uploadDocs')}</label><div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:bg-gray-50 transition-colors bg-white"><div className="space-y-1 text-center"><Upload className="mx-auto h-12 w-12 text-gray-400" /><div className="flex text-sm text-gray-600"><label className="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500"><span>Upload a file</span><input type="file" className="sr-only" accept="image/png, image/jpeg" onChange={(e) => handleFileUpload(e, 'certifications')} /></label><p className="pl-1">or drag and drop</p></div><p className="text-xs text-gray-500">PNG, JPG up to 10MB</p></div></div>{formData.certifications.length > 0 && (<ul className="mt-3 border border-gray-200 rounded-md divide-y divide-gray-200 bg-white">{formData.certifications.map((cert, idx) => (<li key={idx} className="pl-3 pr-4 py-3 flex items-center justify-between text-sm"><div className="w-0 flex-1 flex items-center"><FileText className="flex-shrink-0 h-5 w-5 text-gray-400" /><span className="ml-2 flex-1 w-0 truncate text-gray-900">{cert}</span></div></li>))}</ul>)}</div>
-                <div className="sm:col-span-6 pt-4 flex justify-end"><button type="submit" className="bg-primary-600 text-white px-6 py-2 rounded-md text-sm font-medium shadow hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">{t('form.save')}</button></div>
+                <div className="sm:col-span-6 border-t border-gray-100 pt-4"><h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center"><FileText className="h-4 w-4 mr-1 text-primary-600" /> Documents</h4><label className="block text-sm font-medium text-gray-700">{t('profile.uploadDocs')}</label><div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:bg-gray-50 transition-colors bg-white"><div className="space-y-1 text-center"><Upload className="mx-auto h-12 w-12 text-gray-400" /><div className="flex text-sm text-gray-600"><label className="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500"><span>Upload a file</span><input type="file" className="sr-only" accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf" onChange={(e) => handleFileUpload(e, 'certifications')} /></label><p className="pl-1">or drag and drop</p></div><p className="text-xs text-gray-500">PNG, JPG, PDF up to 10MB</p></div></div>{formData.certifications.length > 0 && (<ul className="mt-3 border border-gray-200 rounded-md divide-y divide-gray-200 bg-white">{formData.certifications.map((cert, idx) => (<li key={idx} className="pl-3 pr-4 py-3 flex items-center justify-between text-sm"><div className="w-0 flex-1 flex items-center"><FileText className="flex-shrink-0 h-5 w-5 text-gray-400" /><span className="ml-2 flex-1 w-0 truncate text-gray-900">{cert}</span></div></li>))}</ul>)}</div>
+                <div className="sm:col-span-6 pt-4 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={updateProducerMutation.isPending}
+                    className="inline-flex items-center justify-center gap-2 bg-primary-600 text-white px-6 py-2 rounded-md text-sm font-medium shadow hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {updateProducerMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+                        {t('form.saving')}
+                      </>
+                    ) : (
+                      t('form.save')
+                    )}
+                  </button>
+                </div>
               </div>
             </form>
           )}
