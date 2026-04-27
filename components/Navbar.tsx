@@ -14,7 +14,7 @@ const marketplaceVisible = (user: { role?: UserRole } | null) =>
   !user || user.role === UserRole.CLIENT || user.role === UserRole.PRODUCER;
 
 export const Navbar: React.FC = () => {
-  const { user, producers, clients, logout, cart, notifications, markNotificationsAsRead, chats } = useStore();
+  const { user, producers, clients, logout, cart, notifications, markNotificationsAsRead, chats, isInitialCatalogLoading } = useStore();
   const token = typeof window !== 'undefined' ? getToken() : null;
   const staffWrongApp = isWebAppSessionBlocked(token, user);
   const { t, language, setLanguage } = useTranslation();
@@ -56,6 +56,18 @@ export const Navbar: React.FC = () => {
     }
     return user.name;
   };
+
+  const isUserNameResolving = useMemo(() => {
+    if (!user) return false;
+    if (!isInitialCatalogLoading) return false;
+    if (user.role === UserRole.PRODUCER) {
+      return !producers.some(x => x.userId === user.id || x.id === user.producerId);
+    }
+    if (user.role === UserRole.CLIENT) {
+      return !clients.some(x => x.userId === user.id);
+    }
+    return false;
+  }, [clients, producers, user, isInitialCatalogLoading]);
 
   // Close notifications & profile menu when clicking outside
   useEffect(() => {
@@ -296,7 +308,13 @@ export const Navbar: React.FC = () => {
                 )}
 
                 <div className="hidden md:flex flex-col items-end">
-                  <span className="text-sm font-medium text-gray-900">{getUserDisplayName()}</span>
+                  <span className="text-sm font-medium text-gray-900">
+                    {isUserNameResolving ? (
+                      <span className="inline-block h-4 w-28 animate-pulse rounded bg-gray-200 align-middle" />
+                    ) : (
+                      getUserDisplayName()
+                    )}
+                  </span>
                   <span className="text-xs text-gray-500 px-2 py-0.5 rounded-full bg-gray-100">
                     {user.role}
                   </span>

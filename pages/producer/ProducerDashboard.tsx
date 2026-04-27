@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, ProducerStatus, OrderStatus, Order, OfferType } from '../../types';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp } from 'lucide-react';
 import { SEO } from '../../components/SEO';
+import { Spinner } from '../../components/Spinner';
 
 export const ProducerDashboard: React.FC = () => {
    const { user, getProducerOffers, producers, clients, orders, confirmOrder, rejectOrder, startDelivery, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating } = useStore();
    const { t } = useTranslation();
    const navigate = useNavigate();
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+   const [profileLookupTimedOut, setProfileLookupTimedOut] = useState(false);
 
    // Review State
    const [showReviewModal, setShowReviewModal] = useState(false);
@@ -23,16 +25,41 @@ export const ProducerDashboard: React.FC = () => {
    const [showEvidenceModal, setShowEvidenceModal] = useState(false);
    const [evidenceOrderId, setEvidenceOrderId] = useState<string | null>(null);
    const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+   const [orderActionBusy, setOrderActionBusy] = useState<string | null>(null);
 
    const currentProducer = producers.find(p => p.id === user?.producerId);
    const myOffers = user?.producerId ? getProducerOffers(user.producerId) : [];
+   const isProducerProfileLoading =
+      user?.role === UserRole.PRODUCER &&
+      Boolean(user?.producerId) &&
+      !currentProducer &&
+      !profileLookupTimedOut;
 
-   // Filter orders for this producer
-   const allMyOrders = orders.filter(o => o.producerId === currentProducer?.id || o.producerId === user?.producerId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+   useEffect(() => {
+      if (!isProducerProfileLoading) {
+         setProfileLookupTimedOut(false);
+         return;
+      }
+      const timer = setTimeout(() => setProfileLookupTimedOut(true), 2500);
+      return () => clearTimeout(timer);
+   }, [isProducerProfileLoading]);
 
-   const pendingValidationOrders = allMyOrders.filter(o => o.status === OrderStatus.PENDING_VALIDATION);
-   const awaitingPaymentOrders = allMyOrders.filter(o => o.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT);
-   const ordersToShip = allMyOrders.filter(o => o.status === OrderStatus.PAID_IN_PREPARATION);
+   // Seller-side orders (producer can manage/confirm/reject these)
+   const producerOwnedOrders = orders.filter((o) =>
+      o.producerId === currentProducer?.id || o.producerId === user?.producerId,
+   );
+   // Buyer-side orders (producer may have placed orders as a client account)
+   const producerPurchaseOrders = orders.filter(
+      (o) => o.clientId === user?.id || (user?.clientId ? o.clientId === user.clientId : false),
+   );
+   // Unified list for history/details without duplicates
+   const allMyOrders = Array.from(
+      new Map([...producerOwnedOrders, ...producerPurchaseOrders].map((o) => [o.id, o])).values(),
+   ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+   const pendingValidationOrders = producerOwnedOrders.filter(o => o.status === OrderStatus.PENDING_VALIDATION);
+   const awaitingPaymentOrders = producerOwnedOrders.filter(o => o.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT);
+   const ordersToShip = producerOwnedOrders.filter(o => o.status === OrderStatus.PAID_IN_PREPARATION);
 
    // Past Orders (Completed, Cancelled, Dispute, Delivered, In Transit) — always visible so producers can see full history
    const pastOrders = allMyOrders.filter(o =>
@@ -50,8 +77,29 @@ export const ProducerDashboard: React.FC = () => {
      : [];
    const myAverageRating = user?.id ? getAverageRating(user.id) : 0;
 
-   if (!user || user.role !== UserRole.PRODUCER || !currentProducer) {
+   if (!user || user.role !== UserRole.PRODUCER) {
       return <div className="p-8 text-center">Access Denied</div>;
+   }
+
+   if (isProducerProfileLoading) {
+      return (
+         <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 px-4">
+            <SEO title="Producer Dashboard | AgriMarket" noindex={true} />
+            <div className="animate-pulse space-y-4">
+               <div className="h-8 bg-gray-200 rounded w-64" />
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="h-24 bg-gray-200 rounded" />
+                  <div className="h-24 bg-gray-200 rounded" />
+                  <div className="h-24 bg-gray-200 rounded" />
+               </div>
+               <div className="h-72 bg-gray-200 rounded" />
+            </div>
+         </div>
+      );
+   }
+
+   if (!currentProducer) {
+      return <div className="p-8 text-center">Producer profile not found. Please complete your producer profile setup.</div>;
    }
 
    const getClientDetails = (clientId: string) => {
@@ -286,16 +334,28 @@ export const ProducerDashboard: React.FC = () => {
 
                            <div className="flex space-x-2">
                               <button
-                                 onClick={() => confirmOrder(order.id)}
-                                 className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700"
+                                 type="button"
+                                 disabled={!!orderActionBusy}
+                                 onClick={() => {
+                                    setOrderActionBusy(`${order.id}:confirm`);
+                                    void confirmOrder(order.id).finally(() => setOrderActionBusy(null));
+                                 }}
+                                 className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700 disabled:opacity-60"
                               >
-                                 <CheckCircle className="h-4 w-4 mr-1" /> {t('dash.confirm')}
+                                 {orderActionBusy === `${order.id}:confirm` ? <Spinner className="h-4 w-4 mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+                                 {t('dash.confirm')}
                               </button>
                               <button
-                                 onClick={() => rejectOrder(order.id)}
-                                 className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-red-600 hover:bg-red-700"
+                                 type="button"
+                                 disabled={!!orderActionBusy}
+                                 onClick={() => {
+                                    setOrderActionBusy(`${order.id}:reject`);
+                                    void rejectOrder(order.id).finally(() => setOrderActionBusy(null));
+                                 }}
+                                 className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-red-600 hover:bg-red-700 disabled:opacity-60"
                               >
-                                 <XCircle className="h-4 w-4 mr-1" /> {t('dash.reject')}
+                                 {orderActionBusy === `${order.id}:reject` ? <Spinner className="h-4 w-4 mr-1" /> : <XCircle className="h-4 w-4 mr-1" />}
+                                 {t('dash.reject')}
                               </button>
                            </div>
                         </div>

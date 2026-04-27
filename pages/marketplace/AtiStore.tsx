@@ -6,9 +6,10 @@ import { useTranslation } from '../../services/i18nContext';
 import { MarketType, UserRole } from '../../types';
 import { ShoppingBasket, Search, Star, Filter, Heart, Layers } from 'lucide-react';
 import { SEO } from '../../components/SEO';
+import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 
 export const AtiStore: React.FC = () => {
-  const { offers, toggleFavorite, user, clients, producers, compareList, addToCompare, removeFromCompare } = useStore();
+  const { offers, toggleFavorite, user, clients, producers, compareList, addToCompare, removeFromCompare, isInitialCatalogLoading } = useStore();
   const { t } = useTranslation();
 
   // Filters
@@ -116,7 +117,18 @@ export const AtiStore: React.FC = () => {
             </div>
 
             {/* Horizontal Categories */}
-            {filteredOffers.length === 0 ? (
+            {isInitialCatalogLoading ? (
+              <div className="space-y-10">
+                <div>
+                  <div className="h-7 bg-gray-200 rounded w-48 mb-4 animate-pulse" />
+                  <OfferRowSkeleton count={5} variant="ati" />
+                </div>
+                <div>
+                  <div className="h-7 bg-gray-200 rounded w-40 mb-4 animate-pulse" />
+                  <OfferRowSkeleton count={5} variant="ati" />
+                </div>
+              </div>
+            ) : filteredOffers.length === 0 ? (
               <div className="col-span-full text-center py-12">
                 <ShoppingBasket className="mx-auto h-12 w-12 text-gray-300 mb-4" />
                 <p className="text-gray-500">{t('market.noResults')}</p>

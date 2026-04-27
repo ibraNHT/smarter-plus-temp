@@ -1,22 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
-import { User, Mail, Phone, MapPin, Camera, Lock } from 'lucide-react';
-
-const CAMEROON_LOCATIONS: Record<string, string[]> = {
-  'West': ['Bafoussam', 'Dschang', 'Foumban', 'Mbouda', 'Bandjoun'],
-  'Center': ['Yaoundé', 'Mbalmayo', 'Bafia', 'Obala', 'Eseka'],
-  'Littoral': ['Douala', 'Edea', 'Nkongsamba', 'Loum', 'Mbanga'],
-  'North West': ['Bamenda', 'Kumbo', 'Ndop', 'Wum', 'Mbengwi'],
-  'South West': ['Buea', 'Limbe', 'Kumba', 'Tiko', 'Mamfe'],
-  'Adamaoua': ['Ngaoundere', 'Meiganga', 'Tibati'],
-  'North': ['Garoua', 'Guider', 'Figuil'],
-  'Far North': ['Maroua', 'Kousseri', 'Mokolo'],
-  'East': ['Bertoua', 'Batouri', 'Abong-Mbang'],
-  'South': ['Ebolowa', 'Kribi', 'Sangmelima']
-};
+import { User, Mail, Phone, MapPin, Camera, Lock, Eye, EyeOff } from 'lucide-react';
+import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 
 const AFRICA_COUNTRY_CODES = [
   // Central Africa
@@ -68,27 +56,51 @@ export const RegisterClient: React.FC = () => {
     address: '',
     region: '',
     city: '',
+    lat: 0,
+    lng: 0,
     profileImageUrl: '',
   });
 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoError, setGeoError] = useState('');
 
-  const handleRegionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const region = e.target.value;
-    setFormData({
-      ...formData,
-      region,
-      city: CAMEROON_LOCATIONS[region]?.[0] || ''
-    });
+  const avatarFileRef = useRef<File | null>(null);
+
+  const fillLocationFromCoords = async (lat: number, lng: number) => {
+    const rev = await nominatimReverseGeocode(lat, lng);
+    setFormData((prev) => ({
+      ...prev,
+      lat,
+      lng,
+      address: rev?.address || prev.address,
+      city: rev?.city || prev.city,
+      region: rev?.region || prev.region,
+    }));
+  };
+
+  const handleUseMyLocation = async () => {
+    setGeoError('');
+    setGeoLoading(true);
+    try {
+      const { lat, lng } = await requestBrowserLocation();
+      await fillLocationFromCoords(lat, lng);
+    } catch (e: unknown) {
+      setGeoError(e instanceof Error ? e.message : 'Could not get your location.');
+    } finally {
+      setGeoLoading(false);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const fakeUrl = URL.createObjectURL(file);
-      setFormData({ ...formData, profileImageUrl: fakeUrl });
-    }
+    const file = e.target.files?.[0];
+    if (!file) return;
+    avatarFileRef.current = file;
+    const previewUrl = URL.createObjectURL(file);
+    setFormData({ ...formData, profileImageUrl: previewUrl });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -105,6 +117,11 @@ export const RegisterClient: React.FC = () => {
       return;
     }
 
+    const address = String(formData.address ?? '').trim();
+    const addressParts = address.split(',').map((x) => x.trim()).filter(Boolean);
+    const inferredCity = String(formData.city ?? '').trim() || addressParts[1] || addressParts[0] || 'Unknown';
+    const inferredRegion = String(formData.region ?? '').trim() || addressParts[2] || addressParts[1] || 'Unknown';
+
     setIsLoading(true);
     const result = await registerClient({
       name: `${formData.firstName} ${formData.lastName}`,
@@ -115,17 +132,16 @@ export const RegisterClient: React.FC = () => {
       email: formData.email,
       phone: `${formData.phoneCode}${formData.phone}`,
       locations: [{
-        lat: 0,
-        lng: 0,
-        address: formData.address,
-        region: formData.region,
-        city: formData.city
+        lat: Number(formData.lat) || 0,
+        lng: Number(formData.lng) || 0,
+        address,
+        region: inferredRegion,
+        city: inferredCity
       }],
-      profileImageUrl: formData.profileImageUrl,
       favorites: [],
       searchHistory: [],
       referrerCode: refCode || undefined
-    }, formData.password);
+    }, formData.password, avatarFileRef.current);
     setIsLoading(false);
 
     if (result.success) {
@@ -162,7 +178,7 @@ export const RegisterClient: React.FC = () => {
             </div>
             <label className="absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white cursor-pointer hover:bg-primary-700 shadow-sm">
               <Camera className="h-4 w-4" />
-              <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={handleFileUpload} />
+              <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFileUpload} />
             </label>
           </div>
         </div>
@@ -257,20 +273,45 @@ export const RegisterClient: React.FC = () => {
             <div className="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Password</label>
-                <input type="password" required minLength={8}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white text-gray-900"
-                  value={formData.password}
-                  onChange={e => setFormData({ ...formData, password: e.target.value })}
-                />
+                <div className="relative mt-1">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    minLength={8}
+                    className="block w-full border border-gray-300 rounded-md shadow-sm p-2 pr-10 focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white text-gray-900"
+                    value={formData.password}
+                    onChange={e => setFormData({ ...formData, password: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(prev => !prev)}
+                    className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
                 <p className="text-xs text-gray-500 mt-1">Min 8 characters</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Confirm Password</label>
-                <input type="password" required
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white text-gray-900"
-                  value={formData.confirmPassword}
-                  onChange={e => setFormData({ ...formData, confirmPassword: e.target.value })}
-                />
+                <div className="relative mt-1">
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    required
+                    className="block w-full border border-gray-300 rounded-md shadow-sm p-2 pr-10 focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white text-gray-900"
+                    value={formData.confirmPassword}
+                    onChange={e => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(prev => !prev)}
+                    className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
+                    aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
             </div>
             {error && <p className="text-sm text-red-600 mt-2 font-medium">{error}</p>}
@@ -279,35 +320,24 @@ export const RegisterClient: React.FC = () => {
           {/* Location Section */}
           <div className="sm:col-span-6 border-t border-gray-100 pt-4">
             <h4 className="text-sm font-medium text-gray-900 mb-3">Location Details</h4>
-          </div>
-
-          <div className="sm:col-span-3">
-            <label className="block text-sm font-medium text-gray-700">{t('profile.region')}</label>
-            <select required
-              className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm text-gray-900"
-              value={formData.region}
-              onChange={handleRegionChange}
+            <p className="text-xs text-gray-500 mb-3">
+              Use your device location (browser permission). We do not load Google Places on signup. You can edit the address fields below.
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleUseMyLocation()}
+              disabled={geoLoading}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-60"
             >
-              <option value="">Select Region</option>
-              {Object.keys(CAMEROON_LOCATIONS).map((region) => (
-                <option key={region} value={region}>{region}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="sm:col-span-3">
-            <label className="block text-sm font-medium text-gray-700">{t('profile.city')}</label>
-            <select required
-              className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm text-gray-900"
-              value={formData.city}
-              onChange={e => setFormData({ ...formData, city: e.target.value })}
-              disabled={!formData.region}
-            >
-              <option value="">Select City</option>
-              {formData.region && CAMEROON_LOCATIONS[formData.region]?.map((city) => (
-                <option key={city} value={city}>{city}</option>
-              ))}
-            </select>
+              <MapPin className="h-4 w-4" />
+              {geoLoading ? 'Getting location…' : 'Use my current location'}
+            </button>
+            {geoError ? <p className="mt-2 text-xs text-red-600">{geoError}</p> : null}
+            {formData.lat !== 0 && formData.lng !== 0 && (
+              <p className="mt-2 text-xs text-gray-600">
+                Coordinates: {formData.lat.toFixed(5)}, {formData.lng.toFixed(5)}
+              </p>
+            )}
           </div>
 
           <div className="sm:col-span-6">
@@ -318,12 +348,34 @@ export const RegisterClient: React.FC = () => {
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <MapPin className="h-5 w-5 text-gray-400" />
               </div>
-              <input type="text" name="address" required placeholder="Neighborhood / Street..."
+              <input
+                type="text"
+                name="address"
+                required
+                placeholder="Street, area, or full address"
                 className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
                 value={formData.address}
                 onChange={e => setFormData({ ...formData, address: e.target.value })}
               />
             </div>
+          </div>
+          <div className="sm:col-span-3">
+            <label className="block text-sm font-medium text-gray-700">City</label>
+            <input
+              type="text"
+              className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900"
+              value={formData.city}
+              onChange={e => setFormData({ ...formData, city: e.target.value })}
+            />
+          </div>
+          <div className="sm:col-span-3">
+            <label className="block text-sm font-medium text-gray-700">Region / State</label>
+            <input
+              type="text"
+              className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900"
+              value={formData.region}
+              onChange={e => setFormData({ ...formData, region: e.target.value })}
+            />
           </div>
         </div>
 

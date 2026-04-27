@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useLayoutEffect, useRef } from 'react';
 import { useStoreOptional } from '../services/storeContext';
 import { Notification } from '../types';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
@@ -7,30 +7,26 @@ import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 export const ToastContainer: React.FC = () => {
   const store = useStoreOptional();
   const [visibleToasts, setVisibleToasts] = useState<Notification[]>([]);
-  const lastNotifyIdRef = useRef<string | null>(null);
+  const seenNotifyIdsRef = useRef<Set<string>>(new Set());
 
   const notifications = store?.notifications ?? [];
   const user = store?.user ?? null;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!store || notifications.length === 0) return;
-    {
-      // Get the most recent notification
-      const latest = notifications[0];
+    const userToasts = notifications.filter(
+      (n) => n.userId === user?.id && !seenNotifyIdsRef.current.has(n.id),
+    );
+    if (userToasts.length === 0) return;
 
-      // Check if it belongs to current user (or is system wide) and hasn't been shown yet
-      if (latest.userId === user?.id && latest.id !== lastNotifyIdRef.current) {
-        lastNotifyIdRef.current = latest.id;
+    userToasts.forEach((toast) => seenNotifyIdsRef.current.add(toast.id));
+    setVisibleToasts((prev) => [...userToasts, ...prev]);
 
-        // Add to visible toasts
-        setVisibleToasts(prev => [latest, ...prev]);
-
-        // Auto remove after 5 seconds
-        setTimeout(() => {
-          removeToast(latest.id);
-        }, 5000);
-      }
-    }
+    userToasts.forEach((toast) => {
+      window.setTimeout(() => {
+        removeToast(toast.id);
+      }, 5000);
+    });
   }, [store, notifications, user]);
 
   const removeToast = (id: string) => {

@@ -3,13 +3,15 @@
 
 import { apiFetch } from './apiService';
 import { getToken } from './apiService';
+import { API_ENDPOINTS } from '../api/endpoints';
+import { sendSupportChatMessage } from '../api/endpoints/support';
 
 /**
  * Generate a product description using AI
  */
 export const generateProductDescription = async (title: string, category: string, features: string): Promise<string> => {
   try {
-    const data = await apiFetch<{ text: string }>('/api/ai/generate-description', {
+    const data = await apiFetch<{ text: string }>(API_ENDPOINTS.ai.generateDescription, {
       method: 'POST',
       body: JSON.stringify({ title, category, features })
     } as any);
@@ -48,52 +50,16 @@ export const generateSupportResponse = async (
       };
     }
 
-    // Use apiFetch for authenticated users (handles JWT, token refresh, etc.)
-    if (isAuthenticated) {
-      const data = await apiFetch<{ text: string; handover: boolean; sessionId: string }>(
-        '/api/ai/support-chat',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            message: userMessage,
-            sessionId: sessionId || undefined
-          })
-        } as any
-      );
+    const payload = isAuthenticated
+      ? { message: userMessage, sessionId: sessionId || undefined }
+      : {
+          message: userMessage,
+          sessionId: sessionId || undefined,
+          guestEmail: guestEmail || undefined,
+          guestName: guestName || undefined
+        };
 
-      return {
-        text: data.text || "No response from AI.",
-        handover: data.handover || false,
-        sessionId: data.sessionId || ''
-      };
-    }
-
-    // For guests, use raw fetch (no authentication needed)
-    const baseURL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '' : 'http://localhost:3000');
-    const response = await fetch(`${baseURL}/api/ai/support-chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        message: userMessage,
-        sessionId: sessionId || undefined,
-        guestEmail: guestEmail || undefined,
-        guestName: guestName || undefined
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error(`Support chat error: ${response.status}`, errorData);
-      return {
-        text: "Support server is currently unreachable.",
-        handover: true,
-        sessionId: ''
-      };
-    }
-
-    const data = await response.json();
+    const data = await sendSupportChatMessage(payload as any);
     return {
       text: data.text || "No response from AI.",
       handover: data.handover || false,
