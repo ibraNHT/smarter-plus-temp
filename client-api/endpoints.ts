@@ -41,8 +41,8 @@ export const API_ENDPOINTS = {
     update: (id: string) => `/api/offers/${id}`,
   },
   orders: {
-    my: '/api/orders/my',
-    producer: '/api/orders/producer',
+    my: '/api/orders/my-orders',
+    producer: '/api/orders/producer-orders',
     create: '/api/orders',
     confirm: (id: string) => `/api/orders/${id}/confirm`,
     reject: (id: string) => `/api/orders/${id}/reject`,
