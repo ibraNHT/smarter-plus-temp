@@ -1,0 +1,105 @@
+export const API_ENDPOINTS = {
+  auth: {
+    login: '/api/auth/login',
+    logout: '/api/auth/logout',
+    register: '/api/auth/register',
+    verifyEmail: '/api/auth/verify-email',
+    changePassword: '/api/auth/change-password',
+    forgotPassword: '/api/auth/forgot-password',
+    forgotPasswordVerifyOtp: '/api/auth/forgot-password/verify-otp',
+    resetPassword: '/api/auth/reset-password',
+  },
+  otp: {
+    request: '/api/otp/request',
+    verify: '/api/otp/verify',
+  },
+  users: {
+    myReferrals: '/api/users/me/referrals',
+  },
+  referralPrograms: {
+    active: '/api/referral-programs/active',
+  },
+  profiles: {
+    client: '/api/profiles/client',
+    producer: '/api/profiles/producer',
+    meClient: '/api/profiles/me/client',
+  },
+  producers: {
+    list: '/api/producers',
+    update: (id: string) => `/api/producers/${id}`,
+    validate: (id: string) => `/api/producers/${id}/validate`,
+    availability: (id: string) => `/api/producers/${id}/availability`,
+  },
+  clients: {
+    list: '/api/clients',
+    me: '/api/clients/me',
+    update: (id: string) => `/api/clients/${id}`,
+  },
+  offers: {
+    list: '/api/offers',
+    create: '/api/offers',
+    update: (id: string) => `/api/offers/${id}`,
+  },
+  orders: {
+    my: '/api/orders/my',
+    producer: '/api/orders/producer',
+    create: '/api/orders',
+    confirm: (id: string) => `/api/orders/${id}/confirm`,
+    reject: (id: string) => `/api/orders/${id}/reject`,
+    cancel: (id: string) => `/api/orders/${id}/cancel`,
+    pay: (id: string) => `/api/orders/${id}/pay`,
+    deliver: (id: string) => `/api/orders/${id}/deliver`,
+    confirmReceipt: (id: string) => `/api/orders/${id}/confirm-receipt`,
+    dispute: (id: string) => `/api/orders/${id}/dispute`,
+  },
+  cart: {
+    get: '/api/cart',
+    sync: '/api/cart/sync',
+  },
+  chat: {
+    sessions: '/api/chat/sessions',
+    sessionMessages: (chatId: string) => `/api/chat/sessions/${chatId}/messages`,
+    proposalAction: (messageId: string) => `/api/chat/proposals/${messageId}`,
+  },
+  notifications: {
+    list: '/api/notifications',
+    markRead: '/api/notifications/mark-read',
+  },
+  wallet: {
+    me: '/api/wallet/me',
+    fund: '/api/wallet/fund',
+    withdraw: '/api/wallet/withdraw',
+    withdrawals: '/api/wallet/withdrawals',
+  },
+  reviews: {
+    create: '/api/reviews',
+    byUser: (userId: string) => `/api/reviews/user/${userId}`,
+  },
+  portfolios: {
+    list: '/api/portfolios/my',
+    create: '/api/portfolios',
+    update: (id: string) => `/api/portfolios/${id}`,
+    remove: (id: string) => `/api/portfolios/${id}`,
+  },
+  pickupPoints: {
+    list: '/api/pickup-points',
+  },
+  coupons: {
+    validate: '/api/coupons/validate',
+  },
+  upload: {
+    avatar: '/api/upload/avatar',
+  },
+  support: {
+    sessions: '/api/support/sessions',
+    sessionMessages: (sessionId: string) => `/api/support/sessions/${sessionId}/messages`,
+    guestSessionMessagesPost: (sessionId: string) => `/api/support/sessions/${sessionId}/guest/messages`,
+    guestSessionMessages: (sessionId: string, guestEmail: string) =>
+      `/api/support/sessions/${sessionId}/guest/messages?guestEmail=${encodeURIComponent(guestEmail)}`,
+  },
+  ai: {
+    supportChat: '/api/ai/support/chat',
+    generateDescription: '/api/ai/generate-description',
+  },
+} as const;
+
