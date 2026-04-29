@@ -1,6 +1,6 @@
 
 import React, { useState, ReactNode, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerStatus, OfferType, CartItem, Order, OrderStatus, Wallet, Notification, WithdrawalRequest, PaymentMethod, ChatSession, ChatMessage, Proposal, ProposalStatus, WeeklySchedule, AvailabilityException, Review, SupportMessage, Portfolio, DisputeEvidence, Coupon, PickupPoint, MyReferralsData } from '../types';
+import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerStatus, OfferType, CartItem, Order, OrderStatus, Wallet, Notification, WithdrawalRequest, WithdrawalStatus, PaymentMethod, ChatSession, ChatMessage, Proposal, ProposalStatus, WeeklySchedule, AvailabilityException, Review, SupportMessage, Portfolio, DisputeEvidence, Coupon, PickupPoint, MyReferralsData } from '../types';
 import { generateSupportResponse } from './geminiService';
 import {
   getSupportMessages,
@@ -15,12 +15,7 @@ import { apiFetch, apiUpload, setToken, clearToken, getToken, setRefreshToken } 
 import { logApiFailure } from './apiDebug';
 import { uploadAvatar } from './uploadService';
 
-/*
- * Preserved from rev: map Prisma withdrawal row (+ nested paymentMethod) → app `WithdrawalRequest`.
- * Uncomment and call when GET /api/wallet/withdrawals (or equivalent) is available, e.g.
- *   setWithdrawalRequests(rows.map(mapWithdrawalFromApi))
- * (Re-add `WithdrawalStatus` to the types import when uncommenting.)
-
+/** Map Prisma withdrawal row (+ nested paymentMethod) to app `WithdrawalRequest`. */
 function mapWithdrawalFromApi(d: any): WithdrawalRequest {
   const pm = d.paymentMethod ?? {};
   const prov = String(pm.provider ?? '').toUpperCase();
@@ -48,7 +43,6 @@ function mapWithdrawalFromApi(d: any): WithdrawalRequest {
     adminNote: d.adminNote || undefined,
   };
 }
-*/
 
 function mapReviewFromApi(r: any): Review {
   return {
@@ -266,8 +260,11 @@ const getOrdersEndpointsForUser = (activeUser?: UserSession | null): string[] =>
   if (!activeUser) return [];
   if (activeUser.role === UserRole.CLIENT) return [API_ENDPOINTS.orders.my];
   if (activeUser.role === UserRole.PRODUCER) {
-    // Producers can sell and also place purchases; include both views.
-    return [API_ENDPOINTS.orders.producer, API_ENDPOINTS.orders.my];
+    // `GET /orders/my-orders` uses GetClientOrders and returns 403 without a client profile.
+    // Only add it when the session has a client profile (producer–buyer or linked clientId).
+    const out: string[] = [API_ENDPOINTS.orders.producer];
+    if (activeUser.clientId) out.push(API_ENDPOINTS.orders.my);
+    return out;
   }
   return [];
 };
@@ -364,7 +361,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (guestEmail) localStorage.setItem('guestEmail', guestEmail);
     else localStorage.removeItem('guestEmail');
 
-    if (user && cart.length > 0) {
+    if (user && getToken() && cart.length > 0) {
       const timer = setTimeout(() => {
         apiFetch(API_ENDPOINTS.cart.sync, {
           method: 'POST',
@@ -376,7 +373,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               bookingDate: item.bookingDate || undefined
             }))
           })
-        } as any).catch(err => logApiFailure('Failed to sync cart:', err));
+        } as any).catch(() => {});
       }, 750);
       return () => clearTimeout(timer);
     }
@@ -494,7 +491,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       ]);
       // Only fetch orders, wallet, and referral stats when authenticated and we have a token (avoids 401 spam when token expired)
       if (activeUser && getToken()) {
-        const [resOrders, resWallet, referralsPayload, resMyReviews] = await Promise.all([
+        const [resOrders, resWallet, resWithdrawals, referralsPayload, resMyReviews] = await Promise.all([
           ordersEndpoints.length > 0
             ? Promise.all(
                 ordersEndpoints.map((endpoint) =>
@@ -503,6 +500,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               ).then((rows) => Array.from(new Map(rows.flat().map((o: any) => [o.id, o])).values()))
             : Promise.resolve([] as any[]),
           apiFetch<any>(API_ENDPOINTS.wallet.me, { silent401: true } as any).catch((e) => { on401(e); return null; }),
+          apiFetch<any[]>(API_ENDPOINTS.wallet.myWithdrawals, { silent401: true } as any).catch((e) => {
+            on401(e);
+            return [];
+          }),
           fetchMyReferrals(),
           apiFetch<any[]>(API_ENDPOINTS.reviews.byUser(activeUser.id), { silent401: true } as any).catch((e) => {
             on401(e);
@@ -510,9 +511,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           }),
         ]);
         setMyReferrals(referralsPayload);
-        // Backend currently has no GET /api/wallet/withdrawals endpoint.
-        // When it exists: map rows with preserved `mapWithdrawalFromApi` (see comment block near top of file).
-        setWithdrawalRequests([]);
+        if (Array.isArray(resWithdrawals)) {
+          setWithdrawalRequests(resWithdrawals.map(mapWithdrawalFromApi));
+        } else {
+          setWithdrawalRequests([]);
+        }
         setOrders(Array.isArray(resOrders) ? resOrders.map((o: any) => ({
           ...o,
           items: Array.isArray(o.orderItems || o.items)
@@ -1394,8 +1397,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify({ amount, paymentMethodId: method.id }),
         headers,
       });
-      // Backend currently has no GET /api/wallet/withdrawals endpoint.
-      setWithdrawalRequests([]);
+      try {
+        const rows = await apiFetch<any[]>(API_ENDPOINTS.wallet.myWithdrawals, { silent401: true } as any);
+        if (Array.isArray(rows)) setWithdrawalRequests(rows.map(mapWithdrawalFromApi));
+      } catch {
+        setWithdrawalRequests([]);
+      }
       return { success: result.success, message: result.message };
     } catch (error: any) {
       logApiFailure('Failed to request withdrawal', error);

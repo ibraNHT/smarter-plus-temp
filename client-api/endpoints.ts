@@ -55,7 +55,8 @@ export const API_ENDPOINTS = {
   },
   cart: {
     get: "/api/cart",
-    sync: "/api/cart/sync",
+    /** Aligned with Nest: `CartController` @Post("sync-cart") */
+    sync: "/api/cart/sync-cart",
   },
   chat: {
     sessions: "/api/chat/sessions",
@@ -71,7 +72,8 @@ export const API_ENDPOINTS = {
     me: "/api/wallet/me",
     fund: "/api/wallet/fund",
     withdraw: "/api/wallet/withdraw",
-    withdrawals: "/api/wallet/withdrawals",
+    /** Aligned with Nest: `WalletController` @Get("me/withdrawals") */
+    myWithdrawals: "/api/wallet/me/withdrawals",
   },
   reviews: {
     create: "/api/reviews",

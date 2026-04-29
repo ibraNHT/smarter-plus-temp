@@ -5,8 +5,8 @@ import { useSessionStore } from '../../stores/sessionStore';
 export const useRoleOrdersQuery = () => {
   const user = useSessionStore((s) => s.user);
   return useQuery({
-    queryKey: ['orders', user?.id, user?.role],
+    queryKey: ['orders', user?.id, user?.role, user?.clientId],
     enabled: Boolean(user?.role),
-    queryFn: () => ordersApi.listForRole(user!.role),
+    queryFn: () => ordersApi.listForUser(user!),
   });
 };
