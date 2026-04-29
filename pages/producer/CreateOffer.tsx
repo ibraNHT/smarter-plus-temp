@@ -5,7 +5,8 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { OfferType, UnitOfMeasure, MarketType, Offer } from '../../types';
 import { generateProductDescription } from '../../services/geminiService';
-import { Sparkles, Loader2, Camera, MapPin, Clock } from 'lucide-react';
+import { uploadOfferImage } from '../../services/uploadService';
+import { Sparkles, Loader2, Camera, MapPin, Clock, X } from 'lucide-react';
 
 const SERVICE_ONLY_CATEGORIES = new Set(['Service']);
 const SERVICE_UNITS = new Set<UnitOfMeasure>([
@@ -45,6 +46,9 @@ export const CreateOffer: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [existingOffer, setExistingOffer] = useState<Offer | undefined>(undefined);
+  const [imageUrl, setImageUrl] = useState<string>('');
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   // Get current producer
   const currentProducer = producers.find(p => p.id === user?.producerId);
@@ -134,6 +138,7 @@ export const CreateOffer: React.FC = () => {
             ? (SERVICE_UNITS.has(offer.unit) ? offer.unit : SERVICE_DEFAULT_UNIT)
             : (SERVICE_UNITS.has(offer.unit) ? PRODUCT_DEFAULT_UNIT : offer.unit);
         setExistingOffer(offer);
+        setImageUrl(offer.imageUrl ?? '');
         setFormData({
           title: offer.title,
           description: offer.description,
@@ -154,6 +159,30 @@ export const CreateOffer: React.FC = () => {
       }
     }
   }, [offerId, getOfferById, navigate, user?.producerId, registeredLocation, fallbackProductCategory, fallbackServiceCategory, selectableProductCategories, selectableServiceCategories]);
+
+  const handleImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      setImageError('Only PNG, JPG, or WebP images are accepted.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setImageError('Image must be 5 MB or less.');
+      return;
+    }
+    setImageError(null);
+    setImageUploading(true);
+    try {
+      const url = await uploadOfferImage(file);
+      setImageUrl(url);
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : 'Image upload failed.');
+    } finally {
+      setImageUploading(false);
+    }
+  };
 
   const handleGenerateDescription = async () => {
     if (!formData.title || !formData.features) return;
@@ -188,12 +217,22 @@ export const CreateOffer: React.FC = () => {
       serviceDuration: formData.type === OfferType.SERVICE ? Number(formData.serviceDuration) : 0
     };
 
+    if (imageUploading) {
+      setSubmitError('Please wait for the image to finish uploading.');
+      return;
+    }
+    if (!imageUrl) {
+      setSubmitError('Please upload a product/service image.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       if (existingOffer) {
         const result = await updateOffer({
           ...existingOffer,
-          ...offerData
+          ...offerData,
+          imageUrl,
         });
         if (!result.success) {
           setSubmitError(result.error ?? 'Could not update the offer.');
@@ -203,7 +242,7 @@ export const CreateOffer: React.FC = () => {
         const result = await createOffer({
           ...offerData,
           marketType: MarketType.PRODUCER,
-          imageUrl: `https://picsum.photos/400/300?random=${Date.now()}`,
+          imageUrl,
         });
         if (!result.success) {
           setSubmitError(result.error ?? 'Could not publish the offer.');
@@ -449,23 +488,63 @@ export const CreateOffer: React.FC = () => {
                </div>
              </div>
 
-             {!isEditMode && (
-               <div className="sm:col-span-6">
-                 <label className="block text-sm font-medium text-gray-700">Product Image</label>
+             <div className="sm:col-span-6">
+               <label className="block text-sm font-medium text-gray-700">
+                 {formData.type === OfferType.SERVICE ? 'Service image' : 'Product image'}
+               </label>
+               {imageUrl ? (
+                 <div className="mt-2 flex items-start gap-4">
+                   <div className="relative h-28 w-28 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
+                     <img src={imageUrl} alt="Offer preview" className="h-full w-full object-cover" />
+                     <button
+                       type="button"
+                       onClick={() => setImageUrl('')}
+                       className="absolute right-1 top-1 rounded-full bg-black/55 p-1 text-white hover:bg-black/75"
+                       aria-label="Remove image"
+                     >
+                       <X className="h-3 w-3" />
+                     </button>
+                   </div>
+                   <label className={`inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 ${imageUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}>
+                     <Camera className="h-4 w-4" />
+                     <span>{imageUploading ? 'Uploading…' : 'Replace image'}</span>
+                     <input
+                       type="file"
+                       accept="image/png,image/jpeg,image/webp"
+                       className="hidden"
+                       disabled={imageUploading}
+                       onChange={handleImagePick}
+                     />
+                   </label>
+                 </div>
+               ) : (
                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md bg-white">
                    <div className="space-y-1 text-center">
-                     <Camera className="mx-auto h-12 w-12 text-gray-400" />
+                     {imageUploading ? (
+                       <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary-500" />
+                     ) : (
+                       <Camera className="mx-auto h-12 w-12 text-gray-400" />
+                     )}
                      <div className="flex text-sm text-gray-600">
-                       <label className="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500">
-                         <span>Upload a photo</span>
-                         <input type="file" className="sr-only" />
+                       <label className={`relative bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 ${imageUploading ? 'pointer-events-none opacity-60' : 'cursor-pointer'}`}>
+                         <span>{imageUploading ? 'Uploading…' : 'Upload a photo'}</span>
+                         <input
+                           type="file"
+                           accept="image/png,image/jpeg,image/webp"
+                           className="sr-only"
+                           disabled={imageUploading}
+                           onChange={handleImagePick}
+                         />
                        </label>
                      </div>
-                     <p className="text-xs text-gray-500">PNG, JPG up to 5MB</p>
+                     <p className="text-xs text-gray-500">PNG, JPG, or WebP up to 5MB</p>
                    </div>
                  </div>
-               </div>
-             )}
+               )}
+               {imageError && (
+                 <p className="mt-1 text-xs text-red-600">{imageError}</p>
+               )}
+             </div>
 
            </div>
          </div>

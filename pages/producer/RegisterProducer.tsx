@@ -6,6 +6,7 @@ import { useTranslation } from '../../services/i18nContext';
 import { MapPin, X, Plus, Lock, Phone, Eye, EyeOff } from 'lucide-react';
 import { ProducerType, Location } from '../../types';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
+import { uploadDocument } from '../../services/uploadService';
 
 const AFRICA_COUNTRY_CODES = [
   // Central Africa
@@ -70,6 +71,7 @@ export const RegisterProducer: React.FC = () => {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [taxDocUploading, setTaxDocUploading] = useState(false);
 
   const handleUseMyLocationSignup = async () => {
     setGeoLoading(true);
@@ -189,17 +191,29 @@ export const RegisterProducer: React.FC = () => {
     );
   }, []);
 
-  const handleTaxDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !e.target.files[0]) return;
-    const file = e.target.files[0];
+  const handleTaxDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
     const allowedTypes = ['image/png', 'image/jpeg', 'application/pdf'];
     if (!allowedTypes.includes(file.type)) {
       setError('Tax document must be PNG, JPG, JPEG, or PDF.');
       return;
     }
-    const fakeUrl = URL.createObjectURL(file);
-    setFormData(prev => ({ ...prev, taxClearanceCertificateUrl: fakeUrl }));
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Tax document must be 10 MB or less.');
+      return;
+    }
     setError('');
+    setTaxDocUploading(true);
+    try {
+      const url = await uploadDocument(file);
+      setFormData(prev => ({ ...prev, taxClearanceCertificateUrl: url }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Tax document upload failed.');
+    } finally {
+      setTaxDocUploading(false);
+    }
   };
 
   const addLocation = () => {
@@ -240,6 +254,10 @@ export const RegisterProducer: React.FC = () => {
 
     if (locations.length === 0) {
       alert("Please add at least one location.");
+      return;
+    }
+    if (taxDocUploading) {
+      setError('Please wait for the tax document upload to finish.');
       return;
     }
 
@@ -352,11 +370,25 @@ export const RegisterProducer: React.FC = () => {
                   type="file"
                   name="taxClearanceCertificateUrl"
                   accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf"
-                  className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
+                  className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900 disabled:opacity-50"
                   onChange={handleTaxDocumentUpload}
+                  disabled={taxDocUploading}
                 />
-                {formData.taxClearanceCertificateUrl && (
-                  <p className="text-xs text-green-600 mt-1">Document selected successfully.</p>
+                {taxDocUploading && (
+                  <p className="text-xs text-gray-500 mt-1">Uploading document…</p>
+                )}
+                {!taxDocUploading && formData.taxClearanceCertificateUrl && (
+                  <p className="text-xs text-green-600 mt-1">
+                    Document uploaded.{' '}
+                    <a
+                      href={formData.taxClearanceCertificateUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline"
+                    >
+                      View
+                    </a>
+                  </p>
                 )}
               </div>
             </>

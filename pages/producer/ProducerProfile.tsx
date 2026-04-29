@@ -11,7 +11,7 @@ import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 import { OtpVerificationModal } from '../../components/OtpVerificationModal';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { LocationMapPicker } from '../../components/LocationMapPicker';
-import { uploadAvatar } from '../../services/uploadService';
+import { uploadAvatar, uploadPortfolioImage, uploadPortfolioVideo } from '../../services/uploadService';
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 
@@ -402,10 +402,81 @@ export const ProducerProfile: React.FC = () => {
     }
   };
 
-  const handlePortfolioImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) { const files = Array.from(e.target.files) as File[]; if ((portfolioForm.imageUrls?.length || 0) + files.length > 10) { alert("Maximum 10 images allowed."); return; } const newUrls: string[] = []; for (const file of files) { if (file.size > 2 * 1024 * 1024) { alert(`File ${file.name} is too large. Max 2MB.`); continue; } if (!['image/png', 'image/jpeg'].includes(file.type)) { alert(`File ${file.name} is invalid format. PNG/JPG only.`); continue; } newUrls.push(URL.createObjectURL(file)); } setPortfolioForm(prev => ({ ...prev, imageUrls: [...(prev.imageUrls || []), ...newUrls] })); } };
-  const handlePortfolioVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { const file = e.target.files[0]; if (file.size > 30 * 1024 * 1024) { alert("Video file too large. Max 30MB."); return; } setPortfolioForm(prev => ({ ...prev, videoUrl: URL.createObjectURL(file) })); } };
+  const [portfolioImageUploading, setPortfolioImageUploading] = useState(false);
+  const [portfolioVideoUploading, setPortfolioVideoUploading] = useState(false);
+  const handlePortfolioImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []) as File[];
+    e.target.value = '';
+    if (files.length === 0) return;
+    if ((portfolioForm.imageUrls?.length || 0) + files.length > 10) {
+      alert('Maximum 10 images allowed.');
+      return;
+    }
+    const validFiles: File[] = [];
+    for (const file of files) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert(`File ${file.name} is too large. Max 5MB.`);
+        continue;
+      }
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+        alert(`File ${file.name} is invalid format. PNG, JPG, or WebP only.`);
+        continue;
+      }
+      validFiles.push(file);
+    }
+    if (validFiles.length === 0) return;
+    setPortfolioImageUploading(true);
+    try {
+      const uploaded = await Promise.all(validFiles.map((f) => uploadPortfolioImage(f)));
+      setPortfolioForm(prev => ({ ...prev, imageUrls: [...(prev.imageUrls || []), ...uploaded] }));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Portfolio image upload failed.');
+    } finally {
+      setPortfolioImageUploading(false);
+    }
+  };
+  const handlePortfolioVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 50 * 1024 * 1024) {
+      alert('Video file too large. Max 50MB.');
+      return;
+    }
+    setPortfolioVideoUploading(true);
+    try {
+      const url = await uploadPortfolioVideo(file);
+      setPortfolioForm(prev => ({ ...prev, videoUrl: url }));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Video upload failed.');
+    } finally {
+      setPortfolioVideoUploading(false);
+    }
+  };
   const openPortfolioModal = (portfolio?: Portfolio) => { if (portfolio) { setPortfolioForm({ ...portfolio }); } else { setPortfolioForm({ title: '', description: '', category: currentProducer?.productionTypes[0] || '', imageUrls: [], isPublished: true }); } setShowPortfolioModal(true); };
-  const savePortfolio = (e: React.FormEvent) => { e.preventDefault(); if (!user?.producerId) return; const data = { producerId: user.producerId, title: portfolioForm.title!, description: portfolioForm.description!, category: portfolioForm.category!, imageUrls: portfolioForm.imageUrls || [], videoUrl: portfolioForm.videoUrl, isPublished: portfolioForm.isPublished || false }; if (portfolioForm.id) { updatePortfolio({ ...data, id: portfolioForm.id, createdAt: (portfolioForm as Portfolio).createdAt }); } else { addPortfolio(data); } setShowPortfolioModal(false); };
+  const savePortfolio = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user?.producerId) return;
+    if (portfolioImageUploading || portfolioVideoUploading) {
+      alert('Please wait for media uploads to finish.');
+      return;
+    }
+    const data = {
+      producerId: user.producerId,
+      title: portfolioForm.title!,
+      description: portfolioForm.description!,
+      category: portfolioForm.category!,
+      imageUrls: portfolioForm.imageUrls || [],
+      videoUrl: portfolioForm.videoUrl,
+      isPublished: portfolioForm.isPublished || false,
+    };
+    if (portfolioForm.id) {
+      updatePortfolio({ ...data, id: portfolioForm.id, createdAt: (portfolioForm as Portfolio).createdAt });
+    } else {
+      addPortfolio(data);
+    }
+    setShowPortfolioModal(false);
+  };
   const confirmDeletePortfolio = () => {
     if (!portfolioPendingDelete) return;
     void deletePortfolio(portfolioPendingDelete.id);
@@ -735,7 +806,7 @@ export const ProducerProfile: React.FC = () => {
       )}
 
       {/* Portfolio Edit/Add Modal (Omitted code block for brevity but functional logic is above) */}
-      {showPortfolioModal && (<div className="fixed inset-0 z-50 overflow-y-auto"><div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0"><div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowPortfolioModal(false)}></div><span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span><div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6"><h3 className="text-lg font-medium text-gray-900 mb-4">{portfolioForm.id ? 'Edit' : 'Add'} Portfolio Item</h3><form onSubmit={savePortfolio} className="space-y-4"><div><label className="block text-sm font-medium text-gray-700">{t('form.title')}</label><input type="text" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.title} onChange={e => setPortfolioForm({ ...portfolioForm, title: e.target.value })} /></div><div><label className="block text-sm font-medium text-gray-700">{t('form.category')}</label><select required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.category} onChange={e => setPortfolioForm({ ...portfolioForm, category: e.target.value })}><option value="">Select Category</option>{currentProducer?.productionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select><p className="text-xs text-gray-500 mt-1">{t('portfolio.categoryTip')}</p></div><div><label className="block text-sm font-medium text-gray-700">{t('form.desc')}</label><textarea required rows={3} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.description} onChange={e => setPortfolioForm({ ...portfolioForm, description: e.target.value })} /></div><div className="bg-gray-50 p-3 rounded border border-gray-200"><label className="block text-sm font-medium text-gray-700 mb-2">Media</label><div className="mb-3"><label className="cursor-pointer flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800"><ImageIcon className="h-4 w-4" /><span>Add Images (Max 10)</span><input type="file" multiple accept="image/png, image/jpeg" className="hidden" onChange={handlePortfolioImageUpload} /></label><div className="flex flex-wrap gap-2 mt-2">{portfolioForm.imageUrls?.map((url, idx) => (<div key={idx} className="relative w-16 h-16 border rounded overflow-hidden group"><img src={url} className="w-full h-full object-cover" /><button type="button" onClick={() => setPortfolioForm(prev => ({ ...prev, imageUrls: prev.imageUrls?.filter((_, i) => i !== idx) }))} className="absolute top-0 right-0 bg-red-500 text-white p-0.5 rounded-bl opacity-0 group-hover:opacity-100"><X className="h-3 w-3" /></button></div>))}</div><p className="text-xs text-gray-500 mt-1">{t('portfolio.maxImages')}</p></div><div><label className="cursor-pointer flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800"><Video className="h-4 w-4" /><span>{portfolioForm.videoUrl ? 'Replace Video' : 'Add Video'}</span><input type="file" accept="video/*" className="hidden" onChange={handlePortfolioVideoUpload} /></label>{portfolioForm.videoUrl && (<div className="mt-2 text-xs text-green-600 flex items-center"><CheckCircle className="h-3 w-3 mr-1" /> Video attached<button type="button" onClick={() => setPortfolioForm(prev => ({ ...prev, videoUrl: undefined }))} className="ml-2 text-red-500 hover:underline">Remove</button></div>)}<p className="text-xs text-gray-500 mt-1">{t('portfolio.video')}</p></div></div><div className="flex items-center"><input type="checkbox" id="publish" className="h-4 w-4 text-primary-600 border-gray-300 rounded" checked={portfolioForm.isPublished} onChange={e => setPortfolioForm({ ...portfolioForm, isPublished: e.target.checked })} /><label htmlFor="publish" className="ml-2 block text-sm text-gray-900">{t('form.publish')}</label></div><div className="flex justify-end space-x-3"><button type="button" onClick={() => setShowPortfolioModal(false)} className="text-gray-600 hover:text-gray-900">{t('form.cancel')}</button><button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded hover:bg-primary-700">{t('form.save')}</button></div></form></div></div></div>)}
+      {showPortfolioModal && (<div className="fixed inset-0 z-50 overflow-y-auto"><div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0"><div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowPortfolioModal(false)}></div><span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span><div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6"><h3 className="text-lg font-medium text-gray-900 mb-4">{portfolioForm.id ? 'Edit' : 'Add'} Portfolio Item</h3><form onSubmit={savePortfolio} className="space-y-4"><div><label className="block text-sm font-medium text-gray-700">{t('form.title')}</label><input type="text" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.title} onChange={e => setPortfolioForm({ ...portfolioForm, title: e.target.value })} /></div><div><label className="block text-sm font-medium text-gray-700">{t('form.category')}</label><select required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.category} onChange={e => setPortfolioForm({ ...portfolioForm, category: e.target.value })}><option value="">Select Category</option>{currentProducer?.productionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select><p className="text-xs text-gray-500 mt-1">{t('portfolio.categoryTip')}</p></div><div><label className="block text-sm font-medium text-gray-700">{t('form.desc')}</label><textarea required rows={3} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.description} onChange={e => setPortfolioForm({ ...portfolioForm, description: e.target.value })} /></div><div className="bg-gray-50 p-3 rounded border border-gray-200"><label className="block text-sm font-medium text-gray-700 mb-2">Media</label><div className="mb-3"><label className={`flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 ${portfolioImageUploading ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}><ImageIcon className="h-4 w-4" /><span>{portfolioImageUploading ? 'Uploading…' : 'Add Images (Max 10)'}</span><input type="file" multiple accept="image/png,image/jpeg,image/webp" className="hidden" disabled={portfolioImageUploading} onChange={handlePortfolioImageUpload} /></label><div className="flex flex-wrap gap-2 mt-2">{portfolioForm.imageUrls?.map((url, idx) => (<div key={idx} className="relative w-16 h-16 border rounded overflow-hidden group"><img src={url} className="w-full h-full object-cover" /><button type="button" onClick={() => setPortfolioForm(prev => ({ ...prev, imageUrls: prev.imageUrls?.filter((_, i) => i !== idx) }))} className="absolute top-0 right-0 bg-red-500 text-white p-0.5 rounded-bl opacity-0 group-hover:opacity-100"><X className="h-3 w-3" /></button></div>))}</div><p className="text-xs text-gray-500 mt-1">{t('portfolio.maxImages')}</p></div><div><label className={`flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 ${portfolioVideoUploading ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}><Video className="h-4 w-4" /><span>{portfolioVideoUploading ? 'Uploading…' : (portfolioForm.videoUrl ? 'Replace Video' : 'Add Video')}</span><input type="file" accept="video/*" className="hidden" disabled={portfolioVideoUploading} onChange={handlePortfolioVideoUpload} /></label>{portfolioForm.videoUrl && (<div className="mt-2 text-xs text-green-600 flex items-center"><CheckCircle className="h-3 w-3 mr-1" /> Video attached<button type="button" onClick={() => setPortfolioForm(prev => ({ ...prev, videoUrl: undefined }))} className="ml-2 text-red-500 hover:underline">Remove</button></div>)}<p className="text-xs text-gray-500 mt-1">{t('portfolio.video')}</p></div></div><div className="flex items-center"><input type="checkbox" id="publish" className="h-4 w-4 text-primary-600 border-gray-300 rounded" checked={portfolioForm.isPublished} onChange={e => setPortfolioForm({ ...portfolioForm, isPublished: e.target.checked })} /><label htmlFor="publish" className="ml-2 block text-sm text-gray-900">{t('form.publish')}</label></div><div className="flex justify-end space-x-3"><button type="button" onClick={() => setShowPortfolioModal(false)} className="text-gray-600 hover:text-gray-900">{t('form.cancel')}</button><button type="submit" disabled={portfolioImageUploading || portfolioVideoUploading} className="bg-primary-600 text-white px-4 py-2 rounded hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed">{portfolioImageUploading || portfolioVideoUploading ? 'Uploading…' : t('form.save')}</button></div></form></div></div></div>)}
 
       {/* Portfolio Preview Modal */}
       {showPortfolioPreview && (() => {

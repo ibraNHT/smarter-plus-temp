@@ -581,8 +581,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         };
       };
       let clientRows = Array.isArray(resClients) ? resClients.map(mapClientRow) : [];
-      // Backend currently has no dedicated "me client profile" endpoint.
-      // We rely on /api/clients list payload to populate client profile state.
+      // API must return `locations` on each client (see Prisma `include` on GET /api/clients);
+      // otherwise this map will set `locations: []` and wipe in-memory saved addresses.
       setClients(clientRows);
       const offersList = Array.isArray(resOffers) ? resOffers : ((resOffers as any)?.data || []);
       setOffers(offersList);
@@ -1037,9 +1037,20 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const updateClientProfile = async (updatedClient: ClientProfile): Promise<boolean> => {
     try {
+      // Always send `locations` as JSON (Prisma update replaces rows); omitting it skips server-side location sync.
+      const locations = Array.isArray(updatedClient.locations)
+        ? updatedClient.locations.map((loc) => ({
+            lat: Number(loc.lat) || 0,
+            lng: Number(loc.lng) || 0,
+            region: String(loc.region ?? ''),
+            city: String(loc.city ?? ''),
+            address: String(loc.address ?? ''),
+          }))
+        : [];
+      const payload = { ...updatedClient, locations };
       const saved = await apiFetch<any>(API_ENDPOINTS.clients.update(updatedClient.id), {
         method: 'PUT',
-        body: JSON.stringify(updatedClient),
+        body: JSON.stringify(payload),
       });
       setClients(prev => prev.map(c => c.id === saved.id ? { ...saved, user: saved.user ?? (c as any).user } : c));
       if (saved?.user && user && user.id === saved.user.id) {
