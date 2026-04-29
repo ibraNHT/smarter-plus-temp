@@ -10,7 +10,7 @@ interface I18nContextType {
 }
 
 const translations: Record<string, Record<Language, string>> = {
-  // Navbar
+  // Navbaradasdada
   'nav.home': { en: 'Home', fr: 'Accueil' },
   'nav.producerMarket': { en: 'Producer Market', fr: 'Marché Producteurs' },
   'nav.atiStore': { en: 'ATI Store', fr: 'Boutique ATI' },
