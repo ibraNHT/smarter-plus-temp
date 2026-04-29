@@ -1,6 +1,6 @@
 
 import React, { useState, ReactNode, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerStatus, OfferType, CartItem, Order, OrderStatus, Wallet, Notification, WithdrawalRequest, WithdrawalStatus, PaymentMethod, ChatSession, ChatMessage, Proposal, ProposalStatus, WeeklySchedule, AvailabilityException, Review, SupportMessage, Portfolio, DisputeEvidence, Coupon, PickupPoint, MyReferralsData } from '../types';
+import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerStatus, OfferType, CartItem, Order, OrderStatus, Wallet, Notification, WithdrawalRequest, PaymentMethod, ChatSession, ChatMessage, Proposal, ProposalStatus, WeeklySchedule, AvailabilityException, Review, SupportMessage, Portfolio, DisputeEvidence, Coupon, PickupPoint, MyReferralsData } from '../types';
 import { generateSupportResponse } from './geminiService';
 import {
   getSupportMessages,
@@ -14,7 +14,13 @@ const defaultSchedule: WeeklySchedule = { Monday: [], Tuesday: [], Wednesday: []
 import { apiFetch, apiUpload, setToken, clearToken, getToken, setRefreshToken } from './apiService';
 import { logApiFailure } from './apiDebug';
 import { uploadAvatar } from './uploadService';
-/** Map Prisma withdrawal row (+ nested paymentMethod) to app `WithdrawalRequest`. */
+
+/*
+ * Preserved from rev: map Prisma withdrawal row (+ nested paymentMethod) → app `WithdrawalRequest`.
+ * Uncomment and call when GET /api/wallet/withdrawals (or equivalent) is available, e.g.
+ *   setWithdrawalRequests(rows.map(mapWithdrawalFromApi))
+ * (Re-add `WithdrawalStatus` to the types import when uncommenting.)
+
 function mapWithdrawalFromApi(d: any): WithdrawalRequest {
   const pm = d.paymentMethod ?? {};
   const prov = String(pm.provider ?? '').toUpperCase();
@@ -42,6 +48,7 @@ function mapWithdrawalFromApi(d: any): WithdrawalRequest {
     adminNote: d.adminNote || undefined,
   };
 }
+*/
 
 function mapReviewFromApi(r: any): Review {
   return {
@@ -468,7 +475,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const isProducerSession = activeUser?.role === UserRole.PRODUCER;
     const hashPath = typeof window !== 'undefined' ? window.location.hash : '';
     const isClientUiRoute = hashPath.includes('/client/') || hashPath.includes('/register/client');
+    /** Skip `/api/clients` list when a producer is not on client UI (reduces load; rev behavior). */
     const shouldFetchBuyerProfile = isClientSession || (isProducerSession && isClientUiRoute);
+    /** Reserved for GET producer portfolios when backend exposes listing (rev flag). */
     const shouldFetchProducerPortfolios = isProducerSession && Boolean(activeUser?.producerId);
     const ordersEndpoints = getOrdersEndpointsForUser(activeUser);
     try {
@@ -477,7 +486,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (activeUser && getToken()) await fetchChats().catch(on401);
       const [resProducers, resClients, resOffers, resPickup] = await Promise.all([
         apiFetch<ProducerProfile[]>(API_ENDPOINTS.producers.list, { silent401: true } as any).catch((e) => { on401(e); return []; }),
-        apiFetch<ClientProfile[]>(API_ENDPOINTS.clients.list, { silent401: true } as any).catch((e) => { on401(e); return []; }),
+        shouldFetchBuyerProfile
+          ? apiFetch<ClientProfile[]>(API_ENDPOINTS.clients.list, { silent401: true } as any).catch((e) => { on401(e); return []; })
+          : Promise.resolve([] as ClientProfile[]),
         apiFetch<Offer[]>(API_ENDPOINTS.offers.list, { silent401: true } as any).catch((e) => { on401(e); return []; }),
         apiFetch<PickupPoint[]>(API_ENDPOINTS.pickupPoints.list, { silent401: true } as any).catch((e) => { on401(e); return []; }),
       ]);
@@ -500,6 +511,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         ]);
         setMyReferrals(referralsPayload);
         // Backend currently has no GET /api/wallet/withdrawals endpoint.
+        // When it exists: map rows with preserved `mapWithdrawalFromApi` (see comment block near top of file).
         setWithdrawalRequests([]);
         setOrders(Array.isArray(resOrders) ? resOrders.map((o: any) => ({
           ...o,
@@ -522,7 +534,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           }));
         }
         // Backend currently has no producer portfolio listing endpoint.
-        setPortfolios([]);
+        // When listing exists, hydrate only when shouldFetchProducerPortfolios is true.
+        setPortfolios(shouldFetchProducerPortfolios ? [] : []);
         if (Array.isArray(resMyReviews)) {
           const mappedReviews = resMyReviews.map(mapReviewFromApi);
           setReviews((prev) => {
