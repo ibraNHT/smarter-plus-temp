@@ -1,5 +1,5 @@
 import { apiUpload } from './apiService';
-import { API_ENDPOINTS } from '../api/endpoints';
+import { API_ENDPOINTS } from '../client-api/endpoints';
 
 /** POST /api/upload/avatar — requires JWT; returns public URL for User.profileImageUrl. */
 export async function uploadAvatar(file: File): Promise<string> {

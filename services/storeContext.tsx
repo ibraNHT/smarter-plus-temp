@@ -125,7 +125,7 @@ import { validateCouponRemote, type CouponValidationChannel } from './couponsApi
 import { io, Socket } from 'socket.io-client';
 import { isWebAppAllowedRole, isWebAppSessionBlocked } from './authRoles';
 import { useSessionStore } from '../stores/sessionStore';
-import { API_ENDPOINTS } from '../api/endpoints';
+import { API_ENDPOINTS } from '../client-api/endpoints';
 
 interface StoreContextType {
   user: UserSession | null;
@@ -483,7 +483,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       ]);
       // Only fetch orders, wallet, and referral stats when authenticated and we have a token (avoids 401 spam when token expired)
       if (activeUser && getToken()) {
-        const [resOrders, resWallet, resWithdrawals, referralsPayload, resPortfolios, resMyReviews] = await Promise.all([
+        const [resOrders, resWallet, referralsPayload, resMyReviews] = await Promise.all([
           ordersEndpoints.length > 0
             ? Promise.all(
                 ordersEndpoints.map((endpoint) =>
@@ -492,18 +492,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               ).then((rows) => Array.from(new Map(rows.flat().map((o: any) => [o.id, o])).values()))
             : Promise.resolve([] as any[]),
           apiFetch<any>(API_ENDPOINTS.wallet.me, { silent401: true } as any).catch((e) => { on401(e); return null; }),
-          apiFetch<any[]>(API_ENDPOINTS.wallet.withdrawals, { silent401: true } as any).catch((e) => { on401(e); return []; }),
           fetchMyReferrals(),
-          shouldFetchProducerPortfolios
-            ? apiFetch<Portfolio[]>(API_ENDPOINTS.portfolios.list, { silent401: true } as any).catch((e) => { on401(e); return []; })
-            : Promise.resolve([] as Portfolio[]),
           apiFetch<any[]>(API_ENDPOINTS.reviews.byUser(activeUser.id), { silent401: true } as any).catch((e) => {
             on401(e);
             return [];
           }),
         ]);
         setMyReferrals(referralsPayload);
-        setWithdrawalRequests(Array.isArray(resWithdrawals) ? resWithdrawals.map(mapWithdrawalFromApi) : []);
+        // Backend currently has no GET /api/wallet/withdrawals endpoint.
+        setWithdrawalRequests([]);
         setOrders(Array.isArray(resOrders) ? resOrders.map((o: any) => ({
           ...o,
           items: Array.isArray(o.orderItems || o.items)
@@ -524,18 +521,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             },
           }));
         }
-        setPortfolios(
-          Array.isArray(resPortfolios)
-            ? resPortfolios.map((p: Portfolio) => ({
-                ...p,
-                createdAt:
-                  typeof (p as any).createdAt === 'string'
-                    ? (p as any).createdAt
-                    : new Date((p as any).createdAt).toISOString(),
-                videoUrl: (p as any).videoUrl || undefined,
-              }))
-            : [],
-        );
+        // Backend currently has no producer portfolio listing endpoint.
+        setPortfolios([]);
         if (Array.isArray(resMyReviews)) {
           const mappedReviews = resMyReviews.map(mapReviewFromApi);
           setReviews((prev) => {
@@ -578,22 +565,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         };
       };
       let clientRows = Array.isArray(resClients) ? resClients.map(mapClientRow) : [];
-      if (activeUser && getToken() && shouldFetchBuyerProfile) {
-        const meClient = await apiFetch<any>(API_ENDPOINTS.profiles.meClient, { silent401: true } as any).catch(() =>
-          apiFetch<any>(API_ENDPOINTS.clients.me, { silent401: true } as any).catch(() => null),
-        );
-        if (meClient && typeof meClient === 'object' && meClient.id) {
-          const mapped = mapClientRow(meClient);
-          const ix = clientRows.findIndex(
-            c => c.id === mapped.id || (c as any).userId === (mapped as any).userId
-          );
-          if (ix >= 0) {
-            clientRows[ix] = { ...clientRows[ix], ...mapped };
-          } else {
-            clientRows = [...clientRows, mapped];
-          }
-        }
-      }
+      // Backend currently has no dedicated "me client profile" endpoint.
+      // We rely on /api/clients list payload to populate client profile state.
       setClients(clientRows);
       const offersList = Array.isArray(resOffers) ? resOffers : ((resOffers as any)?.data || []);
       setOffers(offersList);
@@ -1114,15 +1087,31 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
+  // const deleteOffer = async (offerId: string): Promise<{ success: boolean; error?: string }> => {
+  //   try {
+  //     await apiFetch(API_ENDPOINTS.offers.remove(offerId), { method: 'DELETE' });
+  //     setOffers(prev => prev.filter(o => o.id !== offerId));
+  //     if (user) addNotification(user.id, 'Offer deleted successfully.', 'SUCCESS');
+  //     return { success: true };
+  //   } catch (error: unknown) {
+  //     const message = error instanceof Error ? error.message : 'Failed to delete offer.';
+  //     logApiFailure('Failed to delete offer', error);
+  //     if (user) addNotification(user.id, message, 'ERROR');
+  //     return { success: false, error: message };
+  //   }
+  // };
+
   const deleteOffer = async (offerId: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      await apiFetch(API_ENDPOINTS.offers.remove(offerId), { method: 'DELETE' });
+      await apiFetch(API_ENDPOINTS.offers.remove(offerId), {
+        method: 'DELETE',
+      });
       setOffers(prev => prev.filter(o => o.id !== offerId));
       if (user) addNotification(user.id, 'Offer deleted successfully.', 'SUCCESS');
       return { success: true };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to delete offer.';
-      logApiFailure('Failed to delete offer', error);
+      console.error('Failed to delete offer', error);
       if (user) addNotification(user.id, message, 'ERROR');
       return { success: false, error: message };
     }
@@ -1392,8 +1381,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify({ amount, paymentMethodId: method.id }),
         headers,
       });
-      const list = await apiFetch<any[]>(API_ENDPOINTS.wallet.withdrawals, { silent401: true } as any).catch(() => []);
-      setWithdrawalRequests(Array.isArray(list) ? list.map(mapWithdrawalFromApi) : []);
+      // Backend currently has no GET /api/wallet/withdrawals endpoint.
+      setWithdrawalRequests([]);
       return { success: result.success, message: result.message };
     } catch (error: any) {
       logApiFailure('Failed to request withdrawal', error);

@@ -816,6 +816,7 @@ export const ProducerDashboard: React.FC = () => {
             </div>
          )}
 
+         {/* Delete Offer Modal */}
          {offerDeleteTarget && (
             <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="delete-offer-modal-title" role="dialog" aria-modal="true">
                <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
@@ -832,7 +833,7 @@ export const ProducerDashboard: React.FC = () => {
                            </h3>
                            <div className="mt-2">
                               <p className="text-sm text-gray-500">
-                                 Delete offer &quot;{offerDeleteTarget.title}&quot;? This action cannot be undone.
+                                 Delete offer "{offerDeleteTarget.title}"? This action cannot be undone.
                               </p>
                            </div>
                         </div>

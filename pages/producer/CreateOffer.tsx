@@ -1,11 +1,39 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { OfferType, UnitOfMeasure, MarketType, Offer } from '../../types';
 import { generateProductDescription } from '../../services/geminiService';
 import { Sparkles, Loader2, Camera, MapPin, Clock } from 'lucide-react';
+
+const SERVICE_ONLY_CATEGORIES = new Set(['Service']);
+const SERVICE_UNITS = new Set<UnitOfMeasure>([
+  UnitOfMeasure.HOUR,
+  UnitOfMeasure.DAY,
+  UnitOfMeasure.JOB,
+]);
+const PRODUCT_DEFAULT_UNIT = UnitOfMeasure.KG;
+const SERVICE_DEFAULT_UNIT = UnitOfMeasure.HOUR;
+
+const normalizeOfferType = (
+  rawType: unknown,
+  rawUnit: unknown,
+  rawCategory: unknown,
+  rawServiceDuration: unknown,
+): OfferType => {
+  const typeValue = String(rawType ?? '').toUpperCase();
+  if (typeValue === OfferType.PRODUCT || typeValue === OfferType.SERVICE) {
+    return typeValue as OfferType;
+  }
+  const hasServiceUnit = SERVICE_UNITS.has(rawUnit as UnitOfMeasure);
+  const hasServiceCategory = SERVICE_ONLY_CATEGORIES.has(String(rawCategory ?? '').trim());
+  const serviceDuration = Number(rawServiceDuration ?? 0);
+  if (hasServiceUnit || hasServiceCategory || serviceDuration > 0) {
+    return OfferType.SERVICE;
+  }
+  return OfferType.PRODUCT;
+};
 
 export const CreateOffer: React.FC = () => {
   const { createOffer, updateOffer, getOfferById, user, producers } = useStore();
@@ -25,16 +53,41 @@ export const CreateOffer: React.FC = () => {
   // Get Categories from Producer Profile
   const producerProductionTypes = currentProducer?.productionTypes || [];
   // If producer has specific types, use them. Otherwise default to a broad list.
-  const availableCategories = producerProductionTypes.length > 0 
-      ? producerProductionTypes 
-      : ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
+  const allAvailableCategories = useMemo(
+    () =>
+      producerProductionTypes.length > 0
+        ? producerProductionTypes
+        : [
+            'Agriculture',
+            'Livestock farming',
+            'Fish Farming',
+            'Vegetables',
+            'Processed foods',
+            'Equipment',
+            'Service',
+          ],
+    [producerProductionTypes],
+  );
+  const productCategories = useMemo(
+    () => allAvailableCategories.filter(cat => !SERVICE_ONLY_CATEGORIES.has(cat)),
+    [allAvailableCategories],
+  );
+  const serviceCategories = useMemo(
+    () => allAvailableCategories.filter(cat => SERVICE_ONLY_CATEGORIES.has(cat)),
+    [allAvailableCategories],
+  );
+  const fallbackProductCategory = productCategories[0] || 'Agriculture';
+  const fallbackServiceCategory = serviceCategories[0] || 'Service';
+  const selectableProductCategories = productCategories.length > 0 ? productCategories : [fallbackProductCategory];
+  const selectableServiceCategories = serviceCategories.length > 0 ? serviceCategories : [fallbackServiceCategory];
+  const hasInitializedEditForm = useRef(false);
 
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    category: availableCategories[0] || 'Agriculture',
+    category: fallbackProductCategory,
     type: OfferType.PRODUCT,
-    unit: UnitOfMeasure.KG,
+    unit: PRODUCT_DEFAULT_UNIT,
     quantity: 0,
     minQuantity: 1,
     maxQuantity: 0, // 0 means unlimited (up to total stock)
@@ -54,20 +107,39 @@ export const CreateOffer: React.FC = () => {
   }, [registeredLocation]);
 
   useEffect(() => {
+    hasInitializedEditForm.current = false;
+  }, [offerId]);
+
+  useEffect(() => {
     if (offerId) {
+      if (hasInitializedEditForm.current) return;
       const offer = getOfferById(offerId);
       if (offer) {
         if (offer.producerId !== user?.producerId) {
             navigate('/producer/dashboard'); // Security check
             return;
         }
+        const normalizedType = normalizeOfferType(
+          offer.type,
+          offer.unit,
+          offer.category,
+          offer.serviceDuration,
+        );
+        const normalizedCategory =
+          normalizedType === OfferType.SERVICE
+            ? (selectableServiceCategories.includes(offer.category) ? offer.category : fallbackServiceCategory)
+            : (selectableProductCategories.includes(offer.category) ? offer.category : fallbackProductCategory);
+        const normalizedUnit =
+          normalizedType === OfferType.SERVICE
+            ? (SERVICE_UNITS.has(offer.unit) ? offer.unit : SERVICE_DEFAULT_UNIT)
+            : (SERVICE_UNITS.has(offer.unit) ? PRODUCT_DEFAULT_UNIT : offer.unit);
         setExistingOffer(offer);
         setFormData({
           title: offer.title,
           description: offer.description,
-          category: offer.category,
-          type: offer.type,
-          unit: offer.unit,
+          category: normalizedCategory,
+          type: normalizedType,
+          unit: normalizedUnit,
           quantity: offer.quantity,
           minQuantity: offer.minQuantity || 1,
           maxQuantity: offer.maxQuantity || 0,
@@ -76,11 +148,12 @@ export const CreateOffer: React.FC = () => {
           offerLocation: offer.offerLocation || registeredLocation,
           isNegotiable: offer.isNegotiable,
           isDeliveryAvailable: offer.isDeliveryAvailable,
-          serviceDuration: offer.serviceDuration || 1
+          serviceDuration: normalizedType === OfferType.SERVICE ? (offer.serviceDuration || 1) : 0
         });
+        hasInitializedEditForm.current = true;
       }
     }
-  }, [offerId, getOfferById, navigate, user?.producerId, registeredLocation]);
+  }, [offerId, getOfferById, navigate, user?.producerId, registeredLocation, fallbackProductCategory, fallbackServiceCategory, selectableProductCategories, selectableServiceCategories]);
 
   const handleGenerateDescription = async () => {
     if (!formData.title || !formData.features) return;
@@ -112,7 +185,7 @@ export const CreateOffer: React.FC = () => {
       offerLocation: formData.offerLocation,
       isNegotiable: formData.isNegotiable,
       isDeliveryAvailable: formData.isDeliveryAvailable,
-      serviceDuration: formData.type === OfferType.SERVICE ? Number(formData.serviceDuration) : undefined
+      serviceDuration: formData.type === OfferType.SERVICE ? Number(formData.serviceDuration) : 0
     };
 
     setSubmitting(true);
@@ -167,7 +240,17 @@ export const CreateOffer: React.FC = () => {
                       name="offerType" 
                       value={OfferType.PRODUCT}
                       checked={formData.type === OfferType.PRODUCT}
-                      onChange={() => setFormData({ ...formData, type: OfferType.PRODUCT, unit: UnitOfMeasure.KG })}
+                      onChange={() =>
+                        setFormData({
+                          ...formData,
+                          type: OfferType.PRODUCT,
+                          unit: PRODUCT_DEFAULT_UNIT,
+                          category: selectableProductCategories.includes(formData.category)
+                            ? formData.category
+                            : fallbackProductCategory,
+                          serviceDuration: 0,
+                        })
+                      }
                       className="sr-only"
                     />
                     <span className="font-bold block text-gray-900">Product</span>
@@ -179,7 +262,17 @@ export const CreateOffer: React.FC = () => {
                       name="offerType" 
                       value={OfferType.SERVICE}
                       checked={formData.type === OfferType.SERVICE}
-                      onChange={() => setFormData({ ...formData, type: OfferType.SERVICE, unit: UnitOfMeasure.HOUR })}
+                      onChange={() =>
+                        setFormData({
+                          ...formData,
+                          type: OfferType.SERVICE,
+                          unit: SERVICE_DEFAULT_UNIT,
+                          category: selectableServiceCategories.includes(formData.category)
+                            ? formData.category
+                            : fallbackServiceCategory,
+                          serviceDuration: formData.serviceDuration > 0 ? formData.serviceDuration : 1,
+                        })
+                      }
                       className="sr-only"
                     />
                     <span className="font-bold block text-gray-900">Service</span>
@@ -201,7 +294,7 @@ export const CreateOffer: React.FC = () => {
                <select className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900"
                  value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}
                >
-                 {availableCategories.map(cat => (
+                 {(formData.type === OfferType.SERVICE ? selectableServiceCategories : selectableProductCategories).map(cat => (
                    <option key={cat} value={cat}>{t(`category.${cat}`)}</option>
                  ))}
                </select>
@@ -274,7 +367,13 @@ export const CreateOffer: React.FC = () => {
                <select className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900"
                  value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value as UnitOfMeasure})}
                >
-                 {Object.values(UnitOfMeasure).map(u => <option key={u} value={u}>{t(`unit.${u}`)}</option>)}
+                 {Object.values(UnitOfMeasure)
+                   .filter((u) =>
+                     formData.type === OfferType.SERVICE
+                       ? SERVICE_UNITS.has(u as UnitOfMeasure)
+                       : !SERVICE_UNITS.has(u as UnitOfMeasure),
+                   )
+                   .map(u => <option key={u} value={u}>{t(`unit.${u}`)}</option>)}
                </select>
              </div>
 

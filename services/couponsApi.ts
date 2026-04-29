@@ -2,7 +2,7 @@
  * Checkout coupon validation — must match Nest POST /api/coupons/validate.
  */
 import { apiFetch } from './apiService';
-import { API_ENDPOINTS } from '../api/endpoints';
+import { API_ENDPOINTS } from '../client-api/endpoints';
 
 /** Must match API ValidateCouponDto.channel */
 export type CouponValidationChannel = 'MARKETPLACE' | 'RETAIL';

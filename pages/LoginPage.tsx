@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useStore } from '../services/storeContext';
 import { useTranslation } from '../services/i18nContext';
 import { apiFetch } from '../services/apiService';
-import { API_ENDPOINTS } from '../api/endpoints';
+import { API_ENDPOINTS } from '../client-api/endpoints';
 import { Sprout, Lock, Mail, X, Phone, Eye, EyeOff } from 'lucide-react';
 
 const AFRICA_COUNTRY_CODES = [
