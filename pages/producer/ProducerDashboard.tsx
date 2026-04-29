@@ -3,12 +3,12 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, ProducerStatus, OrderStatus, Order, OfferType } from '../../types';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp } from 'lucide-react';
+import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2 } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
 
 export const ProducerDashboard: React.FC = () => {
-   const { user, getProducerOffers, producers, clients, orders, confirmOrder, rejectOrder, startDelivery, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating } = useStore();
+   const { user, getProducerOffers, deleteOffer, producers, clients, orders, confirmOrder, rejectOrder, startDelivery, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating } = useStore();
    const { t } = useTranslation();
    const navigate = useNavigate();
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -26,6 +26,8 @@ export const ProducerDashboard: React.FC = () => {
    const [evidenceOrderId, setEvidenceOrderId] = useState<string | null>(null);
    const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
    const [orderActionBusy, setOrderActionBusy] = useState<string | null>(null);
+   const [offerDeleteTarget, setOfferDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+   const [isDeletingOffer, setIsDeletingOffer] = useState(false);
 
    const currentProducer = producers.find(p => p.id === user?.producerId);
    const myOffers = user?.producerId ? getProducerOffers(user.producerId) : [];
@@ -176,6 +178,17 @@ export const ProducerDashboard: React.FC = () => {
       if (evidenceOrderId && evidenceFiles.length > 0) {
          addDisputeEvidence(evidenceOrderId, evidenceFiles);
          setShowEvidenceModal(false);
+      }
+   };
+
+   const handleDeleteOffer = async () => {
+      if (!offerDeleteTarget) return;
+      setIsDeletingOffer(true);
+      try {
+         await deleteOffer(offerDeleteTarget.id);
+         setOfferDeleteTarget(null);
+      } finally {
+         setIsDeletingOffer(false);
       }
    };
 
@@ -523,8 +536,17 @@ export const ProducerDashboard: React.FC = () => {
                                  </div>
                               </div>
                               <div className="mt-4 flex-shrink-0 sm:mt-0 sm:ml-5">
-                                 <div className="flex -space-x-1 overflow-hidden">
+                                 <div className="flex items-center gap-3 overflow-hidden">
                                     <Link to={`/producer/offers/edit/${offer.id}`} className="text-gray-400 hover:text-primary-600">Edit</Link>
+                                    <button
+                                       type="button"
+                                       onClick={() => setOfferDeleteTarget({ id: offer.id, title: offer.title })}
+                                       className="text-gray-400 hover:text-red-600"
+                                       aria-label={`Delete ${offer.title}`}
+                                       title="Delete offer"
+                                    >
+                                       <Trash2 className="h-4 w-4" />
+                                    </button>
                                  </div>
                               </div>
                            </div>
@@ -789,6 +811,51 @@ export const ProducerDashboard: React.FC = () => {
                            <button type="submit" className="px-4 py-2 text-white bg-primary-600 rounded-md text-sm hover:bg-primary-700">Upload</button>
                         </div>
                      </form>
+                  </div>
+               </div>
+            </div>
+         )}
+
+         {/* Delete Offer Modal */}
+         {offerDeleteTarget && (
+            <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="delete-offer-modal-title" role="dialog" aria-modal="true">
+               <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !isDeletingOffer && setOfferDeleteTarget(null)}></div>
+                  <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+                  <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full sm:p-6">
+                     <div className="sm:flex sm:items-start">
+                        <div className="mx-auto flex-shrink-0 flex items-center justify-center h-10 w-10 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                           <AlertTriangle className="h-5 w-5 text-red-600" />
+                        </div>
+                        <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                           <h3 className="text-lg leading-6 font-medium text-gray-900" id="delete-offer-modal-title">
+                              Delete offer
+                           </h3>
+                           <div className="mt-2">
+                              <p className="text-sm text-gray-500">
+                                 Delete offer "{offerDeleteTarget.title}"? This action cannot be undone.
+                              </p>
+                           </div>
+                        </div>
+                     </div>
+                     <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                        <button
+                           type="button"
+                           disabled={isDeletingOffer}
+                           onClick={() => void handleDeleteOffer()}
+                           className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 disabled:opacity-60 sm:ml-3 sm:w-auto sm:text-sm"
+                        >
+                           {isDeletingOffer ? 'Deleting...' : 'Delete'}
+                        </button>
+                        <button
+                           type="button"
+                           disabled={isDeletingOffer}
+                           onClick={() => setOfferDeleteTarget(null)}
+                           className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60 sm:mt-0 sm:w-auto sm:text-sm"
+                        >
+                           Cancel
+                        </button>
+                     </div>
                   </div>
                </div>
             </div>

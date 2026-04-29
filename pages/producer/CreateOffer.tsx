@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
@@ -53,15 +53,34 @@ export const CreateOffer: React.FC = () => {
   // Get Categories from Producer Profile
   const producerProductionTypes = currentProducer?.productionTypes || [];
   // If producer has specific types, use them. Otherwise default to a broad list.
-  const allAvailableCategories = producerProductionTypes.length > 0 
-      ? producerProductionTypes 
-      : ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
-  const productCategories = allAvailableCategories.filter(cat => !SERVICE_ONLY_CATEGORIES.has(cat));
-  const serviceCategories = allAvailableCategories.filter(cat => SERVICE_ONLY_CATEGORIES.has(cat));
+  const allAvailableCategories = useMemo(
+    () =>
+      producerProductionTypes.length > 0
+        ? producerProductionTypes
+        : [
+            'Agriculture',
+            'Livestock farming',
+            'Fish Farming',
+            'Vegetables',
+            'Processed foods',
+            'Equipment',
+            'Service',
+          ],
+    [producerProductionTypes],
+  );
+  const productCategories = useMemo(
+    () => allAvailableCategories.filter(cat => !SERVICE_ONLY_CATEGORIES.has(cat)),
+    [allAvailableCategories],
+  );
+  const serviceCategories = useMemo(
+    () => allAvailableCategories.filter(cat => SERVICE_ONLY_CATEGORIES.has(cat)),
+    [allAvailableCategories],
+  );
   const fallbackProductCategory = productCategories[0] || 'Agriculture';
   const fallbackServiceCategory = serviceCategories[0] || 'Service';
   const selectableProductCategories = productCategories.length > 0 ? productCategories : [fallbackProductCategory];
   const selectableServiceCategories = serviceCategories.length > 0 ? serviceCategories : [fallbackServiceCategory];
+  const hasInitializedEditForm = useRef(false);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -88,7 +107,12 @@ export const CreateOffer: React.FC = () => {
   }, [registeredLocation]);
 
   useEffect(() => {
+    hasInitializedEditForm.current = false;
+  }, [offerId]);
+
+  useEffect(() => {
     if (offerId) {
+      if (hasInitializedEditForm.current) return;
       const offer = getOfferById(offerId);
       if (offer) {
         if (offer.producerId !== user?.producerId) {
@@ -126,6 +150,7 @@ export const CreateOffer: React.FC = () => {
           isDeliveryAvailable: offer.isDeliveryAvailable,
           serviceDuration: normalizedType === OfferType.SERVICE ? (offer.serviceDuration || 1) : 0
         });
+        hasInitializedEditForm.current = true;
       }
     }
   }, [offerId, getOfferById, navigate, user?.producerId, registeredLocation, fallbackProductCategory, fallbackServiceCategory, selectableProductCategories, selectableServiceCategories]);

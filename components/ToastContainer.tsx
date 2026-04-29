@@ -4,13 +4,50 @@ import { useStoreOptional } from '../services/storeContext';
 import { Notification } from '../types';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
+const getSeenToastStorageKey = (userId?: string) =>
+  userId ? `seen_toast_notifications:${userId}` : null;
+
+const loadSeenToastIds = (userId?: string): Set<string> => {
+  if (!userId || typeof window === 'undefined') return new Set();
+  const key = getSeenToastStorageKey(userId);
+  if (!key) return new Set();
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.map((id) => String(id)));
+  } catch {
+    return new Set();
+  }
+};
+
+const persistSeenToastIds = (userId: string, ids: Set<string>) => {
+  if (typeof window === 'undefined') return;
+  const key = getSeenToastStorageKey(userId);
+  if (!key) return;
+  // Keep storage bounded.
+  const bounded = Array.from(ids).slice(-500);
+  localStorage.setItem(key, JSON.stringify(bounded));
+};
+
 export const ToastContainer: React.FC = () => {
   const store = useStoreOptional();
   const [visibleToasts, setVisibleToasts] = useState<Notification[]>([]);
   const seenNotifyIdsRef = useRef<Set<string>>(new Set());
+  const activeUserIdRef = useRef<string | null>(null);
 
   const notifications = store?.notifications ?? [];
   const user = store?.user ?? null;
+
+  useLayoutEffect(() => {
+    if (!store || !user?.id) return;
+
+    // Restore per-user seen toast ids after reload.
+    if (activeUserIdRef.current !== user.id) {
+      activeUserIdRef.current = user.id;
+      seenNotifyIdsRef.current = loadSeenToastIds(user.id);
+      setVisibleToasts([]);
+    }
+  }, [store, user?.id]);
 
   useLayoutEffect(() => {
     if (!store || notifications.length === 0) return;
@@ -20,6 +57,9 @@ export const ToastContainer: React.FC = () => {
     if (userToasts.length === 0) return;
 
     userToasts.forEach((toast) => seenNotifyIdsRef.current.add(toast.id));
+    if (user?.id) {
+      persistSeenToastIds(user.id, seenNotifyIdsRef.current);
+    }
     setVisibleToasts((prev) => [...userToasts, ...prev]);
 
     userToasts.forEach((toast) => {

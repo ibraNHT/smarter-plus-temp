@@ -39,6 +39,7 @@ export const API_ENDPOINTS = {
     list: "/api/offers",
     create: "/api/offers",
     update: (id: string) => `/api/offers/${id}`,
+    remove: (id: string) => `/api/offers/${id}`,
   },
   orders: {
     my: "/api/orders/my-orders",
@@ -64,7 +65,7 @@ export const API_ENDPOINTS = {
   },
   notifications: {
     list: "/api/notifications",
-    markRead: "/api/notifications/mark-read",
+    markRead: "/api/notifications/read",
   },
   wallet: {
     me: "/api/wallet/me",
