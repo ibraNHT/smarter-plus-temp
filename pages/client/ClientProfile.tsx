@@ -14,6 +14,7 @@ import { LocationMapPicker } from '../../components/LocationMapPicker';
 import { uploadAvatar } from '../../services/uploadService';
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
+import { offerImageInBox } from '../../utils/offerImageDisplay';
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
@@ -498,7 +499,9 @@ export const ClientProfile: React.FC = () => {
                      <div className="flex flex-col sm:flex-row justify-between items-end gap-4">
                         <div className="flex -space-x-2 overflow-hidden">
                            {(order.items || []).slice(0, 3).map((item: any, idx: number) => (
-                              <img key={idx} className="inline-block h-10 w-10 rounded-md ring-2 ring-white object-cover" src={item.imageUrl} alt="" title={item.title} />
+                              <div key={idx} className="inline-block h-10 w-10 overflow-hidden rounded-md ring-2 ring-white bg-gray-100" title={item.title}>
+                                 <img src={item.imageUrl} alt="" className={offerImageInBox} />
+                              </div>
                            ))}
                            {(order.items?.length ?? 0) > 3 && (
                               <div className="flex items-center justify-center h-10 w-10 rounded-md ring-2 ring-white bg-gray-100 text-xs font-bold text-gray-500">+{(order.items?.length ?? 0) - 3}</div>
@@ -858,7 +861,9 @@ export const ClientProfile: React.FC = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                            {favoriteOffers.map((offer: any) => (
                               <div key={offer.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow flex items-center">
-                                 <img src={offer.imageUrl} className="w-16 h-16 rounded-md object-cover mr-4" />
+                                 <div className="mr-4 h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
+                                    <img src={offer.imageUrl} alt="" className={offerImageInBox} />
+                                 </div>
                                  <div className="flex-1 min-w-0"><h4 className="font-bold text-gray-900 truncate">{offer.title}</h4><p className="text-sm text-gray-500">{offer.price} XAF / {offer.unit}</p></div>
                                  <div className="flex flex-col gap-2 ml-2">
                                     <Link to={`/offer/${offer.id}`} className="text-primary-600 hover:bg-primary-50 p-2 rounded-full"><ArrowLeft className="h-5 w-5 rotate-180" /></Link>
@@ -1045,7 +1050,9 @@ export const ClientProfile: React.FC = () => {
                               {(payOrder.items || []).map((item: any, idx: number) => (
                                  <div key={idx} className="flex items-center gap-3 bg-gray-50 rounded-lg p-2 border border-gray-100">
                                     {item.imageUrl && (
-                                       <img src={item.imageUrl} alt={item.title} className="h-10 w-10 rounded-md object-cover flex-shrink-0 border border-gray-200" />
+                                       <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-100">
+                                          <img src={item.imageUrl} alt={item.title} className={offerImageInBox} />
+                                       </div>
                                     )}
                                     <div className="flex-1 min-w-0">
                                        <p className="text-sm font-medium text-gray-900 truncate">{item.title || item.description || 'Item'}</p>
@@ -1183,7 +1190,7 @@ export const ClientProfile: React.FC = () => {
                            {(selectedOrder.items || []).map((item: any, idx: number) => (
                               <li key={item.id || idx} className="p-3 flex justify-between items-center">
                                  <div className="flex items-center min-w-0">
-                                    {item.imageUrl && <div className="h-10 w-10 rounded bg-gray-100 overflow-hidden mr-3 flex-shrink-0"><img src={item.imageUrl} alt={item.title} className="h-full w-full object-cover" /></div>}
+                                    {item.imageUrl && <div className="h-10 w-10 rounded bg-gray-100 overflow-hidden mr-3 flex-shrink-0"><img src={item.imageUrl} alt={item.title} className={offerImageInBox} /></div>}
                                     <div className="min-w-0">
                                        <p className="text-sm font-medium text-gray-900 truncate">{item.title || 'Item'}</p>
                                        <p className="text-xs text-gray-500">{(item.cartQuantity ?? item.quantity ?? 1)} {item.unit} × {(item.price ?? 0).toLocaleString()} XAF</p>

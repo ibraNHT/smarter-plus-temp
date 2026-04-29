@@ -6,6 +6,7 @@ import { useTranslation } from '../../services/i18nContext';
 import { OfferType, UnitOfMeasure, MarketType, Offer } from '../../types';
 import { generateProductDescription } from '../../services/geminiService';
 import { uploadOfferImage } from '../../services/uploadService';
+import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { Sparkles, Loader2, Camera, MapPin, Clock, X } from 'lucide-react';
 
 const SERVICE_ONLY_CATEGORIES = new Set(['Service']);
@@ -85,6 +86,7 @@ export const CreateOffer: React.FC = () => {
   const selectableProductCategories = productCategories.length > 0 ? productCategories : [fallbackProductCategory];
   const selectableServiceCategories = serviceCategories.length > 0 ? serviceCategories : [fallbackServiceCategory];
   const hasInitializedEditForm = useRef(false);
+  const submitErrorRef = useRef<HTMLDivElement | null>(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -109,6 +111,12 @@ export const CreateOffer: React.FC = () => {
       setFormData(prev => ({ ...prev, offerLocation: registeredLocation }));
     }
   }, [registeredLocation]);
+
+  useEffect(() => {
+    if (submitError) {
+      submitErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [submitError]);
 
   useEffect(() => {
     hasInitializedEditForm.current = false;
@@ -201,6 +209,12 @@ export const CreateOffer: React.FC = () => {
       return;
     }
 
+    // Backend DTO requires `maxQuantity` as a number. Using `|| undefined` for 0 omitted the field
+    // in JSON, which caused 400 validation errors for "unlimited" (0) max order.
+    const maxQ = Math.max(0, Math.floor(Number(formData.maxQuantity) || 0));
+    const offerLocation =
+      String(formData.offerLocation ?? registeredLocation ?? '').trim() || 'Location not set';
+
     const offerData = {
       title: formData.title,
       description: formData.description,
@@ -209,9 +223,9 @@ export const CreateOffer: React.FC = () => {
       unit: formData.unit,
       quantity: Number(formData.quantity),
       minQuantity: Number(formData.minQuantity),
-      maxQuantity: Number(formData.maxQuantity) || undefined,
+      maxQuantity: maxQ,
       price: Number(formData.price),
-      offerLocation: formData.offerLocation,
+      offerLocation,
       isNegotiable: formData.isNegotiable,
       isDeliveryAvailable: formData.isDeliveryAvailable,
       serviceDuration: formData.type === OfferType.SERVICE ? Number(formData.serviceDuration) : 0
@@ -263,7 +277,11 @@ export const CreateOffer: React.FC = () => {
        
        <form onSubmit={handleSubmit} aria-busy={submitting} className="space-y-8 divide-y divide-gray-200 bg-white p-8 shadow rounded-lg">
          {submitError && (
-           <div className="rounded-md bg-red-50 p-4 border border-red-200 text-sm text-red-800" role="alert">
+           <div
+             ref={submitErrorRef}
+             className="rounded-md bg-red-50 p-4 border border-red-200 text-sm text-red-800"
+             role="alert"
+           >
              {submitError}
            </div>
          )}
@@ -495,7 +513,7 @@ export const CreateOffer: React.FC = () => {
                {imageUrl ? (
                  <div className="mt-2 flex items-start gap-4">
                    <div className="relative h-28 w-28 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
-                     <img src={imageUrl} alt="Offer preview" className="h-full w-full object-cover" />
+                     <img src={imageUrl} alt="Offer preview" className={offerImageInBox} />
                      <button
                        type="button"
                        onClick={() => setImageUrl('')}

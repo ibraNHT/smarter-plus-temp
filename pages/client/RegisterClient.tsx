@@ -1,5 +1,5 @@
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
@@ -70,6 +70,13 @@ export const RegisterClient: React.FC = () => {
 
   const avatarFileRef = useRef<File | null>(null);
 
+  useEffect(() => {
+    return () => {
+      const u = formData.profileImageUrl;
+      if (u?.startsWith('blob:')) URL.revokeObjectURL(u);
+    };
+  }, [formData.profileImageUrl]);
+
   const fillLocationFromCoords = async (lat: number, lng: number) => {
     const rev = await nominatimReverseGeocode(lat, lng);
     setFormData((prev) => ({
@@ -98,6 +105,9 @@ export const RegisterClient: React.FC = () => {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (formData.profileImageUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(formData.profileImageUrl);
+    }
     avatarFileRef.current = file;
     const previewUrl = URL.createObjectURL(file);
     setFormData({ ...formData, profileImageUrl: previewUrl });

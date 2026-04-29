@@ -93,6 +93,11 @@ export const API_ENDPOINTS = {
   },
   upload: {
     avatar: "/api/upload/avatar",
+    offerImage: "/api/upload/offer-image",
+    portfolioImage: "/api/upload/portfolio-image",
+    portfolioVideo: "/api/upload/portfolio-video",
+    /** Images + PDF, max 10MB — use when Cloudinary is off (e.g. tax docs, certificates). */
+    evidence: "/api/upload/evidence",
   },
   support: {
     sessions: "/api/support/sessions",

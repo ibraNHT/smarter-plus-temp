@@ -8,6 +8,7 @@ import { MarketType, OfferType, UserRole } from '../../types';
 import { SEO } from '../../components/SEO';
 import { ProductDetailsSkeleton } from '../../components/skeletons/ProductDetailsSkeleton';
 import { Spinner } from '../../components/Spinner';
+import { offerImageHero, offerImageInBox } from '../../utils/offerImageDisplay';
 
 /** Parse `YYYY-MM-DD` from `<input type="date">` as a local calendar day (avoids UTC weekday shifts). */
 function parseLocalYmd(ymd: string): Date {
@@ -205,12 +206,12 @@ export const ProductDetails: React.FC = () => {
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           <div className="md:flex">
 
-            {/* Image Section */}
-            <div className="md:w-1/2 h-96 md:h-auto relative bg-gray-200">
+            {/* Image Section — show full photo without cropping (letterbox in frame). */}
+            <div className="md:w-1/2 h-96 min-h-96 flex items-center justify-center relative bg-gray-100 p-4">
               <img
                 src={offer.imageUrl}
                 alt={offer.title}
-                className="w-full h-full object-cover"
+                className={offerImageHero}
               />
               <div className="absolute top-4 left-4 flex flex-col gap-2">
                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold shadow-sm ${isProducerMarket ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
@@ -498,13 +499,18 @@ export const ProductDetails: React.FC = () => {
                         </div>
                       )}
                       {portfolio.imageUrls.map((url: string, idx: number) => (
-                        <img
+                        <button
                           key={idx}
-                          src={url}
-                          alt={`Portfolio ${idx}`}
+                          type="button"
                           onClick={() => setActivePortfolioMedia(url)}
-                          className="flex-shrink-0 w-64 h-40 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity border border-gray-200"
-                        />
+                          className="flex-shrink-0 w-64 h-40 rounded-lg border border-gray-200 bg-gray-100 flex items-center justify-center cursor-pointer overflow-hidden hover:opacity-90 transition-opacity"
+                        >
+                          <img
+                            src={url}
+                            alt={`Portfolio ${idx}`}
+                            className={offerImageInBox}
+                          />
+                        </button>
                       ))}
                     </div>
                   </div>

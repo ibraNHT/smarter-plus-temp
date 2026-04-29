@@ -15,6 +15,7 @@ import {
 import { apiFetch } from "../../services/apiService";
 import { API_ENDPOINTS } from "../../client-api/endpoints";
 import { PublicProfileSkeleton } from "../../components/skeletons/PublicProfileSkeleton";
+import { offerImageHero, offerImageInBox } from "../../utils/offerImageDisplay";
 
 function mapReviewRow(r: any): Review {
   return {
@@ -249,11 +250,13 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
                           className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow bg-white flex items-center cursor-pointer"
                           onClick={() => navigate(`/offer/${offer.id}`)}
                         >
-                          <img
-                            src={offer.imageUrl}
-                            className="w-12 h-12 rounded object-cover mr-3"
-                            alt={offer.title}
-                          />
+                          <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded bg-gray-100 mr-3">
+                            <img
+                              src={offer.imageUrl}
+                              className={offerImageInBox}
+                              alt={offer.title}
+                            />
+                          </div>
                           <div className="overflow-hidden">
                             <p className="font-medium text-gray-900 truncate">
                               {offer.title}
@@ -288,11 +291,13 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
                           className="border border-gray-200 rounded-lg p-3 bg-white"
                         >
                           {item.imageUrls?.[0] ? (
-                            <img
-                              src={item.imageUrls[0]}
-                              alt={item.title}
-                              className="w-full h-32 object-cover rounded mb-3"
-                            />
+                            <div className="mb-3 flex h-32 w-full items-center justify-center overflow-hidden rounded bg-gray-100">
+                              <img
+                                src={item.imageUrls[0]}
+                                alt={item.title}
+                                className={offerImageHero}
+                              />
+                            </div>
                           ) : (
                             <div className="w-full h-32 bg-gray-100 rounded mb-3 flex items-center justify-center">
                               <ImageIcon className="h-8 w-8 text-gray-400" />

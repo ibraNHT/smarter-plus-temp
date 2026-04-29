@@ -8,6 +8,7 @@ import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
 import { OfferType, MarketType, UserRole } from '../../types';
 import { loadGooglePlacesApi, parseGooglePlace, citiesLooselyMatch } from '../../services/googlePlaces';
+import { offerImageInBox } from '../../utils/offerImageDisplay';
 
 export const ShoppingCart: React.FC = () => {
   const { cart, removeFromCart, placeOrder, user, clearCart, clients, producers, moveToFavorites, validateCoupon, pickupPoints, guestEmail, setGuestEmail } = useStore();
@@ -334,11 +335,11 @@ export const ShoppingCart: React.FC = () => {
               <ul className="divide-y divide-gray-200">
                 {cart.map((item) => (
                   <li key={item.id} className="p-6 flex">
-                    <div className="flex-shrink-0 w-24 h-24 border border-gray-200 rounded-md overflow-hidden relative">
+                    <div className="flex-shrink-0 w-24 h-24 border border-gray-200 bg-gray-100 rounded-md overflow-hidden relative">
                       <img
                         src={item.imageUrl}
                         alt={item.title}
-                        className="w-full h-full object-center object-cover"
+                        className={offerImageInBox}
                       />
                       {item.type === OfferType.SERVICE && (
                         <div className="absolute bottom-0 left-0 right-0 bg-purple-600 text-white text-[10px] text-center py-1 font-bold">SERVICE</div>

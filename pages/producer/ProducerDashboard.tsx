@@ -6,6 +6,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2 } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
+import { offerImageInBox } from '../../utils/offerImageDisplay';
 
 export const ProducerDashboard: React.FC = () => {
    const { user, getProducerOffers, deleteOffer, producers, clients, orders, confirmOrder, rejectOrder, startDelivery, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating } = useStore();
@@ -518,7 +519,7 @@ export const ProducerDashboard: React.FC = () => {
                            <div className="min-w-0 flex-1 sm:flex sm:items-center sm:justify-between">
                               <div className="flex items-center">
                                  <div className="flex-shrink-0 h-12 w-12 bg-gray-100 rounded-md overflow-hidden">
-                                    <img src={offer.imageUrl} alt={offer.title} className="h-full w-full object-cover" />
+                                    <img src={offer.imageUrl} alt={offer.title} className={offerImageInBox} />
                                  </div>
                                  <div className="ml-4 truncate">
                                     <div className="flex text-sm">
@@ -688,7 +689,7 @@ export const ProducerDashboard: React.FC = () => {
                               <li key={item.id} className="p-3 flex justify-between items-center">
                                  <div className="flex items-center">
                                     <div className="h-10 w-10 rounded bg-gray-100 overflow-hidden mr-3">
-                                       <img src={item.imageUrl} alt={item.title} className="h-full w-full object-cover" />
+                                       <img src={item.imageUrl} alt={item.title} className={offerImageInBox} />
                                     </div>
                                     <div>
                                        <p className="text-sm font-medium text-gray-900">{item.title}</p>

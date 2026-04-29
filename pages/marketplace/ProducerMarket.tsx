@@ -7,6 +7,7 @@ import { MarketType, UserRole } from '../../types';
 import { Tractor, Search, MapPin, ArrowLeft, MessageCircle, Truck, Heart, Star, Layers } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
+import { offerImageInBox } from '../../utils/offerImageDisplay';
 
 export const ProducerMarket: React.FC = () => {
   const { offers, producers, user, clients, trackUserSearch, toggleFavorite, getRecommendedOffers, getAverageRating, reviews, compareList, addToCompare, removeFromCompare, isInitialCatalogLoading } = useStore();
@@ -238,8 +239,8 @@ export const ProducerMarket: React.FC = () => {
         </div>
 
         <Link to={`/offer/${offer.id}`} className="block h-full flex flex-col">
-          <div className="relative h-44">
-            <img src={offer.imageUrl} alt={offer.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+          <div className="relative h-44 bg-gray-100">
+            <img src={offer.imageUrl} alt={offer.title} className={offerImageInBox} />
 
             {/* Badges Overlay */}
             <div className="absolute top-2 right-10 flex flex-col gap-1 items-end w-full pr-6 pointer-events-none">

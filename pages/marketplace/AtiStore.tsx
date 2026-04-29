@@ -7,6 +7,7 @@ import { MarketType, UserRole } from '../../types';
 import { ShoppingBasket, Search, Star, Filter, Heart, Layers } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
+import { offerImageInBox } from '../../utils/offerImageDisplay';
 
 export const AtiStore: React.FC = () => {
   const { offers, toggleFavorite, user, clients, producers, compareList, addToCompare, removeFromCompare, isInitialCatalogLoading } = useStore();
@@ -172,11 +173,11 @@ export const AtiStore: React.FC = () => {
                             </div>
 
                             <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-200 rounded-lg flex flex-col overflow-hidden hover:shadow-lg transition-all h-full">
-                              <div className="aspect-w-1 aspect-h-1 bg-gray-200 h-36 relative">
+                              <div className="aspect-w-1 aspect-h-1 bg-gray-100 h-36 relative">
                                 <img
                                   src={offer.imageUrl}
                                   alt={offer.title}
-                                  className="w-full h-full object-cover object-center group-hover:opacity-90 transition-opacity"
+                                  className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`}
                                 />
                                 <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">ATI Choice</div>
                               </div>
