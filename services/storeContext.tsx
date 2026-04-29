@@ -12,6 +12,7 @@ import {
 } from './supportSessionsApi';
 const defaultSchedule: WeeklySchedule = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
 import { apiFetch, apiUpload, setToken, clearToken, getToken, setRefreshToken } from './apiService';
+import { logApiFailure } from './apiDebug';
 import { uploadAvatar } from './uploadService';
 /** Map Prisma withdrawal row (+ nested paymentMethod) to app `WithdrawalRequest`. */
 function mapWithdrawalFromApi(d: any): WithdrawalRequest {
@@ -187,6 +188,7 @@ interface StoreContextType {
   deleteProducerPaymentMethod: (producerId: string, methodId: string) => void;
   createOffer: (offer: Omit<Offer, 'id' | 'createdAt' | 'producerId'>) => Promise<{ success: boolean; error?: string }>;
   updateOffer: (offer: Offer) => Promise<{ success: boolean; error?: string }>;
+  deleteOffer: (offerId: string) => Promise<{ success: boolean; error?: string }>;
   getProducerOffers: (producerId: string) => Offer[];
   getOfferById: (offerId: string) => Offer | undefined;
   getAvailableSlots: (producerId: string, date: Date, durationHours: number) => Date[];
@@ -367,7 +369,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               bookingDate: item.bookingDate || undefined
             }))
           })
-        } as any).catch(err => console.error('Failed to sync cart:', err));
+        } as any).catch(err => logApiFailure('Failed to sync cart:', err));
       }, 750);
       return () => clearTimeout(timer);
     }
@@ -622,7 +624,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
       }
     } catch (error) {
-      console.error('Could not fetch data from API:', error);
+      logApiFailure('Could not fetch data from API:', error);
     } finally {
       if (!initialCatalogLoadDoneRef.current) {
         initialCatalogLoadDoneRef.current = true;
@@ -647,7 +649,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       await apiFetch(API_ENDPOINTS.notifications.markRead, { method: 'PATCH', silent401: true } as any);
       setNotifications(prev => prev.map(n => n.userId === user.id ? { ...n, isRead: true } : n));
     } catch (e) {
-      console.error('Failed to mark notifications as read:', e);
+      logApiFailure('Failed to mark notifications as read:', e);
     }
   };
 
@@ -970,7 +972,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (user) addNotification(user.id, 'Profile updated', 'SUCCESS');
       return true;
     } catch (error) {
-      console.error('Failed to update producer profile', error);
+      logApiFailure('Failed to update producer profile', error);
       if (user) addNotification(user.id, 'Failed to save changes.', 'ERROR');
       return false;
     }
@@ -1001,7 +1003,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setProducers(prev => prev.map(p => p.id === producerId ? { ...p, availability: schedule, exceptions } : p));
       if (user) addNotification(user.id, 'Availability updated', 'SUCCESS');
     } catch (error) {
-      console.error('Failed to update availability', error);
+      logApiFailure('Failed to update availability', error);
     }
   };
 
@@ -1013,7 +1015,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       });
       setProducers(prev => prev.map(p => p.id === id ? { ...p, status } : p));
     } catch (error) {
-      console.error('Failed to validate producer', error);
+      logApiFailure('Failed to validate producer', error);
     }
   };
 
@@ -1067,7 +1069,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (user) addNotification(user.id, 'Profile updated', 'SUCCESS');
       return true;
     } catch (error) {
-      console.error('Failed to update client profile', error);
+      logApiFailure('Failed to update client profile', error);
       if (user) addNotification(user.id, 'Failed to save changes.', 'ERROR');
       return false;
     }
@@ -1089,7 +1091,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return { success: true };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to create offer.';
-      console.error('Failed to create offer:', err);
+      logApiFailure('Failed to create offer:', err);
       addNotification(user.id, message, 'ERROR');
       return { success: false, error: message };
     }
@@ -1106,7 +1108,21 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return { success: true };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to update offer.';
-      console.error('Failed to update offer', error);
+      logApiFailure('Failed to update offer', error);
+      if (user) addNotification(user.id, message, 'ERROR');
+      return { success: false, error: message };
+    }
+  };
+
+  const deleteOffer = async (offerId: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await apiFetch(API_ENDPOINTS.offers.remove(offerId), { method: 'DELETE' });
+      setOffers(prev => prev.filter(o => o.id !== offerId));
+      if (user) addNotification(user.id, 'Offer deleted successfully.', 'SUCCESS');
+      return { success: true };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to delete offer.';
+      logApiFailure('Failed to delete offer', error);
       if (user) addNotification(user.id, message, 'ERROR');
       return { success: false, error: message };
     }
@@ -1178,7 +1194,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return true;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to place order. Please try again.';
-      console.error('Failed to place order:', error);
+      logApiFailure('Failed to place order:', error);
       if (user) addNotification(user.id, message, 'ERROR');
       return false;
     }
@@ -1196,7 +1212,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CONFIRMED_AWAITING_PAYMENT } : o));
       addNotification(targetOrder.clientId, `Order #${targetOrder.id.substring(targetOrder.id.length - 6).toUpperCase()} confirmed.`, 'SUCCESS');
     } catch (error) {
-      console.error('Failed to confirm order', error);
+      logApiFailure('Failed to confirm order', error);
     }
   };
 
@@ -1211,7 +1227,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CANCELLED } : o));
       addNotification(order.clientId, `Order #${orderId.substring(orderId.length - 6).toUpperCase()} cancelled by producer.`, 'WARNING');
     } catch (error) {
-      console.error('Failed to reject order', error);
+      logApiFailure('Failed to reject order', error);
     }
   };
 
@@ -1226,7 +1242,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CANCELLED } : o));
       addNotification(order.producerId, `Order #${orderId.substring(orderId.length - 6).toUpperCase()} cancelled by client.`, 'WARNING');
     } catch (error) {
-      console.error('Failed to cancel order', error);
+      logApiFailure('Failed to cancel order', error);
     }
   };
 
@@ -1242,7 +1258,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       addNotification(user.id, 'Payment successful!', 'SUCCESS');
       return { success: true };
     } catch (error) {
-      console.error('Payment failed', error);
+      logApiFailure('Payment failed', error);
       return { success: false };
     }
   };
@@ -1254,7 +1270,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const order = orders.find(o => o.id === id);
       if (order) addNotification(order.clientId, 'Order in transit', 'INFO');
     } catch (error) {
-      console.error('Failed to start delivery', error);
+      logApiFailure('Failed to start delivery', error);
     }
   };
 
@@ -1268,7 +1284,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         addNotification(order.producerId, 'Order delivered. Funds released to wallet.', 'SUCCESS');
       }
     } catch (error) {
-      console.error('Failed to confirm receipt', error);
+      logApiFailure('Failed to confirm receipt', error);
     }
   };
 
@@ -1285,7 +1301,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const order = orders.find(o => o.id === orderId);
       if (order) addNotification(order.producerId, 'Dispute opened', 'WARNING');
     } catch (error) {
-      console.error('Failed to report problem', error);
+      logApiFailure('Failed to report problem', error);
       addNotification(user!.id, 'Failed to report problem. Please try again.', 'ERROR');
     }
   };
@@ -1327,7 +1343,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }),
       );
     } catch (error) {
-      console.error('Failed to submit review', error);
+      logApiFailure('Failed to submit review', error);
     }
   };
 
@@ -1361,7 +1377,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (result.wallet) setWallets(prev => ({ ...prev, [user.id]: result.wallet }));
       return { success: result.success, message: result.message };
     } catch (error: any) {
-      console.error('Failed to fund wallet', error);
+      logApiFailure('Failed to fund wallet', error);
       return { success: false, message: error.message || 'Funding failed' };
     }
   };
@@ -1380,7 +1396,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setWithdrawalRequests(Array.isArray(list) ? list.map(mapWithdrawalFromApi) : []);
       return { success: result.success, message: result.message };
     } catch (error: any) {
-      console.error('Failed to request withdrawal', error);
+      logApiFailure('Failed to request withdrawal', error);
       return { success: false, message: error.message || 'Withdrawal request failed' };
     }
   };
@@ -1400,7 +1416,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       });
       setPortfolios(prev => [...prev, saved]);
     } catch (error) {
-      console.error('Failed to add portfolio', error);
+      logApiFailure('Failed to add portfolio', error);
     }
   };
 
@@ -1412,7 +1428,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       });
       setPortfolios(prev => prev.map(p => p.id === saved.id ? saved : p));
     } catch (error) {
-      console.error('Failed to update portfolio', error);
+      logApiFailure('Failed to update portfolio', error);
     }
   };
 
@@ -1421,7 +1437,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       await apiFetch(API_ENDPOINTS.portfolios.remove(id), { method: 'DELETE' });
       setPortfolios(prev => prev.filter(p => p.id !== id));
     } catch (error) {
-      console.error('Failed to delete portfolio', error);
+      logApiFailure('Failed to delete portfolio', error);
     }
   };
 
@@ -1561,7 +1577,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         } catch (error) {
           setClients(prev => prev.map(c => c.id === client.id ? { ...c, favorites: previousFavorites } : c));
           addNotification(user.id, 'Failed to update favorites. Please try again.', 'ERROR');
-          console.error('Failed to persist client favorites:', error);
+          logApiFailure('Failed to persist client favorites:', error);
         }
       })();
       return;
@@ -1588,7 +1604,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         } catch (error) {
           setProducers(prev => prev.map(p => p.id === producer.id ? { ...p, favorites: previousFavorites } : p));
           addNotification(user.id, 'Failed to update favorites. Please try again.', 'ERROR');
-          console.error('Failed to persist producer favorites:', error);
+          logApiFailure('Failed to persist producer favorites:', error);
         }
       })();
     }
@@ -1679,7 +1695,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           setSupportMessages((prev) => prev.filter((m) => m.id !== tempId));
         }
       } catch (e) {
-        console.error('Failed to send support message', e);
+        logApiFailure('Failed to send support message', e);
         setSupportMessages((prev) => prev.filter((m) => m.id !== tempId));
         if (user) addNotification(user.id, 'Could not send message. Please try again.', 'ERROR');
       }
@@ -1739,7 +1755,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           setSupportMessages((prev) => mergeIncomingSupportMessages(prev, backendMessages));
         }
       } catch (err) {
-        console.error('Error polling support messages:', err);
+        logApiFailure('Error polling support messages:', err);
       }
     }, 5000); // Poll every 5 seconds while chat is open
 
@@ -1757,7 +1773,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const backendMessages = data.map((msg) => mapDtoToSupportMessage(msg));
         setSupportMessages((prev) => mergeIncomingSupportMessages(prev, backendMessages));
       } catch (err) {
-        console.error('Error polling support messages (auth):', err);
+        logApiFailure('Error polling support messages (auth):', err);
       }
     }, 5000);
 
@@ -1772,7 +1788,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const res = await apiFetch<any[]>(API_ENDPOINTS.chat.sessions, { silent401: true } as any);
       if (Array.isArray(res)) setChats(normalizeChatSessionsFromApi(res));
     } catch (e) {
-      console.error('Failed to fetch chats:', e);
+      logApiFailure('Failed to fetch chats:', e);
     }
   };
 
@@ -1814,7 +1830,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       );
       void fetchChats();
     } catch (e) {
-      console.error('Failed to fetch messages:', e);
+      logApiFailure('Failed to fetch messages:', e);
     }
   };
 
@@ -1847,7 +1863,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setChats(prev => [...prev, normalized]);
       return normalized.id;
     } catch (e) {
-      console.error('Failed to create chat:', e);
+      logApiFailure('Failed to create chat:', e);
       const id = `chat-${Date.now()}`;
       setChats(prev => [...prev, { id, participantIds: [user.id, pid], offerId: oid, lastMessage: 'Started', lastMessageAt: new Date().toISOString(), unreadCounts: {} }]);
       return id;
@@ -1914,7 +1930,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       fetchMessages(chatId);
       return true;
     } catch (err: any) {
-      console.error('Failed to respond to proposal:', err);
+      logApiFailure('Failed to respond to proposal:', err);
       setMessages(prev => prev.map(m =>
         m.id === msgId && m.proposal
           ? { ...m, proposal: { ...m.proposal, status: ProposalStatus.PENDING } }
@@ -2006,7 +2022,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       void fetchChats();
       return true;
     } catch (e: any) {
-      console.error('Failed to send message:', e);
+      logApiFailure('Failed to send message:', e);
       
       // Parse and provide user-friendly error messages
       let errorMessage = e?.message || 'Failed to send message';
@@ -2037,7 +2053,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     fetchMessages,
     startNegotiation,
     sendMessage, respondToProposal,
-    login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, getProducerOffers, getOfferById,
+    login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, deleteOffer, getProducerOffers, getOfferById,
     addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, confirmReceipt, reportProblem, addDisputeEvidence, revealContactInfo,
     getWallet, fundWallet, requestWithdrawal, markNotificationsAsRead, getAvailableSlots, submitReview, getAverageRating,
     getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,

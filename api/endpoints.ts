@@ -69,6 +69,7 @@ export const API_ENDPOINTS = {
     list: '/api/offers',
     create: '/api/offers',
     update: (offerId: string) => `/api/offers/${offerId}`,
+    remove: (offerId: string) => `/api/offers/${offerId}`,
   },
   pickupPoints: {
     list: '/api/pickup-points',
