@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useStore } from '../../services/storeContext';
+import { useStore, clientProfileMatchesSession } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order } from '../../types';
 import { Link, useNavigate } from 'react-router-dom';
@@ -81,10 +81,10 @@ export const ClientProfile: React.FC = () => {
    const [avatarUploading, setAvatarUploading] = useState(false);
    const [profileHydrating, setProfileHydrating] = useState(false);
 
-   const currentClient = useMemo(
-      () => (user?.id ? clients.find(c => c.userId === user.id || c.id === user.id) : undefined),
-      [clients, user?.id],
-   );
+   const currentClient = useMemo(() => {
+      if (!user?.id) return undefined;
+      return clients.find((c) => clientProfileMatchesSession(c, user));
+   }, [clients, user]);
    const wallet = user ? getWallet(user.id) : null;
 
    const referralCodeDisplay = useMemo(

@@ -58,7 +58,10 @@ function mapReviewFromApi(r: any): Review {
 }
 
 /** `UserSession.id` is the auth user row; `ClientProfile.id` is the profile row. */
-function clientProfileMatchesSession(c: ClientProfile, session: UserSession): boolean {
+export function clientProfileMatchesSession(
+  c: ClientProfile,
+  session: UserSession,
+): boolean {
   if (session.clientId && c.id === session.clientId) return true;
   if (c.userId && c.userId === session.id) return true;
   return false;
@@ -470,8 +473,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const activeUser = currentUser ?? user;
     const isClientSession = activeUser?.role === UserRole.CLIENT;
     const isProducerSession = activeUser?.role === UserRole.PRODUCER;
-    const hashPath = typeof window !== 'undefined' ? window.location.hash : '';
-    const isClientUiRoute = hashPath.includes('/client/') || hashPath.includes('/register/client');
+    // BrowserRouter uses pathname; hash is often empty (only used if present).
+    const path =
+      typeof window !== 'undefined'
+        ? `${window.location.pathname}${window.location.hash}`
+        : '';
+    const isClientUiRoute =
+      path.includes('/client/') || path.includes('/register/client');
     /** Skip `/api/clients` list when a producer is not on client UI (reduces load; rev behavior). */
     const shouldFetchBuyerProfile = isClientSession || (isProducerSession && isClientUiRoute);
     /** Reserved for GET producer portfolios when backend exposes listing (rev flag). */
@@ -649,7 +657,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     user: UserSession;
   };
 
-  const establishSession = async (data: AuthSessionPayload) => {
+  const establishSession = async (
+    data: AuthSessionPayload,
+    options?: { skipCatalogFetch?: boolean },
+  ) => {
     if (!isWebAppAllowedRole(data.user?.role)) {
       clearToken();
       localStorage.removeItem('currentUser');
@@ -675,9 +686,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       } as any).catch(() => {});
     }
 
-    // Do not block route transitions (post-login/onboarding) on full catalog/profile fetch.
-    // This prevents the UI from feeling like a full app reload.
-    void fetchData(data.user);
+    // `skipCatalogFetch` avoids a race: an in-flight fetch from here can finish *after* the
+    // profile is created and overwrite `clients` / `producers` with stale data. Registration
+    // flows call `fetchData(mergedUser)` once at the end instead.
+    if (!options?.skipCatalogFetch) {
+      void fetchData(data.user);
+    }
   };
 
   // ─── AUTHENTICATION ──────────────────────────────────────────────────────────
@@ -798,7 +812,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(producerRegisterBody),
       });
 
-      await establishSession(session);
+      await establishSession(session, { skipCatalogFetch: true });
 
       const producerProfile = await apiFetch<{ id: string }>(API_ENDPOINTS.profiles.producer, {
         method: 'POST',
@@ -821,17 +835,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }),
       });
 
+      const mergedUser: UserSession = producerProfile?.id
+        ? { ...session.user, producerId: producerProfile.id }
+        : session.user;
       if (producerProfile?.id) {
-        setUser(prev => {
-          if (!prev) return prev;
-          const next = { ...prev, producerId: producerProfile.id };
-          useSessionStore.getState().setUser(next);
-          localStorage.setItem('currentUser', JSON.stringify(next));
-          return next;
-        });
+        setUser(mergedUser);
+        useSessionStore.getState().setUser(mergedUser);
+        localStorage.setItem('currentUser', JSON.stringify(mergedUser));
       }
 
-      await fetchData();
+      await fetchData(mergedUser);
       return { success: true, message: 'Registration successful!' };
     } catch (err: any) {
       return { success: false, message: err.message || 'Registration failed.' };
@@ -860,7 +873,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(clientRegisterBody),
       });
 
-      await establishSession(session);
+      await establishSession(session, { skipCatalogFetch: true });
 
       const clientProfile = await apiFetch<{ id: string }>(API_ENDPOINTS.profiles.client, {
         method: 'POST',
@@ -885,17 +898,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
       }
 
+      const mergedUser: UserSession = clientProfile?.id
+        ? { ...session.user, clientId: clientProfile.id }
+        : session.user;
       if (clientProfile?.id) {
-        setUser(prev => {
-          if (!prev) return prev;
-          const next = { ...prev, clientId: clientProfile.id };
-          useSessionStore.getState().setUser(next);
-          localStorage.setItem('currentUser', JSON.stringify(next));
-          return next;
-        });
+        setUser(mergedUser);
+        useSessionStore.getState().setUser(mergedUser);
+        localStorage.setItem('currentUser', JSON.stringify(mergedUser));
       }
 
-      await fetchData();
+      await fetchData(mergedUser);
       return { success: true, message: 'Registration successful!' };
     } catch (err: any) {
       return { success: false, message: err.message || 'Registration failed.' };
