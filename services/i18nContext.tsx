@@ -406,6 +406,7 @@ const translations: Record<string, Record<Language, string>> = {
   'chat.status.ACCEPTED': { en: 'Accepted', fr: 'Accepté' },
   'chat.status.REJECTED': { en: 'Rejected', fr: 'Rejeté' },
   'chat.status.COUNTERED': { en: 'Countered', fr: 'Contré' },
+  'chat.status.SUPERSEDED': { en: 'No longer active', fr: 'Plus actif' },
   'chat.typeMessage': { en: 'Type a message...', fr: 'Tapez un message...' },
   'chat.composeHint': { en: 'Enter to send · Shift+Enter for new line', fr: 'Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne' },
   'chat.noChats': { en: 'No active conversations.', fr: 'Aucune conversation active.' },

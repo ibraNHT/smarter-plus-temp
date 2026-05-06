@@ -51,6 +51,54 @@ export const ChatPage: React.FC = () => {
    // Get active chat early to determine message length
    const activeChat = chatId ? chats.find(c => c.id === chatId) : null;
    const activeMessages = activeChat ? messages.filter(m => m.chatId === chatId).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) : [];
+   const activeOfferId = activeChat?.offerId || null;
+
+   const getUserSide = useCallback((senderId: string): 'CLIENT' | 'PRODUCER' | 'UNKNOWN' => {
+      const isClient = clients.some((c) => c.id === senderId || c.userId === senderId);
+      if (isClient) return 'CLIENT';
+      const isProducer = producers.some((p) => p.id === senderId || p.userId === senderId);
+      if (isProducer) return 'PRODUCER';
+      return 'UNKNOWN';
+   }, [clients, producers]);
+
+   const proposalCountersThisMonth = (() => {
+      if (!activeOfferId) return { client: 0, producer: 0 };
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+      const monthlyOfferMessages = activeMessages
+         .filter((m) => {
+            const created = new Date(m.createdAt);
+            const isInMonth = created >= monthStart && created < monthEnd;
+            return isInMonth && m.proposal?.offerId === activeOfferId;
+         })
+         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+      // Same rule as backend: once any proposal is accepted/rejected, a new round starts.
+      const latestResolvedTimestamp = monthlyOfferMessages.reduce<number | null>((latest, m) => {
+         const status = m.proposal?.status;
+         if (status !== ProposalStatus.ACCEPTED && status !== ProposalStatus.REJECTED) return latest;
+         const ts = new Date(m.createdAt).getTime();
+         return latest == null ? ts : Math.max(latest, ts);
+      }, null);
+
+      let client = 0;
+      let producer = 0;
+      for (const m of monthlyOfferMessages) {
+         const ts = new Date(m.createdAt).getTime();
+         const isInCurrentRound = latestResolvedTimestamp == null || ts > latestResolvedTimestamp;
+         if (!isInCurrentRound) continue;
+         const side = getUserSide(m.senderId);
+         if (side === 'CLIENT') client += 1;
+         if (side === 'PRODUCER') producer += 1;
+      }
+      return { client, producer };
+   })();
+
+   const mySide = user?.role === 'PRODUCER' ? 'PRODUCER' : 'CLIENT';
+   const mySideProposalCount = mySide === 'PRODUCER' ? proposalCountersThisMonth.producer : proposalCountersThisMonth.client;
+   const canSendMoreCounters = mySideProposalCount < 2;
 
    const scrollToBottom = () => {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -135,6 +183,10 @@ export const ChatPage: React.FC = () => {
 
    const handleSendProposal = async () => {
       if (!activeChat || !activeChat.offerId) return;
+      if (!canSendMoreCounters) {
+         setProposalModalError('Monthly counter-offer limit reached for your side (2) on this product in this chat.');
+         return;
+      }
 
       setProposalModalError('');
       setProposalPriceError('');
@@ -199,6 +251,10 @@ export const ChatPage: React.FC = () => {
 
    const handleSendCounter = async () => {
       if (!counterTargetMsgId || !chatId || counterSending) return;
+      if (!canSendMoreCounters) {
+         setCounterPriceError('Monthly counter-offer limit reached (2).');
+         return;
+      }
 
       setCounterPriceError('');
       setCounterQtyError('');
@@ -347,6 +403,7 @@ export const ChatPage: React.FC = () => {
                                           </span>
                                           <span className={`text-xs font-bold px-2 py-0.5 rounded ${msg.proposal.status === ProposalStatus.PENDING ? 'bg-yellow-500 text-white' :
                                              msg.proposal.status === ProposalStatus.ACCEPTED ? 'bg-green-500 text-white' :
+                                             msg.proposal.status === ProposalStatus.SUPERSEDED ? 'bg-gray-400 text-white' :
                                                 'bg-red-500 text-white'
                                              }`}>
                                              {t(`chat.status.${msg.proposal.status}`)}
@@ -384,7 +441,7 @@ export const ChatPage: React.FC = () => {
                                              </button>
                                              <button
                                                 type="button"
-                                                disabled={!!proposalActionBusy || counterSending}
+                                                disabled={!!proposalActionBusy || counterSending || !canSendMoreCounters}
                                                 onClick={() => handleOpenCounter(msg.id, msg.proposal!.pricePerUnit, msg.proposal!.quantity)}
                                                 className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-2 rounded font-bold transition-colors min-w-[60px] disabled:opacity-60"
                                              >
@@ -431,9 +488,9 @@ export const ChatPage: React.FC = () => {
                               setProposalQtyError('');
                               setShowProposalModal(true);
                            }}
-                           disabled={!activeChat?.offerId || !(getOfferById(activeChat?.offerId || '')?.isNegotiable ?? false)}
+                           disabled={!activeChat?.offerId || !(getOfferById(activeChat?.offerId || '')?.isNegotiable ?? false) || !canSendMoreCounters}
                            className="mb-1 p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                           title={!activeChat?.offerId ? 'Select an offer first' : (getOfferById(activeChat?.offerId || '')?.isNegotiable ? 'Make Proposal' : 'This offer is not open for negotiation')}
+                           title={!activeChat?.offerId ? 'Select an offer first' : (!canSendMoreCounters ? 'Monthly counter-offer limit reached (2)' : (getOfferById(activeChat?.offerId || '')?.isNegotiable ? 'Make Proposal' : 'This offer is not open for negotiation'))}
                         >
                            <Gavel className="h-6 w-6 text-primary-600" />
                         </button>

@@ -355,7 +355,9 @@ export enum ProposalStatus {
   PENDING = 'PENDING',
   ACCEPTED = 'ACCEPTED',
   REJECTED = 'REJECTED',
-  COUNTERED = 'COUNTERED'
+  COUNTERED = 'COUNTERED',
+  /** Settled by another proposal for the same product in this chat; no longer actionable. */
+  SUPERSEDED = 'SUPERSEDED',
 }
 
 export interface Proposal {

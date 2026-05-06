@@ -1953,12 +1953,28 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       );
     }
 
-    // Optimistic UI update immediately
-    setMessages(prev => prev.map(m =>
-      m.id === msgId && m.proposal
-        ? { ...m, proposal: { ...m.proposal, status: action === 'ACCEPT' ? ProposalStatus.ACCEPTED : ProposalStatus.REJECTED } }
-        : m
-    ));
+    // Optimistic UI: resolve this proposal and void other pending ones for the same offer in this chat
+    setMessages(prev => {
+      const target = prev.find((m) => m.id === msgId);
+      const offerId = target?.proposal?.offerId;
+      const resolvedStatus =
+        action === 'ACCEPT' ? ProposalStatus.ACCEPTED : ProposalStatus.REJECTED;
+      return prev.map((m) => {
+        if (m.id === msgId && m.proposal) {
+          return { ...m, proposal: { ...m.proposal, status: resolvedStatus } };
+        }
+        if (
+          offerId &&
+          m.chatId === chatId &&
+          m.proposal?.offerId === offerId &&
+          m.proposal.status === ProposalStatus.PENDING &&
+          m.id !== msgId
+        ) {
+          return { ...m, proposal: { ...m.proposal, status: ProposalStatus.SUPERSEDED } };
+        }
+        return m;
+      });
+    });
 
     try {
       const res = await apiFetch<{ message: any; order?: any }>(
@@ -1997,11 +2013,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return true;
     } catch (err: any) {
       logApiFailure('Failed to respond to proposal:', err);
-      setMessages(prev => prev.map(m =>
-        m.id === msgId && m.proposal
-          ? { ...m, proposal: { ...m.proposal, status: ProposalStatus.PENDING } }
-          : m
-      ));
+      void fetchMessages(chatId);
 
       let errorMessage = err?.message || 'Failed to respond to proposal';
       if (errorMessage.toLowerCase().includes('profile')) {

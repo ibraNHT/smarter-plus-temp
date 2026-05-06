@@ -64,7 +64,7 @@ export const API_ENDPOINTS = {
     sessions: "/api/chat/sessions",
     sessionMessages: (chatId: string) =>
       `/api/chat/sessions/${chatId}/messages`,
-    proposalAction: (messageId: string) => `/api/chat/proposals/${messageId}`,
+    proposalAction: (messageId: string) => `/api/chat/messages/${messageId}/proposal`,
   },
   notifications: {
     list: "/api/notifications",
