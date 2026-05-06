@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, ProducerProfile as ProducerProfileType, Location, Portfolio } from '../../types';
@@ -112,6 +112,7 @@ export const ProducerProfile: React.FC = () => {
   const [pendingProfileUpdate, setPendingProfileUpdate] = useState<ProducerProfileType | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [profileHydrating, setProfileHydrating] = useState(false);
+  const lastSeededLocationFormForProfileId = useRef<string | null>(null);
 
   // ... [Existing Logic for form init, favorites, handlers] ...
   const currentProducer = producers.find(p => p.id === user?.producerId || p.userId === user?.id);
@@ -201,13 +202,24 @@ export const ProducerProfile: React.FC = () => {
     };
   }, [user]);
   useEffect(() => {
-    if (!formData || formData.locations.length === 0) return;
-    if (String(newLoc.address ?? '').trim()) return;
+    if (!formData?.id) {
+      lastSeededLocationFormForProfileId.current = null;
+      return;
+    }
+    if (formData.locations.length === 0) return;
+    if (lastSeededLocationFormForProfileId.current === formData.id) return;
     const first = formData.locations[0];
-    setNewLoc({ ...first });
+    setNewLoc({
+      lat: first.lat,
+      lng: first.lng,
+      region: first.region,
+      city: first.city,
+      address: first.address,
+    });
     setLocationSearch(first.address ?? '');
     setEditingLocationIndex(0);
-  }, [formData, newLoc.address]);
+    lastSeededLocationFormForProfileId.current = formData.id;
+  }, [formData]);
   const favoriteOffers = currentProducer?.favorites.map(id => offers.find(o => o.id === id)).filter(Boolean) as any[];
   const unavailableFavoriteIds = currentProducer?.favorites.filter(id => !offers.find(o => o.id === id));
   const performLogout = async () => {
@@ -218,6 +230,15 @@ export const ProducerProfile: React.FC = () => {
   const handleAddPayment = (e: React.FormEvent) => { e.preventDefault(); void paymentFormik.submitForm(); };
   const handleInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => { if (!formData) return; const { name, value } = e.target; setFormData(prev => prev ? ({ ...prev, [name]: value }) : null); };
   const toggleCategory = (cat: string) => { if (!formData) return; if (formData.productionTypes.includes(cat)) { setFormData({ ...formData, productionTypes: formData.productionTypes.filter(c => c !== cat) }); } else { setFormData({ ...formData, productionTypes: [...formData.productionTypes, cat] }); } };
+  const startNewLocationEntry = () => {
+    setEditingLocationIndex(null);
+    setNewLoc({ region: '', city: '', address: '', lat: 0, lng: 0 });
+    setLocationSearch('');
+    setShowLocationSuggestions(false);
+  };
+  const addCurrentFieldsAsNewAddress = () => {
+    setEditingLocationIndex(null);
+  };
   const addLocation = () => {
     if (!formData || !newLoc.address) return;
     const address = String(newLoc.address).trim();
@@ -667,14 +688,32 @@ export const ProducerProfile: React.FC = () => {
                           <p className="text-sm font-medium text-gray-900">{loc.address}</p>
                           <p className="text-xs text-gray-500">{loc.city}, {loc.region}</p>
                         </div>
-                        <button type="button" onClick={() => removeLocation(idx)} className="text-gray-400 hover:text-red-500">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeLocation(idx);
+                          }}
+                          className="text-gray-400 hover:text-red-500"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     ))}
                   </div>
                   <div className="bg-blue-50 p-3 rounded-md border border-blue-100 space-y-3">
-                    <p className="text-xs font-medium text-blue-700">Add new location</p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-blue-700">Add or update an address</p>
+                      {formData.locations.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={startNewLocationEntry}
+                          className="text-xs font-semibold text-primary-700 hover:text-primary-900 underline"
+                        >
+                          {editingLocationIndex != null ? 'New address (keep existing)' : 'Add another address'}
+                        </button>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
@@ -772,7 +811,7 @@ export const ProducerProfile: React.FC = () => {
                         />
                       </div>
                     </div>
-                    <div className="flex gap-2 items-center">
+                    <div className="flex flex-wrap gap-2 items-center">
                       <button
                         type="button"
                         onClick={addLocation}
@@ -782,6 +821,15 @@ export const ProducerProfile: React.FC = () => {
                         <Plus className="h-4 w-4" />
                         {editingLocationIndex != null ? 'Update location' : 'Add to list'}
                       </button>
+                      {editingLocationIndex != null && (
+                        <button
+                          type="button"
+                          onClick={addCurrentFieldsAsNewAddress}
+                          className="text-sm text-gray-600 hover:text-gray-900 underline"
+                        >
+                          Add as new address (keep fields below)
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

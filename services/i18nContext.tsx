@@ -427,6 +427,7 @@ const translations: Record<string, Record<Language, string>> = {
   'review.rated': { en: 'Rated', fr: 'Noté' },
   'review.received': { en: 'Received Reviews', fr: 'Avis Reçus' },
   'review.ratedBy': { en: 'Rated by', fr: 'Noté par' },
+  'review.reviewerFallback': { en: 'Unknown reviewer', fr: 'Auteur inconnu' },
   'review.noReviews': { en: 'No reviews received yet.', fr: 'Aucun avis reçu pour le moment.' },
 
   // Compare

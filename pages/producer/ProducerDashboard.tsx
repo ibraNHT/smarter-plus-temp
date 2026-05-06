@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
-import { UserRole, ProducerStatus, OrderStatus, Order, OfferType } from '../../types';
+import { UserRole, ProducerStatus, OrderStatus, Order, OfferType, Review } from '../../types';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2 } from 'lucide-react';
 import { SEO } from '../../components/SEO';
@@ -117,6 +117,26 @@ export const ProducerDashboard: React.FC = () => {
       ) as any;
    };
 
+   /** Prefer reviewer snapshot from GET /reviews/user/:id; else catalog by auth user id. */
+   const getReviewerDisplayForReview = (review: Review) => {
+      const row = getClientDetails(review.reviewerId) as any;
+      const catalogName = row
+         ? (row.name || row.user?.displayName || `${(row.firstName ?? '').trim()} ${(row.lastName ?? '').trim()}`.trim()).trim()
+         : '';
+      const catalogAvatar = row
+         ? (row.profileImageUrl || row.user?.profileImageUrl || '').trim() || undefined
+         : undefined;
+      const apiName = (review.reviewerDisplayName ?? '').trim();
+      const apiAvatar =
+         typeof review.reviewerProfileImageUrl === 'string' && review.reviewerProfileImageUrl.trim()
+            ? review.reviewerProfileImageUrl.trim()
+            : undefined;
+      return {
+         name: apiName || catalogName || t('review.reviewerFallback'),
+         avatarUrl: apiAvatar ?? catalogAvatar,
+      };
+   };
+
    const getClientDisplayName = (order: Order) => {
       if (order.clientDisplayName) return order.clientDisplayName;
       const c = getClientDetails(order.clientId);
@@ -129,6 +149,18 @@ export const ProducerDashboard: React.FC = () => {
       if (order.deliveryMethod === 'PICKUP' && order.pickupPointId) {
          const point = pickupPoints.find((p) => p.id === order.pickupPointId);
          if (point) return `${point.address}, ${point.city}`;
+      }
+
+      const snap = order.shippingAddress;
+      if (
+         order.deliveryMethod === 'HOME' &&
+         snap &&
+         typeof snap === 'object' &&
+         String((snap as { address?: string }).address ?? '').trim()
+      ) {
+         const s = snap as { address: string; city?: string; region?: string };
+         const line = [s.address, s.city, s.region].filter(Boolean).join(', ');
+         if (line) return line;
       }
 
       const c = getClientDetails(order.clientId) as any;
@@ -208,9 +240,29 @@ export const ProducerDashboard: React.FC = () => {
       }
    };
 
-   const handleShareLocation = (address: string) => {
-      const encoded = encodeURIComponent(address);
-      window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, '_blank');
+   /** Open Maps at the delivery point for this order (pin at lat/lng when available). */
+   const openOrderDeliveryInMaps = (order: Order) => {
+      if (order.deliveryMethod === 'HOME') {
+         const snap = order.shippingAddress;
+         if (snap && typeof snap === 'object') {
+            const lat = Number((snap as { lat?: number }).lat);
+            const lng = Number((snap as { lng?: number }).lng);
+            if (
+               Number.isFinite(lat) &&
+               Number.isFinite(lng) &&
+               (Math.abs(lat) > 1e-6 || Math.abs(lng) > 1e-6)
+            ) {
+               window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
+               return;
+            }
+         }
+      }
+      const line = getClientAddress(order);
+      if (!line || line === 'No Address') return;
+      window.open(
+         `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(line)}`,
+         '_blank',
+      );
    };
 
    const openEvidenceModal = (orderId: string, e: React.MouseEvent) => {
@@ -349,7 +401,7 @@ export const ProducerDashboard: React.FC = () => {
                               )}
 
                               <button
-                                 onClick={(e) => { e.stopPropagation(); handleShareLocation(currentProducer.locations[0].address); }}
+                                 onClick={(e) => { e.stopPropagation(); openOrderDeliveryInMaps(order); }}
                                  className="inline-flex items-center px-3 py-2 border border-purple-200 text-sm font-medium rounded-md text-purple-700 bg-purple-50 hover:bg-purple-100"
                               >
                                  <Navigation className="h-4 w-4 mr-2" /> {t('order.shareLocation')}
@@ -506,7 +558,7 @@ export const ProducerDashboard: React.FC = () => {
                                        <span className="text-xs text-green-600 flex items-center"><CheckCircle className="w-3 h-3 mr-1" /> Contact Shared</span>
                                     )}
                                     <button
-                                       onClick={(e) => { e.stopPropagation(); handleShareLocation(currentProducer.locations[0].address); }}
+                                       onClick={(e) => { e.stopPropagation(); openOrderDeliveryInMaps(order); }}
                                        className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded border border-purple-200 hover:bg-purple-100"
                                     >
                                        <Navigation className="h-3 w-3 inline mr-1" /> Loc
@@ -622,14 +674,21 @@ export const ProducerDashboard: React.FC = () => {
                <div className="px-4 py-8 text-center text-gray-500 italic">{t('review.noReviews')}</div>
             ) : (
                <ul className="divide-y divide-gray-200">
-                  {myReviews.map(review => (
+                  {myReviews.map(review => {
+                     const author = getReviewerDisplayForReview(review);
+                     const initial = (author.name || '?').charAt(0).toUpperCase();
+                     return (
                      <li key={review.id} className="px-4 py-4 hover:bg-gray-50">
                         <div className="flex justify-between mb-1">
-                           <div className="flex items-center">
-                              <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 mr-2">
-                                 {getClientDetails(review.reviewerId)?.name.charAt(0) || 'U'}
-                              </div>
-                              <span className="text-sm font-bold text-gray-800">{getClientDetails(review.reviewerId)?.name || 'Client'}</span>
+                           <div className="flex items-center min-w-0">
+                              {author.avatarUrl ? (
+                                 <img src={author.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover mr-2 shrink-0" />
+                              ) : (
+                                 <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 mr-2 shrink-0">
+                                    {initial}
+                                 </div>
+                              )}
+                              <span className="text-sm font-bold text-gray-800 truncate">{author.name}</span>
                            </div>
                            <div className="flex items-center">
                               {[...Array(5)].map((_, i) => (
@@ -640,7 +699,8 @@ export const ProducerDashboard: React.FC = () => {
                         <p className="text-sm text-gray-600 italic ml-8">"{review.comment}"</p>
                         <p className="text-xs text-gray-400 text-right mt-1">{new Date(review.createdAt).toLocaleDateString()}</p>
                      </li>
-                  ))}
+                     );
+                  })}
                </ul>
             )}
          </div>
@@ -693,9 +753,16 @@ export const ProducerDashboard: React.FC = () => {
                               </Link>
                            </span>
                         </div>
-                        <div className="flex items-start">
-                           <MapPin className="h-4 w-4 text-gray-500 mr-2 mt-0.5" />
-                           <span className="text-sm text-gray-600">{t('dash.address')}: {getClientAddress(selectedOrder)}</span>
+                        <div className="flex items-start flex-wrap gap-2">
+                           <MapPin className="h-4 w-4 text-gray-500 mr-2 mt-0.5 shrink-0" />
+                           <span className="text-sm text-gray-600 flex-1 min-w-0">{t('dash.address')}: {getClientAddress(selectedOrder)}</span>
+                           <button
+                              type="button"
+                              onClick={() => openOrderDeliveryInMaps(selectedOrder)}
+                              className="inline-flex items-center text-xs font-medium text-purple-700 hover:text-purple-900 shrink-0"
+                           >
+                              <Navigation className="h-3 w-3 mr-1" /> {t('order.shareLocation')}
+                           </button>
                         </div>
 
                         {selectedOrder.contactRevealed && (

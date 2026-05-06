@@ -1,6 +1,6 @@
 
 import React, { useState, ReactNode, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerStatus, OfferType, CartItem, Order, OrderStatus, Wallet, Notification, WithdrawalRequest, WithdrawalStatus, PaymentMethod, ChatSession, ChatMessage, Proposal, ProposalStatus, WeeklySchedule, AvailabilityException, Review, SupportMessage, Portfolio, DisputeEvidence, Coupon, PickupPoint, MyReferralsData } from '../types';
+import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerStatus, OfferType, CartItem, Order, OrderStatus, Wallet, Notification, WithdrawalRequest, WithdrawalStatus, PaymentMethod, ChatSession, ChatMessage, Proposal, ProposalStatus, WeeklySchedule, AvailabilityException, Review, SupportMessage, Portfolio, DisputeEvidence, Coupon, PickupPoint, MyReferralsData, Location, PreferredHomeDeliverySnapshot } from '../types';
 import { generateSupportResponse } from './geminiService';
 import {
   getSupportMessages,
@@ -44,6 +44,8 @@ function mapWithdrawalFromApi(d: any): WithdrawalRequest {
 }
 
 function mapReviewFromApi(r: any): Review {
+  const pic = r.reviewerProfileImageUrl;
+  const picStr = typeof pic === 'string' && pic.trim() ? pic.trim() : undefined;
   return {
     id: String(r.id),
     orderId: String(r.orderId),
@@ -53,6 +55,38 @@ function mapReviewFromApi(r: any): Review {
     comment: typeof r.comment === 'string' ? r.comment : '',
     createdAt:
       typeof r.createdAt === 'string' ? r.createdAt : new Date(r.createdAt ?? 0).toISOString(),
+    reviewerDisplayName:
+      typeof r.reviewerDisplayName === 'string' ? r.reviewerDisplayName : undefined,
+    reviewerProfileImageUrl: picStr,
+  };
+}
+
+function normalizeLocationFromApi(raw: any): Location {
+  const latLng = raw?.latLng;
+  const lat = Number(raw?.lat ?? latLng?.lat ?? 0);
+  const lng = Number(raw?.lng ?? latLng?.lng ?? 0);
+  return {
+    id: raw?.id ? String(raw.id) : undefined,
+    region: String(raw?.region ?? ''),
+    city: String(raw?.city ?? ''),
+    address: String(raw?.address ?? ''),
+    lat: Number.isFinite(lat) ? lat : 0,
+    lng: Number.isFinite(lng) ? lng : 0,
+    lastUsedForOrderAt: raw?.lastUsedForOrderAt
+      ? new Date(raw.lastUsedForOrderAt).toISOString()
+      : undefined,
+  };
+}
+
+function normalizePreferredHomeFromApi(raw: unknown): PreferredHomeDeliverySnapshot | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  return {
+    address: String(o.address ?? ''),
+    city: String(o.city ?? ''),
+    region: String(o.region ?? ''),
+    lat: o.lat != null ? Number(o.lat) : undefined,
+    lng: o.lng != null ? Number(o.lng) : undefined,
   };
 }
 
@@ -198,7 +232,15 @@ interface StoreContextType {
   addToCart: (offer: Offer, quantity: number, bookingDate?: string) => { success: boolean; error?: 'PRODUCER_CONFLICT' | 'OWN_OFFER' };
   removeFromCart: (offerId: string) => void;
   clearCart: () => void;
-  placeOrder: (couponId?: string, discountAmount?: number, deliveryDate?: string, deliveryMethod?: 'HOME' | 'PICKUP', pickupPointId?: string) => Promise<boolean>;
+  placeOrder: (
+    couponId?: string,
+    discountAmount?: number,
+    deliveryDate?: string,
+    deliveryMethod?: 'HOME' | 'PICKUP',
+    pickupPointId?: string,
+    homeDeliveryLocationId?: string,
+    homeShippingSnapshot?: PreferredHomeDeliverySnapshot | null,
+  ) => Promise<boolean>;
   confirmOrder: (orderId: string) => Promise<void>;
   rejectOrder: (orderId: string) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
@@ -570,7 +612,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           ...p,
           name: displayName || 'Unknown',
           profileImageUrl: (p as any).user?.profileImageUrl ?? (p as any).profileImageUrl,
-          locations: p.locations || [],
+          locations: Array.isArray(p.locations) ? p.locations.map(normalizeLocationFromApi) : [],
+          preferredHomeDelivery: normalizePreferredHomeFromApi((p as any).preferredHomeDelivery),
           certifications: p.certifications || [],
           paymentMethods: p.paymentMethods || [],
           referrals: p.referrals || [],
@@ -586,7 +629,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           ...c,
           name: displayName || 'Unknown',
           profileImageUrl: (c as any).user?.profileImageUrl ?? (c as any).profileImageUrl,
-          locations: c.locations || [],
+          locations: Array.isArray(c.locations) ? c.locations.map(normalizeLocationFromApi) : [],
+          preferredHomeDelivery: normalizePreferredHomeFromApi(c.preferredHomeDelivery),
           favorites: c.favorites || [],
           referrals: c.referrals || [],
           searchHistory: c.searchHistory || []
@@ -960,7 +1004,26 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(updatedProducer),
         headers,
       });
-      setProducers(prev => prev.map(p => p.id === saved.id ? { ...saved, user: saved.user ?? (p as any).user } : p));
+      setProducers(prev =>
+        prev.map((p) => {
+          if (p.id !== saved.id) return p;
+          const displayName =
+            (saved as any).user?.displayName ??
+            `${String((saved as any).firstName ?? '').trim()} ${String((saved as any).lastName ?? '').trim()}`.trim();
+          return {
+            ...p,
+            ...saved,
+            name: displayName || p.name || 'Unknown',
+            locations: Array.isArray(saved.locations)
+              ? saved.locations.map(normalizeLocationFromApi)
+              : p.locations,
+            preferredHomeDelivery:
+              normalizePreferredHomeFromApi((saved as any).preferredHomeDelivery) ??
+              p.preferredHomeDelivery,
+            user: saved.user ?? (p as any).user,
+          };
+        }),
+      );
       if (saved?.user && user && user.id === saved.user.id) {
         const nextUser: UserSession = {
           ...user,
@@ -1087,7 +1150,26 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         method: 'PUT',
         body: JSON.stringify(payload),
       });
-      setClients(prev => prev.map(c => c.id === saved.id ? { ...saved, user: saved.user ?? (c as any).user } : c));
+      setClients((prev) =>
+        prev.map((c) => {
+          if (c.id !== saved.id) return c;
+          const displayName =
+            (saved as any).user?.displayName ??
+            `${String((saved as any).firstName ?? '').trim()} ${String((saved as any).lastName ?? '').trim()}`.trim();
+          return {
+            ...c,
+            ...saved,
+            name: displayName || c.name || 'Unknown',
+            locations: Array.isArray(saved.locations)
+              ? saved.locations.map(normalizeLocationFromApi)
+              : c.locations,
+            preferredHomeDelivery:
+              normalizePreferredHomeFromApi((saved as any).preferredHomeDelivery) ??
+              c.preferredHomeDelivery,
+            user: saved.user ?? (c as any).user,
+          };
+        }),
+      );
       if (saved?.user && user && user.id === saved.user.id) {
         const nextUser: UserSession = {
           ...user,
@@ -1210,7 +1292,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── ORDERS ──────────────────────────────────────────────────────────────────
 
-  const placeOrder = async (couponId?: string, _discountAmount: number = 0, deliveryDate?: string, deliveryMethod: 'HOME' | 'PICKUP' = 'HOME', pickupPointId?: string): Promise<boolean> => {
+  const placeOrder = async (couponId?: string, _discountAmount: number = 0, deliveryDate?: string, deliveryMethod: 'HOME' | 'PICKUP' = 'HOME', pickupPointId?: string, homeDeliveryLocationId?: string, homeShippingSnapshot?: PreferredHomeDeliverySnapshot | null): Promise<boolean> => {
     if (cart.length === 0 || (!user && !guestEmail)) return false;
 
     const payload = {
@@ -1223,6 +1305,20 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       deliveryMethod,
       pickupPointId: pickupPointId || undefined,
       couponId: couponId || undefined,
+      homeDeliveryLocationId:
+        deliveryMethod === 'HOME' && homeDeliveryLocationId ? homeDeliveryLocationId : undefined,
+      shippingAddress:
+        deliveryMethod === 'HOME' &&
+        homeShippingSnapshot &&
+        String(homeShippingSnapshot.address ?? '').trim()
+          ? {
+              address: String(homeShippingSnapshot.address).trim(),
+              city: String(homeShippingSnapshot.city ?? '').trim(),
+              region: String(homeShippingSnapshot.region ?? '').trim(),
+              lat: homeShippingSnapshot.lat,
+              lng: homeShippingSnapshot.lng,
+            }
+          : undefined,
     };
 
     try {
@@ -1381,7 +1477,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const submitReview = async (data: Omit<Review, 'id' | 'createdAt'>) => {
     try {
-      const saved = await apiFetch<Review>(API_ENDPOINTS.reviews.create, {
+      const savedRaw = await apiFetch<any>(API_ENDPOINTS.reviews.create, {
         method: 'POST',
         body: JSON.stringify({
           orderId: data.orderId,
@@ -1389,6 +1485,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           comment: data.comment ?? '',
         }),
       });
+      const saved = mapReviewFromApi(savedRaw);
       setReviews(prev => [...prev, saved]);
       setOrders(prev =>
         prev.map((o) => {

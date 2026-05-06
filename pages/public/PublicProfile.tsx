@@ -18,6 +18,8 @@ import { PublicProfileSkeleton } from "../../components/skeletons/PublicProfileS
 import { offerImageHero, offerImageInBox } from "../../utils/offerImageDisplay";
 
 function mapReviewRow(r: any): Review {
+  const pic = r.reviewerProfileImageUrl;
+  const picStr = typeof pic === "string" && pic.trim() ? pic.trim() : undefined;
   return {
     id: String(r.id),
     orderId: String(r.orderId),
@@ -29,6 +31,9 @@ function mapReviewRow(r: any): Review {
       typeof r.createdAt === "string"
         ? r.createdAt
         : new Date(r.createdAt ?? 0).toISOString(),
+    reviewerDisplayName:
+      typeof r.reviewerDisplayName === "string" ? r.reviewerDisplayName : undefined,
+    reviewerProfileImageUrl: picStr,
   };
 }
 

@@ -143,12 +143,25 @@ export interface Notification {
 
 export type ProducerType = 'BUSINESS' | 'INDIVIDUAL';
 
+/** Persisted when a HOME order is placed; used to pre-select the same address next time. */
+export interface PreferredHomeDeliverySnapshot {
+  address: string;
+  city: string;
+  region: string;
+  lat?: number;
+  lng?: number;
+}
+
 export interface Location {
+  /** Present when loaded from API (saved profile address). */
+  id?: string;
   lat: number;
   lng: number;
   region: string;
   city: string;
   address: string;
+  /** ISO timestamp from server when this row was last used for a HOME order. */
+  lastUsedForOrderAt?: string;
 }
 
 // PICKUP POINTS (New)
@@ -206,6 +219,7 @@ export interface ProducerProfile {
   profileImageUrl?: string; // New
 
   locations: Location[]; // Refactored to Array
+  preferredHomeDelivery?: PreferredHomeDeliverySnapshot | null;
 
   certifications: string[]; // URLs or filenames
   productionTypes: string[]; // e.g., 'Agriculture', 'Livestock'
@@ -244,6 +258,7 @@ export interface ClientProfile {
   profileImageUrl?: string;
   locations: Location[]; // Refactored to Array
   joinedDate: string;
+  preferredHomeDelivery?: PreferredHomeDeliverySnapshot | null;
 
   // New Features
   favorites: string[]; // List of Offer IDs or Producer IDs
@@ -338,6 +353,8 @@ export interface Order {
   requestedDeliveryDate?: string; // YYYY-MM-DD for ATI Retail Orders
   deliveryMethod?: 'HOME' | 'PICKUP'; // New
   pickupPointId?: string; // New
+  /** HOME: address chosen at checkout (persisted on order; not profile order). */
+  shippingAddress?: PreferredHomeDeliverySnapshot | null;
 }
 
 export interface Review {
@@ -348,6 +365,9 @@ export interface Review {
   rating: number; // 1-5
   comment: string;
   createdAt: string;
+  /** From API when listing reviews (User row of reviewer). */
+  reviewerDisplayName?: string;
+  reviewerProfileImageUrl?: string | null;
 }
 
 // Chat & Negotiation Types

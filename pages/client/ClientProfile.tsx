@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useStore, clientProfileMatchesSession } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
-import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order } from '../../types';
+import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order, Review } from '../../types';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle, Loader2 } from 'lucide-react';
 import { useUpdateClientProfileMutation } from '../../client-api/hooks/useUpdateClientProfileMutation';
@@ -72,6 +72,8 @@ export const ClientProfile: React.FC = () => {
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
    const [avatarUploading, setAvatarUploading] = useState(false);
    const [profileHydrating, setProfileHydrating] = useState(false);
+   /** Seeds the map/address editor once per loaded profile — do not re-run when the user clears the form to add another address. */
+   const lastSeededLocationFormForProfileId = useRef<string | null>(null);
 
    const upgradeFormik = useFormik({
       initialValues: {
@@ -380,13 +382,24 @@ export const ClientProfile: React.FC = () => {
    }, [user]);
 
    useEffect(() => {
-      if (!formData || formData.locations.length === 0) return;
-      if (String(newLoc.address ?? '').trim()) return;
+      if (!formData?.id) {
+         lastSeededLocationFormForProfileId.current = null;
+         return;
+      }
+      if (formData.locations.length === 0) return;
+      if (lastSeededLocationFormForProfileId.current === formData.id) return;
       const first = formData.locations[0];
-      setNewLoc({ ...first });
+      setNewLoc({
+         lat: first.lat,
+         lng: first.lng,
+         region: first.region,
+         city: first.city,
+         address: first.address,
+      });
       setLocationSearch(first.address ?? '');
       setEditingLocationIndex(0);
-   }, [formData, newLoc.address]);
+      lastSeededLocationFormForProfileId.current = formData.id;
+   }, [formData]);
 
    if (!user) {
       return (
@@ -479,6 +492,16 @@ export const ClientProfile: React.FC = () => {
      setFormData(nextProfile);
      updateClientMutation.mutate(nextProfile);
   };
+   const startNewLocationEntry = () => {
+      setEditingLocationIndex(null);
+      setNewLoc({ region: '', city: '', address: '', lat: 0, lng: 0 });
+      setLocationSearch('');
+      setShowLocationSuggestions(false);
+   };
+   /** Exit "edit existing" mode so the next save appends, without clearing the form. */
+   const addCurrentFieldsAsNewAddress = () => {
+      setEditingLocationIndex(null);
+   };
    const addLocation = () => {
       if (!formData || !newLoc.address) return;
       const address = String(newLoc.address).trim();
@@ -559,6 +582,31 @@ export const ClientProfile: React.FC = () => {
    };
   const openReviewModal = (orderId: string, producerId: string) => { setReviewOrderId(orderId); setReviewTargetId(producerId); reviewFormik.setValues({ rating: 5, comment: '' }); setShowReviewModal(true); };
    const getProducerName = (producerId: string) => { const p = producers.find(prod => prod.id === producerId); return p ? (p.name || (p as any).user?.displayName || `${(p.firstName ?? '').trim()} ${(p.lastName ?? '').trim()}`.trim()) : 'Unknown Producer'; };
+   /** Prefer snapshot fields from GET /reviews/user/:id; fallback to catalog by reviewer user id. */
+   const getReviewAuthorDisplay = (review: Review) => {
+      const displayFromRow = (row: any) => {
+         const name = (row?.name || row?.user?.displayName || `${(row?.firstName ?? '').trim()} ${(row?.lastName ?? '').trim()}`.trim()).trim();
+         const avatar = (row?.profileImageUrl || row?.user?.profileImageUrl || '').trim() || undefined;
+         return { name: name || t('review.reviewerFallback'), avatarUrl: avatar };
+      };
+      const fromCatalog = (reviewerUserId: string) => {
+         const prod = producers.find((p) => p.userId === reviewerUserId);
+         if (prod) return displayFromRow(prod);
+         const cli = clients.find((c) => c.userId === reviewerUserId);
+         if (cli) return displayFromRow(cli);
+         return { name: t('review.reviewerFallback'), avatarUrl: undefined as string | undefined };
+      };
+      const apiName = (review.reviewerDisplayName ?? '').trim();
+      const apiAvatar =
+         typeof review.reviewerProfileImageUrl === 'string' && review.reviewerProfileImageUrl.trim()
+            ? review.reviewerProfileImageUrl.trim()
+            : undefined;
+      const catalog = fromCatalog(review.reviewerId);
+      return {
+         name: apiName || catalog.name,
+         avatarUrl: apiAvatar ?? catalog.avatarUrl,
+      };
+   };
    const getProducerDisplayName = (order: Order) => order.producerDisplayName || getProducerName(order.producerId);
    const getOrderItemImage = (item: any) => {
       if (item?.imageUrl) return item.imageUrl as string;
@@ -758,14 +806,32 @@ export const ClientProfile: React.FC = () => {
                                        <p className="text-sm font-medium text-gray-900">{loc.address}</p>
                                        <p className="text-xs text-gray-500">{loc.city}, {loc.region}</p>
                                     </div>
-                                    <button type="button" onClick={() => removeLocation(idx)} className="text-gray-400 hover:text-red-500">
+                                    <button
+                                       type="button"
+                                       onClick={(e) => {
+                                          e.stopPropagation();
+                                          removeLocation(idx);
+                                       }}
+                                       className="text-gray-400 hover:text-red-500"
+                                    >
                                        <Trash2 className="h-4 w-4" />
                                     </button>
                                  </div>
                               ))}
                            </div>
                            <div className="bg-blue-50 p-3 rounded-md border border-blue-100 space-y-3">
-                              <p className="text-xs font-medium text-blue-700">Add new location</p>
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                 <p className="text-xs font-medium text-blue-700">Add or update an address</p>
+                                 {(formData.locations?.length ?? 0) > 0 && (
+                                    <button
+                                       type="button"
+                                       onClick={startNewLocationEntry}
+                                       className="text-xs font-semibold text-primary-700 hover:text-primary-900 underline"
+                                    >
+                                       {editingLocationIndex != null ? 'New address (keep existing)' : 'Add another address'}
+                                    </button>
+                                 )}
+                              </div>
                               <div className="flex flex-wrap gap-2">
                                  <button
                                     type="button"
@@ -867,7 +933,7 @@ export const ClientProfile: React.FC = () => {
                                     />
                                  </div>
                               </div>
-                              <div className="flex gap-2 items-center">
+                              <div className="flex flex-wrap gap-2 items-center">
                                  <button
                                     type="button"
                                     onClick={addLocation}
@@ -877,6 +943,15 @@ export const ClientProfile: React.FC = () => {
                                     <Plus className="h-4 w-4" />
                                     {editingLocationIndex != null ? 'Update location' : 'Add to list'}
                                  </button>
+                                 {editingLocationIndex != null && (
+                                    <button
+                                       type="button"
+                                       onClick={addCurrentFieldsAsNewAddress}
+                                       className="text-sm text-gray-600 hover:text-gray-900 underline"
+                                    >
+                                       Add as new address (keep fields below)
+                                    </button>
+                                 )}
                               </div>
                            </div>
                         </div>
@@ -990,18 +1065,26 @@ export const ClientProfile: React.FC = () => {
                         <div className="text-center py-12 text-gray-500"><Star className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('review.noReviews')}</p></div>
                      ) : (
                         <div className="space-y-4">
-                           {myReviews.map(review => (
+                           {myReviews.map(review => {
+                              const author = getReviewAuthorDisplay(review);
+                              const initial = (author.name || '?').charAt(0).toUpperCase();
+                              return (
                               <div key={review.id} className="border border-gray-100 rounded-lg p-4 bg-gray-50">
                                  <div className="flex items-center justify-between mb-2">
-                                    <div className="flex items-center">
-                                       <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold mr-2">{getProducerName(review.reviewerId).charAt(0)}</div>
-                                       <div><p className="text-sm font-bold text-gray-900">{t('review.ratedBy')}: {getProducerName(review.reviewerId)}</p><p className="text-xs text-gray-500">{new Date(review.createdAt).toLocaleDateString()}</p></div>
+                                    <div className="flex items-center min-w-0">
+                                       {author.avatarUrl ? (
+                                          <img src={author.avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover mr-2 shrink-0" />
+                                       ) : (
+                                          <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold mr-2 shrink-0">{initial}</div>
+                                       )}
+                                       <div className="min-w-0"><p className="text-sm font-bold text-gray-900 truncate">{t('review.ratedBy')}: {author.name}</p><p className="text-xs text-gray-500">{new Date(review.createdAt).toLocaleDateString()}</p></div>
                                     </div>
-                                    <div className="flex">{[...Array(5)].map((_, i) => (<Star key={i} className={`w-4 h-4 ${i < review.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} />))}</div>
+                                    <div className="flex shrink-0">{[...Array(5)].map((_, i) => (<Star key={i} className={`w-4 h-4 ${i < review.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} />))}</div>
                                  </div>
                                  <p className="text-sm text-gray-700 italic">"{review.comment}"</p>
                               </div>
-                           ))}
+                              );
+                           })}
                         </div>
                      )}
                   </div>

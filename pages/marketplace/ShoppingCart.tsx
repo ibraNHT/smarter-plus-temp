@@ -6,7 +6,47 @@ import { useTranslation } from '../../services/i18nContext';
 import { Trash2, ArrowLeft, ShoppingBag, CheckCircle, Calendar, X, MapPin, Heart, Tag, ChevronLeft, ChevronRight, Truck, Home } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
-import { OfferType, MarketType, UserRole } from '../../types';
+import { OfferType, MarketType, UserRole, Location, PreferredHomeDeliverySnapshot } from '../../types';
+
+function pickDefaultHomeLocationIndex(
+  locs: Location[],
+  preferred: PreferredHomeDeliverySnapshot | null | undefined,
+): number {
+  if (!locs.length) return 0;
+  if (preferred && (preferred.address || preferred.city || preferred.region)) {
+    const a = String(preferred.address ?? '').trim().toLowerCase();
+    const c = String(preferred.city ?? '').trim().toLowerCase();
+    const r = String(preferred.region ?? '').trim().toLowerCase();
+    const byFields = locs.findIndex(
+      (l) =>
+        l.address.trim().toLowerCase() === a &&
+        l.city.trim().toLowerCase() === c &&
+        l.region.trim().toLowerCase() === r,
+    );
+    if (byFields >= 0) return byFields;
+  }
+  if (preferred != null) {
+    const plat = Number(preferred.lat);
+    const plng = Number(preferred.lng);
+    if (Number.isFinite(plat) && Number.isFinite(plng) && (plat !== 0 || plng !== 0)) {
+      const TOL = 1e-4;
+      const byCoords = locs.findIndex(
+        (l) => Math.abs(l.lat - plat) < TOL && Math.abs(l.lng - plng) < TOL,
+      );
+      if (byCoords >= 0) return byCoords;
+    }
+  }
+  let best = 0;
+  let bestTs = -1;
+  locs.forEach((l, i) => {
+    const ts = l.lastUsedForOrderAt ? new Date(l.lastUsedForOrderAt).getTime() : 0;
+    if (ts > bestTs) {
+      bestTs = ts;
+      best = i;
+    }
+  });
+  return best;
+}
 import { loadGooglePlacesApi, parseGooglePlace, citiesLooselyMatch } from '../../services/googlePlaces';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { useFormik } from 'formik';
@@ -84,6 +124,20 @@ export const ShoppingCart: React.FC = () => {
       ? currentClient.locations
       : (user?.role === UserRole.PRODUCER ? (currentProducer?.locations ?? []) : []);
   const selectedHomeLocation = homeLocations[selectedHomeLocationIndex] ?? homeLocations[0];
+
+  const preferredHomeDelivery =
+    currentClient?.preferredHomeDelivery ?? currentProducer?.preferredHomeDelivery ?? null;
+  const homeLocationsStabilityKey = homeLocations
+    .map((l) => `${l.id ?? 'noid'}|${l.lastUsedForOrderAt ?? ''}|${l.address.slice(0, 48)}`)
+    .join('>');
+  const preferredKey = preferredHomeDelivery
+    ? `${preferredHomeDelivery.address}|${preferredHomeDelivery.city}|${preferredHomeDelivery.region}`
+    : '';
+
+  useEffect(() => {
+    if (deliveryMethod !== 'HOME' || homeLocations.length === 0) return;
+    setSelectedHomeLocationIndex(pickDefaultHomeLocationIndex(homeLocations, preferredHomeDelivery));
+  }, [homeLocationsStabilityKey, preferredKey, deliveryMethod, homeLocations.length]);
 
   // Check if order contains ATI items
   const isAtiOrder = cart.length > 0 && cart[0].marketType === MarketType.ATI;
@@ -299,6 +353,16 @@ export const ShoppingCart: React.FC = () => {
         isAtiOrder ? deliveryDate : undefined,
         deliveryMethod,
         selectedPickupPointId,
+        deliveryMethod === 'HOME' ? selectedHomeLocation?.id : undefined,
+        deliveryMethod === 'HOME' && selectedHomeLocation
+          ? {
+              address: selectedHomeLocation.address,
+              city: selectedHomeLocation.city,
+              region: selectedHomeLocation.region,
+              lat: selectedHomeLocation.lat,
+              lng: selectedHomeLocation.lng,
+            }
+          : undefined,
       );
       if (ok) {
         setShowRecap(false);
@@ -436,29 +500,30 @@ export const ShoppingCart: React.FC = () => {
                   <p className="font-bold text-gray-700 mb-1">Delivering to:</p>
                   {isHomeAddressValid ? (
                     <>
-                      {homeLocations.length > 1 && (
-                        <div className="mb-2">
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Select saved address</label>
-                          <select
-                            value={selectedHomeLocationIndex}
-                            onChange={(e) => setSelectedHomeLocationIndex(Number(e.target.value))}
-                            className="block w-full border border-gray-300 rounded-md p-2 text-sm bg-white"
-                          >
-                            {homeLocations.map((loc, idx) => (
-                              <option key={`${loc.address}-${idx}`} value={idx}>
-                                {loc.address}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
+                      <div className="mb-2">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Select saved address</label>
+                        <select
+                          value={selectedHomeLocationIndex}
+                          onChange={(e) => setSelectedHomeLocationIndex(Number(e.target.value))}
+                          className="block w-full border border-gray-300 rounded-md p-2 text-sm bg-white"
+                        >
+                          {homeLocations.map((loc, idx) => (
+                            <option key={loc.id ?? `${loc.address}-${idx}`} value={idx}>
+                              {loc.address}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <p className="text-gray-900">{selectedHomeLocation?.address}</p>
                       <p className="text-gray-500">{selectedHomeLocation?.city}, {selectedHomeLocation?.region}</p>
                     </>
                   ) : (
                     <p className="text-red-500">
                       No address in profile.{" "}
-                      <Link to="/client/profile" className="underline font-medium text-red-600 hover:text-red-700">
+                      <Link
+                        to={user?.role === UserRole.PRODUCER ? '/producer/profile' : '/client/profile'}
+                        className="underline font-medium text-red-600 hover:text-red-700"
+                      >
                         Set address now
                       </Link>
                     </p>
