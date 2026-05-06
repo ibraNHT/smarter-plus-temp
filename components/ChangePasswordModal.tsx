@@ -5,6 +5,8 @@ import { X, Lock, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useStore } from '../services/storeContext';
 import { useFormik } from 'formik';
 import { z } from 'zod';
+const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
+const PASSWORD_RULE_MESSAGE = 'Password must be at least 4 characters with 1 letter, 1 number, and 1 special character.';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
@@ -25,8 +27,8 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
   const schema = z
     .object({
       currentPassword: z.string().min(1, 'Current password is required.'),
-      newPassword: z.string().min(8, 'New password must be at least 8 characters long.'),
-      confirmPassword: z.string().min(8, 'Confirm your new password.'),
+      newPassword: z.string().regex(PASSWORD_RULE, PASSWORD_RULE_MESSAGE),
+      confirmPassword: z.string().min(1, 'Confirm your new password.'),
     })
     .refine((v) => v.newPassword === v.confirmPassword, {
       message: 'New passwords do not match.',
@@ -148,7 +150,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                             name="newPassword"
                             type={showNewPassword ? 'text' : 'password'} 
                             required
-                            minLength={8}
+                            minLength={4}
                             className="w-full border border-gray-300 rounded-md p-2 pr-10 text-sm focus:ring-primary-500 focus:border-primary-500"
                             value={formik.values.newPassword}
                             onChange={formik.handleChange}

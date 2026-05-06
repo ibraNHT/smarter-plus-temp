@@ -469,6 +469,16 @@ export const ClientProfile: React.FC = () => {
       }
    };
    const handleInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { if (!formData) return; const { name, value } = e.target; setFormData({ ...formData, [name]: value ?? '' }); };
+  const persistLocations = (nextLocations: Location[]) => {
+     if (!formData) return;
+     const nextProfile = {
+        ...formData,
+        locations: nextLocations,
+        name: `${formData.firstName} ${formData.lastName}`,
+     };
+     setFormData(nextProfile);
+     updateClientMutation.mutate(nextProfile);
+  };
    const addLocation = () => {
       if (!formData || !newLoc.address) return;
       const address = String(newLoc.address).trim();
@@ -489,14 +499,15 @@ export const ClientProfile: React.FC = () => {
          editingLocationIndex != null && editingLocationIndex >= 0 && editingLocationIndex < formData.locations.length
             ? formData.locations.map((loc, idx) => (idx === editingLocationIndex ? locationToAdd : loc))
             : [...formData.locations, locationToAdd];
-      setFormData({ ...formData, locations: nextLocations });
+      persistLocations(nextLocations);
       setNewLoc({ region: '', city: '', address: '', lat: 0, lng: 0 });
       setLocationSearch('');
       setEditingLocationIndex(null);
    };
    const removeLocation = (index: number) => {
       if (!formData) return;
-      setFormData({ ...formData, locations: formData.locations.filter((_, i) => i !== index) });
+      const nextLocations = formData.locations.filter((_, i) => i !== index);
+      persistLocations(nextLocations);
       if (editingLocationIndex === index) {
          setEditingLocationIndex(null);
          setNewLoc({ region: '', city: '', address: '', lat: 0, lng: 0 });

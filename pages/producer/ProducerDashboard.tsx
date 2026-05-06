@@ -151,6 +151,16 @@ export const ProducerDashboard: React.FC = () => {
       return 'No Address';
    };
 
+   const getClientPhone = (clientId: string) => {
+      const c = getClientDetails(clientId) as any;
+      return c?.phone || c?.user?.phone || 'N/A';
+   };
+
+   const getClientEmail = (clientId: string) => {
+      const c = getClientDetails(clientId) as any;
+      return c?.email || c?.user?.email || 'N/A';
+   };
+
    const getOrderItemImage = (item: any) => {
       if (item?.imageUrl) return item.imageUrl as string;
       const offerId = item?.offerId || item?.id;
@@ -304,7 +314,7 @@ export const ProducerDashboard: React.FC = () => {
                </h3>
                <span className="bg-primary-100 text-primary-800 text-xs font-bold px-2 py-1 rounded-full">Action Required</span>
             </div>
-            <ul className="divide-y divide-gray-200">
+            <ul className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
                {ordersToShip.length === 0 ? (
                   <li className="px-4 py-8 text-center text-gray-500">No orders ready for shipping.</li>
                ) : (
@@ -333,8 +343,8 @@ export const ProducerDashboard: React.FC = () => {
                               ) : (
                                  <div className="text-xs text-gray-600 bg-gray-100 p-1.5 rounded border flex flex-col">
                                     <span className="font-bold">Client Contact:</span>
-                                    <span className="flex items-center"><Phone className="w-3 h-3 mr-1" /> {getClientDetails(order.clientId)?.phone || 'N/A'}</span>
-                                    <span className="flex items-center"><Mail className="w-3 h-3 mr-1" /> {getClientDetails(order.clientId)?.email || 'N/A'}</span>
+                                    <span className="flex items-center"><Phone className="w-3 h-3 mr-1" /> {getClientPhone(order.clientId)}</span>
+                                    <span className="flex items-center"><Mail className="w-3 h-3 mr-1" /> {getClientEmail(order.clientId)}</span>
                                  </div>
                               )}
 
@@ -691,8 +701,8 @@ export const ProducerDashboard: React.FC = () => {
                         {selectedOrder.contactRevealed && (
                            <div className="mt-2 pt-2 border-t border-gray-200 text-sm">
                               <div className="font-bold text-gray-700 mb-1">Contact Info:</div>
-                              <div className="text-gray-600"><Phone className="h-3 w-3 inline mr-1" /> {getClientDetails(selectedOrder.clientId)?.phone}</div>
-                              <div className="text-gray-600"><Mail className="h-3 w-3 inline mr-1" /> {getClientDetails(selectedOrder.clientId)?.email}</div>
+                                 <div className="text-gray-600"><Phone className="h-3 w-3 inline mr-1" /> {getClientPhone(selectedOrder.clientId)}</div>
+                                 <div className="text-gray-600"><Mail className="h-3 w-3 inline mr-1" /> {getClientEmail(selectedOrder.clientId)}</div>
                            </div>
                         )}
                      </div>

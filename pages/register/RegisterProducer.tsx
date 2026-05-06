@@ -51,6 +51,7 @@ const AFRICA_COUNTRY_CODES = [
 ];
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock', 'Vegetables', 'Processed Goods', 'Equipment', 'Service'];
+const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
 
 export const RegisterProducer: React.FC = () => {
   const { registerProducer } = useStore();
@@ -108,8 +109,8 @@ export const RegisterProducer: React.FC = () => {
       setError('Passwords do not match.');
       return;
     }
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters long.');
+    if (!PASSWORD_RULE.test(formData.password)) {
+      setError('Password must be at least 4 characters with 1 letter, 1 number, and 1 special character.');
       return;
     }
 
@@ -282,7 +283,7 @@ export const RegisterProducer: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700">Password</label>
                 <div className="relative mt-1">
-                  <input type={showPassword ? 'text' : 'password'} required minLength={8}
+                  <input type={showPassword ? 'text' : 'password'} required minLength={4}
                     className="block w-full border border-gray-300 rounded-md shadow-sm p-2 pr-10 focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white text-gray-900"
                     value={formData.password}
                     onChange={e => setFormData({ ...formData, password: e.target.value })}
@@ -296,7 +297,7 @@ export const RegisterProducer: React.FC = () => {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Min 8 characters</p>
+                <p className="text-xs text-gray-500 mt-1">Min 4 chars: 1 letter, 1 number, 1 special</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Confirm Password</label>

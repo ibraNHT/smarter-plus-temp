@@ -92,7 +92,7 @@ const translations: Record<string, Record<Language, string>> = {
   'login.saveNewPassword': { en: 'Save new password', fr: 'Enregistrer le mot de passe' },
   'login.passwordResetSuccess': { en: 'Your password was updated. You can sign in now.', fr: 'Votre mot de passe a été mis à jour. Vous pouvez vous connecter.' },
   'login.passwordsMustMatch': { en: 'Passwords do not match.', fr: 'Les mots de passe ne correspondent pas.' },
-  'login.passwordMinLength': { en: 'Password must be at least 8 characters.', fr: 'Le mot de passe doit contenir au moins 8 caractères.' },
+  'login.passwordMinLength': { en: 'Password must be at least 4 characters and include a letter, a number, and a special character.', fr: 'Le mot de passe doit contenir au moins 4 caractères avec une lettre, un chiffre et un caractère spécial.' },
   'login.changePhoneNumber': { en: 'Use a different number', fr: 'Utiliser un autre numéro' },
   'login.phoneLocalMin': { en: 'Enter at least 6 digits for your phone number.', fr: 'Entrez au moins 6 chiffres pour votre numéro.' },
   'login.invalidPhoneFormat': { en: 'Enter a valid phone number (country code + number).', fr: 'Entrez un numéro valide (indicatif + numéro).' },

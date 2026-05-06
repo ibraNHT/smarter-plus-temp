@@ -8,6 +8,9 @@ import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/
 import { useFormik } from 'formik';
 import { z } from 'zod';
 
+const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
+const PASSWORD_RULE_MESSAGE = 'Password must be at least 4 characters with 1 letter, 1 number, and 1 special character.';
+
 const AFRICA_COUNTRY_CODES = [
   // Central Africa
   { code: '+237', country: 'Cameroon' },
@@ -61,8 +64,8 @@ export const RegisterClient: React.FC = () => {
       gender: z.string().min(1, 'Gender is required.'),
       dateOfBirth: z.string().min(1, 'Date of birth is required.'),
       email: z.string().trim().email('Valid email is required.'),
-      password: z.string().min(8, 'Password must be at least 8 characters long.'),
-      confirmPassword: z.string().min(8, 'Confirm your password.'),
+      password: z.string().regex(PASSWORD_RULE, PASSWORD_RULE_MESSAGE),
+      confirmPassword: z.string().min(1, 'Confirm your password.'),
       phoneCode: z.string().min(1),
       phone: z.string().trim().min(6, 'Phone number is required.'),
       address: z.string().trim().min(5, 'Address is required.'),
@@ -325,7 +328,7 @@ export const RegisterClient: React.FC = () => {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
-                    minLength={8}
+                    minLength={4}
                     className="block w-full border border-gray-300 rounded-md shadow-sm p-2 pr-10 focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white text-gray-900"
                     name="password"
                     value={formik.values.password}
@@ -341,7 +344,7 @@ export const RegisterClient: React.FC = () => {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Min 8 characters</p>
+                <p className="text-xs text-gray-500 mt-1">Min 4 chars: 1 letter, 1 number, 1 special</p>
                 {formik.touched.password && formik.errors.password ? <p className="text-xs text-red-600 mt-1">{formik.errors.password}</p> : null}
               </div>
               <div>

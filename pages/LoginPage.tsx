@@ -41,6 +41,7 @@ const AFRICA_COUNTRY_CODES = [
 
 /** Matches backend RELAXED_PHONE_PATTERN (optional +, digits/spaces/hyphens, 4–32 chars). */
 const RELAXED_PHONE_PATTERN = /^\+?[\d\s-]{4,32}$/;
+const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
 
 function buildFullPhone(countryCode: string, local: string): string {
   const compactLocal = local.replace(/\s+/g, '').replace(/-/g, '');
@@ -148,8 +149,8 @@ export const LoginPage: React.FC = () => {
     validate: (values) => {
       const schema = z
         .object({
-          forgotNewPassword: z.string().min(8, t('login.passwordMinLength')),
-          forgotConfirmPassword: z.string().min(8, t('login.passwordMinLength')),
+          forgotNewPassword: z.string().regex(PASSWORD_RULE, t('login.passwordMinLength')),
+          forgotConfirmPassword: z.string().min(1, t('login.passwordMinLength')),
         })
         .refine((v) => v.forgotNewPassword === v.forgotConfirmPassword, {
           path: ['forgotConfirmPassword'],
@@ -555,7 +556,7 @@ export const LoginPage: React.FC = () => {
                     type={showForgotNewPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     required
-                    minLength={8}
+                    minLength={4}
                     className="w-full border border-gray-300 rounded-md p-2 pr-10 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
                     value={forgotPasswordFormik.values.forgotNewPassword}
                     onChange={forgotPasswordFormik.handleChange}
@@ -578,7 +579,7 @@ export const LoginPage: React.FC = () => {
                     type={showForgotConfirmPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     required
-                    minLength={8}
+                    minLength={4}
                     className="w-full border border-gray-300 rounded-md p-2 pr-10 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
                     value={forgotPasswordFormik.values.forgotConfirmPassword}
                     onChange={forgotPasswordFormik.handleChange}
