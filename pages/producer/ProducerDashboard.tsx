@@ -120,7 +120,16 @@ export const ProducerDashboard: React.FC = () => {
    const getClientAddress = (clientId: string) => {
       const c = getClientDetails(clientId);
       if (!c || c.locations.length === 0) return 'No Address';
-      return c.locations[0].address;
+      const primary = c.locations[0];
+      return [primary.address, primary.city, primary.region].filter(Boolean).join(', ');
+   };
+
+   const getOrderItemImage = (item: any) => {
+      if (item?.imageUrl) return item.imageUrl as string;
+      const offerId = item?.offerId || item?.id;
+      if (!offerId) return '';
+      const offerMatch = myOffers.find((o) => o.id === offerId);
+      return offerMatch?.imageUrl || '';
    };
 
    // Order lifecycle steps for timeline (booking → receiving)
@@ -689,7 +698,11 @@ export const ProducerDashboard: React.FC = () => {
                               <li key={item.id} className="p-3 flex justify-between items-center">
                                  <div className="flex items-center">
                                     <div className="h-10 w-10 rounded bg-gray-100 overflow-hidden mr-3">
-                                       <img src={item.imageUrl} alt={item.title} className={offerImageInBox} />
+                                       {getOrderItemImage(item) ? (
+                                          <img src={getOrderItemImage(item)} alt={item.title} className={offerImageInBox} />
+                                       ) : (
+                                          <div className="h-full w-full bg-gray-200" />
+                                       )}
                                     </div>
                                     <div>
                                        <p className="text-sm font-medium text-gray-900">{item.title}</p>

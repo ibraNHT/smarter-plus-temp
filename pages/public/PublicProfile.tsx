@@ -43,13 +43,13 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
     producers,
     clients,
     getProducerOffers,
-    getProducerPortfolios,
     isInitialCatalogLoading,
   } = useStore();
   const { t } = useTranslation();
 
   const [profileData, setProfileData] = useState<any>(null);
   const [profileReviews, setProfileReviews] = useState<Review[]>([]);
+  const [producerPortfolios, setProducerPortfolios] = useState<any[]>([]);
 
   useEffect(() => {
     if (role === "PRODUCER") {
@@ -81,6 +81,25 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
     };
   }, [profileData?.userId]);
 
+  useEffect(() => {
+    if (role !== "PRODUCER" || !id) {
+      setProducerPortfolios([]);
+      return;
+    }
+    let cancelled = false;
+    apiFetch<any[]>(API_ENDPOINTS.portfolios.publicByProducer(id), { silent401: true } as any)
+      .then((rows) => {
+        if (cancelled) return;
+        setProducerPortfolios(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (!cancelled) setProducerPortfolios([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, role]);
+
   if (isInitialCatalogLoading && !profileData) {
     return <PublicProfileSkeleton />;
   }
@@ -101,10 +120,8 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
 
   // For Producers Only
   const activeOffers = role === "PRODUCER" && id ? getProducerOffers(id) : [];
-  const producerPortfolios =
-    role === "PRODUCER" && id
-      ? getProducerPortfolios(id).filter((p) => p.isPublished)
-      : [];
+  const producerPublishedPortfolios =
+    role === "PRODUCER" ? producerPortfolios : [];
   const isVerified =
     role === "PRODUCER" && profileData.status === ProducerStatus.VALIDATED;
 
@@ -277,15 +294,15 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
                 <div>
                   <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
                     <ImageIcon className="w-5 h-5 mr-2 text-primary-600" />{" "}
-                    Portfolio ({producerPortfolios.length})
+                    Portfolio ({producerPublishedPortfolios.length})
                   </h3>
-                  {producerPortfolios.length === 0 ? (
+                  {producerPublishedPortfolios.length === 0 ? (
                     <p className="text-gray-500 italic">
                       No portfolio items published yet.
                     </p>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {producerPortfolios.slice(0, 4).map((item) => (
+                      {producerPublishedPortfolios.slice(0, 4).map((item) => (
                         <div
                           key={item.id}
                           className="border border-gray-200 rounded-lg p-3 bg-white"

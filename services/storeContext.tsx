@@ -196,7 +196,7 @@ interface StoreContextType {
   getProducerOffers: (producerId: string) => Offer[];
   getOfferById: (offerId: string) => Offer | undefined;
   getAvailableSlots: (producerId: string, date: Date, durationHours: number) => Date[];
-  addToCart: (offer: Offer, quantity: number, bookingDate?: string) => { success: boolean; error?: 'PRODUCER_CONFLICT' };
+  addToCart: (offer: Offer, quantity: number, bookingDate?: string) => { success: boolean; error?: 'PRODUCER_CONFLICT' | 'OWN_OFFER' };
   removeFromCart: (offerId: string) => void;
   clearCart: () => void;
   placeOrder: (couponId?: string, discountAmount?: number, deliveryDate?: string, deliveryMethod?: 'HOME' | 'PICKUP', pickupPointId?: string) => Promise<boolean>;
@@ -364,7 +364,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (guestEmail) localStorage.setItem('guestEmail', guestEmail);
     else localStorage.removeItem('guestEmail');
 
-    if (user && getToken() && cart.length > 0) {
+    if (user && getToken()) {
       const timer = setTimeout(() => {
         apiFetch(API_ENDPOINTS.cart.sync, {
           method: 'POST',
@@ -480,9 +480,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         : '';
     const isClientUiRoute =
       path.includes('/client/') || path.includes('/register/client');
+    const isProducerUiRoute = path.includes('/producer/');
     /** Skip `/api/clients` list when a producer is not on client UI (reduces load; rev behavior). */
-    const shouldFetchBuyerProfile = isClientSession || (isProducerSession && isClientUiRoute);
-    /** Reserved for GET producer portfolios when backend exposes listing (rev flag). */
+    const shouldFetchBuyerProfile =
+      isClientSession || (isProducerSession && (isClientUiRoute || isProducerUiRoute));
     const shouldFetchProducerPortfolios = isProducerSession && Boolean(activeUser?.producerId);
     const ordersEndpoints = getOrdersEndpointsForUser(activeUser);
     try {
@@ -499,7 +500,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       ]);
       // Only fetch orders, wallet, and referral stats when authenticated and we have a token (avoids 401 spam when token expired)
       if (activeUser && getToken()) {
-        const [resOrders, resWallet, resWithdrawals, referralsPayload, resMyReviews] = await Promise.all([
+        const [resOrders, resWallet, resWithdrawals, referralsPayload, resMyReviews, resMyPortfolios] = await Promise.all([
           ordersEndpoints.length > 0
             ? Promise.all(
                 ordersEndpoints.map((endpoint) =>
@@ -517,6 +518,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             on401(e);
             return [];
           }),
+          shouldFetchProducerPortfolios
+            ? apiFetch<Portfolio[]>(API_ENDPOINTS.portfolios.list, { silent401: true } as any).catch((e) => {
+                on401(e);
+                return [];
+              })
+            : Promise.resolve([] as Portfolio[]),
         ]);
         setMyReferrals(referralsPayload);
         if (Array.isArray(resWithdrawals)) {
@@ -544,9 +551,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             },
           }));
         }
-        // Backend currently has no producer portfolio listing endpoint.
-        // When listing exists, hydrate only when shouldFetchProducerPortfolios is true.
-        setPortfolios(shouldFetchProducerPortfolios ? [] : []);
+        setPortfolios(Array.isArray(resMyPortfolios) ? resMyPortfolios : []);
         if (Array.isArray(resMyReviews)) {
           const mappedReviews = resMyReviews.map(mapReviewFromApi);
           setReviews((prev) => {
@@ -1161,7 +1166,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── CART ────────────────────────────────────────────────────────────────────
 
-  const addToCart = (offer: Offer, quantity: number, bookingDate?: string): { success: boolean; error?: 'PRODUCER_CONFLICT' } => {
+  const addToCart = (offer: Offer, quantity: number, bookingDate?: string): { success: boolean; error?: 'PRODUCER_CONFLICT' | 'OWN_OFFER' } => {
+    if (user?.role === UserRole.PRODUCER && user.producerId && offer.producerId === user.producerId) {
+      return { success: false, error: 'OWN_OFFER' };
+    }
     if (cart.length > 0 && cart[0].producerId !== offer.producerId) return { success: false, error: 'PRODUCER_CONFLICT' };
     setCart(prev => {
       if (offer.type === OfferType.SERVICE && bookingDate) return [...prev, { ...offer, cartQuantity: quantity, bookingDate }];
@@ -1172,7 +1180,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
-  const clearCart = () => setCart([]);
+  const clearCart = () => {
+    setCart([]);
+    if (user && getToken()) {
+      apiFetch(API_ENDPOINTS.cart.clear, {
+        method: 'DELETE',
+        silent401: true,
+      } as any).catch(() => {});
+    }
+  };
 
   // ─── ORDERS ──────────────────────────────────────────────────────────────────
 

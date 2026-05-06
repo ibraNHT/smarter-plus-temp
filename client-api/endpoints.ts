@@ -57,6 +57,7 @@ export const API_ENDPOINTS = {
     get: "/api/cart",
     /** Aligned with Nest: `CartController` @Post("sync-cart") */
     sync: "/api/cart/sync-cart",
+    clear: "/api/cart",
   },
   chat: {
     sessions: "/api/chat/sessions",
@@ -80,7 +81,8 @@ export const API_ENDPOINTS = {
     byUser: (userId: string) => `/api/reviews/user/${userId}`,
   },
   portfolios: {
-    list: "/api/portfolios/my",
+    list: "/api/portfolios",
+    publicByProducer: (producerId: string) => `/api/portfolios/producer/${producerId}/public`,
     create: "/api/portfolios",
     update: (id: string) => `/api/portfolios/${id}`,
     remove: (id: string) => `/api/portfolios/${id}`,

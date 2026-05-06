@@ -121,6 +121,10 @@ export const ProductDetails: React.FC = () => {
     }
 
     const result = addToCart(offer, quantity, selectedSlot || undefined);
+    if (!result.success && result.error === 'OWN_OFFER') {
+      alert('You cannot add your own offer to cart.');
+      return;
+    }
     if (!result.success && result.error === 'PRODUCER_CONFLICT') {
       const confirmClear = window.confirm(t('cart.confirmClear'));
 

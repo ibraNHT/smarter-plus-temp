@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, PaymentMethod, ProducerProfile as ProducerProfileType, Location, Portfolio } from '../../types';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { User, Wallet, Shield, Tractor, CreditCard, Trash2, Plus, Camera, Upload, MapPin, FileText, X, LogOut, Image as ImageIcon, Video, Eye, Edit, CheckCircle, Heart, ArrowLeft, Search, Users, Copy, Loader2 } from 'lucide-react';
 import { useUpdateProducerProfileMutation } from '../../client-api/hooks/useUpdateProducerProfileMutation';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
@@ -36,7 +36,20 @@ export const ProducerProfile: React.FC = () => {
   const updateProducerMutation = useUpdateProducerProfileMutation();
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { tab } = useParams<{ tab?: string }>();
+  type ProducerProfileTab = 'info' | 'security' | 'payment' | 'portfolio' | 'favorites' | 'referrals';
+  const isProducerProfileTab = (value: string | undefined): value is ProducerProfileTab =>
+    value === 'info' ||
+    value === 'security' ||
+    value === 'payment' ||
+    value === 'portfolio' ||
+    value === 'favorites' ||
+    value === 'referrals';
   const [activeTab, setActiveTab] = useState<'info' | 'security' | 'payment' | 'portfolio' | 'favorites' | 'referrals'>('info');
+  const navigateToTab = (nextTab: ProducerProfileTab) => {
+    setActiveTab(nextTab);
+    navigate(`/producer/profile/${nextTab}`);
+  };
 
   // New Payment Method Form State
   const [showAddPayment, setShowAddPayment] = useState(false);
@@ -82,6 +95,13 @@ export const ProducerProfile: React.FC = () => {
   const referralCount = myReferrals?.totalReferred ?? currentProducer?.referrals?.length ?? 0;
   const referredPeople = myReferrals?.referredUsers ?? [];
 
+  useEffect(() => {
+    if (isProducerProfileTab(tab)) {
+      setActiveTab(tab);
+      return;
+    }
+    if (!tab) setActiveTab('info');
+  }, [tab]);
   useEffect(() => {
     if (activeTab === 'referrals') void refreshMyReferrals();
   }, [activeTab, refreshMyReferrals]);
@@ -512,28 +532,28 @@ export const ProducerProfile: React.FC = () => {
       <div className="lg:grid lg:grid-cols-12 lg:gap-x-5">
         <aside className="py-6 px-2 sm:px-6 lg:py-0 lg:px-0 lg:col-span-3">
           <nav className="space-y-1">
-            <button onClick={() => setActiveTab('info')} className={`${activeTab === 'info' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
+            <button onClick={() => navigateToTab('info')} className={`${activeTab === 'info' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
               <User className={`${activeTab === 'info' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.info')}</span>
             </button>
             <Link to="/producer/dashboard" className="text-gray-900 hover:text-gray-900 hover:bg-gray-50 group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full">
               <Tractor className="text-gray-400 group-hover:text-gray-500 flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> <span className="truncate">{t('nav.dashboard')}</span>
             </Link>
-            <button onClick={() => setActiveTab('favorites')} className={`${activeTab === 'favorites' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
+            <button onClick={() => navigateToTab('favorites')} className={`${activeTab === 'favorites' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
               <Heart className={`${activeTab === 'favorites' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.favorites')}</span>
             </button>
-            <button onClick={() => setActiveTab('portfolio')} className={`${activeTab === 'portfolio' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
+            <button onClick={() => navigateToTab('portfolio')} className={`${activeTab === 'portfolio' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
               <ImageIcon className={`${activeTab === 'portfolio' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.portfolio')}</span>
             </button>
-            <button onClick={() => setActiveTab('referrals')} className={`${activeTab === 'referrals' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
+            <button onClick={() => navigateToTab('referrals')} className={`${activeTab === 'referrals' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
               <Users className={`${activeTab === 'referrals' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">Referrals</span>
             </button>
             <Link to="/wallet" className="text-gray-900 hover:text-gray-900 hover:bg-gray-50 group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full">
               <Wallet className="text-gray-400 group-hover:text-gray-500 flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> <span className="truncate">{t('nav.wallet')}</span>
             </Link>
-            <button onClick={() => setActiveTab('payment')} className={`${activeTab === 'payment' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
+            <button onClick={() => navigateToTab('payment')} className={`${activeTab === 'payment' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
               <CreditCard className={`${activeTab === 'payment' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.payment')}</span>
             </button>
-            <button onClick={() => setActiveTab('security')} className={`${activeTab === 'security' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
+            <button onClick={() => navigateToTab('security')} className={`${activeTab === 'security' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
               <Shield className={`${activeTab === 'security' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.security')}</span>
             </button>
             <div className="pt-4 mt-4 border-t border-gray-200">

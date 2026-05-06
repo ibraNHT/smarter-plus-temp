@@ -117,7 +117,7 @@ const App: React.FC = () => {
 
                 {/* Producer Routes */}
                 <Route path="/producer/dashboard" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><ProducerDashboard /></GuardedRoute>} />
-                <Route path="/producer/profile" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><ProducerProfile /></GuardedRoute>} />
+                <Route path="/producer/profile/:tab?" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><ProducerProfile /></GuardedRoute>} />
                 <Route path="/producer/availability" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><ProducerAvailability /></GuardedRoute>} />
                 <Route path="/producer/offers/new" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><CreateOffer /></GuardedRoute>} />
                 <Route path="/producer/offers/edit/:offerId" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><CreateOffer /></GuardedRoute>} />

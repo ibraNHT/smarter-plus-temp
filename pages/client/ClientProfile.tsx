@@ -470,6 +470,13 @@ export const ClientProfile: React.FC = () => {
    const handleSubmitReview = (e: React.FormEvent) => { e.preventDefault(); if (user && reviewOrderId && reviewTargetId) { submitReview({ orderId: reviewOrderId, reviewerId: user.id, targetId: reviewTargetId, rating, comment }); setShowReviewModal(false); } };
    const getProducerName = (producerId: string) => { const p = producers.find(prod => prod.id === producerId); return p ? (p.name || (p as any).user?.displayName || `${(p.firstName ?? '').trim()} ${(p.lastName ?? '').trim()}`.trim()) : 'Unknown Producer'; };
    const getProducerDisplayName = (order: Order) => order.producerDisplayName || getProducerName(order.producerId);
+   const getOrderItemImage = (item: any) => {
+      if (item?.imageUrl) return item.imageUrl as string;
+      const offerId = item?.offerId || item?.id;
+      if (!offerId) return '';
+      const offerMatch = offers.find((o) => o.id === offerId);
+      return offerMatch?.imageUrl || '';
+   };
    const openDisputeModal = (orderId: string) => { setDisputeOrderId(orderId); setDisputeReason(''); setDisputeFiles([]); setShowDisputeModal(true); };
    const handleDisputeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) { setDisputeFiles(Array.from(e.target.files)); } };
    const submitDispute = (e: React.FormEvent) => { e.preventDefault(); if (disputeOrderId && disputeReason) { reportProblem(disputeOrderId, disputeReason, disputeFiles); setShowDisputeModal(false); } };
@@ -500,7 +507,11 @@ export const ClientProfile: React.FC = () => {
                         <div className="flex -space-x-2 overflow-hidden">
                            {(order.items || []).slice(0, 3).map((item: any, idx: number) => (
                               <div key={idx} className="inline-block h-10 w-10 overflow-hidden rounded-md ring-2 ring-white bg-gray-100" title={item.title}>
-                                 <img src={item.imageUrl} alt="" className={offerImageInBox} />
+                                 {getOrderItemImage(item) ? (
+                                    <img src={getOrderItemImage(item)} alt="" className={offerImageInBox} />
+                                 ) : (
+                                    <div className="h-full w-full bg-gray-200" />
+                                 )}
                               </div>
                            ))}
                            {(order.items?.length ?? 0) > 3 && (
@@ -1049,9 +1060,9 @@ export const ClientProfile: React.FC = () => {
                            <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                               {(payOrder.items || []).map((item: any, idx: number) => (
                                  <div key={idx} className="flex items-center gap-3 bg-gray-50 rounded-lg p-2 border border-gray-100">
-                                    {item.imageUrl && (
+                                    {getOrderItemImage(item) && (
                                        <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-100">
-                                          <img src={item.imageUrl} alt={item.title} className={offerImageInBox} />
+                                          <img src={getOrderItemImage(item)} alt={item.title} className={offerImageInBox} />
                                        </div>
                                     )}
                                     <div className="flex-1 min-w-0">
@@ -1190,7 +1201,7 @@ export const ClientProfile: React.FC = () => {
                            {(selectedOrder.items || []).map((item: any, idx: number) => (
                               <li key={item.id || idx} className="p-3 flex justify-between items-center">
                                  <div className="flex items-center min-w-0">
-                                    {item.imageUrl && <div className="h-10 w-10 rounded bg-gray-100 overflow-hidden mr-3 flex-shrink-0"><img src={item.imageUrl} alt={item.title} className={offerImageInBox} /></div>}
+                                    {getOrderItemImage(item) && <div className="h-10 w-10 rounded bg-gray-100 overflow-hidden mr-3 flex-shrink-0"><img src={getOrderItemImage(item)} alt={item.title} className={offerImageInBox} /></div>}
                                     <div className="min-w-0">
                                        <p className="text-sm font-medium text-gray-900 truncate">{item.title || 'Item'}</p>
                                        <p className="text-xs text-gray-500">{(item.cartQuantity ?? item.quantity ?? 1)} {item.unit} × {(item.price ?? 0).toLocaleString()} XAF</p>

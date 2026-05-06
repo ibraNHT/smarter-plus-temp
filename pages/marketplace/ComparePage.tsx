@@ -48,6 +48,10 @@ export const ComparePage: React.FC = () => {
     }
     const qty = comparePageAddQuantity(canonical);
     const result = addToCart(canonical, qty);
+    if (!result.success && result.error === 'OWN_OFFER') {
+      alert('You cannot add your own offer to cart.');
+      return;
+    }
     if (!result.success && result.error === 'PRODUCER_CONFLICT') {
       if (window.confirm(t('cart.confirmClear'))) {
         clearCart();
