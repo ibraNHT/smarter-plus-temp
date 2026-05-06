@@ -15,6 +15,8 @@ import { uploadAvatar } from '../../services/uploadService';
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
+import { useFormik } from 'formik';
+import { z } from 'zod';
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
@@ -53,22 +55,12 @@ export const ClientProfile: React.FC = () => {
    const [geoLoading, setGeoLoading] = useState(false);
    const [editingLocationIndex, setEditingLocationIndex] = useState<number | null>(null);
 
-   const [upgradeData, setUpgradeData] = useState({
-      type: 'INDIVIDUAL' as 'INDIVIDUAL' | 'BUSINESS',
-      farmName: '',
-      description: '',
-      productionTypes: [] as string[]
-   });
-
    const [showReviewModal, setShowReviewModal] = useState(false);
    const [reviewOrderId, setReviewOrderId] = useState<string | null>(null);
    const [reviewTargetId, setReviewTargetId] = useState<string | null>(null);
-   const [rating, setRating] = useState(5);
-   const [comment, setComment] = useState('');
 
    const [showDisputeModal, setShowDisputeModal] = useState(false);
    const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
-   const [disputeReason, setDisputeReason] = useState('');
    const [disputeFiles, setDisputeFiles] = useState<File[]>([]);
 
    const [showPaymentRecap, setShowPaymentRecap] = useState(false);
@@ -80,6 +72,88 @@ export const ClientProfile: React.FC = () => {
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
    const [avatarUploading, setAvatarUploading] = useState(false);
    const [profileHydrating, setProfileHydrating] = useState(false);
+
+   const upgradeFormik = useFormik({
+      initialValues: {
+         type: 'INDIVIDUAL' as 'INDIVIDUAL' | 'BUSINESS',
+         farmName: '',
+         description: '',
+         productionTypes: [] as string[],
+      },
+      validate: (values) => {
+         const schema = z.object({
+            type: z.enum(['INDIVIDUAL', 'BUSINESS']),
+            farmName: z.string(),
+            description: z.string().trim().min(10, 'Description should be at least 10 characters.'),
+            productionTypes: z.array(z.string()),
+         }).superRefine((v, ctx) => {
+            if (v.type === 'BUSINESS' && !v.farmName.trim()) {
+               ctx.addIssue({ code: 'custom', path: ['farmName'], message: 'Farm/Business name is required for business accounts.' });
+            }
+         });
+         const parsed = schema.safeParse(values);
+         if (parsed.success) return {};
+         const errs: Record<string, string> = {};
+         for (const issue of parsed.error.issues) {
+            const key = String(issue.path[0] ?? '');
+            if (key && !errs[key]) errs[key] = issue.message;
+         }
+         return errs;
+      },
+      onSubmit: async (values) => {
+         if (!user || !currentClient?.id) return;
+         const ok = await upgradeClientToProducer(currentClient.id, {
+            type: values.type,
+            name: values.type === 'BUSINESS' ? values.farmName : undefined,
+            description: values.description,
+            productionTypes: values.productionTypes,
+         });
+         if (!ok) {
+            alert('Upgrade failed. Please try again.');
+            return;
+         }
+         setShowUpgradeModal(false);
+         navigate('/producer/dashboard');
+      },
+   });
+
+   const reviewFormik = useFormik({
+      initialValues: { comment: '', rating: 5 },
+      validate: (values) => {
+         const parsed = z.object({
+            comment: z.string().trim().min(2, 'Please add a short comment.'),
+            rating: z.number().min(1).max(5),
+         }).safeParse(values);
+         if (parsed.success) return {};
+         const errs: Record<string, string> = {};
+         for (const issue of parsed.error.issues) {
+            const key = String(issue.path[0] ?? '');
+            if (key && !errs[key]) errs[key] = issue.message;
+         }
+         return errs;
+      },
+      onSubmit: (values) => {
+         if (user && reviewOrderId && reviewTargetId) {
+            submitReview({ orderId: reviewOrderId, reviewerId: user.id, targetId: reviewTargetId, rating: values.rating, comment: values.comment });
+            setShowReviewModal(false);
+         }
+      },
+   });
+
+   const disputeFormik = useFormik({
+      initialValues: { disputeReason: '' },
+      validate: (values) => {
+         const parsed = z.object({ disputeReason: z.string().trim().min(5, 'Please describe the issue in at least 5 characters.') }).safeParse(values);
+         if (parsed.success) return {};
+         return { disputeReason: parsed.error.issues[0]?.message || 'Invalid reason.' };
+      },
+      onSubmit: (values) => {
+         if (disputeOrderId) {
+            reportProblem(disputeOrderId, values.disputeReason, disputeFiles);
+            setShowDisputeModal(false);
+         }
+      },
+   });
 
    const currentClient = useMemo(() => {
       if (!user?.id) return undefined;
@@ -459,15 +533,20 @@ export const ClientProfile: React.FC = () => {
       if (!formData) return;
       updateClientMutation.mutate({ ...formData, name: `${formData.firstName} ${formData.lastName}` });
    };
-   const toggleUpgradeCategory = (cat: string) => { const current = upgradeData.productionTypes; if (current.includes(cat)) { setUpgradeData({ ...upgradeData, productionTypes: current.filter(c => c !== cat) }); } else { setUpgradeData({ ...upgradeData, productionTypes: [...current, cat] }); } };
-   const handleUpgradeSubmit = (e: React.FormEvent) => { e.preventDefault(); if (!user) return; upgradeClientToProducer(user.id, { type: upgradeData.type, name: upgradeData.type === 'BUSINESS' ? upgradeData.farmName : undefined, description: upgradeData.description, productionTypes: upgradeData.productionTypes }); setShowUpgradeModal(false); navigate('/producer/dashboard'); };
+  const toggleUpgradeCategory = (cat: string) => {
+   const current = upgradeFormik.values.productionTypes;
+   if (current.includes(cat)) {
+      void upgradeFormik.setFieldValue('productionTypes', current.filter(c => c !== cat));
+   } else {
+      void upgradeFormik.setFieldValue('productionTypes', [...current, cat]);
+   }
+ };
    const performLogout = async () => {
       await logout();
       setLogoutConfirmOpen(false);
       navigate('/');
    };
-   const openReviewModal = (orderId: string, producerId: string) => { setReviewOrderId(orderId); setReviewTargetId(producerId); setRating(5); setComment(''); setShowReviewModal(true); };
-   const handleSubmitReview = (e: React.FormEvent) => { e.preventDefault(); if (user && reviewOrderId && reviewTargetId) { submitReview({ orderId: reviewOrderId, reviewerId: user.id, targetId: reviewTargetId, rating, comment }); setShowReviewModal(false); } };
+  const openReviewModal = (orderId: string, producerId: string) => { setReviewOrderId(orderId); setReviewTargetId(producerId); reviewFormik.setValues({ rating: 5, comment: '' }); setShowReviewModal(true); };
    const getProducerName = (producerId: string) => { const p = producers.find(prod => prod.id === producerId); return p ? (p.name || (p as any).user?.displayName || `${(p.firstName ?? '').trim()} ${(p.lastName ?? '').trim()}`.trim()) : 'Unknown Producer'; };
    const getProducerDisplayName = (order: Order) => order.producerDisplayName || getProducerName(order.producerId);
    const getOrderItemImage = (item: any) => {
@@ -477,9 +556,8 @@ export const ClientProfile: React.FC = () => {
       const offerMatch = offers.find((o) => o.id === offerId);
       return offerMatch?.imageUrl || '';
    };
-   const openDisputeModal = (orderId: string) => { setDisputeOrderId(orderId); setDisputeReason(''); setDisputeFiles([]); setShowDisputeModal(true); };
+  const openDisputeModal = (orderId: string) => { setDisputeOrderId(orderId); disputeFormik.setFieldValue('disputeReason', ''); setDisputeFiles([]); setShowDisputeModal(true); };
    const handleDisputeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) { setDisputeFiles(Array.from(e.target.files)); } };
-   const submitDispute = (e: React.FormEvent) => { e.preventDefault(); if (disputeOrderId && disputeReason) { reportProblem(disputeOrderId, disputeReason, disputeFiles); setShowDisputeModal(false); } };
    const getStatusBadge = (status: OrderStatus) => { const styles = { [OrderStatus.PENDING_VALIDATION]: 'bg-yellow-100 text-yellow-800', [OrderStatus.CONFIRMED_AWAITING_PAYMENT]: 'bg-blue-100 text-blue-800', [OrderStatus.PAID_IN_PREPARATION]: 'bg-purple-100 text-purple-800', [OrderStatus.IN_TRANSIT]: 'bg-indigo-100 text-indigo-800', [OrderStatus.DELIVERED]: 'bg-green-100 text-green-800', [OrderStatus.COMPLETED]: 'bg-gray-100 text-gray-800', [OrderStatus.CANCELLED]: 'bg-red-100 text-red-800', [OrderStatus.DISPUTE]: 'bg-red-100 text-red-800', }; return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-100'}`}>{status.replace(/_/g, ' ')}</span>; };
 
    const renderOrderList = (orderList: any[], emptyMsg: string) => {
@@ -999,17 +1077,17 @@ export const ClientProfile: React.FC = () => {
                   <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowUpgradeModal(false)}></div>
                   <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
                      <h3 className="text-lg font-medium text-gray-900 mb-4">{t('profile.upgrade')}</h3>
-                     <form onSubmit={handleUpgradeSubmit} className="space-y-4">
+                     <form onSubmit={upgradeFormik.handleSubmit} className="space-y-4">
                         <div>
                            <label className="block text-sm font-medium text-gray-700 mb-2">Producer Type</label>
                            <div className="flex space-x-4">
-                              <label className="flex items-center"><input type="radio" name="upgradeType" value="INDIVIDUAL" checked={upgradeData.type === 'INDIVIDUAL'} onChange={() => setUpgradeData({ ...upgradeData, type: 'INDIVIDUAL' })} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">Individual</span></label>
-                              <label className="flex items-center"><input type="radio" name="upgradeType" value="BUSINESS" checked={upgradeData.type === 'BUSINESS'} onChange={() => setUpgradeData({ ...upgradeData, type: 'BUSINESS' })} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">Business</span></label>
+                              <label className="flex items-center"><input type="radio" name="type" value="INDIVIDUAL" checked={upgradeFormik.values.type === 'INDIVIDUAL'} onChange={upgradeFormik.handleChange} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">Individual</span></label>
+                              <label className="flex items-center"><input type="radio" name="type" value="BUSINESS" checked={upgradeFormik.values.type === 'BUSINESS'} onChange={upgradeFormik.handleChange} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">Business</span></label>
                            </div>
                         </div>
-                        {upgradeData.type === 'BUSINESS' && (<div><label className="block text-sm font-medium text-gray-700">Farm/Business Name</label><input type="text" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeData.farmName} onChange={e => setUpgradeData({ ...upgradeData, farmName: e.target.value })} /></div>)}
-                        <div><label className="block text-sm font-medium text-gray-700">Description</label><textarea required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" rows={3} value={upgradeData.description} onChange={e => setUpgradeData({ ...upgradeData, description: e.target.value })} /></div>
-                        <div><label className="block text-sm font-medium text-gray-700 mb-2">Categories (Click to select)</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded bg-white">{PRODUCTION_TYPES.map(cat => (<button key={cat} type="button" onClick={() => toggleUpgradeCategory(cat)} className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${upgradeData.productionTypes.includes(cat) ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}</button>))}</div></div>
+                        {upgradeFormik.values.type === 'BUSINESS' && (<div><label className="block text-sm font-medium text-gray-700">Farm/Business Name</label><input type="text" name="farmName" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.farmName} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.farmName && upgradeFormik.errors.farmName ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.farmName}</p> : null}</div>)}
+                        <div><label className="block text-sm font-medium text-gray-700">Description</label><textarea name="description" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" rows={3} value={upgradeFormik.values.description} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.description && upgradeFormik.errors.description ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.description}</p> : null}</div>
+                        <div><label className="block text-sm font-medium text-gray-700 mb-2">Categories (Click to select)</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded bg-white">{PRODUCTION_TYPES.map(cat => (<button key={cat} type="button" onClick={() => toggleUpgradeCategory(cat)} className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${upgradeFormik.values.productionTypes.includes(cat) ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}</button>))}</div></div>
                         <div className="mt-5 sm:mt-6 flex justify-end gap-3"><button type="button" onClick={() => setShowUpgradeModal(false)} className="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:text-sm">Cancel</button><button type="submit" className="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 sm:text-sm">Upgrade Account</button></div>
                      </form>
                   </div>
@@ -1254,15 +1332,16 @@ export const ClientProfile: React.FC = () => {
                   <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
                   <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-sm sm:w-full sm:p-6">
                      <h3 className="text-lg font-medium text-gray-900 mb-4 text-center">{t('review.rate')}</h3>
-                     <form onSubmit={handleSubmitReview}>
+                     <form onSubmit={reviewFormik.handleSubmit}>
                         <div className="flex justify-center space-x-2 mb-6">
                            {[1, 2, 3, 4, 5].map((star) => (
-                              <button key={star} type="button" onClick={() => setRating(star)} className="focus:outline-none"><Star className={`h-8 w-8 ${star <= rating ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} /></button>
+                              <button key={star} type="button" onClick={() => { void reviewFormik.setFieldValue('rating', star); }} className="focus:outline-none"><Star className={`h-8 w-8 ${star <= reviewFormik.values.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} /></button>
                            ))}
                         </div>
                         <div className="mb-4">
                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('review.comment')}</label>
-                           <textarea rows={3} className="block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Share your experience..." />
+                           <textarea name="comment" rows={3} className="block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500" value={reviewFormik.values.comment} onChange={reviewFormik.handleChange} onBlur={reviewFormik.handleBlur} placeholder="Share your experience..." />
+                           {reviewFormik.touched.comment && reviewFormik.errors.comment ? <p className="text-xs text-red-600 mt-1">{reviewFormik.errors.comment}</p> : null}
                         </div>
                         <button type="submit" className="w-full bg-primary-600 text-white rounded-md py-2 text-sm font-bold hover:bg-primary-700">{t('review.submit')}</button>
                      </form>
@@ -1277,8 +1356,8 @@ export const ClientProfile: React.FC = () => {
                   <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowDisputeModal(false)}></div>
                   <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
                      <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2"><h3 className="text-lg font-bold text-gray-900">{t('order.reportProblem')}</h3><button onClick={() => setShowDisputeModal(false)}><X className="h-5 w-5 text-gray-400" /></button></div>
-                     <form onSubmit={submitDispute} className="space-y-4">
-                        <div><label className="block text-sm font-medium text-gray-700 mb-1">{t('order.reason')}</label><textarea required rows={3} className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" value={disputeReason} onChange={e => setDisputeReason(e.target.value)} placeholder="What's the issue?" /></div>
+                     <form onSubmit={disputeFormik.handleSubmit} className="space-y-4">
+                        <div><label className="block text-sm font-medium text-gray-700 mb-1">{t('order.reason')}</label><textarea name="disputeReason" required rows={3} className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" value={disputeFormik.values.disputeReason} onChange={disputeFormik.handleChange} onBlur={disputeFormik.handleBlur} placeholder="What's the issue?" />{disputeFormik.touched.disputeReason && disputeFormik.errors.disputeReason ? <p className="text-xs text-red-600 mt-1">{disputeFormik.errors.disputeReason}</p> : null}</div>
                         <div><label className="block text-sm font-medium text-gray-700 mb-1">{t('order.uploadFiles')}</label><input type="file" multiple accept="image/*,application/pdf" className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100" onChange={handleDisputeFileChange} /></div>
                         <div className="flex justify-end gap-3 pt-4"><button type="button" onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">{t('form.cancel')}</button><button type="submit" className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700">{t('order.submitReport')}</button></div>
                      </form>

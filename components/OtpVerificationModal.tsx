@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useFormik } from 'formik';
+import { z } from 'zod';
 
 type OtpAction = 'PROFILE_UPDATE' | 'WITHDRAWAL';
 
@@ -28,9 +30,44 @@ export const OtpVerificationModal: React.FC<OtpVerificationModalProps> = ({
   codeSentMessage = 'Enter the 6-digit code sent to your registered phone number.',
 }) => {
   const [step, setStep] = useState<'request' | 'verify'>('request');
-  const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const otpSchema = z.object({
+    code: z
+      .string()
+      .regex(/^\d{6}$/, 'Please enter a 6-digit code.'),
+  });
+
+  const otpFormik = useFormik({
+    initialValues: { code: '' },
+    validate: (values) => {
+      const parsed = otpSchema.safeParse(values);
+      if (parsed.success) return {};
+      const nextErrors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const key = String(issue.path[0] ?? '');
+        if (key && !nextErrors[key]) nextErrors[key] = issue.message;
+      }
+      return nextErrors;
+    },
+    onSubmit: async (values) => {
+      setError('');
+      setLoading(true);
+      try {
+        const res = await onVerifyOtp(action, values.code);
+        if (res.success && res.token) {
+          onVerified(res.token);
+        } else {
+          setError(res.message || 'Invalid or expired code');
+        }
+      } catch (e: any) {
+        setError(e?.message || 'Verification failed');
+      } finally {
+        setLoading(false);
+      }
+    },
+  });
 
   const handleSendCode = async () => {
     setError('');
@@ -44,30 +81,6 @@ export const OtpVerificationModal: React.FC<OtpVerificationModalProps> = ({
       }
     } catch (e: any) {
       setError(e?.message || 'Failed to send code');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = code.replace(/\D/g, '').slice(0, 6);
-    if (trimmed.length !== 6) {
-      setError('Please enter a 6-digit code.');
-      return;
-    }
-    setError('');
-    setLoading(true);
-    try {
-      const res = await onVerifyOtp(action, trimmed);
-      if (res.success && res.token) {
-        onVerified(res.token);
-        // Parent is responsible for closing after completing the protected action
-      } else {
-        setError(res.message || 'Invalid or expired code');
-      }
-    } catch (e: any) {
-      setError(e?.message || 'Verification failed');
     } finally {
       setLoading(false);
     }
@@ -103,23 +116,26 @@ export const OtpVerificationModal: React.FC<OtpVerificationModalProps> = ({
             </>
           )}
           {step === 'verify' && (
-            <form onSubmit={handleVerify}>
+            <form onSubmit={otpFormik.handleSubmit}>
               <p className="text-sm text-gray-600 mb-3">{codeSentMessage}</p>
               {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
               <input
+                name="code"
                 type="text"
                 inputMode="numeric"
                 maxLength={6}
                 placeholder="000000"
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                value={otpFormik.values.code}
+                onChange={(e) => otpFormik.setFieldValue('code', e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onBlur={otpFormik.handleBlur}
                 className="block w-full rounded-md border border-gray-300 px-3 py-2 text-center text-lg tracking-widest focus:border-primary-500 focus:ring-primary-500"
                 autoFocus
               />
+              {otpFormik.touched.code && otpFormik.errors.code ? <p className="text-sm text-red-600 mt-2">{otpFormik.errors.code}</p> : null}
               <div className="mt-4 flex gap-2">
                 <button
                   type="submit"
-                  disabled={loading || code.replace(/\D/g, '').length !== 6}
+                  disabled={loading || otpFormik.values.code.length !== 6}
                   className="flex-1 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
                 >
                   {loading ? 'Verifying…' : verifyLabel}
@@ -128,7 +144,7 @@ export const OtpVerificationModal: React.FC<OtpVerificationModalProps> = ({
                   Cancel
                 </button>
               </div>
-              <button type="button" onClick={() => { setStep('request'); setCode(''); setError(''); }} className="mt-2 text-sm text-primary-600 hover:underline">
+              <button type="button" onClick={() => { setStep('request'); otpFormik.resetForm(); setError(''); }} className="mt-2 text-sm text-primary-600 hover:underline">
                 Request new code
               </button>
             </form>

@@ -10,7 +10,6 @@ import {
   postGuestSupportMessage,
   postUserSupportMessage,
 } from './supportSessionsApi';
-const defaultSchedule: WeeklySchedule = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
 import { apiFetch, apiUpload, setToken, clearToken, getToken, setRefreshToken } from './apiService';
 import { logApiFailure } from './apiDebug';
 import { uploadAvatar } from './uploadService';
@@ -186,7 +185,7 @@ interface StoreContextType {
   registerClient: (data: Omit<ClientProfile, 'id' | 'joinedDate' | 'referrals' | 'referralCode'> & { referrerCode?: string }, password: string, avatarFile?: File | null) => Promise<{ success: boolean; message: string }>;
   verifyEmail: (code: string) => Promise<boolean>;
   updateClientProfile: (client: ClientProfile) => Promise<boolean>;
-  upgradeClientToProducer: (clientId: string, producerDetails: Partial<ProducerProfile>) => void;
+  upgradeClientToProducer: (clientId: string, producerDetails: Partial<ProducerProfile>) => Promise<boolean>;
   validateProducer: (id: string, status: ProducerStatus) => Promise<void>;
   saveProducerPaymentMethod: (producerId: string, method: PaymentMethod) => void;
   deleteProducerPaymentMethod: (producerId: string, methodId: string) => void;
@@ -273,7 +272,22 @@ const getOrdersEndpointsForUser = (activeUser?: UserSession | null): string[] =>
 };
 
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<UserSession | null>(null);
+  const [user, setUser] = useState<UserSession | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const savedUser = localStorage.getItem('currentUser');
+    if (!savedUser) return null;
+    try {
+      const parsedUser = JSON.parse(savedUser);
+      if (!isWebAppAllowedRole(parsedUser?.role)) {
+        clearToken();
+        localStorage.removeItem('currentUser');
+        return null;
+      }
+      return parsedUser;
+    } catch {
+      return null;
+    }
+  });
   // pendingRegistration kept in-memory for OTP verification flow
   const [pendingRegistration, setPendingRegistration] = useState<{ email: string, code: string, data: any, role: UserRole, password?: string } | null>(null);
   const [guestEmail, setGuestEmail] = useState<string | null>(null);
@@ -326,25 +340,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [supportSessionId, setSupportSessionId] = useState<string | null>(null);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('currentUser');
-    let parsedUser = null;
-    if (savedUser) {
-      try {
-        parsedUser = JSON.parse(savedUser);
-        if (isWebAppAllowedRole(parsedUser?.role)) {
-          setUser(parsedUser);
-          useSessionStore.getState().setUser(parsedUser);
-        } else {
-          clearToken();
-          localStorage.removeItem('currentUser');
-          useSessionStore.getState().clear();
-          parsedUser = null;
-        }
-      } catch (e) { }
-    }
+    useSessionStore.getState().setUser(user);
     const savedGuestEmail = localStorage.getItem('guestEmail');
     if (savedGuestEmail) setGuestEmail(savedGuestEmail);
-    fetchData(parsedUser); // Pass user directly to avoid stale-closure on first render
+    fetchData(user); // Pass user directly to avoid stale-closure on first render
   }, []);
 
   // Drop admin/staff sessions using JWT role (source of truth) even if localStorage user is stale.
@@ -1025,21 +1024,40 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const upgradeClientToProducer = (clientId: string, producerDetails: Partial<ProducerProfile>) => {
+  const upgradeClientToProducer = async (clientId: string, producerDetails: Partial<ProducerProfile>): Promise<boolean> => {
     const client = clients.find(c => c.id === clientId);
-    if (!client) return;
-    const newProducer: ProducerProfile = {
-      id: clientId, type: producerDetails.type || 'INDIVIDUAL', name: producerDetails.name || client.name,
-      firstName: client.firstName, lastName: client.lastName, email: client.email, phone: client.phone,
-      description: producerDetails.description || '', locations: client.locations, certifications: [],
-      productionTypes: producerDetails.productionTypes || [], status: ProducerStatus.PENDING,
-      paymentMethods: [], joinedDate: new Date().toISOString(), profileImageUrl: client.profileImageUrl,
-      availability: defaultSchedule, exceptions: [], favorites: client.favorites, searchHistory: client.searchHistory,
-      referralCode: client.referralCode, referrals: client.referrals, referredBy: client.referredBy
-    };
-    setProducers(prev => [...prev, newProducer]);
-    // Session update only — user role change is backend-driven in production
-    setUser(prev => prev ? { ...prev, role: UserRole.PRODUCER, producerId: newProducer.id } : null);
+    if (!client || !user) return false;
+    try {
+      const upgraded = await apiFetch<{ producerId: string; accessToken: string; refreshToken: string }>(
+        API_ENDPOINTS.profiles.upgradeToProducer,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            type: producerDetails.type || 'INDIVIDUAL',
+            name: producerDetails.name || client.name,
+            description: producerDetails.description || '',
+            productionTypes: producerDetails.productionTypes || [],
+          }),
+        },
+      );
+
+      if (upgraded?.accessToken) setToken(upgraded.accessToken);
+      if (upgraded?.refreshToken) setRefreshToken(upgraded.refreshToken);
+
+      const nextUser: UserSession = {
+        ...user,
+        role: UserRole.PRODUCER,
+        producerId: upgraded.producerId,
+      };
+      setUser(nextUser);
+      useSessionStore.getState().setUser(nextUser);
+      localStorage.setItem('currentUser', JSON.stringify(nextUser));
+      await fetchData(nextUser);
+      return true;
+    } catch (error) {
+      logApiFailure('Failed to upgrade client to producer', error);
+      return false;
+    }
   };
 
   const saveProducerPaymentMethod = (producerId: string, method: PaymentMethod) => {

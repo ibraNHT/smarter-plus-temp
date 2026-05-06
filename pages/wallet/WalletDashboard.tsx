@@ -6,6 +6,8 @@ import { SEO } from '../../components/SEO';
 import { TransactionType, UserRole, WithdrawalStatus, PaymentMethod } from '../../types';
 import { Link, useNavigate } from 'react-router-dom';
 import { OtpVerificationModal } from '../../components/OtpVerificationModal';
+import { useFormik } from 'formik';
+import { z } from 'zod';
 
 export const WalletDashboard: React.FC = () => {
   const { user, getWallet, fundWallet, requestWithdrawal, requestOtp, verifyOtp, producers, withdrawalRequests } = useStore();
@@ -14,8 +16,6 @@ export const WalletDashboard: React.FC = () => {
 
   const [showTopUp, setShowTopUp] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
-  const [amount, setAmount] = useState<number | string>('');
-  const [txnId, setTxnId] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<'ORANGE' | 'MTN' | 'BANK'>('ORANGE');
   const [selectedSavedMethodId, setSelectedSavedMethodId] = useState<string>('');
@@ -33,23 +33,54 @@ export const WalletDashboard: React.FC = () => {
   const pendingAmount = myRequests.filter(r => r.status === WithdrawalStatus.PENDING).reduce((acc, curr) => acc + curr.amount, 0);
   const availableBalance = wallet.balance - pendingAmount;
 
-  const handleTopUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    const result = await fundWallet(Number(amount), selectedProvider, txnId);
-    setLoading(false);
-    if (result.success) {
-      setShowTopUp(false);
-      setAmount('');
-      setTxnId('');
-      alert(result.message);
-    } else {
-      alert(result.message);
-    }
-  };
+  const topUpSchema = z.object({
+    amount: z.coerce.number().min(100, 'Amount must be at least 100 XAF.'),
+    txnId: z.string().trim().min(3, 'Transaction ID is required.'),
+  });
 
-  const handleWithdrawRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const topUpFormik = useFormik({
+    initialValues: { amount: '', txnId: '' },
+    validate: (values) => {
+      const parsed = topUpSchema.safeParse(values);
+      if (parsed.success) return {};
+      const nextErrors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const key = String(issue.path[0] ?? '');
+        if (key && !nextErrors[key]) nextErrors[key] = issue.message;
+      }
+      return nextErrors;
+    },
+    onSubmit: async (values) => {
+      setLoading(true);
+      const result = await fundWallet(Number(values.amount), selectedProvider, values.txnId.trim());
+      setLoading(false);
+      if (result.success) {
+        setShowTopUp(false);
+        topUpFormik.resetForm();
+      }
+      alert(result.message);
+    },
+  });
+
+  const withdrawSchema = z.object({
+    amount: z.coerce.number().min(100, 'Enter a valid amount (min 100 XAF).'),
+  });
+
+  const withdrawFormik = useFormik({
+    initialValues: { amount: '' },
+    validate: (values) => {
+      const parsed = withdrawSchema.safeParse(values);
+      if (parsed.success) return {};
+      const nextErrors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const key = String(issue.path[0] ?? '');
+        if (key && !nextErrors[key]) nextErrors[key] = issue.message;
+      }
+      const asNumber = Number(values.amount);
+      if (asNumber > availableBalance) nextErrors.amount = `Amount cannot exceed ${availableBalance.toLocaleString()} XAF.`;
+      return nextErrors;
+    },
+    onSubmit: async (values) => {
     if (!isProducer || !currentProducer) {
       alert("Withdrawals are for producers only.");
       return;
@@ -60,14 +91,11 @@ export const WalletDashboard: React.FC = () => {
     }
     const method = currentProducer.paymentMethods.find(pm => pm.id === selectedSavedMethodId);
     if (!method) return;
-    const withdrawAmount = Number(amount);
-    if (!withdrawAmount || withdrawAmount < 100) {
-      alert("Enter a valid amount (min 100 XAF).");
-      return;
-    }
+    const withdrawAmount = Number(values.amount);
     setPendingWithdraw({ amount: withdrawAmount, method });
     setShowOtpModal(true);
-  };
+    },
+  });
 
   const handleOtpVerifiedForWithdraw = async (token: string) => {
     if (!pendingWithdraw) return;
@@ -78,7 +106,7 @@ export const WalletDashboard: React.FC = () => {
     setPendingWithdraw(null);
     if (result.success) {
       setShowWithdraw(false);
-      setAmount('');
+      withdrawFormik.resetForm();
       alert(result.message);
     } else {
       alert(result.message);
@@ -256,7 +284,7 @@ export const WalletDashboard: React.FC = () => {
               <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
               <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
                 <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">{t('wallet.topup')}</h3>
-                <form onSubmit={handleTopUp} className="space-y-4">
+                <form onSubmit={topUpFormik.handleSubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">{t('wallet.selectMethod')}</label>
                     <div className="grid grid-cols-3 gap-3">
@@ -265,8 +293,10 @@ export const WalletDashboard: React.FC = () => {
                       <div onClick={() => setSelectedProvider('BANK')} className={`cursor-pointer border rounded-lg p-3 flex flex-col items-center text-center ${selectedProvider === 'BANK' ? 'border-blue-500 bg-blue-50' : ''}`}><Building className="h-6 w-6 text-blue-500 mb-2" /><span className="text-xs text-gray-900">Bank</span></div>
                     </div>
                   </div>
-                  <input type="number" required min="100" className="w-full border border-gray-300 p-2 rounded bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" />
-                  <input type="text" required className="w-full border border-gray-300 p-2 rounded bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500" value={txnId} onChange={e => setTxnId(e.target.value)} placeholder="Transaction ID" />
+                  <input type="number" name="amount" required min="100" className="w-full border border-gray-300 p-2 rounded bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500" value={topUpFormik.values.amount} onChange={topUpFormik.handleChange} onBlur={topUpFormik.handleBlur} placeholder="Amount" />
+                  {topUpFormik.touched.amount && topUpFormik.errors.amount ? <p className="text-xs text-red-600">{topUpFormik.errors.amount}</p> : null}
+                  <input type="text" name="txnId" required className="w-full border border-gray-300 p-2 rounded bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500" value={topUpFormik.values.txnId} onChange={topUpFormik.handleChange} onBlur={topUpFormik.handleBlur} placeholder="Transaction ID" />
+                  {topUpFormik.touched.txnId && topUpFormik.errors.txnId ? <p className="text-xs text-red-600">{topUpFormik.errors.txnId}</p> : null}
                   <button type="submit" disabled={loading} className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700">{loading ? 'Processing...' : 'Fund Wallet'}</button>
                 </form>
               </div>
@@ -290,7 +320,7 @@ export const WalletDashboard: React.FC = () => {
                       <Link to="/producer/profile" className="text-primary-600 hover:underline text-sm font-bold">Go to Profile to Add Payment Method</Link>
                     </div>
                   ) : (
-                    <form onSubmit={handleWithdrawRequest} className="mt-4 space-y-6">
+                    <form onSubmit={withdrawFormik.handleSubmit} className="mt-4 space-y-6">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">{t('wallet.selectSaved')}</label>
                         <div className="space-y-2">
@@ -321,10 +351,12 @@ export const WalletDashboard: React.FC = () => {
                         <div className="relative rounded-md shadow-sm">
                           <input
                             type="number"
+                            name="amount"
                             required min="100" max={availableBalance}
                             className="block w-full pr-12 border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500 p-2 border bg-white text-gray-900"
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
+                            value={withdrawFormik.values.amount}
+                            onChange={withdrawFormik.handleChange}
+                            onBlur={withdrawFormik.handleBlur}
                             placeholder="0"
                           />
                           <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
@@ -332,6 +364,7 @@ export const WalletDashboard: React.FC = () => {
                           </div>
                         </div>
                         <p className="mt-1 text-xs text-gray-500">Max available: {availableBalance.toLocaleString()} XAF</p>
+                        {withdrawFormik.touched.amount && withdrawFormik.errors.amount ? <p className="mt-1 text-xs text-red-600">{withdrawFormik.errors.amount}</p> : null}
                       </div>
 
                       <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">

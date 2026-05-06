@@ -9,6 +9,8 @@ import { Spinner } from '../../components/Spinner';
 import { OfferType, MarketType, UserRole } from '../../types';
 import { loadGooglePlacesApi, parseGooglePlace, citiesLooselyMatch } from '../../services/googlePlaces';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
+import { useFormik } from 'formik';
+import { z } from 'zod';
 
 export const ShoppingCart: React.FC = () => {
   const { cart, removeFromCart, placeOrder, user, clearCart, clients, producers, moveToFavorites, validateCoupon, pickupPoints, guestEmail, setGuestEmail } = useStore();
@@ -17,7 +19,30 @@ export const ShoppingCart: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [showRecap, setShowRecap] = useState(false);
   const [showGuestEmailModal, setShowGuestEmailModal] = useState(false);
-  const [tempEmail, setTempEmail] = useState('');
+  const guestEmailSchema = z.object({
+    tempEmail: z.string().trim().email('Please enter a valid email address.'),
+  });
+
+  const guestEmailFormik = useFormik({
+    initialValues: { tempEmail: '' },
+    validate: (values) => {
+      const parsed = guestEmailSchema.safeParse(values);
+      if (parsed.success) return {};
+      const nextErrors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const key = String(issue.path[0] ?? '');
+        if (key && !nextErrors[key]) nextErrors[key] = issue.message;
+      }
+      return nextErrors;
+    },
+    onSubmit: (values) => {
+      setGuestEmail(values.tempEmail.trim());
+      setShowGuestEmailModal(false);
+      alert(t('cart.loginRequired'));
+      navigate('/login');
+    },
+  });
+
 
   // Coupon State (discount from POST /api/coupons/validate; order sends coupon UUID)
   const [couponCode, setCouponCode] = useState('');
@@ -281,17 +306,6 @@ export const ShoppingCart: React.FC = () => {
       }
     } finally {
       setOrderPlacing(false);
-    }
-  };
-
-  const handleGuestEmailSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (tempEmail.includes('@')) {
-      setGuestEmail(tempEmail);
-      setShowGuestEmailModal(false);
-
-      alert(t('cart.loginRequired'));
-      navigate('/login');
     }
   };
 
@@ -811,18 +825,21 @@ export const ShoppingCart: React.FC = () => {
                 </button>
               </div>
               <p className="text-sm text-gray-500 mb-4">Please provide an email address so we can send your order details and track your cart.</p>
-              <form onSubmit={handleGuestEmailSubmit}>
+              <form onSubmit={guestEmailFormik.handleSubmit}>
                 <div className="mb-4">
                   <label htmlFor="tempEmail" className="block text-sm font-medium text-gray-700">Email Address</label>
                   <input
                     type="email"
                     id="tempEmail"
+                    name="tempEmail"
                     required
-                    value={tempEmail}
-                    onChange={(e) => setTempEmail(e.target.value)}
+                    value={guestEmailFormik.values.tempEmail}
+                    onChange={guestEmailFormik.handleChange}
+                    onBlur={guestEmailFormik.handleBlur}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                     placeholder="you@example.com"
                   />
+                  {guestEmailFormik.touched.tempEmail && guestEmailFormik.errors.tempEmail ? <p className="text-xs text-red-600 mt-1">{guestEmailFormik.errors.tempEmail}</p> : null}
                 </div>
                 <div className="flex justify-end gap-3">
                   <button type="button" onClick={() => setShowGuestEmailModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">Cancel</button>

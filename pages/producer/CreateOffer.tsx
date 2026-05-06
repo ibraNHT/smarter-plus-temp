@@ -8,6 +8,7 @@ import { generateProductDescription } from '../../services/geminiService';
 import { uploadOfferImage } from '../../services/uploadService';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { Sparkles, Loader2, Camera, MapPin, Clock, X } from 'lucide-react';
+import { z } from 'zod';
 
 const SERVICE_ONLY_CATEGORIES = new Set(['Service']);
 const SERVICE_UNITS = new Set<UnitOfMeasure>([
@@ -17,6 +18,35 @@ const SERVICE_UNITS = new Set<UnitOfMeasure>([
 ]);
 const PRODUCT_DEFAULT_UNIT = UnitOfMeasure.KG;
 const SERVICE_DEFAULT_UNIT = UnitOfMeasure.HOUR;
+const createOfferSchema = z.object({
+  title: z.string().trim().min(3, 'Title must be at least 3 characters.'),
+  description: z.string().trim().min(10, 'Description must be at least 10 characters.'),
+  category: z.string().trim().min(1, 'Category is required.'),
+  unit: z.string().trim().min(1, 'Unit is required.'),
+  price: z.number().min(1, 'Price must be greater than 0.'),
+  quantity: z.number().min(1, 'Quantity must be at least 1.'),
+  minQuantity: z.number().min(1, 'Minimum order must be at least 1.'),
+  maxQuantity: z.number().min(0, 'Maximum order cannot be negative.'),
+  offerLocation: z.string().trim().min(2, 'Product location is required.'),
+  imageUrl: z.string().trim().min(1, 'Please upload a product/service image.'),
+  type: z.nativeEnum(OfferType),
+  serviceDuration: z.number(),
+}).superRefine((data, ctx) => {
+  if (data.maxQuantity > 0 && data.maxQuantity < data.minQuantity) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['maxQuantity'],
+      message: 'Maximum order quantity cannot be less than Minimum order quantity.',
+    });
+  }
+  if (data.type === OfferType.SERVICE && data.serviceDuration < 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['serviceDuration'],
+      message: 'Service duration must be at least 1 hour.',
+    });
+  }
+});
 
 const normalizeOfferType = (
   rawType: unknown,
@@ -46,6 +76,7 @@ export const CreateOffer: React.FC = () => {
   const [loadingAI, setLoadingAI] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [existingOffer, setExistingOffer] = useState<Offer | undefined>(undefined);
   const [imageUrl, setImageUrl] = useState<string>('');
   const [imageUploading, setImageUploading] = useState(false);
@@ -86,7 +117,7 @@ export const CreateOffer: React.FC = () => {
   const selectableProductCategories = productCategories.length > 0 ? productCategories : [fallbackProductCategory];
   const selectableServiceCategories = serviceCategories.length > 0 ? serviceCategories : [fallbackServiceCategory];
   const hasInitializedEditForm = useRef(false);
-  const submitErrorRef = useRef<HTMLDivElement | null>(null);
+  const firstFieldErrorRef = useRef<HTMLDivElement | null>(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -113,10 +144,10 @@ export const CreateOffer: React.FC = () => {
   }, [registeredLocation]);
 
   useEffect(() => {
-    if (submitError) {
-      submitErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (Object.keys(fieldErrors).length > 0) {
+      firstFieldErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-  }, [submitError]);
+  }, [fieldErrors]);
 
   useEffect(() => {
     hasInitializedEditForm.current = false;
@@ -203,11 +234,7 @@ export const CreateOffer: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
-
-    if (formData.maxQuantity > 0 && formData.maxQuantity < formData.minQuantity) {
-      setSubmitError('Maximum order quantity cannot be less than Minimum order quantity.');
-      return;
-    }
+    setFieldErrors({});
 
     // Backend DTO requires `maxQuantity` as a number. Using `|| undefined` for 0 omitted the field
     // in JSON, which caused 400 validation errors for "unlimited" (0) max order.
@@ -235,8 +262,27 @@ export const CreateOffer: React.FC = () => {
       setSubmitError('Please wait for the image to finish uploading.');
       return;
     }
-    if (!imageUrl) {
-      setSubmitError('Please upload a product/service image.');
+    const validation = createOfferSchema.safeParse({
+      title: formData.title,
+      description: formData.description,
+      category: formData.category,
+      unit: formData.unit,
+      price: Number(formData.price),
+      quantity: Number(formData.quantity),
+      minQuantity: Number(formData.minQuantity),
+      maxQuantity: Number(formData.maxQuantity),
+      offerLocation,
+      imageUrl,
+      type: formData.type,
+      serviceDuration: Number(formData.serviceDuration),
+    });
+    if (!validation.success) {
+      const nextErrors: Record<string, string> = {};
+      for (const issue of validation.error.issues) {
+        const key = String(issue.path[0] ?? 'form');
+        if (!nextErrors[key]) nextErrors[key] = issue.message;
+      }
+      setFieldErrors(nextErrors);
       return;
     }
 
@@ -276,9 +322,8 @@ export const CreateOffer: React.FC = () => {
        <h1 className="text-3xl font-bold text-gray-900 mb-8">{isEditMode ? t('form.editOffer') : t('nav.newOffer')}</h1>
        
        <form onSubmit={handleSubmit} aria-busy={submitting} className="space-y-8 divide-y divide-gray-200 bg-white p-8 shadow rounded-lg">
-         {submitError && (
+        {submitError && (
            <div
-             ref={submitErrorRef}
              className="rounded-md bg-red-50 p-4 border border-red-200 text-sm text-red-800"
              role="alert"
            >
@@ -343,6 +388,7 @@ export const CreateOffer: React.FC = () => {
                <input type="text" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900" 
                  value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="e.g. Organic Red Onions"
                />
+              {fieldErrors.title && <p ref={firstFieldErrorRef} className="mt-1 text-xs text-red-600">{fieldErrors.title}</p>}
              </div>
 
              {/* Category Dropdown - Filtered by Producer Profile */}
@@ -355,6 +401,7 @@ export const CreateOffer: React.FC = () => {
                    <option key={cat} value={cat}>{t(`category.${cat}`)}</option>
                  ))}
                </select>
+              {fieldErrors.category && <p className="mt-1 text-xs text-red-600">{fieldErrors.category}</p>}
              </div>
 
              {/* AI Section */}
@@ -382,6 +429,7 @@ export const CreateOffer: React.FC = () => {
                <textarea rows={3} required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900"
                  value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}
                />
+              {fieldErrors.description && <p className="mt-1 text-xs text-red-600">{fieldErrors.description}</p>}
              </div>
              
              {/* SERVICE SPECIFIC FIELD */}
@@ -397,6 +445,7 @@ export const CreateOffer: React.FC = () => {
                        <input type="number" min="1" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900"
                           value={formData.serviceDuration} onChange={e => setFormData({...formData, serviceDuration: Number(e.target.value)})}
                        />
+                       {fieldErrors.serviceDuration && <p className="mt-1 text-xs text-red-600">{fieldErrors.serviceDuration}</p>}
                      </div>
                      <div>
                        <p className="text-xs text-gray-500 mt-5">Clients will book timeslots of this duration based on your Availability Calendar.</p>
@@ -410,6 +459,7 @@ export const CreateOffer: React.FC = () => {
                <input type="number" required min="0" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900"
                  value={formData.price} onChange={e => setFormData({...formData, price: Number(e.target.value)})}
                />
+              {fieldErrors.price && <p className="mt-1 text-xs text-red-600">{fieldErrors.price}</p>}
              </div>
 
              <div className="sm:col-span-2">
@@ -417,6 +467,7 @@ export const CreateOffer: React.FC = () => {
                <input type="number" required min="1" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900"
                   value={formData.quantity} onChange={e => setFormData({...formData, quantity: Number(e.target.value)})}
                />
+               {fieldErrors.quantity && <p className="mt-1 text-xs text-red-600">{fieldErrors.quantity}</p>}
              </div>
 
              <div className="sm:col-span-2">
@@ -442,6 +493,7 @@ export const CreateOffer: React.FC = () => {
                   value={formData.minQuantity} onChange={e => setFormData({...formData, minQuantity: Number(e.target.value)})}
                 />
                 <p className="mt-1 text-xs text-gray-500">Minimum amount a client can buy.</p>
+                {fieldErrors.minQuantity && <p className="mt-1 text-xs text-red-600">{fieldErrors.minQuantity}</p>}
              </div>
              <div className="sm:col-span-3">
                 <label className="block text-sm font-medium text-gray-700">{t('form.maxOrder')}</label>
@@ -450,6 +502,7 @@ export const CreateOffer: React.FC = () => {
                   value={formData.maxQuantity} onChange={e => setFormData({...formData, maxQuantity: Number(e.target.value)})}
                 />
                 <p className="mt-1 text-xs text-gray-500">Maximum amount per client (0 = Unlimited).</p>
+                {fieldErrors.maxQuantity && <p className="mt-1 text-xs text-red-600">{fieldErrors.maxQuantity}</p>}
              </div>
 
              {/* Location Selection */}
@@ -469,6 +522,7 @@ export const CreateOffer: React.FC = () => {
                  </select>
                </div>
                <p className="mt-1 text-xs text-gray-500">Select where this product is shipping from.</p>
+              {fieldErrors.offerLocation && <p className="mt-1 text-xs text-red-600">{fieldErrors.offerLocation}</p>}
              </div>
 
              {/* Toggles */}
@@ -562,6 +616,9 @@ export const CreateOffer: React.FC = () => {
                {imageError && (
                  <p className="mt-1 text-xs text-red-600">{imageError}</p>
                )}
+              {fieldErrors.imageUrl && (
+                <p className="mt-1 text-xs text-red-600">{fieldErrors.imageUrl}</p>
+              )}
              </div>
 
            </div>

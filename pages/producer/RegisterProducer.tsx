@@ -7,6 +7,8 @@ import { MapPin, X, Plus, Lock, Phone, Eye, EyeOff } from 'lucide-react';
 import { ProducerType, Location } from '../../types';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { uploadDocument } from '../../services/uploadService';
+import { useFormik } from 'formik';
+import { z } from 'zod';
 
 const AFRICA_COUNTRY_CODES = [
   // Central Africa
@@ -48,20 +50,6 @@ export const RegisterProducer: React.FC = () => {
   const [searchParams] = useSearchParams();
   const refCode = searchParams.get('ref');
 
-  const [formData, setFormData] = useState({
-    type: 'BUSINESS' as ProducerType,
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    phoneCode: '+237',
-    phone: '',
-    description: '',
-    productionTypes: [] as string[],
-    taxIdentificationNumber: '',
-    taxClearanceCertificateUrl: '',
-  });
-
   // Locations State
   const [locations, setLocations] = useState<Location[]>([]);
   const [currentLoc, setCurrentLoc] = useState({ region: '', city: '', address: '', lat: 0, lng: 0 });
@@ -73,6 +61,87 @@ export const RegisterProducer: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [taxDocUploading, setTaxDocUploading] = useState(false);
+
+  const registerProducerSchema = z.object({
+    type: z.enum(['BUSINESS', 'INDIVIDUAL']),
+    name: z.string().trim().min(2, 'Farm/producer name is required.'),
+    email: z.string().trim().email('Valid email is required.'),
+    password: z.string().min(8, 'Password must be at least 8 characters long.'),
+    confirmPassword: z.string().min(8, 'Confirm your password.'),
+    phoneCode: z.string().min(1),
+    phone: z.string().trim().min(6, 'Phone number is required.'),
+    description: z.string().trim().min(10, 'Description should be at least 10 characters.'),
+    productionTypes: z.array(z.string()),
+    taxIdentificationNumber: z.string(),
+    taxClearanceCertificateUrl: z.string(),
+  }).superRefine((values, ctx) => {
+    if (values.password !== values.confirmPassword) {
+      ctx.addIssue({ code: 'custom', path: ['confirmPassword'], message: 'Passwords do not match.' });
+    }
+    if (values.type === 'BUSINESS' && !values.taxIdentificationNumber.trim()) {
+      ctx.addIssue({ code: 'custom', path: ['taxIdentificationNumber'], message: 'Tax ID is required for business accounts.' });
+    }
+  });
+
+  const formik = useFormik({
+    initialValues: {
+      type: 'BUSINESS' as ProducerType,
+      name: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      phoneCode: '+237',
+      phone: '',
+      description: '',
+      productionTypes: [] as string[],
+      taxIdentificationNumber: '',
+      taxClearanceCertificateUrl: '',
+    },
+    validate: (values) => {
+      const parsed = registerProducerSchema.safeParse(values);
+      if (parsed.success) return {};
+      const nextErrors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const key = String(issue.path[0] ?? '');
+        if (key && !nextErrors[key]) nextErrors[key] = issue.message;
+      }
+      return nextErrors;
+    },
+    onSubmit: async (values) => {
+      setError('');
+      if (locations.length === 0) {
+        alert("Please add at least one location.");
+        return;
+      }
+      if (taxDocUploading) {
+        setError('Please wait for the tax document upload to finish.');
+        return;
+      }
+      const result = await registerProducer({
+        type: values.type,
+        name: values.name,
+        email: values.email,
+        phone: `${values.phoneCode}${values.phone}`,
+        description: values.description,
+        locations: locations,
+        certifications: [],
+        productionTypes: values.productionTypes.length > 0 ? values.productionTypes : ['Agriculture'],
+        referrerCode: refCode || undefined,
+        ...(values.type === 'BUSINESS'
+          ? {
+              taxIdentificationNumber: values.taxIdentificationNumber.trim() || undefined,
+              taxClearanceCertificateUrl: values.taxClearanceCertificateUrl.trim() || undefined,
+            }
+          : {}),
+      }, values.password);
+
+      if (result.success) {
+        navigate('/');
+      } else {
+        setError(result.message);
+      }
+    },
+  });
 
   const handleUseMyLocationSignup = async () => {
     setGeoLoading(true);
@@ -209,7 +278,7 @@ export const RegisterProducer: React.FC = () => {
     setTaxDocUploading(true);
     try {
       const url = await uploadDocument(file);
-      setFormData(prev => ({ ...prev, taxClearanceCertificateUrl: url }));
+      formik.setFieldValue('taxClearanceCertificateUrl', url);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Tax document upload failed.');
     } finally {
@@ -232,58 +301,10 @@ export const RegisterProducer: React.FC = () => {
   };
 
   const toggleCategory = (cat: string) => {
-    if (formData.productionTypes.includes(cat)) {
-      setFormData(prev => ({ ...prev, productionTypes: prev.productionTypes.filter(c => c !== cat) }));
+    if (formik.values.productionTypes.includes(cat)) {
+      formik.setFieldValue('productionTypes', formik.values.productionTypes.filter(c => c !== cat));
     } else {
-      setFormData(prev => ({ ...prev, productionTypes: [...prev.productionTypes, cat] }));
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    // Security Validations
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters long.');
-      return;
-    }
-
-    if (locations.length === 0) {
-      alert("Please add at least one location.");
-      return;
-    }
-    if (taxDocUploading) {
-      setError('Please wait for the tax document upload to finish.');
-      return;
-    }
-
-    const result = await registerProducer({
-      type: formData.type,
-      name: formData.name,
-      email: formData.email,
-      phone: `${formData.phoneCode}${formData.phone}`,
-      description: formData.description,
-      locations: locations,
-      certifications: [],
-      productionTypes: formData.productionTypes.length > 0 ? formData.productionTypes : ['Agriculture'],
-      referrerCode: refCode || undefined,
-      ...(formData.type === 'BUSINESS'
-        ? {
-            taxIdentificationNumber: formData.taxIdentificationNumber.trim() || undefined,
-            taxClearanceCertificateUrl: formData.taxClearanceCertificateUrl.trim() || undefined,
-          }
-        : {}),
-    }, formData.password);
-
-    if (result.success) {
-      navigate('/');
-    } else {
-      setError(result.message);
+      formik.setFieldValue('productionTypes', [...formik.values.productionTypes, cat]);
     }
   };
 
@@ -300,7 +321,7 @@ export const RegisterProducer: React.FC = () => {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8 bg-white p-8 shadow sm:rounded-lg">
+      <form onSubmit={formik.handleSubmit} className="space-y-8 bg-white p-8 shadow sm:rounded-lg">
 
         {/* Basic Info */}
         <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
@@ -313,8 +334,8 @@ export const RegisterProducer: React.FC = () => {
                   type="radio"
                   name="type"
                   value="BUSINESS"
-                  checked={formData.type === 'BUSINESS'}
-                  onChange={() => setFormData({ ...formData, type: 'BUSINESS' })}
+                  checked={formik.values.type === 'BUSINESS'}
+                  onChange={() => formik.setFieldValue('type', 'BUSINESS')}
                   className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300"
                 />
                 <span className="ml-2 text-sm text-gray-700">{t('profile.business')}</span>
@@ -324,8 +345,8 @@ export const RegisterProducer: React.FC = () => {
                   type="radio"
                   name="type"
                   value="INDIVIDUAL"
-                  checked={formData.type === 'INDIVIDUAL'}
-                  onChange={() => setFormData({ ...formData, type: 'INDIVIDUAL' })}
+                  checked={formik.values.type === 'INDIVIDUAL'}
+                  onChange={() => formik.setFieldValue('type', 'INDIVIDUAL')}
                   className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300"
                 />
                 <span className="ml-2 text-sm text-gray-700">{t('profile.individual')}</span>
@@ -338,13 +359,15 @@ export const RegisterProducer: React.FC = () => {
             <div className="mt-1">
               <input type="text" name="name" required
                 className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
-                value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                value={formik.values.name}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
               />
+              {formik.touched.name && formik.errors.name ? <p className="text-xs text-red-600 mt-1">{formik.errors.name}</p> : null}
             </div>
           </div>
 
-          {formData.type === 'BUSINESS' && (
+          {formik.values.type === 'BUSINESS' && (
             <>
               <div className="sm:col-span-6">
                 <label htmlFor="tin" className="block text-sm font-medium text-gray-700">
@@ -355,11 +378,13 @@ export const RegisterProducer: React.FC = () => {
                   id="tin"
                   type="text"
                   name="taxIdentificationNumber"
-                  required={formData.type === 'BUSINESS'}
+                  required={formik.values.type === 'BUSINESS'}
                   className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
-                  value={formData.taxIdentificationNumber}
-                  onChange={e => setFormData({ ...formData, taxIdentificationNumber: e.target.value })}
+                  value={formik.values.taxIdentificationNumber}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
                 />
+                {formik.touched.taxIdentificationNumber && formik.errors.taxIdentificationNumber ? <p className="text-xs text-red-600 mt-1">{formik.errors.taxIdentificationNumber}</p> : null}
               </div>
               <div className="sm:col-span-6">
                 <label htmlFor="taxCert" className="block text-sm font-medium text-gray-700">
@@ -378,11 +403,11 @@ export const RegisterProducer: React.FC = () => {
                 {taxDocUploading && (
                   <p className="text-xs text-gray-500 mt-1">Uploading document…</p>
                 )}
-                {!taxDocUploading && formData.taxClearanceCertificateUrl && (
+                {!taxDocUploading && formik.values.taxClearanceCertificateUrl && (
                   <p className="text-xs text-green-600 mt-1">
                     Document uploaded.{' '}
                     <a
-                      href={formData.taxClearanceCertificateUrl}
+                      href={formik.values.taxClearanceCertificateUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="underline"
@@ -400,10 +425,12 @@ export const RegisterProducer: React.FC = () => {
             <div className="mt-1">
               <input type="email" name="email" required
                 className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
-                value={formData.email}
-                onChange={e => setFormData({ ...formData, email: e.target.value })}
+                value={formik.values.email}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
               />
             </div>
+            {formik.touched.email && formik.errors.email ? <p className="text-xs text-red-600 mt-1">{formik.errors.email}</p> : null}
           </div>
 
           <div className="sm:col-span-3">
@@ -411,8 +438,10 @@ export const RegisterProducer: React.FC = () => {
             <div className="mt-1 flex rounded-md shadow-sm">
               <select
                 className="w-24 sm:w-32 inline-flex items-center px-2 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm overflow-hidden"
-                value={formData.phoneCode}
-                onChange={e => setFormData({ ...formData, phoneCode: e.target.value })}
+                name="phoneCode"
+                value={formik.values.phoneCode}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
               >
                 {AFRICA_COUNTRY_CODES.map(c => (
                   <option key={c.code} value={c.code}>{c.code} ({c.country})</option>
@@ -424,12 +453,14 @@ export const RegisterProducer: React.FC = () => {
                 </div>
                 <input type="tel" name="phone" required
                   className="focus:ring-primary-500 focus:border-primary-500 flex-1 block w-full pl-10 rounded-none rounded-r-md sm:text-sm border-gray-300 p-2 border bg-white text-gray-900"
-                  value={formData.phone}
-                  onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                  value={formik.values.phone}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
                   placeholder="612 345 678"
                 />
               </div>
             </div>
+            {formik.touched.phone && formik.errors.phone ? <p className="text-xs text-red-600 mt-1">{formik.errors.phone}</p> : null}
           </div>
 
           {/* Password Section */}
@@ -446,8 +477,10 @@ export const RegisterProducer: React.FC = () => {
                     required
                     minLength={8}
                     className="block w-full border border-gray-300 rounded-md shadow-sm p-2 pr-10 focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white text-gray-900"
-                    value={formData.password}
-                    onChange={e => setFormData({ ...formData, password: e.target.value })}
+                    name="password"
+                    value={formik.values.password}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
                   />
                   <button
                     type="button"
@@ -459,6 +492,7 @@ export const RegisterProducer: React.FC = () => {
                   </button>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">Min 8 characters</p>
+                {formik.touched.password && formik.errors.password ? <p className="text-xs text-red-600 mt-1">{formik.errors.password}</p> : null}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Confirm Password</label>
@@ -467,8 +501,10 @@ export const RegisterProducer: React.FC = () => {
                     type={showConfirmPassword ? 'text' : 'password'}
                     required
                     className="block w-full border border-gray-300 rounded-md shadow-sm p-2 pr-10 focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white text-gray-900"
-                    value={formData.confirmPassword}
-                    onChange={e => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    name="confirmPassword"
+                    value={formik.values.confirmPassword}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
                   />
                   <button
                     type="button"
@@ -479,6 +515,7 @@ export const RegisterProducer: React.FC = () => {
                     {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                {formik.touched.confirmPassword && formik.errors.confirmPassword ? <p className="text-xs text-red-600 mt-1">{formik.errors.confirmPassword}</p> : null}
               </div>
             </div>
             {error && <p className="text-sm text-red-600 mt-2 font-medium">{error}</p>}
@@ -489,10 +526,12 @@ export const RegisterProducer: React.FC = () => {
             <div className="mt-1">
               <textarea name="description" rows={3} required
                 className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
-                value={formData.description}
-                onChange={e => setFormData({ ...formData, description: e.target.value })}
+                value={formik.values.description}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
               />
             </div>
+            {formik.touched.description && formik.errors.description ? <p className="text-xs text-red-600 mt-1">{formik.errors.description}</p> : null}
           </div>
         </div>
 
@@ -501,7 +540,7 @@ export const RegisterProducer: React.FC = () => {
           <label className="block text-sm font-medium text-gray-700 mb-2">{t('form.category')} (Multi-select)</label>
           <div className="flex flex-wrap gap-2 mb-3">
             {PRODUCTION_TYPES.map(cat => {
-              const isSelected = formData.productionTypes.includes(cat);
+              const isSelected = formik.values.productionTypes.includes(cat);
               return (
                 <button
                   key={cat}

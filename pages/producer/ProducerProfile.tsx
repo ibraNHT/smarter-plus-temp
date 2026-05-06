@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
-import { UserRole, PaymentMethod, ProducerProfile as ProducerProfileType, Location, Portfolio } from '../../types';
+import { UserRole, ProducerProfile as ProducerProfileType, Location, Portfolio } from '../../types';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { User, Wallet, Shield, Tractor, CreditCard, Trash2, Plus, Camera, Upload, MapPin, FileText, X, LogOut, Image as ImageIcon, Video, Eye, Edit, CheckCircle, Heart, ArrowLeft, Search, Users, Copy, Loader2 } from 'lucide-react';
 import { useUpdateProducerProfileMutation } from '../../client-api/hooks/useUpdateProducerProfileMutation';
@@ -15,6 +15,8 @@ import { uploadAvatar, uploadPortfolioImage, uploadPortfolioVideo } from '../../
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 import { offerImageHero, offerImageInBox } from '../../utils/offerImageDisplay';
+import { useFormik } from 'formik';
+import { z } from 'zod';
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
@@ -53,7 +55,34 @@ export const ProducerProfile: React.FC = () => {
 
   // New Payment Method Form State
   const [showAddPayment, setShowAddPayment] = useState(false);
-  const [newPayment, setNewPayment] = useState<Partial<PaymentMethod>>({ provider: 'ORANGE', accountNumber: '', accountName: '' });
+  const paymentFormik = useFormik({
+    initialValues: { provider: 'ORANGE', accountNumber: '', accountName: '' },
+    validate: (values) => {
+      const parsed = z.object({
+        provider: z.enum(['ORANGE', 'MTN', 'BANK']),
+        accountNumber: z.string().trim().min(3, 'Account number is required.'),
+        accountName: z.string().trim().min(2, 'Account name is required.'),
+      }).safeParse(values);
+      if (parsed.success) return {};
+      const errs: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const key = String(issue.path[0] ?? '');
+        if (key && !errs[key]) errs[key] = issue.message;
+      }
+      return errs;
+    },
+    onSubmit: (values) => {
+      if (!user?.producerId) return;
+      saveProducerPaymentMethod(user.producerId, {
+        id: `pm-${Date.now()}`,
+        provider: values.provider as any,
+        accountNumber: values.accountNumber.trim(),
+        accountName: values.accountName.trim(),
+      });
+      setShowAddPayment(false);
+      paymentFormik.resetForm({ values: { provider: 'ORANGE', accountNumber: '', accountName: '' } });
+    },
+  });
 
   // Personal Info Form State
   const [formData, setFormData] = useState<ProducerProfileType | null>(null);
@@ -186,7 +215,7 @@ export const ProducerProfile: React.FC = () => {
     setLogoutConfirmOpen(false);
     navigate('/');
   };
-  const handleAddPayment = (e: React.FormEvent) => { e.preventDefault(); if (user?.producerId && newPayment.provider && newPayment.accountNumber && newPayment.accountName) { saveProducerPaymentMethod(user.producerId, { id: `pm-${Date.now()}`, provider: newPayment.provider, accountNumber: newPayment.accountNumber, accountName: newPayment.accountName }); setShowAddPayment(false); setNewPayment({ provider: 'ORANGE', accountNumber: '', accountName: '' }); } };
+  const handleAddPayment = (e: React.FormEvent) => { e.preventDefault(); void paymentFormik.submitForm(); };
   const handleInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => { if (!formData) return; const { name, value } = e.target; setFormData(prev => prev ? ({ ...prev, [name]: value }) : null); };
   const toggleCategory = (cat: string) => { if (!formData) return; if (formData.productionTypes.includes(cat)) { setFormData({ ...formData, productionTypes: formData.productionTypes.filter(c => c !== cat) }); } else { setFormData({ ...formData, productionTypes: [...formData.productionTypes, cat] }); } };
   const addLocation = () => {
@@ -264,6 +293,21 @@ export const ProducerProfile: React.FC = () => {
   const savePersonalInfo = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData) return;
+    const parsed = z.object({
+      type: z.enum(['BUSINESS', 'INDIVIDUAL']),
+      description: z.string().trim().min(2, 'Description is required.'),
+      phone: z.string().trim().min(6, 'Phone is required.'),
+      email: z.string().trim().email('Valid email is required.'),
+    }).safeParse({
+      type: formData.type,
+      description: formData.description ?? '',
+      phone: formData.phone ?? '',
+      email: formData.email ?? '',
+    });
+    if (!parsed.success) {
+      alert(parsed.error.issues[0]?.message || 'Please fix profile form errors.');
+      return;
+    }
     let displayName = formData.name;
     if (formData.type === 'INDIVIDUAL' && formData.firstName && formData.lastName) displayName = `${formData.firstName} ${formData.lastName}`;
     const payload = { ...formData, name: displayName };
@@ -478,6 +522,19 @@ export const ProducerProfile: React.FC = () => {
   const savePortfolio = (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.producerId) return;
+    const parsed = z.object({
+      title: z.string().trim().min(2, 'Title is required.'),
+      category: z.string().trim().min(1, 'Category is required.'),
+      description: z.string().trim().min(5, 'Description is required.'),
+    }).safeParse({
+      title: portfolioForm.title ?? '',
+      category: portfolioForm.category ?? '',
+      description: portfolioForm.description ?? '',
+    });
+    if (!parsed.success) {
+      alert(parsed.error.issues[0]?.message || 'Please fix portfolio form errors.');
+      return;
+    }
     if (portfolioImageUploading || portfolioVideoUploading) {
       alert('Please wait for media uploads to finish.');
       return;
@@ -573,6 +630,16 @@ export const ProducerProfile: React.FC = () => {
             <form onSubmit={savePersonalInfo} className="shadow sm:rounded-md sm:overflow-hidden bg-white p-6">
               {/* ... [Existing Info Form Code] ... */}
               <div className="flex justify-between items-center border-b border-gray-200 pb-4 mb-4"><h3 className="text-lg font-medium text-gray-900">{t('profile.tabs.info')}</h3></div>
+              <div className={`mb-4 rounded-md border p-3 ${formData.status === 'VALIDATED' ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'}`}>
+                <p className={`text-sm font-bold ${formData.status === 'VALIDATED' ? 'text-green-800' : 'text-yellow-800'}`}>
+                  Producer status: {formData.status === 'VALIDATED' ? 'Approved Producer' : 'Pending Approval'}
+                </p>
+                <p className={`text-xs mt-1 ${formData.status === 'VALIDATED' ? 'text-green-700' : 'text-yellow-700'}`}>
+                  {formData.status === 'VALIDATED'
+                    ? 'Your producer account is approved. You can publish offers normally.'
+                    : 'Your producer account is pending admin approval. Once approved, your status will change to Approved Producer.'}
+                </p>
+              </div>
               {/* Simplified view for brevity, functionality preserved */}
               <div className="flex items-center mb-6"><div className="relative"><div className="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">{formData.profileImageUrl ? (<img src={formData.profileImageUrl} alt="Profile" className="h-full w-full object-cover" />) : (<User className="h-12 w-12 text-gray-400" />)}</div><label className={`absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white shadow-sm ${avatarUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-primary-700'}`}><Camera className="h-4 w-4" /><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={avatarUploading} onChange={(e) => void handleFileUpload(e, 'profileImageUrl')} /></label></div><div className="ml-4"><p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p><p className="text-xs text-gray-500">{avatarUploading ? 'Uploading…' : 'JPG, PNG, or WebP. Max 2 MB.'}</p></div></div>
               <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
@@ -785,7 +852,7 @@ export const ProducerProfile: React.FC = () => {
             <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-6">
               <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-medium text-gray-900">{t('profile.payment.saved')}</h3><button onClick={() => setShowAddPayment(true)} className="flex items-center text-sm bg-primary-600 text-white px-3 py-2 rounded-md hover:bg-primary-700"><Plus className="h-4 w-4 mr-1" /> {t('form.add')}</button></div>
               <ul className="divide-y divide-gray-200 mb-6">{(!currentProducer?.paymentMethods || currentProducer.paymentMethods.length === 0) ? (<li className="py-4 text-gray-500 italic">{t('profile.payment.none')}</li>) : (currentProducer.paymentMethods.map(pm => (<li key={pm.id} className="py-4 flex justify-between items-center"><div className="flex items-center"><div className={`h-10 w-10 rounded-full flex items-center justify-center mr-3 ${pm.provider === 'ORANGE' ? 'bg-orange-100 text-orange-600' : pm.provider === 'MTN' ? 'bg-yellow-100 text-yellow-600' : 'bg-blue-100 text-blue-600'}`}><CreditCard className="h-5 w-5" /></div><div><p className="text-sm font-medium text-gray-900">{pm.provider} - {pm.accountNumber}</p><p className="text-xs text-gray-500">{pm.accountName}</p></div></div><button onClick={() => user.producerId && deleteProducerPaymentMethod(user.producerId, pm.id)} className="text-red-600 hover:text-red-800 p-2"><Trash2 className="h-5 w-5" /></button></li>)))}</ul>
-              {showAddPayment && (<div className="bg-gray-50 p-4 rounded-md border border-gray-200 animate-fade-in"><h4 className="text-sm font-bold text-gray-700 mb-3">{t('profile.payment.add')}</h4><form onSubmit={handleAddPayment} className="space-y-4"><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.provider')}</label><select className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" value={newPayment.provider} onChange={e => setNewPayment({ ...newPayment, provider: e.target.value as any })}><option value="ORANGE">Orange Money</option><option value="MTN">MTN Mobile Money</option><option value="BANK">Bank Transfer</option></select></div><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.accNum')}</label><input type="text" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder={newPayment.provider === 'BANK' ? 'IBAN / Account No' : '6...'} value={newPayment.accountNumber} onChange={e => setNewPayment({ ...newPayment, accountNumber: e.target.value })} /></div><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.accName')}</label><input type="text" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder="Full Name on Account" value={newPayment.accountName} onChange={e => setNewPayment({ ...newPayment, accountName: e.target.value })} /></div><div className="flex justify-end space-x-3 mt-4"><button type="button" onClick={() => setShowAddPayment(false)} className="text-gray-600 text-sm hover:text-gray-800">{t('form.cancel')}</button><button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded-md text-sm hover:bg-primary-700">{t('form.save')}</button></div></form></div>)}
+              {showAddPayment && (<div className="bg-gray-50 p-4 rounded-md border border-gray-200 animate-fade-in"><h4 className="text-sm font-bold text-gray-700 mb-3">{t('profile.payment.add')}</h4><form onSubmit={handleAddPayment} className="space-y-4"><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.provider')}</label><select name="provider" className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" value={paymentFormik.values.provider} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur}><option value="ORANGE">Orange Money</option><option value="MTN">MTN Mobile Money</option><option value="BANK">Bank Transfer</option></select></div><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.accNum')}</label><input type="text" name="accountNumber" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder={paymentFormik.values.provider === 'BANK' ? 'IBAN / Account No' : '6...'} value={paymentFormik.values.accountNumber} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur} />{paymentFormik.touched.accountNumber && paymentFormik.errors.accountNumber ? <p className="text-xs text-red-600 mt-1">{paymentFormik.errors.accountNumber}</p> : null}</div><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.accName')}</label><input type="text" name="accountName" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder="Full Name on Account" value={paymentFormik.values.accountName} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur} />{paymentFormik.touched.accountName && paymentFormik.errors.accountName ? <p className="text-xs text-red-600 mt-1">{paymentFormik.errors.accountName}</p> : null}</div><div className="flex justify-end space-x-3 mt-4"><button type="button" onClick={() => setShowAddPayment(false)} className="text-gray-600 text-sm hover:text-gray-800">{t('form.cancel')}</button><button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded-md text-sm hover:bg-primary-700">{t('form.save')}</button></div></form></div>)}
             </div>
           )}
 

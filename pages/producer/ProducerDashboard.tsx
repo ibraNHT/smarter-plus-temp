@@ -9,7 +9,7 @@ import { Spinner } from '../../components/Spinner';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 
 export const ProducerDashboard: React.FC = () => {
-   const { user, getProducerOffers, deleteOffer, producers, clients, orders, confirmOrder, rejectOrder, startDelivery, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating } = useStore();
+   const { user, getProducerOffers, deleteOffer, producers, clients, orders, confirmOrder, rejectOrder, startDelivery, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating, pickupPoints } = useStore();
    const { t } = useTranslation();
    const navigate = useNavigate();
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -106,22 +106,49 @@ export const ProducerDashboard: React.FC = () => {
    }
 
    const getClientDetails = (clientId: string) => {
-      return clients.find(c => c.id === clientId);
+      const fromClientProfile = clients.find(
+         (c) => c.id === clientId || (c as any).userId === clientId,
+      );
+      if (fromClientProfile) return fromClientProfile as any;
+
+      // Fallback for legacy rows where order.clientId stored auth user id.
+      return producers.find(
+         (p) => p.id === clientId || (p as any).userId === clientId,
+      ) as any;
    };
 
    const getClientDisplayName = (order: Order) => {
       if (order.clientDisplayName) return order.clientDisplayName;
       const c = getClientDetails(order.clientId);
-      if (!c) return 'Unknown';
+      if (!c) return `Client ${order.clientId.slice(0, 8)}`;
       const name = c.name || (c as any).user?.displayName || `${(c.firstName ?? '').trim()} ${(c.lastName ?? '').trim()}`.trim();
-      return name || 'Unknown';
+      return name || `Client ${order.clientId.slice(0, 8)}`;
    };
 
-   const getClientAddress = (clientId: string) => {
-      const c = getClientDetails(clientId);
-      if (!c || c.locations.length === 0) return 'No Address';
-      const primary = c.locations[0];
-      return [primary.address, primary.city, primary.region].filter(Boolean).join(', ');
+   const getClientAddress = (order: Order) => {
+      if (order.deliveryMethod === 'PICKUP' && order.pickupPointId) {
+         const point = pickupPoints.find((p) => p.id === order.pickupPointId);
+         if (point) return `${point.address}, ${point.city}`;
+      }
+
+      const c = getClientDetails(order.clientId) as any;
+      const clientLocations = Array.isArray(c?.locations) ? c.locations : [];
+      if (clientLocations.length > 0) {
+         const primary = clientLocations[0];
+         const joined = [primary.address, primary.city, primary.region].filter(Boolean).join(', ');
+         if (joined) return joined;
+      }
+
+      // Legacy migrated users may have location only on producer profile.
+      const linkedProducer = producers.find((p: any) => p.userId && p.userId === c?.userId);
+      const producerLocations = Array.isArray((linkedProducer as any)?.locations) ? (linkedProducer as any).locations : [];
+      if (producerLocations.length > 0) {
+         const primary = producerLocations[0];
+         const joined = [primary.address, primary.city, primary.region].filter(Boolean).join(', ');
+         if (joined) return joined;
+      }
+
+      return 'No Address';
    };
 
    const getOrderItemImage = (item: any) => {
@@ -658,7 +685,7 @@ export const ProducerDashboard: React.FC = () => {
                         </div>
                         <div className="flex items-start">
                            <MapPin className="h-4 w-4 text-gray-500 mr-2 mt-0.5" />
-                           <span className="text-sm text-gray-600">{t('dash.address')}: {getClientAddress(selectedOrder.clientId)}</span>
+                           <span className="text-sm text-gray-600">{t('dash.address')}: {getClientAddress(selectedOrder)}</span>
                         </div>
 
                         {selectedOrder.contactRevealed && (

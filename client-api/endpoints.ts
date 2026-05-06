@@ -23,6 +23,7 @@ export const API_ENDPOINTS = {
     client: "/api/profiles/client",
     producer: "/api/profiles/producer",
     meClient: "/api/profiles/me/client",
+    upgradeToProducer: "/api/profiles/upgrade-to-producer",
   },
   producers: {
     list: "/api/producers",

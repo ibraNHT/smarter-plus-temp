@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { useTranslation } from '../services/i18nContext';
 import { X, Lock, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useStore } from '../services/storeContext';
+import { useFormik } from 'formik';
+import { z } from 'zod';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
@@ -13,9 +15,6 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
   const { t } = useTranslation();
   const { changePassword } = useStore();
   
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -23,45 +22,58 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  if (!isOpen) return null;
+  const schema = z
+    .object({
+      currentPassword: z.string().min(1, 'Current password is required.'),
+      newPassword: z.string().min(8, 'New password must be at least 8 characters long.'),
+      confirmPassword: z.string().min(8, 'Confirm your new password.'),
+    })
+    .refine((v) => v.newPassword === v.confirmPassword, {
+      message: 'New passwords do not match.',
+      path: ['confirmPassword'],
+    })
+    .refine((v) => v.currentPassword !== v.newPassword, {
+      message: 'New password cannot be the same as the old password.',
+      path: ['newPassword'],
+    });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
+  const formik = useFormik({
+    initialValues: {
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    },
+    validate: (values) => {
+      const parsed = schema.safeParse(values);
+      if (parsed.success) return {};
+      const nextErrors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const key = String(issue.path[0] ?? '');
+        if (key && !nextErrors[key]) nextErrors[key] = issue.message;
+      }
+      return nextErrors;
+    },
+    onSubmit: async (values) => {
+      setError('');
+      setSuccess('');
+      setLoading(true);
+      const result = await changePassword(values.currentPassword, values.newPassword);
+      setLoading(false);
 
-    // Validation
-    if (newPassword.length < 8) {
-        setError('New password must be at least 8 characters long.');
-        return;
-    }
-    if (newPassword !== confirmPassword) {
-        setError('New passwords do not match.');
-        return;
-    }
-    if (currentPassword === newPassword) {
-        setError('New password cannot be the same as the old password.');
-        return;
-    }
-
-    setLoading(true);
-    const result = await changePassword(currentPassword, newPassword);
-    setLoading(false);
-
-    if (result.success) {
+      if (result.success) {
         setSuccess(result.message);
         setTimeout(() => {
-            onClose();
-            // Reset form
-            setCurrentPassword('');
-            setNewPassword('');
-            setConfirmPassword('');
-            setSuccess('');
+          onClose();
+          formik.resetForm();
+          setSuccess('');
         }, 2000);
-    } else {
+      } else {
         setError(result.message);
-    }
-  };
+      }
+    },
+  });
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
@@ -108,15 +120,17 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={formik.handleSubmit} className="space-y-4">
                     <div className="relative">
                         <label className="block text-xs font-bold text-gray-700 mb-1">Current Password</label>
                         <input 
+                            name="currentPassword"
                             type={showCurrentPassword ? 'text' : 'password'} 
                             required
                             className="w-full border border-gray-300 rounded-md p-2 pr-10 text-sm focus:ring-primary-500 focus:border-primary-500"
-                            value={currentPassword}
-                            onChange={(e) => setCurrentPassword(e.target.value)}
+                            value={formik.values.currentPassword}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
                         />
                         <button
                           type="button"
@@ -126,16 +140,19 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                         >
                           {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
+                        {formik.touched.currentPassword && formik.errors.currentPassword ? <p className="text-xs text-red-600 mt-1">{formik.errors.currentPassword}</p> : null}
                     </div>
                     <div className="relative">
                         <label className="block text-xs font-bold text-gray-700 mb-1">New Password</label>
                         <input 
+                            name="newPassword"
                             type={showNewPassword ? 'text' : 'password'} 
                             required
                             minLength={8}
                             className="w-full border border-gray-300 rounded-md p-2 pr-10 text-sm focus:ring-primary-500 focus:border-primary-500"
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
+                            value={formik.values.newPassword}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
                         />
                         <button
                           type="button"
@@ -145,15 +162,18 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                         >
                           {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
+                        {formik.touched.newPassword && formik.errors.newPassword ? <p className="text-xs text-red-600 mt-1">{formik.errors.newPassword}</p> : null}
                     </div>
                     <div className="relative">
                         <label className="block text-xs font-bold text-gray-700 mb-1">Confirm New Password</label>
                         <input 
+                            name="confirmPassword"
                             type={showConfirmPassword ? 'text' : 'password'} 
                             required
                             className="w-full border border-gray-300 rounded-md p-2 pr-10 text-sm focus:ring-primary-500 focus:border-primary-500"
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            value={formik.values.confirmPassword}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
                         />
                         <button
                           type="button"
@@ -163,6 +183,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                         >
                           {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
+                        {formik.touched.confirmPassword && formik.errors.confirmPassword ? <p className="text-xs text-red-600 mt-1">{formik.errors.confirmPassword}</p> : null}
                     </div>
 
                     <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
