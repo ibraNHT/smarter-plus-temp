@@ -122,6 +122,27 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
       )
     : 0;
   const userReviews = profileReviews;
+  const getReviewerDisplay = (review: Review) => {
+    const fromCatalogProducer = producers.find((p) => p.userId === review.reviewerId);
+    const fromCatalogClient = clients.find((c) => c.userId === review.reviewerId);
+    const row: any = fromCatalogProducer || fromCatalogClient;
+    const catalogName = row
+      ? (row.name ||
+          row.user?.displayName ||
+          `${(row.firstName ?? "").trim()} ${(row.lastName ?? "").trim()}`.trim()).trim()
+      : "";
+    const catalogAvatar = row
+      ? (row.profileImageUrl || row.user?.profileImageUrl || "").trim() || undefined
+      : undefined;
+    const apiName = (review.reviewerDisplayName ?? "").trim();
+    const apiAvatar =
+      typeof review.reviewerProfileImageUrl === "string" &&
+      review.reviewerProfileImageUrl.trim()
+        ? review.reviewerProfileImageUrl.trim()
+        : undefined;
+    const name = apiName || catalogName || t("review.reviewerFallback");
+    return { name, avatarUrl: apiAvatar ?? catalogAvatar };
+  };
 
   // For Producers Only
   const activeOffers = role === "PRODUCER" && id ? getProducerOffers(id) : [];
@@ -152,14 +173,11 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
         <ArrowLeft className="h-5 w-5 mr-2" /> Back
       </button>
 
-      <div className="bg-white shadow-xl rounded-lg overflow-hidden">
-        {/* Header / Cover */}
-        <div className="bg-primary-600 h-32 sm:h-48"></div>
-
-        <div className="px-6 pb-6">
-          <div className="relative flex justify-between items-end -mt-12 sm:-mt-16 mb-6">
-            <div className="flex items-end">
-              <div className="h-24 w-24 sm:h-32 sm:w-32 rounded-full ring-4 ring-white bg-white flex items-center justify-center overflow-hidden shadow-md">
+      <div className="bg-white shadow-xl rounded-lg overflow-hidden border border-gray-100">
+        <div className="px-6 pt-6 pb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-5 border-b border-gray-100">
+            <div className="flex items-center min-w-0">
+              <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full ring-2 ring-gray-100 bg-white flex items-center justify-center overflow-hidden shadow-sm shrink-0">
                 {profileData.profileImageUrl ? (
                   <img
                     src={profileData.profileImageUrl}
@@ -170,8 +188,8 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
                   <User className="h-12 w-12 text-gray-300" />
                 )}
               </div>
-              <div className="ml-4 mb-1 sm:mb-2">
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
+              <div className="ml-4 min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2 flex-wrap">
                   {displayName}
                   {isVerified && (
                     <span
@@ -189,7 +207,7 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
             </div>
 
             {/* Rating Badge */}
-            <div className="flex flex-col items-end">
+            <div className="flex flex-col sm:items-end">
               <div className="flex items-center bg-yellow-50 px-3 py-1 rounded-lg border border-yellow-100">
                 <Star className="w-5 h-5 text-yellow-400 fill-current mr-1" />
                 <span className="text-xl font-bold text-yellow-700">
@@ -243,7 +261,10 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
                     <span className="text-xs text-gray-500 block uppercase">
                       Description
                     </span>
-                    <p className="text-sm text-gray-700 mt-1">
+                    <p
+                      className="text-sm text-gray-700 mt-1 break-words whitespace-pre-wrap"
+                      style={{ overflowWrap: "anywhere" }}
+                    >
                       {profileData.description || "No description provided."}
                     </p>
                   </div>
@@ -348,29 +369,47 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
                   <p className="text-gray-500 italic">No reviews yet.</p>
                 ) : (
                   <div className="space-y-4">
-                    {userReviews.map((review) => (
+                    {userReviews.map((review) => {
+                      const reviewer = getReviewerDisplay(review);
+                      const reviewerInitial = reviewer.name.charAt(0).toUpperCase();
+                      return (
                       <div
                         key={review.id}
                         className="border-b border-gray-100 pb-4"
                       >
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center">
+                        <div className="flex items-center justify-between mb-1 gap-3">
+                          <div className="flex items-center min-w-0">
+                            {reviewer.avatarUrl ? (
+                              <img
+                                src={reviewer.avatarUrl}
+                                alt=""
+                                className="h-8 w-8 rounded-full object-cover mr-2 shrink-0"
+                              />
+                            ) : (
+                              <div className="h-8 w-8 rounded-full bg-gray-200 text-gray-600 text-xs font-bold flex items-center justify-center mr-2 shrink-0">
+                                {reviewerInitial}
+                              </div>
+                            )}
+                            <span className="text-sm font-medium text-gray-900 truncate mr-3">
+                              {reviewer.name}
+                            </span>
                             {[...Array(5)].map((_, i) => (
                               <Star
                                 key={i}
                                 className={`w-3 h-3 ${i < review.rating ? "text-yellow-400 fill-current" : "text-gray-300"}`}
                               />
                             ))}
-                            <span className="ml-2 text-xs text-gray-400">
-                              {new Date(review.createdAt).toLocaleDateString()}
-                            </span>
                           </div>
+                          <span className="text-xs text-gray-400 shrink-0">
+                            {new Date(review.createdAt).toLocaleDateString()}
+                          </span>
                         </div>
                         <p className="text-sm text-gray-700">
                           {review.comment}
                         </p>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
