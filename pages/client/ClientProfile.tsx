@@ -1298,6 +1298,12 @@ export const ClientProfile: React.FC = () => {
                                        <p className="text-xs text-gray-500">
                                           {item.cartQuantity ?? item.quantity ?? 1} {item.unit || 'units'} × {(item.price ?? 0).toLocaleString()} XAF
                                        </p>
+                                       {(String(item.type ?? '').toUpperCase() === 'SERVICE' || !!item.bookingDate) && item.bookingDate && (
+                                          <p className="text-xs text-purple-800 font-semibold mt-1 flex items-center gap-1">
+                                             <Calendar className="h-3 w-3 shrink-0" />
+                                             {t('service.appointment')}: {new Date(item.bookingDate).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                                          </p>
+                                       )}
                                     </div>
                                     <span className="text-sm font-bold text-gray-900 flex-shrink-0">
                                        {((item.price ?? 0) * (item.cartQuantity ?? item.quantity ?? 1)).toLocaleString()} XAF

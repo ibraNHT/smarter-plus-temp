@@ -253,7 +253,7 @@ interface StoreContextType {
   getProducerOffers: (producerId: string) => Offer[];
   getOfferById: (offerId: string) => Offer | undefined;
   getAvailableSlots: (producerId: string, date: Date, durationHours: number) => Date[];
-  addToCart: (offer: Offer, quantity: number, bookingDate?: string) => { success: boolean; error?: 'PRODUCER_CONFLICT' | 'OWN_OFFER' };
+  addToCart: (offer: Offer, quantity: number, bookingDate?: string) => { success: boolean; error?: 'PRODUCER_CONFLICT' | 'OWN_OFFER' | 'DUPLICATE_SERVICE_SLOT' };
   removeFromCart: (offerId: string) => void;
   clearCart: () => void;
   placeOrder: (
@@ -1357,11 +1357,35 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── CART ────────────────────────────────────────────────────────────────────
 
-  const addToCart = (offer: Offer, quantity: number, bookingDate?: string): { success: boolean; error?: 'PRODUCER_CONFLICT' | 'OWN_OFFER' } => {
+  const addToCart = (offer: Offer, quantity: number, bookingDate?: string): { success: boolean; error?: 'PRODUCER_CONFLICT' | 'OWN_OFFER' | 'DUPLICATE_SERVICE_SLOT' } => {
     if (user?.role === UserRole.PRODUCER && user.producerId && offer.producerId === user.producerId) {
       return { success: false, error: 'OWN_OFFER' };
     }
     if (cart.length > 0 && cart[0].producerId !== offer.producerId) return { success: false, error: 'PRODUCER_CONFLICT' };
+    if (offer.type === OfferType.SERVICE && bookingDate) {
+      const alreadyInCart = cart.some(
+        (i) =>
+          i.type === OfferType.SERVICE &&
+          i.producerId === offer.producerId &&
+          i.id === offer.id &&
+          i.bookingDate === bookingDate,
+      );
+      if (alreadyInCart) return { success: false, error: 'DUPLICATE_SERVICE_SLOT' };
+      const alreadyBookedInOrders = orders.some(
+        (o) =>
+          o.clientId === user?.clientId &&
+          o.producerId === offer.producerId &&
+          o.status !== OrderStatus.CANCELLED &&
+          (o.items || []).some(
+            (item) =>
+              item.type === OfferType.SERVICE &&
+              item.id === offer.id &&
+              !!item.bookingDate &&
+              new Date(item.bookingDate).toISOString() === new Date(bookingDate).toISOString(),
+          ),
+      );
+      if (alreadyBookedInOrders) return { success: false, error: 'DUPLICATE_SERVICE_SLOT' };
+    }
     setCart(prev => {
       if (offer.type === OfferType.SERVICE && bookingDate) return [...prev, { ...offer, cartQuantity: quantity, bookingDate }];
       const exists = prev.find(i => i.id === offer.id);
@@ -1720,7 +1744,23 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
     const dateStr = `${y}-${m}-${d}`;
-    const isBlocked = producer.exceptions?.some(ex => ex.date === dateStr);
+    const normalizeExceptionDate = (raw: string): string => {
+      if (!raw) return '';
+      const trimmed = String(raw).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+      const ddmmyyyy = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (ddmmyyyy) {
+        const [, dd, mm, yyyy] = ddmmyyyy;
+        return `${yyyy}-${mm}-${dd}`;
+      }
+      const dt = new Date(trimmed);
+      if (!Number.isFinite(dt.getTime())) return '';
+      const yy = dt.getFullYear();
+      const mo = String(dt.getMonth() + 1).padStart(2, '0');
+      const da = String(dt.getDate()).padStart(2, '0');
+      return `${yy}-${mo}-${da}`;
+    };
+    const isBlocked = producer.exceptions?.some(ex => normalizeExceptionDate(ex.date) === dateStr);
     if (isBlocked || !schedule || schedule.length === 0) return [];
     const bookedRanges = orders.filter(o => o.producerId === producerId && o.status !== OrderStatus.CANCELLED).flatMap(o => o.items).filter(item => item.type === OfferType.SERVICE && item.bookingDate && item.bookingDate.startsWith(dateStr)).map(item => ({ start: new Date(item.bookingDate!).getTime(), end: new Date(item.bookingDate!).getTime() + (item.serviceDuration || 1) * 3600000 }));
     const slots: Date[] = [];

@@ -4,11 +4,13 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { ArrowLeft, ShoppingCart, MessageCircle, MapPin, ShieldCheck, Package, Plus, Minus, User, Lock, Truck, AlertCircle, Calendar, Clock, Star, Image as ImageIcon, PlayCircle, X, Heart, Layers } from 'lucide-react';
-import { MarketType, OfferType, UserRole } from '../../types';
+import { MarketType, OfferType, OrderStatus, UserRole } from '../../types';
 import { SEO } from '../../components/SEO';
 import { ProductDetailsSkeleton } from '../../components/skeletons/ProductDetailsSkeleton';
 import { Spinner } from '../../components/Spinner';
 import { offerImageHero, offerImageInBox } from '../../utils/offerImageDisplay';
+import { apiFetch } from '../../services/apiService';
+import { API_ENDPOINTS } from '../../client-api/endpoints';
 
 /** Parse `YYYY-MM-DD` from `<input type="date">` as a local calendar day (avoids UTC weekday shifts). */
 function parseLocalYmd(ymd: string): Date {
@@ -19,7 +21,7 @@ function parseLocalYmd(ymd: string): Date {
 
 export const ProductDetails: React.FC = () => {
   const { offerId } = useParams<{ offerId: string }>();
-  const { getOfferById, producers, addToCart, clearCart, startNegotiation, user, getAvailableSlots, getAverageRating, getProducerPortfolios, toggleFavorite, clients, reviews, compareList, addToCompare, removeFromCompare, isInitialCatalogLoading } = useStore();
+  const { getOfferById, producers, addToCart, clearCart, startNegotiation, user, getAverageRating, getProducerPortfolios, toggleFavorite, clients, reviews, compareList, addToCompare, removeFromCompare, isInitialCatalogLoading, orders, cart } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -31,8 +33,13 @@ export const ProductDetails: React.FC = () => {
 
   // Booking State
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [availableSlots, setAvailableSlots] = useState<Date[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [slotBlockReason, setSlotBlockReason] = useState<string>('');
+  const [serviceSlotStates, setServiceSlotStates] = useState<Array<{
+    time: Date;
+    status: 'AVAILABLE' | 'BOOKED_BY_ME' | 'BOOKED' | 'BLOCKED';
+    reason?: string;
+  }>>([]);
 
   // Portfolio State
   const [relevantPortfolios, setRelevantPortfolios] = useState<any[]>([]);
@@ -61,13 +68,97 @@ export const ProductDetails: React.FC = () => {
   const producerReviews = producer ? reviews.filter(r => r.targetId === producer.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : [];
 
   useEffect(() => {
-    if (offer?.type === OfferType.SERVICE && offer.producerId) {
+    let alive = true;
+    const loadAvailability = async () => {
+      if (!(offer?.type === OfferType.SERVICE && offer.producerId)) return;
       const dateObj = parseLocalYmd(selectedDate);
-      const slots = getAvailableSlots(offer.producerId, dateObj, offer.serviceDuration || 1);
-      setAvailableSlots(slots);
-      setSelectedSlot(null); // Reset slot when date changes
-    }
-  }, [selectedDate, offer]);
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const d = String(dateObj.getDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${d}`;
+      const durationHours = offer.serviceDuration || 1;
+      try {
+        const res = await apiFetch<{
+          blocked: boolean;
+          reason?: string;
+          slots: Array<{ time: string; status: 'AVAILABLE' | 'BOOKED'; reason?: string }>;
+        }>(
+          API_ENDPOINTS.producers.availabilityByDate(offer.producerId, dateStr, durationHours),
+          { silent401: true } as any,
+        );
+        if (!alive) return;
+        if (res?.blocked) {
+          setSlotBlockReason(res.reason ? `Unavailable: ${res.reason}` : 'Unavailable');
+          setServiceSlotStates([]);
+          setSelectedSlot(null);
+          return;
+        }
+        setSlotBlockReason('');
+        const activeOrders = orders.filter(
+          (o) => o.producerId === offer.producerId && o.status !== OrderStatus.CANCELLED,
+        );
+        const myBookedStarts = new Set(
+          activeOrders
+            .filter((o) => !!user?.clientId && o.clientId === user.clientId)
+            .flatMap((o) =>
+              (o.items || [])
+                .filter((item) => item.type === OfferType.SERVICE && !!item.bookingDate)
+                .map((item) => new Date(item.bookingDate!).toISOString()),
+            ),
+        );
+        const myCartBookedStarts = new Set(
+          cart
+            .filter(
+              (item) =>
+                item.type === OfferType.SERVICE &&
+                item.id === offer.id &&
+                !!item.bookingDate,
+            )
+            .map((item) => new Date(item.bookingDate!).toISOString()),
+        );
+        const allSlots = (res?.slots || []).map((s) => {
+          const iso = new Date(s.time).toISOString();
+          if (myCartBookedStarts.has(iso)) {
+            return {
+              time: new Date(s.time),
+              status: 'BOOKED_BY_ME' as const,
+              reason: 'Already in your cart',
+            };
+          }
+          if (s.status === 'BOOKED' && myBookedStarts.has(iso)) {
+            return {
+              time: new Date(s.time),
+              status: 'BOOKED_BY_ME' as const,
+              reason: 'You already booked this slot',
+            };
+          }
+          if (s.status === 'BOOKED') {
+            return {
+              time: new Date(s.time),
+              status: 'BOOKED' as const,
+              reason: s.reason || 'Already busy',
+            };
+          }
+          return { time: new Date(s.time), status: 'AVAILABLE' as const };
+        });
+        setServiceSlotStates(allSlots);
+        setSelectedSlot((prev) => {
+          if (!prev) return null;
+          const selected = allSlots.find((s) => s.time.toISOString() === prev);
+          return selected?.status === 'AVAILABLE' ? prev : null;
+        });
+      } catch {
+        if (!alive) return;
+        setSlotBlockReason('Availability check failed. Please try another date.');
+        setServiceSlotStates([]);
+        setSelectedSlot(null);
+      }
+    };
+    void loadAvailability();
+    return () => {
+      alive = false;
+    };
+  }, [selectedDate, offer?.id, offer?.producerId, offer?.serviceDuration, orders, user?.clientId, cart]);
 
   useEffect(() => {
     if (offer && producer) {
@@ -136,6 +227,10 @@ export const ProductDetails: React.FC = () => {
           navigate(offer.type === OfferType.SERVICE ? '/cart?booking=1' : '/cart');
         }
       }
+      return;
+    }
+    if (!result.success && result.error === 'DUPLICATE_SERVICE_SLOT') {
+      alert('This exact service slot is already booked or already in your cart.');
       return;
     }
     navigate(offer.type === OfferType.SERVICE ? '/cart?booking=1' : '/cart');
@@ -329,9 +424,11 @@ export const ProductDetails: React.FC = () => {
                       />
                     </div>
                     <div className="grid grid-cols-3 gap-2">
-                      {availableSlots.length === 0 ? (
+                      {serviceSlotStates.length === 0 ? (
                         <div className="col-span-3 space-y-2 py-2">
-                          <p className="text-sm text-gray-500 italic">No slots available for this date.</p>
+                          <p className="text-sm text-gray-500 italic">
+                            {slotBlockReason || 'No slots available for this date.'}
+                          </p>
                           <p className="text-xs text-gray-600 leading-relaxed">
                             For <strong>services</strong>, the seller must publish weekly hours in{' '}
                             <strong>Producer dashboard → Availability</strong>. Choose a day they work, pick a time, then press{' '}
@@ -340,17 +437,40 @@ export const ProductDetails: React.FC = () => {
                           </p>
                         </div>
                       ) : (
-                        availableSlots.map((slot) => {
-                          const slotStr = slot.toISOString();
-                          const displayTime = slot.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        serviceSlotStates.map((slot) => {
+                          const slotStr = slot.time.toISOString();
+                          const displayTime = slot.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                           const isSelected = selectedSlot === slotStr;
+                          const isDisabled = slot.status !== 'AVAILABLE';
                           return (
                             <button
                               key={slotStr}
-                              onClick={() => setSelectedSlot(slotStr)}
-                              className={`py-2 px-1 text-xs font-bold rounded border ${isSelected ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:border-purple-400'}`}
+                              type="button"
+                              onClick={() => {
+                                if (isDisabled) return;
+                                setSelectedSlot(slotStr);
+                              }}
+                              disabled={isDisabled}
+                              title={slot.reason || ''}
+                              className={`relative py-2 px-1 text-xs font-bold rounded border ${
+                                isDisabled
+                                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                  : isSelected
+                                    ? 'bg-purple-600 text-white border-purple-600'
+                                    : 'bg-white text-gray-700 border-gray-300 hover:border-purple-400'
+                              }`}
                             >
                               {displayTime}
+                              {slot.status === 'BOOKED_BY_ME' && (
+                                <span className="absolute -top-2 right-1 rounded bg-blue-600 px-1 py-0.5 text-[9px] text-white">
+                                  Mine
+                                </span>
+                              )}
+                              {slot.status === 'BOOKED' && (
+                                <span className="absolute -top-2 right-1 rounded bg-gray-500 px-1 py-0.5 text-[9px] text-white">
+                                  Busy
+                                </span>
+                              )}
                             </button>
                           )
                         })

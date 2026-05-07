@@ -852,9 +852,33 @@ export const ShoppingCart: React.FC = () => {
                   <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">{t('dash.items')}</h4>
                   <ul className="space-y-1 border-b border-gray-300 pb-2 mb-2">
                     {cart.map(item => (
-                      <li key={item.id} className="flex justify-between text-sm">
-                        <span className="text-gray-800">{item.cartQuantity}x {item.title}</span>
-                        <span className="font-medium">{(item.price * item.cartQuantity).toLocaleString()} XAF</span>
+                      <li key={item.id} className="text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-800">{item.cartQuantity}x {item.title}</span>
+                          <span className="font-medium">{(item.price * item.cartQuantity).toLocaleString()} XAF</span>
+                        </div>
+                        {item.type === OfferType.SERVICE && (
+                          <div className="mt-1 text-xs text-gray-600">
+                            {item.bookingDate ? (
+                              <p>
+                                <span className="font-semibold">{t('service.appointment')}:</span>{' '}
+                                {new Date(item.bookingDate).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                              </p>
+                            ) : (
+                              <p className="text-amber-700">
+                                <span className="font-semibold">{t('service.appointment')}:</span> Not selected
+                              </p>
+                            )}
+                            {item.serviceDuration != null && item.serviceDuration > 0 && (
+                              <p>
+                                <span className="font-semibold">{t('service.perSlotHours')}:</span> {item.serviceDuration}
+                              </p>
+                            )}
+                            <p>
+                              <span className="font-semibold">{t('service.bookedQty')}:</span> {item.cartQuantity} {t(`unit.${item.unit}`)}
+                            </p>
+                          </div>
+                        )}
                       </li>
                     ))}
                   </ul>

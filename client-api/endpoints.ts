@@ -30,6 +30,8 @@ export const API_ENDPOINTS = {
     update: (id: string) => `/api/producers/${id}`,
     validate: (id: string) => `/api/producers/${id}/validate`,
     availability: (id: string) => `/api/producers/${id}/availability`,
+    availabilityByDate: (id: string, date: string, durationHours: number) =>
+      `/api/producers/${id}/availability?date=${encodeURIComponent(date)}&durationHours=${encodeURIComponent(String(durationHours))}`,
   },
   clients: {
     list: "/api/clients",
