@@ -2,9 +2,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useStore, clientProfileMatchesSession } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
-import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order, Review } from '../../types';
+import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order, Review, OfferType } from '../../types';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle, Loader2 } from 'lucide-react';
+import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle, Loader2, Calendar } from 'lucide-react';
 import { useUpdateClientProfileMutation } from '../../client-api/hooks/useUpdateClientProfileMutation';
 import { SEO } from '../../components/SEO';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
@@ -15,6 +15,7 @@ import { uploadAvatar } from '../../services/uploadService';
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
+import { orderHasService, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
 import { useFormik } from 'formik';
 import { z } from 'zod';
 
@@ -615,6 +616,18 @@ export const ClientProfile: React.FC = () => {
       const offerMatch = offers.find((o) => o.id === offerId);
       return offerMatch?.imageUrl || '';
    };
+   const clientOrderMetaLine = (order: Order) => {
+      const date = new Date(order.createdAt).toLocaleDateString();
+      if (orderIsServiceOnly(order)) {
+         const lc = serviceLineCount(order);
+         const st = serviceSlotTotal(order);
+         return `${date} · ${lc} ${lc === 1 ? t('service.lineSingular') : t('service.linePlural')} · ${st} ${st === 1 ? t('service.slotSingular') : t('service.slotPlural')}`;
+      }
+      if (orderHasService(order)) {
+         return `${date} · ${order.items?.length ?? 0} ${t('dash.itemsProduct')} · ${t('dash.mixedOrderHint')}`;
+      }
+      return `${date} · ${order.items?.length ?? 0} ${t('dash.itemsProduct')}`;
+   };
   const openDisputeModal = (orderId: string) => { setDisputeOrderId(orderId); disputeFormik.setFieldValue('disputeReason', ''); setDisputeFiles([]); setShowDisputeModal(true); };
    const handleDisputeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) { setDisputeFiles(Array.from(e.target.files)); } };
    const getStatusBadge = (status: OrderStatus) => { const styles = { [OrderStatus.PENDING_VALIDATION]: 'bg-yellow-100 text-yellow-800', [OrderStatus.CONFIRMED_AWAITING_PAYMENT]: 'bg-blue-100 text-blue-800', [OrderStatus.PAID_IN_PREPARATION]: 'bg-purple-100 text-purple-800', [OrderStatus.IN_TRANSIT]: 'bg-indigo-100 text-indigo-800', [OrderStatus.DELIVERED]: 'bg-green-100 text-green-800', [OrderStatus.COMPLETED]: 'bg-gray-100 text-gray-800', [OrderStatus.CANCELLED]: 'bg-red-100 text-red-800', [OrderStatus.DISPUTE]: 'bg-red-100 text-red-800', }; return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-100'}`}>{status.replace(/_/g, ' ')}</span>; };
@@ -630,11 +643,15 @@ export const ClientProfile: React.FC = () => {
                   <div className="p-4 sm:p-6" onClick={() => setSelectedOrder(order)}>
                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
                         <div className="cursor-pointer flex-1">
-                           <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                              Order #{order.id.substring(order.id.length - 6).toUpperCase()}
+                           <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2 flex-wrap">
+                              {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
+                              #{order.id.substring(order.id.length - 6).toUpperCase()}
+                              {orderIsServiceOnly(order) && (
+                                 <span className="text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
+                              )}
                               <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200 flex items-center font-normal"><Eye className="h-3 w-3 mr-1" /> {t('dash.viewDetails')}</span>
                            </h4>
-                           <p className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleDateString()} • {order.items?.length ?? 0} items</p>
+                           <p className="text-xs text-gray-500">{clientOrderMetaLine(order)}</p>
                         </div>
                         <div className="flex items-center gap-2">
                            {getStatusBadge(order.status)}
@@ -990,8 +1007,14 @@ export const ClientProfile: React.FC = () => {
                               allMyOrders.map(order => (
                                  <li key={order.id} className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex justify-between items-center" onClick={() => setSelectedOrder(order)}>
                                     <div>
-                                       <p className="font-medium text-gray-900">Order #{order.id.substring(order.id.length - 6).toUpperCase()}</p>
-                                       <p className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleDateString()} • {(order.items || []).length} items • {getProducerDisplayName(order)}</p>
+                                       <p className="font-medium text-gray-900 flex items-center gap-2 flex-wrap">
+                                          {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
+                                          #{order.id.substring(order.id.length - 6).toUpperCase()}
+                                          {orderIsServiceOnly(order) && (
+                                             <span className="text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
+                                          )}
+                                       </p>
+                                       <p className="text-xs text-gray-500">{clientOrderMetaLine(order)} · {getProducerDisplayName(order)}</p>
                                     </div>
                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${order.status === OrderStatus.CANCELLED || order.status === OrderStatus.DISPUTE ? 'bg-red-100 text-red-800' : order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                                        {order.status.replace(/_/g, ' ')}
@@ -1327,9 +1350,20 @@ export const ClientProfile: React.FC = () => {
                <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
                   <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setSelectedOrder(null)} />
                   <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
-                     <div className="flex justify-between items-start mb-4">
-                        <h3 className="text-lg leading-6 font-bold text-gray-900">{t('dash.orderDetails')} #{selectedOrder.id.substring(selectedOrder.id.length - 6).toUpperCase()}</h3>
-                        <button onClick={() => setSelectedOrder(null)} className="text-gray-400 hover:text-gray-500"><XCircle className="h-6 w-6" /></button>
+                     <div className="flex justify-between items-start mb-4 gap-2">
+                        <div>
+                           <h3 className="text-lg leading-6 font-bold text-gray-900">
+                              {orderIsServiceOnly(selectedOrder) ? t('service.booking') : t('dash.orderDetails')}{' '}
+                              #{selectedOrder.id.substring(selectedOrder.id.length - 6).toUpperCase()}
+                           </h3>
+                           {orderIsServiceOnly(selectedOrder) && (
+                              <span className="inline-flex mt-1 text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
+                           )}
+                           {orderHasService(selectedOrder) && !orderIsServiceOnly(selectedOrder) && (
+                              <p className="text-xs text-amber-700 mt-1">{t('dash.mixedOrderHint')}</p>
+                           )}
+                        </div>
+                        <button onClick={() => setSelectedOrder(null)} className="text-gray-400 hover:text-gray-500 shrink-0"><XCircle className="h-6 w-6" /></button>
                      </div>
 
                      {/* Order timeline: booking → receiving */}
@@ -1366,18 +1400,50 @@ export const ClientProfile: React.FC = () => {
                         </p>
                      </div>
 
-                     {/* Items */}
+                     {/* Items / scheduled services */}
                      <div className="mt-4">
-                        <h4 className="text-sm font-medium text-gray-500 mb-2">{t('dash.items')}</h4>
+                        <h4 className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-2">
+                           {orderHasService(selectedOrder) ? (
+                              <>
+                                 <Calendar className="h-4 w-4 text-purple-600" /> {t('service.scheduledServices')}
+                              </>
+                           ) : (
+                              t('dash.items')
+                           )}
+                        </h4>
                         <ul className="divide-y divide-gray-200 border border-gray-200 rounded-md">
                            {(selectedOrder.items || []).map((item: any, idx: number) => (
-                              <li key={item.id || idx} className="p-3 flex justify-between items-center">
-                                 <div className="flex items-center min-w-0">
+                              <li
+                                 key={item.id || idx}
+                                 className={`p-3 flex justify-between items-start gap-2 ${item.type === OfferType.SERVICE ? 'bg-purple-50/50 border-l-4 border-l-purple-400' : ''}`}
+                              >
+                                 <div className="flex items-start min-w-0">
                                     {getOrderItemImage(item) && <div className="h-10 w-10 rounded bg-gray-100 overflow-hidden mr-3 flex-shrink-0"><img src={getOrderItemImage(item)} alt={item.title} className={offerImageInBox} /></div>}
                                     <div className="min-w-0">
-                                       <p className="text-sm font-medium text-gray-900 truncate">{item.title || 'Item'}</p>
-                                       <p className="text-xs text-gray-500">{(item.cartQuantity ?? item.quantity ?? 1)} {item.unit} × {(item.price ?? 0).toLocaleString()} XAF</p>
-                                       {item.bookingDate && <p className="text-xs text-purple-600 font-bold mt-0.5">Booked: {new Date(item.bookingDate).toLocaleString()}</p>}
+                                       <div className="flex items-center gap-2 flex-wrap">
+                                          <p className="text-sm font-medium text-gray-900 truncate">{item.title || 'Item'}</p>
+                                          {item.type === OfferType.SERVICE && (
+                                             <span className="text-[10px] font-bold uppercase bg-purple-200 text-purple-900 px-1.5 py-0.5 rounded">{t('service.badge')}</span>
+                                          )}
+                                       </div>
+                                       {item.type === OfferType.SERVICE ? (
+                                          <>
+                                             <p className="text-xs text-gray-600 mt-1">
+                                                {t('service.bookedQty')}: {item.cartQuantity ?? item.quantity ?? 1} {t(`unit.${item.unit}`)} · {(item.price ?? 0).toLocaleString()} XAF / {t(`unit.${item.unit}`)}
+                                             </p>
+                                             {item.bookingDate && (
+                                                <p className="text-xs text-purple-800 font-semibold mt-1 flex items-center gap-1">
+                                                   <Calendar className="h-3 w-3 shrink-0" />
+                                                   {t('service.appointment')}: {new Date(item.bookingDate).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                                                </p>
+                                             )}
+                                             {item.serviceDuration != null && item.serviceDuration > 0 && (
+                                                <p className="text-xs text-gray-500 mt-0.5">{item.serviceDuration} {t('service.perSlotHours')}</p>
+                                             )}
+                                          </>
+                                       ) : (
+                                          <p className="text-xs text-gray-500">{(item.cartQuantity ?? item.quantity ?? 1)} {item.unit} × {(item.price ?? 0).toLocaleString()} XAF</p>
+                                       )}
                                     </div>
                                  </div>
                                  <p className="text-sm font-bold text-gray-900 flex-shrink-0 ml-2">{((item.price ?? 0) * (item.cartQuantity ?? item.quantity ?? 1)).toLocaleString()} XAF</p>

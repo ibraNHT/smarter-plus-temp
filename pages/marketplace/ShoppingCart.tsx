@@ -49,6 +49,7 @@ function pickDefaultHomeLocationIndex(
 }
 import { loadGooglePlacesApi, parseGooglePlace, citiesLooselyMatch } from '../../services/googlePlaces';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
+import { cartHasService } from '../../utils/orderLabels';
 import { useFormik } from 'formik';
 import { z } from 'zod';
 
@@ -107,10 +108,12 @@ export const ShoppingCart: React.FC = () => {
   const [pickupCitySearch, setPickupCitySearch] = useState('');
   const [pickupPlacesStatus, setPickupPlacesStatus] = useState<'idle' | 'loading' | 'ready' | 'unavailable'>('idle');
   const pickupCityInputRef = useRef<HTMLInputElement | null>(null);
+  const checkoutSectionRef = useRef<HTMLElement | null>(null);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
   const serviceFee = subtotal * 0.05;
   const totalAmount = Math.max(0, subtotal + serviceFee - discountAmount);
+  const isServiceCart = cartHasService(cart);
 
   const currentClient = user
     ? clients.find(c => c.userId === user.id || c.id === user.id)
@@ -164,6 +167,16 @@ export const ShoppingCart: React.FC = () => {
       setSelectedHomeLocationIndex(0);
     }
   }, [homeLocations.length, selectedHomeLocationIndex]);
+
+  const fromServiceBooking = searchParams.get('booking') === '1';
+
+  useEffect(() => {
+    if (!fromServiceBooking || cart.length === 0) return;
+    const frame = requestAnimationFrame(() => {
+      checkoutSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [fromServiceBooking, cart.length]);
 
   // Google Places autocomplete for producer-market pickup city (when API key present)
   useEffect(() => {
@@ -392,10 +405,18 @@ export const ShoppingCart: React.FC = () => {
     <div className="min-h-screen bg-gray-50 py-8">
       <SEO title="Shopping Cart" noindex={true} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h1 className="text-3xl font-extrabold text-gray-900 mb-8 flex items-center">
-          <ShoppingBag className="h-8 w-8 mr-3 text-primary-600" />
-          {t('cart.title')}
-        </h1>
+        <div className="mb-8">
+          <h1 className="text-3xl font-extrabold text-gray-900 flex items-center flex-wrap gap-2">
+            <ShoppingBag className="h-8 w-8 mr-3 text-primary-600" />
+            {t('cart.title')}
+            {cartHasService(cart) && (
+              <span className="text-sm font-bold bg-purple-100 text-purple-800 px-2 py-1 rounded-full">{t('service.badge')}</span>
+            )}
+          </h1>
+          {cartHasService(cart) && (
+            <p className="text-sm text-gray-600 mt-2 ml-11">{t('cart.includesServices')}</p>
+          )}
+        </div>
 
         <div className="lg:grid lg:grid-cols-12 lg:gap-x-12 lg:items-start">
 
@@ -412,7 +433,10 @@ export const ShoppingCart: React.FC = () => {
               </div>
               <ul className="divide-y divide-gray-200">
                 {cart.map((item) => (
-                  <li key={item.id} className="p-6 flex">
+                  <li
+                    key={item.id}
+                    className={`p-6 flex ${item.type === OfferType.SERVICE ? 'bg-purple-50/40 border-l-4 border-l-purple-300' : ''}`}
+                  >
                     <div className="flex-shrink-0 w-24 h-24 border border-gray-200 bg-gray-100 rounded-md overflow-hidden relative">
                       <img
                         src={item.imageUrl}
@@ -420,7 +444,9 @@ export const ShoppingCart: React.FC = () => {
                         className={offerImageInBox}
                       />
                       {item.type === OfferType.SERVICE && (
-                        <div className="absolute bottom-0 left-0 right-0 bg-purple-600 text-white text-[10px] text-center py-1 font-bold">SERVICE</div>
+                        <div className="absolute bottom-0 left-0 right-0 bg-purple-600 text-white text-[10px] text-center py-1 font-bold">
+                          {t('service.badge').toUpperCase()}
+                        </div>
                       )}
                     </div>
 
@@ -436,14 +462,32 @@ export const ShoppingCart: React.FC = () => {
 
                         {/* Display Booking Date for Services */}
                         {item.bookingDate && (
-                          <div className="mt-2 flex items-center text-sm text-purple-700 bg-purple-50 p-1 rounded w-fit">
-                            <Calendar className="h-3 w-3 mr-1" />
-                            Booking: {new Date(item.bookingDate).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                          <div className="mt-2 flex items-center text-sm text-purple-800 bg-purple-100 border border-purple-200 px-2 py-1 rounded w-fit max-w-full">
+                            <Calendar className="h-3 w-3 mr-1 shrink-0" />
+                            <span className="font-medium">{t('service.appointment')}:</span>
+                            <span className="ml-1">
+                              {new Date(item.bookingDate).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                            </span>
                           </div>
+                        )}
+                        {item.type === OfferType.SERVICE && item.serviceDuration != null && item.serviceDuration > 0 && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            {item.serviceDuration} {t('service.perSlotHours')}
+                          </p>
                         )}
                       </div>
                       <div className="flex-1 flex items-end justify-between text-sm mt-2">
-                        <p className="text-gray-500">{t('form.quantity')} {item.cartQuantity} {item.unit}</p>
+                        <p className="text-gray-500">
+                          {item.type === OfferType.SERVICE ? (
+                            <>
+                              {t('service.bookedQty')}: {item.cartQuantity} {t(`unit.${item.unit}`)}
+                            </>
+                          ) : (
+                            <>
+                              {t('form.quantity')} {item.cartQuantity} {item.unit}
+                            </>
+                          )}
+                        </p>
 
                         <div className="flex space-x-4">
                           <button
@@ -470,12 +514,24 @@ export const ShoppingCart: React.FC = () => {
           </section>
 
           {/* Order Summary & Logistics */}
-          <section className="lg:col-span-5 mt-16 lg:mt-0 space-y-6">
+          <section
+            ref={checkoutSectionRef}
+            id="agm-cart-checkout"
+            className="lg:col-span-5 mt-16 lg:mt-0 space-y-6"
+          >
+            {fromServiceBooking && cart.some((i) => i.type === OfferType.SERVICE) && (
+              <div
+                className="bg-primary-50 border border-primary-200 text-primary-900 text-sm rounded-lg px-4 py-3"
+                role="status"
+              >
+                {t('cart.bookingCheckoutHint')}
+              </div>
+            )}
 
             {/* Delivery Method Selection */}
             <div className="bg-white shadow sm:rounded-lg p-6">
               <h2 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                <Truck className="h-5 w-5 mr-2 text-gray-500" /> Delivery Method
+                <Truck className="h-5 w-5 mr-2 text-gray-500" /> {isServiceCart ? t('service.fulfillment') : 'Delivery Method'}
               </h2>
 
               <div className="flex space-x-4 mb-4">
@@ -484,20 +540,20 @@ export const ShoppingCart: React.FC = () => {
                   className={`flex-1 py-3 px-2 border rounded-md flex flex-col items-center justify-center text-sm font-medium transition-colors ${deliveryMethod === 'HOME' ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
                 >
                   <Home className="h-5 w-5 mb-1" />
-                  Home Delivery
+                  {isServiceCart ? t('service.atClientLocation') : 'Home Delivery'}
                 </button>
                 <button
                   onClick={() => setDeliveryMethod('PICKUP')}
                   className={`flex-1 py-3 px-2 border rounded-md flex flex-col items-center justify-center text-sm font-medium transition-colors ${deliveryMethod === 'PICKUP' ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
                 >
                   <MapPin className="h-5 w-5 mb-1" />
-                  Pickup Station
+                  {isServiceCart ? t('service.atServicePoint') : 'Pickup Station'}
                 </button>
               </div>
 
               {deliveryMethod === 'HOME' && (
                 <div className="bg-gray-50 p-3 rounded border border-gray-200 text-sm">
-                  <p className="font-bold text-gray-700 mb-1">Delivering to:</p>
+                  <p className="font-bold text-gray-700 mb-1">{isServiceCart ? `${t('service.locationInfo')}:` : 'Delivering to:'}</p>
                   {isHomeAddressValid ? (
                     <>
                       <div className="mb-2">
@@ -605,7 +661,7 @@ export const ShoppingCart: React.FC = () => {
                       ))}
                     </select>
                     {selectedPickupCity && availablePickupPoints.length === 0 && (
-                      <p className="text-xs text-red-500 mt-1">No pickup points in this area. Try another city or pick from the list if Places is off.</p>
+                      <p className="text-xs text-red-500 mt-1">{t('cart.pickupNoPointsHint')}</p>
                     )}
                   </div>
                 </div>
@@ -824,17 +880,17 @@ export const ShoppingCart: React.FC = () => {
 
                 <div className="bg-blue-50 p-3 rounded border border-blue-100">
                   <h4 className="text-xs font-bold text-blue-800 uppercase mb-2 flex items-center">
-                    <Truck className="h-3 w-3 mr-1" /> Delivery Info
+                    <Truck className="h-3 w-3 mr-1" /> {isServiceCart ? t('service.locationInfo') : 'Delivery Info'}
                   </h4>
 
                   {deliveryMethod === 'HOME' ? (
                     <p className="text-sm text-blue-900">
-                      <span className="font-bold">Home Delivery:</span><br />
+                      <span className="font-bold">{isServiceCart ? t('service.atClientLocation') : 'Home Delivery'}:</span><br />
                       {selectedHomeLocation?.address}, {selectedHomeLocation?.city}
                     </p>
                   ) : (
                     <p className="text-sm text-blue-900">
-                      <span className="font-bold">Pickup Station:</span><br />
+                      <span className="font-bold">{isServiceCart ? t('service.atServicePoint') : 'Pickup Station'}:</span><br />
                       {pickupPoints.find(p => p.id === selectedPickupPointId)?.name}<br />
                       <span className="text-xs opacity-75">{pickupPoints.find(p => p.id === selectedPickupPointId)?.address}</span>
                     </p>

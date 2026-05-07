@@ -93,7 +93,8 @@ export const Navbar: React.FC = () => {
     setShowNotifications(!showNotifications);
   };
 
-  const cartItemCount = cart.reduce((acc, item) => acc + item.cartQuantity, 0);
+  // Keep badge aligned with cart UI rows (distinct lines), not summed quantity units.
+  const cartItemCount = cart.length;
 
   // Filter user notifications
   const myNotifications = notifications.filter(n => n.userId === user?.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

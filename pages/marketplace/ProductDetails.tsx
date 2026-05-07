@@ -130,11 +130,14 @@ export const ProductDetails: React.FC = () => {
 
       if (confirmClear) {
         clearCart();
-        addToCart(offer, quantity, selectedSlot || undefined);
+        const second = addToCart(offer, quantity, selectedSlot || undefined);
+        if (second.success) {
+          navigate(offer.type === OfferType.SERVICE ? '/cart?booking=1' : '/cart');
+        }
       }
-    } else {
-      navigate('/cart');
+      return;
     }
+    navigate(offer.type === OfferType.SERVICE ? '/cart?booking=1' : '/cart');
   };
 
   const handleNegotiate = async () => {
@@ -460,6 +463,9 @@ export const ProductDetails: React.FC = () => {
                   )}
                   <span className="ml-2">- {(offer.price * quantity).toLocaleString()} XAF</span>
                 </button>
+                {offer.type === OfferType.SERVICE && (
+                  <p className="text-xs text-gray-600 text-center px-1 leading-relaxed">{t('product.bookNowHint')}</p>
+                )}
 
                 {isProducerMarket && !offer.reservedClientId && (
                   <button

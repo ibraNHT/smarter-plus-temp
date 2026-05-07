@@ -7,6 +7,7 @@ import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, M
 import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
+import { orderHasService, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
 
 export const ProducerDashboard: React.FC = () => {
    const { user, getProducerOffers, deleteOffer, producers, clients, orders, confirmOrder, rejectOrder, startDelivery, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating, pickupPoints } = useStore();
@@ -291,6 +292,18 @@ export const ProducerDashboard: React.FC = () => {
       }
    };
 
+   const formatProducerOrderSubtitle = (order: Order) => {
+      if (orderIsServiceOnly(order)) {
+         const lc = serviceLineCount(order);
+         const st = serviceSlotTotal(order);
+         return `${lc} ${lc === 1 ? t('service.lineSingular') : t('service.linePlural')} · ${st} ${st === 1 ? t('service.slotSingular') : t('service.slotPlural')} · ${order.totalAmount.toLocaleString()} XAF`;
+      }
+      if (orderHasService(order)) {
+         return `${order.items.length} ${t('dash.itemsProduct')} · ${t('dash.mixedOrderHint')} · ${order.totalAmount.toLocaleString()} XAF`;
+      }
+      return `${order.items.length} ${t('dash.itemsProduct')} · ${order.totalAmount.toLocaleString()} XAF`;
+   };
+
    return (
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 px-4">
          <SEO title="Producer Dashboard | AgriMarket" noindex={true} />
@@ -374,12 +387,23 @@ export const ProducerDashboard: React.FC = () => {
                      <li key={order.id} className="px-4 py-4 hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedOrder(order)}>
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                            <div>
-                              <p className="font-medium text-gray-900">Order #{order.id.substring(6)}</p>
-                              <p className="text-sm text-gray-500">{order.items.length} items • {order.totalAmount.toLocaleString()} XAF</p>
-                              {order.items.some(i => i.type === OfferType.SERVICE) ? (
-                                 <p className="text-xs text-purple-600 font-bold mt-1">SERVICE BOOKING - Ready to Start</p>
+                              <p className="font-medium text-gray-900 flex items-center gap-2 flex-wrap">
+                                 {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
+                                 #{order.id.substring(6)}
+                                 {orderIsServiceOnly(order) && (
+                                    <span className="text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
+                                 )}
+                                 {orderHasService(order) && !orderIsServiceOnly(order) && (
+                                    <span className="text-xs font-medium bg-amber-50 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">{t('dash.mixedOrderHint')}</span>
+                                 )}
+                              </p>
+                              <p className="text-sm text-gray-500">{formatProducerOrderSubtitle(order)}</p>
+                              {orderIsServiceOnly(order) ? (
+                                 <p className="text-xs text-purple-600 font-bold mt-1">{t('service.paidPrepareAppt')}</p>
+                              ) : orderHasService(order) ? (
+                                 <p className="text-xs text-amber-700 font-medium mt-1">{t('dash.mixedOrderHint')}</p>
                               ) : (
-                                 <p className="text-xs text-green-600 font-bold mt-1">PAID - Please Prepare</p>
+                                 <p className="text-xs text-green-600 font-bold mt-1">{t('dash.paidPrepareShip')}</p>
                               )}
                            </div>
 
@@ -411,7 +435,8 @@ export const ProducerDashboard: React.FC = () => {
                                  onClick={(e) => { e.stopPropagation(); startDelivery(order.id); }}
                                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 shadow-sm"
                               >
-                                 <Truck className="h-4 w-4 mr-2" /> {t('dash.startDelivery')}
+                                 <Truck className="h-4 w-4 mr-2" />{' '}
+                                 {orderIsServiceOnly(order) ? t('dash.startServiceVisit') : t('dash.startDelivery')}
                               </button>
                            </div>
                         </div>
@@ -434,13 +459,17 @@ export const ProducerDashboard: React.FC = () => {
                      <li key={order.id} className="px-4 py-4 hover:bg-gray-50">
                         <div className="flex justify-between items-center">
                            <div onClick={() => setSelectedOrder(order)} className="cursor-pointer flex-1">
-                              <p className="font-medium text-primary-600 flex items-center gap-2">
-                                 Order #{order.id.substring(6)}
+                              <p className="font-medium text-primary-600 flex items-center gap-2 flex-wrap">
+                                 {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
+                                 #{order.id.substring(6)}
+                                 {orderIsServiceOnly(order) && (
+                                    <span className="text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
+                                 )}
                                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200 flex items-center">
                                     <Eye className="h-3 w-3 mr-1" /> {t('dash.viewDetails')}
                                  </span>
                               </p>
-                              <p className="text-sm text-gray-500 mt-1">{order.items.length} items • {order.totalAmount.toLocaleString()} XAF</p>
+                              <p className="text-sm text-gray-500 mt-1">{formatProducerOrderSubtitle(order)}</p>
                               <p className="text-xs text-gray-400 mt-1">{t('dash.status')}: {order.status.replace(/_/g, ' ')}</p>
                            </div>
 
@@ -486,8 +515,14 @@ export const ProducerDashboard: React.FC = () => {
                <ul className="divide-y divide-gray-200">
                   {awaitingPaymentOrders.map(order => (
                      <li key={order.id} className="px-4 py-4 hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedOrder(order)}>
-                        <p className="font-medium text-gray-700">Order #{order.id.substring(6)}</p>
-                        <p className="text-sm text-gray-500">{order.items.length} items • {order.totalAmount.toLocaleString()} XAF</p>
+                        <p className="font-medium text-gray-700 flex items-center gap-2 flex-wrap">
+                           {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
+                           #{order.id.substring(6)}
+                           {orderIsServiceOnly(order) && (
+                              <span className="text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
+                           )}
+                        </p>
+                        <p className="text-sm text-gray-500">{formatProducerOrderSubtitle(order)}</p>
                         <p className="text-xs text-amber-600 mt-1">{t('dash.status')}: {order.status.replace(/_/g, ' ')}</p>
                      </li>
                   ))}
@@ -511,8 +546,14 @@ export const ProducerDashboard: React.FC = () => {
                   allMyOrders.map(order => (
                      <li key={order.id} className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex justify-between items-center" onClick={() => setSelectedOrder(order)}>
                         <div>
-                           <p className="font-medium text-gray-900">Order #{order.id.substring(order.id.length - 6)}</p>
-                           <p className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleDateString()} • {order.items?.length ?? 0} items • {order.totalAmount?.toLocaleString?.() ?? order.totalAmount} XAF</p>
+                           <p className="font-medium text-gray-900 flex items-center gap-2 flex-wrap">
+                              {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
+                              #{order.id.substring(order.id.length - 6)}
+                              {orderIsServiceOnly(order) && (
+                                 <span className="text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
+                              )}
+                           </p>
+                           <p className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleDateString()} · {formatProducerOrderSubtitle(order)}</p>
                         </div>
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${order.status === OrderStatus.CANCELLED || order.status === OrderStatus.DISPUTE ? 'bg-red-100 text-red-800' : order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                            {order.status.replace(/_/g, ' ')}
@@ -539,8 +580,14 @@ export const ProducerDashboard: React.FC = () => {
                      <li key={order.id} className="px-4 py-4 hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedOrder(order)}>
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                            <div>
-                              <p className="font-medium text-gray-700">Order #{order.id.substring(6)}</p>
-                              <p className="text-sm text-gray-500">{new Date(order.createdAt).toLocaleDateString()}</p>
+                              <p className="font-medium text-gray-700 flex items-center gap-2 flex-wrap">
+                                 {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
+                                 #{order.id.substring(6)}
+                                 {orderIsServiceOnly(order) && (
+                                    <span className="text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
+                                 )}
+                              </p>
+                              <p className="text-sm text-gray-500">{new Date(order.createdAt).toLocaleDateString()} · {formatProducerOrderSubtitle(order)}</p>
                            </div>
 
                            <div className="flex items-center space-x-2">
@@ -711,9 +758,19 @@ export const ProducerDashboard: React.FC = () => {
                <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
                   <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setSelectedOrder(null)}></div>
                   <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
-                     <div className="flex justify-between items-start mb-4">
-                        <h3 className="text-lg leading-6 font-bold text-gray-900" id="modal-title">{t('dash.orderDetails')} #{selectedOrder.id.substring(6)}</h3>
-                        <button onClick={() => setSelectedOrder(null)} className="text-gray-400 hover:text-gray-500"><XCircle className="h-6 w-6" /></button>
+                     <div className="flex justify-between items-start mb-4 gap-2">
+                        <div>
+                           <h3 className="text-lg leading-6 font-bold text-gray-900" id="modal-title">
+                              {orderIsServiceOnly(selectedOrder) ? t('service.booking') : t('dash.orderDetails')} #{selectedOrder.id.substring(6)}
+                           </h3>
+                           {orderIsServiceOnly(selectedOrder) && (
+                              <span className="inline-flex mt-1 text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
+                           )}
+                           {orderHasService(selectedOrder) && !orderIsServiceOnly(selectedOrder) && (
+                              <p className="text-xs text-amber-700 mt-1">{t('dash.mixedOrderHint')}</p>
+                           )}
+                        </div>
+                        <button onClick={() => setSelectedOrder(null)} className="text-gray-400 hover:text-gray-500 shrink-0"><XCircle className="h-6 w-6" /></button>
                      </div>
 
                      {/* Order timeline: booking → receiving */}
@@ -755,7 +812,9 @@ export const ProducerDashboard: React.FC = () => {
                         </div>
                         <div className="flex items-start flex-wrap gap-2">
                            <MapPin className="h-4 w-4 text-gray-500 mr-2 mt-0.5 shrink-0" />
-                           <span className="text-sm text-gray-600 flex-1 min-w-0">{t('dash.address')}: {getClientAddress(selectedOrder)}</span>
+                           <span className="text-sm text-gray-600 flex-1 min-w-0">
+                              {orderIsServiceOnly(selectedOrder) ? t('service.visitLocation') : t('dash.address')}: {getClientAddress(selectedOrder)}
+                           </span>
                            <button
                               type="button"
                               onClick={() => openOrderDeliveryInMaps(selectedOrder)}
@@ -794,31 +853,61 @@ export const ProducerDashboard: React.FC = () => {
                         </div>
                      )}
 
-                     {/* Items List */}
+                     {/* Items / scheduled services */}
                      <div className="mt-4">
-                        <h4 className="text-sm font-medium text-gray-500 mb-2">{t('dash.items')}</h4>
+                        <h4 className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-2">
+                           {orderHasService(selectedOrder) ? (
+                              <>
+                                 <Calendar className="h-4 w-4 text-purple-600" /> {t('service.scheduledServices')}
+                              </>
+                           ) : (
+                              t('dash.items')
+                           )}
+                        </h4>
                         <ul className="divide-y divide-gray-200 border border-gray-200 rounded-md">
                            {selectedOrder.items.map((item) => (
-                              <li key={item.id} className="p-3 flex justify-between items-center">
-                                 <div className="flex items-center">
-                                    <div className="h-10 w-10 rounded bg-gray-100 overflow-hidden mr-3">
+                              <li
+                                 key={item.id}
+                                 className={`p-3 flex justify-between items-start gap-2 ${item.type === OfferType.SERVICE ? 'bg-purple-50/50 border-l-4 border-l-purple-400' : ''}`}
+                              >
+                                 <div className="flex items-start min-w-0">
+                                    <div className="h-10 w-10 rounded bg-gray-100 overflow-hidden mr-3 shrink-0">
                                        {getOrderItemImage(item) ? (
                                           <img src={getOrderItemImage(item)} alt={item.title} className={offerImageInBox} />
                                        ) : (
                                           <div className="h-full w-full bg-gray-200" />
                                        )}
                                     </div>
-                                    <div>
-                                       <p className="text-sm font-medium text-gray-900">{item.title}</p>
-                                       <p className="text-xs text-gray-500">{item.cartQuantity} {item.unit} x {item.price.toLocaleString()}</p>
-                                       {item.bookingDate && (
-                                          <p className="text-xs text-purple-600 font-bold mt-1">
-                                             Booked: {new Date(item.bookingDate).toLocaleString()}
-                                          </p>
+                                    <div className="min-w-0">
+                                       <div className="flex items-center gap-2 flex-wrap">
+                                          <p className="text-sm font-medium text-gray-900">{item.title}</p>
+                                          {item.type === OfferType.SERVICE && (
+                                             <span className="text-[10px] font-bold uppercase bg-purple-200 text-purple-900 px-1.5 py-0.5 rounded">{t('service.badge')}</span>
+                                          )}
+                                       </div>
+                                       {item.type === OfferType.SERVICE ? (
+                                          <>
+                                             <p className="text-xs text-gray-600 mt-1">
+                                                {t('service.bookedQty')}: {item.cartQuantity} {t(`unit.${item.unit}`)} · {item.price.toLocaleString()} XAF / {t(`unit.${item.unit}`)}
+                                             </p>
+                                             {item.bookingDate && (
+                                                <p className="text-xs text-purple-800 font-semibold mt-1 flex items-center gap-1">
+                                                   <Calendar className="h-3 w-3 shrink-0" />
+                                                   {t('service.appointment')}: {new Date(item.bookingDate).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                                                </p>
+                                             )}
+                                             {item.serviceDuration != null && item.serviceDuration > 0 && (
+                                                <p className="text-xs text-gray-500 mt-0.5">
+                                                   {item.serviceDuration} {t('service.perSlotHours')}
+                                                </p>
+                                             )}
+                                          </>
+                                       ) : (
+                                          <p className="text-xs text-gray-500">{item.cartQuantity} {item.unit} × {item.price.toLocaleString()}</p>
                                        )}
                                     </div>
                                  </div>
-                                 <p className="text-sm font-bold text-gray-900">{(item.price * item.cartQuantity).toLocaleString()} XAF</p>
+                                 <p className="text-sm font-bold text-gray-900 shrink-0">{(item.price * item.cartQuantity).toLocaleString()} XAF</p>
                               </li>
                            ))}
                         </ul>
