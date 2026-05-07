@@ -69,6 +69,9 @@ export const API_ENDPOINTS = {
   notifications: {
     list: "/api/notifications",
     markRead: "/api/notifications/read",
+    markOneRead: (id: string) => `/api/notifications/${id}/read`,
+    remove: (id: string) => `/api/notifications/${id}`,
+    clear: "/api/notifications",
   },
   wallet: {
     me: "/api/wallet/me",

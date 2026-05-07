@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useStore } from "../../services/storeContext";
 import { useTranslation } from "../../services/i18nContext";
@@ -11,6 +11,10 @@ import {
   ArrowLeft,
   Package,
   Image as ImageIcon,
+  PlayCircle,
+  ChevronLeft,
+  ChevronRight,
+  X,
 } from "lucide-react";
 import { apiFetch } from "../../services/apiService";
 import { API_ENDPOINTS } from "../../client-api/endpoints";
@@ -55,6 +59,9 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
   const [profileData, setProfileData] = useState<any>(null);
   const [profileReviews, setProfileReviews] = useState<Review[]>([]);
   const [producerPortfolios, setProducerPortfolios] = useState<any[]>([]);
+  const [portfolioSlideIdx, setPortfolioSlideIdx] = useState<Record<string, number>>({});
+  const [openPortfolio, setOpenPortfolio] = useState<any | null>(null);
+  const [openPortfolioMediaIdx, setOpenPortfolioMediaIdx] = useState(0);
 
   useEffect(() => {
     if (role === "PRODUCER") {
@@ -105,14 +112,6 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
     };
   }, [id, role]);
 
-  if (isInitialCatalogLoading && !profileData) {
-    return <PublicProfileSkeleton />;
-  }
-
-  if (!profileData) {
-    return <div className="p-8 text-center">User not found</div>;
-  }
-
   const averageRating = profileReviews.length
     ? parseFloat(
         (
@@ -148,6 +147,50 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
   const activeOffers = role === "PRODUCER" && id ? getProducerOffers(id) : [];
   const producerPublishedPortfolios =
     role === "PRODUCER" ? producerPortfolios : [];
+
+  const getPortfolioMedia = (item: any): Array<{ type: "image" | "video"; url: string }> => {
+    const images = Array.isArray(item?.imageUrls)
+      ? item.imageUrls
+          .filter((u: unknown) => typeof u === "string" && u.trim())
+          .map((u: string) => ({ type: "image" as const, url: u }))
+      : [];
+    const video =
+      typeof item?.videoUrl === "string" && item.videoUrl.trim()
+        ? [{ type: "video" as const, url: item.videoUrl.trim() }]
+        : [];
+    return [...images, ...video];
+  };
+
+  const openPortfolioMedia = useMemo(
+    () => (openPortfolio ? getPortfolioMedia(openPortfolio) : []),
+    [openPortfolio],
+  );
+
+  useEffect(() => {
+    if (role !== "PRODUCER" || producerPortfolios.length === 0) return;
+    const timer = setInterval(() => {
+      setPortfolioSlideIdx((prev) => {
+        const next: Record<string, number> = { ...prev };
+        producerPortfolios.forEach((item: any) => {
+          const mediaCount = getPortfolioMedia(item).length;
+          if (mediaCount <= 1) return;
+          const current = next[item.id] ?? 0;
+          next[item.id] = (current + 1) % mediaCount;
+        });
+        return next;
+      });
+    }, 3500);
+    return () => clearInterval(timer);
+  }, [role, producerPortfolios]);
+
+  if (isInitialCatalogLoading && !profileData) {
+    return <PublicProfileSkeleton />;
+  }
+
+  if (!profileData) {
+    return <div className="p-8 text-center">User not found</div>;
+  }
+
   const isVerified =
     role === "PRODUCER" && profileData.status === ProducerStatus.VALIDATED;
 
@@ -328,18 +371,48 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
                     </p>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {producerPublishedPortfolios.slice(0, 4).map((item) => (
+                      {producerPublishedPortfolios.slice(0, 4).map((item) => {
+                        const media = getPortfolioMedia(item);
+                        const currentIdx = Math.min(
+                          portfolioSlideIdx[item.id] ?? 0,
+                          Math.max(media.length - 1, 0),
+                        );
+                        const current = media[currentIdx];
+                        return (
                         <div
                           key={item.id}
-                          className="border border-gray-200 rounded-lg p-3 bg-white"
+                          className="border border-gray-200 rounded-lg p-3 bg-white cursor-pointer hover:shadow-md transition-shadow"
+                          onClick={() => {
+                            setOpenPortfolio(item);
+                            setOpenPortfolioMediaIdx(currentIdx);
+                          }}
                         >
-                          {item.imageUrls?.[0] ? (
-                            <div className="mb-3 flex h-32 w-full items-center justify-center overflow-hidden rounded bg-gray-100">
-                              <img
-                                src={item.imageUrls[0]}
-                                alt={item.title}
-                                className={offerImageHero}
-                              />
+                          {current ? (
+                            <div className="mb-3 relative flex h-32 w-full items-center justify-center overflow-hidden rounded bg-gray-100">
+                              {current.type === "video" ? (
+                                <>
+                                  <video
+                                    src={current.url}
+                                    className="h-full w-full object-cover"
+                                    muted
+                                    playsInline
+                                  />
+                                  <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
+                                    <PlayCircle className="h-10 w-10 text-white drop-shadow" />
+                                  </div>
+                                </>
+                              ) : (
+                                <img
+                                  src={current.url}
+                                  alt={item.title}
+                                  className={offerImageHero}
+                                />
+                              )}
+                              {media.length > 1 && (
+                                <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                                  {currentIdx + 1}/{media.length}
+                                </span>
+                              )}
                             </div>
                           ) : (
                             <div className="w-full h-32 bg-gray-100 rounded mb-3 flex items-center justify-center">
@@ -353,7 +426,8 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
                             {item.description}
                           </p>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -417,6 +491,98 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
           </div>
         </div>
       </div>
+
+      {openPortfolio && (
+        <div className="fixed inset-0 z-50 bg-black/75 p-4 sm:p-6" role="dialog" aria-modal="true">
+          <div className="max-w-4xl h-full mx-auto bg-white rounded-lg shadow-xl overflow-hidden flex flex-col">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+              <div className="min-w-0">
+                <h4 className="font-semibold text-gray-900 truncate">{openPortfolio.title}</h4>
+                <p className="text-xs text-gray-500 truncate">{openPortfolio.description}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpenPortfolio(null)}
+                className="text-gray-500 hover:text-gray-800 ml-3"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 min-h-0 p-4 flex flex-col">
+              <div className="relative flex-1 min-h-[240px] bg-gray-100 rounded overflow-hidden flex items-center justify-center">
+                {openPortfolioMedia.length > 0 ? (
+                  openPortfolioMedia[openPortfolioMediaIdx]?.type === "video" ? (
+                    <video
+                      src={openPortfolioMedia[openPortfolioMediaIdx]?.url}
+                      className="h-full w-full object-contain bg-black"
+                      controls
+                      autoPlay
+                    />
+                  ) : (
+                    <img
+                      src={openPortfolioMedia[openPortfolioMediaIdx]?.url}
+                      alt={openPortfolio.title}
+                      className="h-full w-full object-contain"
+                    />
+                  )
+                ) : (
+                  <ImageIcon className="h-10 w-10 text-gray-400" />
+                )}
+
+                {openPortfolioMedia.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenPortfolioMediaIdx((i) =>
+                          i === 0 ? openPortfolioMedia.length - 1 : i - 1,
+                        )
+                      }
+                      className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/85 hover:bg-white rounded-full p-1.5"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenPortfolioMediaIdx((i) => (i + 1) % openPortfolioMedia.length)
+                      }
+                      className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/85 hover:bg-white rounded-full p-1.5"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                    <span className="absolute bottom-2 right-2 bg-black/65 text-white text-xs px-2 py-0.5 rounded">
+                      {openPortfolioMediaIdx + 1}/{openPortfolioMedia.length}
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {openPortfolioMedia.length > 1 && (
+                <div className="mt-3 grid grid-cols-4 sm:grid-cols-6 gap-2 overflow-y-auto">
+                  {openPortfolioMedia.map((m, idx) => (
+                    <button
+                      type="button"
+                      key={`${m.url}-${idx}`}
+                      onClick={() => setOpenPortfolioMediaIdx(idx)}
+                      className={`h-16 rounded overflow-hidden border ${idx === openPortfolioMediaIdx ? "border-primary-500 ring-1 ring-primary-300" : "border-gray-200"}`}
+                    >
+                      {m.type === "video" ? (
+                        <div className="h-full w-full bg-gray-900 text-white flex items-center justify-center">
+                          <PlayCircle className="h-6 w-6" />
+                        </div>
+                      ) : (
+                        <img src={m.url} alt="" className="h-full w-full object-cover" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

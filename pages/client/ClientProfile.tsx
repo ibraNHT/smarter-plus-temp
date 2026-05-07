@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useStore, clientProfileMatchesSession } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order, Review, OfferType } from '../../types';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle, Loader2, Calendar } from 'lucide-react';
 import { useUpdateClientProfileMutation } from '../../client-api/hooks/useUpdateClientProfileMutation';
 import { SEO } from '../../components/SEO';
@@ -40,11 +40,41 @@ function normalizeDob(dobRaw: unknown): string {
 }
 
 export const ClientProfile: React.FC = () => {
+   type ProfileTab = 'info' | 'orders' | 'security' | 'favorites' | 'reputation' | 'referrals';
+   const isProfileTab = (v: string | null): v is ProfileTab =>
+      v === 'info' || v === 'orders' || v === 'security' || v === 'favorites' || v === 'reputation' || v === 'referrals';
+
    const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, isInitialCatalogLoading } = useStore();
    const updateClientMutation = useUpdateClientProfileMutation();
    const { t } = useTranslation();
    const navigate = useNavigate();
-   const [activeTab, setActiveTab] = useState<'info' | 'orders' | 'security' | 'favorites' | 'reputation' | 'referrals'>('orders');
+   const [searchParams, setSearchParams] = useSearchParams();
+   const [activeTab, setActiveTab] = useState<ProfileTab>(() => {
+      const tab = searchParams.get('tab');
+      return isProfileTab(tab) ? tab : 'orders';
+   });
+
+   useEffect(() => {
+      const tab = searchParams.get('tab');
+      if (isProfileTab(tab) && tab !== activeTab) setActiveTab(tab);
+      if (tab && !isProfileTab(tab)) {
+         setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set('tab', 'orders');
+            return next;
+         }, { replace: true });
+      }
+   }, [searchParams, activeTab]);
+
+   useEffect(() => {
+      const tab = searchParams.get('tab');
+      if (tab === activeTab) return;
+      setSearchParams((prev) => {
+         const next = new URLSearchParams(prev);
+         next.set('tab', activeTab);
+         return next;
+      }, { replace: true });
+   }, [activeTab, searchParams, setSearchParams]);
 
    const [formData, setFormData] = useState<ClientProfileType | null>(null);
    const [showUpgradeModal, setShowUpgradeModal] = useState(false);

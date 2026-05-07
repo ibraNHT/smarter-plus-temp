@@ -8,13 +8,13 @@ import { UserRole } from '../types';
 import { getToken } from '../services/apiService';
 import { isWebAppSessionBlocked } from '../services/authRoles';
 import { LogoutConfirmModal } from './LogoutConfirmModal';
-import { LogOut, Sprout, ShoppingBasket, Tractor, ShoppingCart, Globe, Bell, X, User, MessageCircle, ChevronDown, Download } from 'lucide-react';
+import { LogOut, Sprout, ShoppingBasket, Tractor, ShoppingCart, Globe, Bell, X, User, MessageCircle, ChevronDown, Download, CheckCheck, Trash2 } from 'lucide-react';
 
 const marketplaceVisible = (user: { role?: UserRole } | null) =>
   !user || user.role === UserRole.CLIENT || user.role === UserRole.PRODUCER;
 
 export const Navbar: React.FC = () => {
-  const { user, producers, clients, logout, cart, notifications, markNotificationsAsRead, chats, isInitialCatalogLoading } = useStore();
+  const { user, producers, clients, logout, cart, notifications, markNotificationsAsRead, markNotificationAsRead, deleteNotification, clearNotifications, chats, isInitialCatalogLoading } = useStore();
   const token = typeof window !== 'undefined' ? getToken() : null;
   const staffWrongApp = isWebAppSessionBlocked(token, user);
   const { t, language, setLanguage } = useTranslation();
@@ -86,12 +86,33 @@ export const Navbar: React.FC = () => {
     };
   }, []);
 
-  const toggleNotifications = () => {
-    if (!showNotifications) {
-      markNotificationsAsRead();
+  const toggleNotifications = () => setShowNotifications(!showNotifications);
+  const resolveNotificationDestination = (notif: { link?: string; message: string }) => {
+    if (notif.link) {
+      const normalized =
+        notif.link.startsWith('/chat/')
+          ? notif.link.replace('/chat/', '/messages/')
+          : notif.link;
+      // Backend may send generic links that don't exist in WebApp routes.
+      if (normalized === '/reviews') {
+        return user?.role === UserRole.PRODUCER ? '/producer/dashboard' : '/client/profile?tab=reputation';
+      }
+      return normalized;
     }
-    setShowNotifications(!showNotifications);
+    const msg = (notif.message || '').toLowerCase();
+    if (msg.includes('chat') || msg.includes('proposal') || msg.includes('message')) return '/messages';
+    if (msg.includes('review')) return user?.role === UserRole.PRODUCER ? '/producer/dashboard' : '/client/profile?tab=reputation';
+    if (msg.includes('order')) return user?.role === UserRole.PRODUCER ? '/producer/dashboard' : '/client/profile';
+    return '';
   };
+
+  const handleOpenNotification = async (notif: { id: string; isRead: boolean; link?: string; message: string }) => {
+    if (!notif.isRead) await markNotificationAsRead(notif.id);
+    const dest = resolveNotificationDestination(notif);
+    if (dest) navigate(dest);
+    setShowNotifications(false);
+  };
+
 
   // Keep badge aligned with cart UI rows (distinct lines), not summed quantity units.
   const cartItemCount = cart.length;
@@ -235,9 +256,31 @@ export const Navbar: React.FC = () => {
                     <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg overflow-hidden z-50 border border-gray-200">
                       <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                         <h3 className="text-sm font-semibold text-gray-700">{t('nav.notifications')}</h3>
-                        <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-500">
-                          <X className="h-4 w-4" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {myNotifications.length > 0 && (
+                            <>
+                              {unreadCount > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => void markNotificationsAsRead()}
+                                  className="text-xs text-primary-700 hover:text-primary-900 inline-flex items-center gap-1"
+                                >
+                                  <CheckCheck className="h-3.5 w-3.5" /> Mark all read
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => void clearNotifications()}
+                                className="text-xs text-red-600 hover:text-red-700 inline-flex items-center gap-1"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Clear all
+                              </button>
+                            </>
+                          )}
+                          <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-500">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
                       <div className="max-h-64 overflow-y-auto">
                         {myNotifications.length === 0 ? (
@@ -248,15 +291,30 @@ export const Navbar: React.FC = () => {
                           <ul>
                             {myNotifications.map((notif) => (
                               <li key={notif.id} className={`px-4 py-3 border-b border-gray-100 text-sm ${notif.isRead ? 'bg-white' : 'bg-blue-50'}`}>
-                                <div onClick={() => {
-                                  if (notif.link) {
-                                    const dest = notif.link.startsWith('/chat/') ? notif.link.replace('/chat/', '/messages/') : notif.link;
-                                    navigate(dest);
-                                  }
-                                  setShowNotifications(false);
-                                }} className={`${notif.link ? 'cursor-pointer' : ''}`}>
+                                <div
+                                  onClick={() => void handleOpenNotification(notif)}
+                                  className="cursor-pointer"
+                                >
                                   <p className={`text-gray-800 ${!notif.isRead && 'font-semibold'}`}>{notif.message}</p>
                                   <p className="text-xs text-gray-400 mt-1">{new Date(notif.createdAt).toLocaleString()}</p>
+                                </div>
+                                <div className="mt-2 flex items-center justify-end gap-3">
+                                  {!notif.isRead && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); void markNotificationAsRead(notif.id); }}
+                                      className="text-xs text-primary-700 hover:text-primary-900"
+                                    >
+                                      Mark read
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); void deleteNotification(notif.id); }}
+                                    className="text-xs text-red-600 hover:text-red-700"
+                                  >
+                                    Delete
+                                  </button>
                                 </div>
                               </li>
                             ))}

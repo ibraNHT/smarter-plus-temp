@@ -38,6 +38,9 @@ export const ChatPage: React.FC = () => {
    const messagesEndRef = useRef<HTMLDivElement>(null);
    const messageInputRef = useRef<HTMLTextAreaElement>(null);
    const proposalModalWasOpenRef = useRef(false);
+   const isPollingMessagesRef = useRef(false);
+   const isPollingChatsRef = useRef(false);
+   const chatPollTickRef = useRef(0);
 
    const TEXTAREA_MAX_PX = 160;
 
@@ -52,6 +55,28 @@ export const ChatPage: React.FC = () => {
    const activeChat = chatId ? chats.find(c => c.id === chatId) : null;
    const activeMessages = activeChat ? messages.filter(m => m.chatId === chatId).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) : [];
    const activeOfferId = activeChat?.offerId || null;
+   const hasExistingProposalInCurrentRound = (() => {
+      if (!activeOfferId) return false;
+      const offerMessages = activeMessages
+         .filter((m) => m.proposal?.offerId === activeOfferId)
+         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      if (offerMessages.length === 0) return false;
+      const latestResolvedTimestamp = offerMessages.reduce<number | null>((latest, m) => {
+         const status = m.proposal?.status;
+         if (
+            status !== ProposalStatus.ACCEPTED &&
+            status !== ProposalStatus.REJECTED &&
+            status !== ProposalStatus.SUPERSEDED
+         ) return latest;
+         const ts = new Date(m.createdAt).getTime();
+         return latest == null ? ts : Math.max(latest, ts);
+      }, null);
+      return offerMessages.some((m) => {
+         const ts = new Date(m.createdAt).getTime();
+         return latestResolvedTimestamp == null || ts > latestResolvedTimestamp;
+      });
+   })();
+   const canInitiateFirstProposal = user?.role === 'PRODUCER' || hasExistingProposalInCurrentRound;
 
    const getUserSide = useCallback((senderId: string): 'CLIENT' | 'PRODUCER' | 'UNKNOWN' => {
       const isClient = clients.some((c) => c.id === senderId || c.userId === senderId);
@@ -78,7 +103,11 @@ export const ChatPage: React.FC = () => {
       // Same rule as backend: once any proposal is accepted/rejected, a new round starts.
       const latestResolvedTimestamp = monthlyOfferMessages.reduce<number | null>((latest, m) => {
          const status = m.proposal?.status;
-         if (status !== ProposalStatus.ACCEPTED && status !== ProposalStatus.REJECTED) return latest;
+         if (
+            status !== ProposalStatus.ACCEPTED &&
+            status !== ProposalStatus.REJECTED &&
+            status !== ProposalStatus.SUPERSEDED
+         ) return latest;
          const ts = new Date(m.createdAt).getTime();
          return latest == null ? ts : Math.max(latest, ts);
       }, null);
@@ -126,12 +155,29 @@ export const ChatPage: React.FC = () => {
 
       if (user && chatId) {
          // Initial fetch
-         fetchMessages(chatId);
+         if (!isPollingMessagesRef.current) {
+            isPollingMessagesRef.current = true;
+            Promise.resolve(fetchMessages(chatId)).finally(() => {
+               isPollingMessagesRef.current = false;
+            });
+         }
 
          // Poll exactly every 3 seconds
          interval = setInterval(() => {
-            fetchMessages(chatId);
-            fetchChats(); // Keep the left sidebar unread counts updated too
+            chatPollTickRef.current += 1;
+            if (!isPollingMessagesRef.current) {
+               isPollingMessagesRef.current = true;
+               Promise.resolve(fetchMessages(chatId)).finally(() => {
+                  isPollingMessagesRef.current = false;
+               });
+            }
+            // Poll sessions less frequently (every 6s) and never overlap.
+            if (chatPollTickRef.current % 2 === 0 && !isPollingChatsRef.current) {
+               isPollingChatsRef.current = true;
+               Promise.resolve(fetchChats()).finally(() => {
+                  isPollingChatsRef.current = false;
+               });
+            }
          }, 3000);
       }
 
@@ -146,9 +192,12 @@ export const ChatPage: React.FC = () => {
 
    // Variables hoisted above for scroll calculation
 
-   const getOtherParticipantName = (participantIds: string[]) => {
+   const getOtherParticipantName = (chat: typeof chats[number]) => {
+      const participantIds = chat.participantIds || [];
       const otherId = participantIds.find(id => id !== user?.id);
       if (!otherId) return 'Unknown';
+      const fromParticipantsData = chat.participantsData?.find((p) => p.id === otherId)?.displayName;
+      if (fromParticipantsData && fromParticipantsData.trim()) return fromParticipantsData.trim();
       const client = clients.find(c => c.id === otherId || c.userId === otherId);
       if (client) {
          if (client.name) return client.name;
@@ -183,6 +232,10 @@ export const ChatPage: React.FC = () => {
 
    const handleSendProposal = async () => {
       if (!activeChat || !activeChat.offerId) return;
+      if (!canInitiateFirstProposal) {
+         setProposalModalError('Only producer can open a new proposal round in this chat.');
+         return;
+      }
       if (!canSendMoreCounters) {
          setProposalModalError('Monthly counter-offer limit reached for your side (2) on this product in this chat.');
          return;
@@ -215,9 +268,12 @@ export const ChatPage: React.FC = () => {
       }
       if (hasFieldError) return;
 
-      const listCap = Number(offer.price);
-      if (Number.isFinite(listCap) && price > listCap) {
-         setProposalPriceError(`Cannot exceed listing price (${listCap.toLocaleString()} XAF).`);
+      if (price < minPricePerUnit) {
+         setProposalPriceError(`Price must be at least ${minPricePerUnit.toLocaleString()} XAF.`);
+         return;
+      }
+      if (maxPricePerUnit != null && price > maxPricePerUnit) {
+         setProposalPriceError(`Price cannot exceed ${maxPricePerUnit.toLocaleString()} XAF.`);
          return;
       }
 
@@ -270,13 +326,13 @@ export const ChatPage: React.FC = () => {
       }
       if (hasFieldError) return;
 
-      const capOffer = activeChat?.offerId ? getOfferById(activeChat.offerId) : null;
-      if (capOffer) {
-         const listCap = Number(capOffer.price);
-         if (Number.isFinite(listCap) && counterPrice > listCap) {
-            setCounterPriceError(`Cannot exceed listing price (${listCap.toLocaleString()} XAF).`);
-            return;
-         }
+      if (counterPrice < minPricePerUnit) {
+         setCounterPriceError(`Price must be at least ${minPricePerUnit.toLocaleString()} XAF.`);
+         return;
+      }
+      if (maxPricePerUnit != null && counterPrice > maxPricePerUnit) {
+         setCounterPriceError(`Price cannot exceed ${maxPricePerUnit.toLocaleString()} XAF.`);
+         return;
       }
 
       setCounterSending(true);
@@ -297,9 +353,28 @@ export const ChatPage: React.FC = () => {
 
    const listingOffer = activeChat?.offerId ? getOfferById(activeChat.offerId) ?? null : null;
    const maxPricePerUnit =
-      listingOffer != null && Number.isFinite(Number(listingOffer.price))
-         ? Number(listingOffer.price)
+      listingOffer != null
+         ? (() => {
+            const offerAny = listingOffer as any;
+            const listPrice = Number(listingOffer.price);
+            const configuredMax = Number(
+               offerAny.maxNegotiationPrice ?? offerAny.maxProposalPrice ?? offerAny.maxPrice ?? listPrice,
+            );
+            return Number.isFinite(configuredMax) && configuredMax > 0
+               ? configuredMax
+               : (Number.isFinite(listPrice) ? listPrice : null);
+         })()
          : null;
+   const minPricePerUnit =
+      listingOffer != null
+         ? (() => {
+            const offerAny = listingOffer as any;
+            const configuredMin = Number(
+               offerAny.minNegotiationPrice ?? offerAny.minProposalPrice ?? offerAny.minPrice ?? 0,
+            );
+            return Number.isFinite(configuredMin) && configuredMin > 0 ? configuredMin : 0;
+         })()
+         : 0;
 
    const proposalTotalPreview =
       (() => {
@@ -324,7 +399,7 @@ export const ChatPage: React.FC = () => {
                   <div className="p-8 text-center text-gray-500 text-sm">{t('chat.noChats')}</div>
                ) : (
                   chats.filter(c => c.participantIds?.includes(user.id)).map(chat => {
-                     const otherName = chat.participantIds ? getOtherParticipantName(chat.participantIds) : 'Unknown';
+                     const otherName = getOtherParticipantName(chat);
                      const threadUnread = Math.max(0, Number(chat.unreadCounts?.[user.id]) || 0);
                      return (
                         <div
@@ -362,10 +437,10 @@ export const ChatPage: React.FC = () => {
                            <ChevronLeft className="h-6 w-6" />
                         </button>
                         <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold mr-3">
-                           {activeChat.participantIds ? getOtherParticipantName(activeChat.participantIds).charAt(0) : '?'}
+                           {getOtherParticipantName(activeChat).charAt(0)}
                         </div>
                         <div>
-                           <h3 className="font-bold text-gray-900">{activeChat.participantIds ? getOtherParticipantName(activeChat.participantIds) : 'Unknown'}</h3>
+                           <h3 className="font-bold text-gray-900">{getOtherParticipantName(activeChat)}</h3>
                            {activeChat.offerId && <span className="text-xs text-gray-500">Negotiating Offer</span>}
                         </div>
                      </div>
@@ -481,6 +556,7 @@ export const ChatPage: React.FC = () => {
                         <button
                            type="button"
                            onClick={() => {
+                              if (!canInitiateFirstProposal) return;
                               setProposalPriceStr('');
                               setProposalQtyStr('');
                               setProposalModalError('');
@@ -488,9 +564,9 @@ export const ChatPage: React.FC = () => {
                               setProposalQtyError('');
                               setShowProposalModal(true);
                            }}
-                           disabled={!activeChat?.offerId || !(getOfferById(activeChat?.offerId || '')?.isNegotiable ?? false) || !canSendMoreCounters}
+                           disabled={!activeChat?.offerId || !(getOfferById(activeChat?.offerId || '')?.isNegotiable ?? false) || !canSendMoreCounters || !canInitiateFirstProposal}
                            className="mb-1 p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                           title={!activeChat?.offerId ? 'Select an offer first' : (!canSendMoreCounters ? 'Monthly counter-offer limit reached (2)' : (getOfferById(activeChat?.offerId || '')?.isNegotiable ? 'Make Proposal' : 'This offer is not open for negotiation'))}
+                           title={!activeChat?.offerId ? 'Select an offer first' : (!canInitiateFirstProposal ? 'Only producer can open a new proposal round' : (!canSendMoreCounters ? 'Monthly counter-offer limit reached (2)' : (getOfferById(activeChat?.offerId || '')?.isNegotiable ? 'Make Proposal' : 'This offer is not open for negotiation')))}
                         >
                            <Gavel className="h-6 w-6 text-primary-600" />
                         </button>
@@ -539,7 +615,7 @@ export const ChatPage: React.FC = () => {
                   <h3 className="text-lg font-bold text-gray-900 mb-1">{t('chat.makeProposal')}</h3>
                   {maxPricePerUnit != null && (
                      <p className="text-xs text-gray-500 mb-3">
-                        Listing: {maxPricePerUnit.toLocaleString()} XAF per unit — your price cannot be higher.
+                        Allowed range: {minPricePerUnit.toLocaleString()} - {maxPricePerUnit.toLocaleString()} XAF per unit.
                      </p>
                   )}
                   {proposalModalError ? (
@@ -555,7 +631,7 @@ export const ChatPage: React.FC = () => {
                            type="text"
                            inputMode="decimal"
                            autoComplete="off"
-                           placeholder={maxPricePerUnit != null ? `max ${maxPricePerUnit.toLocaleString()}` : 'e.g. 2500'}
+                           placeholder={maxPricePerUnit != null ? `${minPricePerUnit.toLocaleString()} - ${maxPricePerUnit.toLocaleString()}` : 'e.g. 2500'}
                            value={proposalPriceStr}
                            onChange={(e) => {
                               setProposalPriceStr(e.target.value.replace(/[^\d.,]/g, ''));
@@ -633,7 +709,7 @@ export const ChatPage: React.FC = () => {
                   <p className="text-sm text-gray-500 mb-4">
                      Propose your own price and quantity. The other party will receive it as a new proposal.
                      {maxPricePerUnit != null && (
-                        <> Price per unit cannot exceed {maxPricePerUnit.toLocaleString()} XAF (listing).</>
+                        <> Allowed price range is {minPricePerUnit.toLocaleString()} to {maxPricePerUnit.toLocaleString()} XAF.</>
                      )}
                   </p>
                   <div className="space-y-4">
@@ -641,7 +717,7 @@ export const ChatPage: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">{t('chat.pricePerUnit')} (XAF)</label>
                         <input
                            type="number"
-                           min="0.01"
+                           min={minPricePerUnit > 0 ? minPricePerUnit : 0.01}
                            step="0.01"
                            {...(maxPricePerUnit != null ? { max: maxPricePerUnit } : {})}
                            value={counterPrice || ''}

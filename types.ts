@@ -400,6 +400,12 @@ export interface ChatMessage {
 export interface ChatSession {
   id: string;
   participantIds: string[]; // [clientId, producerId]
+  participantsData?: Array<{
+    id: string;
+    displayName?: string;
+    email?: string;
+    role?: string;
+  }>;
   offerId?: string; // Context of the chat (optional)
   lastMessage: string;
   lastMessageAt: string;

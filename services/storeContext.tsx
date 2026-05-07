@@ -141,6 +141,16 @@ function normalizeChatSessionFromApi(raw: any): ChatSession {
   }
 
   const unreadCounts = coerceUnreadCounts(raw?.unreadCounts ?? raw?.unread_counts);
+  const participantsData = Array.isArray(raw?.participantsData)
+    ? raw.participantsData
+        .map((p: any) => ({
+          id: String(p?.id ?? ''),
+          displayName: p?.displayName ? String(p.displayName) : undefined,
+          email: p?.email ? String(p.email) : undefined,
+          role: p?.role ? String(p.role) : undefined,
+        }))
+        .filter((p: any) => p.id)
+    : undefined;
 
   return {
     id,
@@ -148,6 +158,7 @@ function normalizeChatSessionFromApi(raw: any): ChatSession {
     lastMessage,
     lastMessageAt,
     participantIds,
+    participantsData,
     unreadCounts,
   };
 }
@@ -289,6 +300,9 @@ interface StoreContextType {
   requestWithdrawal: (amount: number, method: PaymentMethod, otpToken?: string) => Promise<{ success: boolean; message: string }>;
   // Notification Methods
   markNotificationsAsRead: () => void;
+  markNotificationAsRead: (notificationId: string) => Promise<void>;
+  deleteNotification: (notificationId: string) => Promise<void>;
+  clearNotifications: () => Promise<void>;
 
   /** From GET /api/users/me/referrals — null when logged out or not loaded. */
   myReferrals: MyReferralsData | null;
@@ -472,7 +486,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           if (resSessions && Array.isArray(resSessions)) setChats(normalizeChatSessionsFromApi(resSessions));
 
           const resNotif = await apiFetch<Notification[]>(API_ENDPOINTS.notifications.list, { silent401: true } as any).catch((e) => { on401(e); return null; });
-          if (resNotif && Array.isArray(resNotif)) setNotifications(resNotif);
+          if (resNotif && Array.isArray(resNotif)) {
+            setNotifications(
+              [...resNotif].sort(
+                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+              ),
+            );
+          }
 
           const orderEndpoints = getOrdersEndpointsForUser(userRef.current);
           if (orderEndpoints.length > 0) {
@@ -541,7 +561,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       ]);
       // Only fetch orders, wallet, and referral stats when authenticated and we have a token (avoids 401 spam when token expired)
       if (activeUser && getToken()) {
-        const [resOrders, resWallet, resWithdrawals, referralsPayload, resMyReviews, resMyPortfolios] = await Promise.all([
+        const [resOrders, resWallet, resWithdrawals, referralsPayload, resMyReviews, resMyPortfolios, resNotifications] = await Promise.all([
           ordersEndpoints.length > 0
             ? Promise.all(
                 ordersEndpoints.map((endpoint) =>
@@ -565,6 +585,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 return [];
               })
             : Promise.resolve([] as Portfolio[]),
+          apiFetch<Notification[]>(API_ENDPOINTS.notifications.list, { silent401: true } as any).catch((e) => {
+            on401(e);
+            return [];
+          }),
         ]);
         setMyReferrals(referralsPayload);
         if (Array.isArray(resWithdrawals)) {
@@ -593,6 +617,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           }));
         }
         setPortfolios(Array.isArray(resMyPortfolios) ? resMyPortfolios : []);
+        if (Array.isArray(resNotifications)) {
+          setNotifications(
+            [...resNotifications].sort(
+              (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+            ),
+          );
+        }
         if (Array.isArray(resMyReviews)) {
           const mappedReviews = resMyReviews.map(mapReviewFromApi);
           setReviews((prev) => {
@@ -605,6 +636,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setMyReferrals(null);
         setWithdrawalRequests([]);
         setPortfolios([]);
+        setNotifications([]);
       }
       setProducers(Array.isArray(resProducers) ? resProducers.map(p => {
         const displayName = (p as any).user?.displayName ?? `${String((p as any).firstName ?? '').trim()} ${String((p as any).lastName ?? '').trim()}`.trim();
@@ -695,6 +727,49 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setNotifications(prev => prev.map(n => n.userId === user.id ? { ...n, isRead: true } : n));
     } catch (e) {
       logApiFailure('Failed to mark notifications as read:', e);
+    }
+  };
+
+  const markNotificationAsRead = async (notificationId: string) => {
+    if (!user) return;
+    try {
+      await apiFetch(API_ENDPOINTS.notifications.markOneRead(notificationId), {
+        method: 'PATCH',
+        silent401: true,
+      } as any);
+      setNotifications((prev) =>
+        prev.map((n) =>
+          n.id === notificationId && n.userId === user.id ? { ...n, isRead: true } : n,
+        ),
+      );
+    } catch (e) {
+      logApiFailure('Failed to mark notification as read:', e);
+    }
+  };
+
+  const deleteNotification = async (notificationId: string) => {
+    if (!user) return;
+    try {
+      await apiFetch(API_ENDPOINTS.notifications.remove(notificationId), {
+        method: 'DELETE',
+        silent401: true,
+      } as any);
+      setNotifications((prev) => prev.filter((n) => !(n.id === notificationId && n.userId === user.id)));
+    } catch (e) {
+      logApiFailure('Failed to delete notification:', e);
+    }
+  };
+
+  const clearNotifications = async () => {
+    if (!user) return;
+    try {
+      await apiFetch(API_ENDPOINTS.notifications.clear, {
+        method: 'DELETE',
+        silent401: true,
+      } as any);
+      setNotifications((prev) => prev.filter((n) => n.userId !== user.id));
+    } catch (e) {
+      logApiFailure('Failed to clear notifications:', e);
     }
   };
 
@@ -2192,7 +2267,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       };
 
       // Optimistic updates for new messages
-      setMessages(prev => [...prev, mappedMsg]);
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === mappedMsg.id);
+        if (idx === -1) return [...prev, mappedMsg];
+        const next = [...prev];
+        next[idx] = mappedMsg; // server truth wins if poll already inserted it
+        return next;
+      });
       setChats(prev => prev.map(c => c.id === chatId ? { ...c, lastMessage: text, lastMessageAt: res.createdAt } : c));
       void fetchChats();
       return true;
@@ -2230,7 +2311,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     sendMessage, respondToProposal,
     login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, deleteOffer, getProducerOffers, getOfferById,
     addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, confirmReceipt, reportProblem, addDisputeEvidence, revealContactInfo,
-    getWallet, fundWallet, requestWithdrawal, markNotificationsAsRead, getAvailableSlots, submitReview, getAverageRating,
+    getWallet, fundWallet, requestWithdrawal, markNotificationsAsRead, markNotificationAsRead, deleteNotification, clearNotifications, getAvailableSlots, submitReview, getAverageRating,
     getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,
     trackUserSearch, toggleFavorite, moveToFavorites, getRecommendedOffers,
     compareList, addToCompare, removeFromCompare, clearCompare,
