@@ -129,6 +129,30 @@ export const ChatPage: React.FC = () => {
    const mySideProposalCount = mySide === 'PRODUCER' ? proposalCountersThisMonth.producer : proposalCountersThisMonth.client;
    const canSendMoreCounters = mySideProposalCount < 2;
 
+   const formatThreadDayLabel = (iso: string) => {
+      const d = new Date(iso);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      if (msgDay.getTime() === today.getTime()) return 'Today';
+      if (msgDay.getTime() === yesterday.getTime()) return 'Yesterday';
+      return d.toLocaleDateString();
+   };
+
+   const formatSidebarDateLabel = (iso: string) => {
+      const d = new Date(iso);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      if (msgDay.getTime() === today.getTime()) return 'Today';
+      if (msgDay.getTime() === yesterday.getTime()) return 'Yesterday';
+      return d.toLocaleDateString();
+   };
+
    const scrollToBottom = () => {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
    };
@@ -211,6 +235,14 @@ export const ChatPage: React.FC = () => {
          return 'Unknown Producer';
       }
       return 'User';
+   };
+
+   const getOfferContextLabel = (offerId?: string) => {
+      if (!offerId) return '';
+      const offer = getOfferById(offerId);
+      if (!offer) return 'Offer';
+      const typeLabel = String(offer.type || '').toUpperCase() === 'SERVICE' ? 'Service' : 'Product';
+      return `${typeLabel}: ${offer.title}`;
    };
 
    const handleSendMessage = async (e?: React.FormEvent) => {
@@ -401,6 +433,7 @@ export const ChatPage: React.FC = () => {
                   chats.filter(c => c.participantIds?.includes(user.id)).map(chat => {
                      const otherName = getOtherParticipantName(chat);
                      const threadUnread = Math.max(0, Number(chat.unreadCounts?.[user.id]) || 0);
+                     const offerContext = getOfferContextLabel(chat.offerId);
                      return (
                         <div
                            key={chat.id}
@@ -415,9 +448,12 @@ export const ChatPage: React.FC = () => {
                                        {threadUnread > 99 ? '99+' : threadUnread}
                                     </span>
                                  )}
-                                 <span className="text-xs text-gray-400 whitespace-nowrap">{new Date(chat.lastMessageAt).toLocaleDateString()}</span>
+                                 <span className="text-xs text-gray-400 whitespace-nowrap">{formatSidebarDateLabel(chat.lastMessageAt)}</span>
                               </div>
                            </div>
+                           {offerContext ? (
+                              <p className="text-[11px] text-primary-700 font-semibold truncate">{offerContext}</p>
+                           ) : null}
                            <p className="text-sm text-gray-500 truncate">{chat.lastMessage}</p>
                         </div>
                      );
@@ -441,7 +477,7 @@ export const ChatPage: React.FC = () => {
                         </div>
                         <div>
                            <h3 className="font-bold text-gray-900">{getOtherParticipantName(activeChat)}</h3>
-                           {activeChat.offerId && <span className="text-xs text-gray-500">Negotiating Offer</span>}
+                           {activeChat.offerId && <span className="text-xs text-gray-500">{getOfferContextLabel(activeChat.offerId)}</span>}
                         </div>
                      </div>
                      <button onClick={() => navigate(-1)} className="text-sm text-gray-500 hover:text-primary-600 hidden md:block">
@@ -451,22 +487,39 @@ export const ChatPage: React.FC = () => {
 
                   {/* Messages */}
                   <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-                     {activeMessages.map(msg => {
+                     {activeChat.offerId ? (
+                        <div className="flex justify-center">
+                           <div className="bg-gray-200 text-gray-700 text-[11px] px-3 py-1 rounded-full">
+                              New negotiation context: {getOfferContextLabel(activeChat.offerId)}
+                           </div>
+                        </div>
+                     ) : null}
+                     {activeMessages.map((msg, idx) => {
                         const isMe = msg.senderId === user.id;
                         const isSystem = msg.systemMessage;
-
-                        if (isSystem) {
-                           return (
-                              <div key={msg.id} className="flex justify-center my-4">
-                                 <div className="bg-gray-200 text-gray-600 text-xs px-3 py-1 rounded-full">
-                                    {msg.text}
-                                 </div>
-                              </div>
-                           );
-                        }
+                        const prev = idx > 0 ? activeMessages[idx - 1] : null;
+                        const showDaySeparator =
+                           !prev ||
+                           new Date(prev.createdAt).toDateString() !==
+                              new Date(msg.createdAt).toDateString();
 
                         return (
-                           <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                           <React.Fragment key={msg.id}>
+                              {showDaySeparator ? (
+                                 <div className="flex justify-center my-2">
+                                    <div className="bg-gray-300/70 text-gray-700 text-[11px] px-3 py-1 rounded-full">
+                                       {formatThreadDayLabel(msg.createdAt)}
+                                    </div>
+                                 </div>
+                              ) : null}
+                              {isSystem ? (
+                                 <div className="flex justify-center my-4">
+                                    <div className="bg-gray-200 text-gray-600 text-xs px-3 py-1 rounded-full">
+                                       {msg.text}
+                                    </div>
+                                 </div>
+                              ) : (
+                                 <div className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                               <div className={`max-w-[85%] md:max-w-[70%] rounded-lg p-3 shadow-sm ${isMe ? 'bg-primary-600 text-white rounded-br-none' : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none'
                                  }`}>
                                  {msg.proposal ? (
@@ -545,6 +598,8 @@ export const ChatPage: React.FC = () => {
                                  </span>
                               </div>
                            </div>
+                              )}
+                           </React.Fragment>
                         );
                      })}
                      <div ref={messagesEndRef} />

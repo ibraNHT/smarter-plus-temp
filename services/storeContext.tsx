@@ -168,6 +168,19 @@ function normalizeChatSessionsFromApi(rows: unknown): ChatSession[] {
   return rows.map(normalizeChatSessionFromApi).filter((c) => Boolean(c.id));
 }
 
+function mergeChatSessionsById(
+  previous: ChatSession[],
+  incoming: ChatSession[],
+): ChatSession[] {
+  const byId = new Map<string, ChatSession>();
+  previous.forEach((s) => byId.set(s.id, s));
+  incoming.forEach((s) => byId.set(s.id, s)); // incoming wins for freshest server truth
+  return Array.from(byId.values()).sort(
+    (a, b) =>
+      new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime(),
+  );
+}
+
 import { fetchMyReferrals } from './referralsApi';
 import { validateCouponRemote, type CouponValidationChannel } from './couponsApi';
 import { io, Socket } from 'socket.io-client';
@@ -483,7 +496,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           // Do not drop the session here; let interactive auth flows handle logout.
           const on401 = (_e: unknown) => {};
           const resSessions = await apiFetch<ChatSession[]>(API_ENDPOINTS.chat.sessions, { silent401: true } as any).catch((e) => { on401(e); return null; });
-          if (resSessions && Array.isArray(resSessions)) setChats(normalizeChatSessionsFromApi(resSessions));
+          if (resSessions && Array.isArray(resSessions)) {
+            const normalized = normalizeChatSessionsFromApi(resSessions);
+            setChats((prev) => mergeChatSessionsById(prev, normalized));
+          }
 
           const resNotif = await apiFetch<Notification[]>(API_ENDPOINTS.notifications.list, { silent401: true } as any).catch((e) => { on401(e); return null; });
           if (resNotif && Array.isArray(resNotif)) {
@@ -2024,7 +2040,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!user) return;
     try {
       const res = await apiFetch<any[]>(API_ENDPOINTS.chat.sessions, { silent401: true } as any);
-      if (Array.isArray(res)) setChats(normalizeChatSessionsFromApi(res));
+      if (Array.isArray(res)) {
+        const normalized = normalizeChatSessionsFromApi(res);
+        setChats((prev) => mergeChatSessionsById(prev, normalized));
+      }
     } catch (e) {
       logApiFailure('Failed to fetch chats:', e);
     }
@@ -2080,7 +2099,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const freshChatsRaw = await apiFetch<any[]>(API_ENDPOINTS.chat.sessions, { silent401: true } as any);
       if (Array.isArray(freshChatsRaw)) {
         const freshChats = normalizeChatSessionsFromApi(freshChatsRaw);
-        setChats(freshChats);
+        setChats((prev) => mergeChatSessionsById(prev, freshChats));
         const existing = freshChats.find((c: ChatSession) =>
           c.participantIds?.includes(user.id) && c.participantIds?.includes(pid) && c.offerId === oid
         );

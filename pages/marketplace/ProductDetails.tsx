@@ -103,6 +103,7 @@ export const ProductDetails: React.FC = () => {
   }
 
   const isProducerMarket = offer.marketType === MarketType.PRODUCER;
+  const isNegotiationAllowed = isProducerMarket && offer.isNegotiable && !offer.reservedClientId;
   const maxOrder = offer.maxQuantity && offer.maxQuantity > 0 ? Math.min(offer.maxQuantity, offer.quantity) : offer.quantity;
   const minOrder = offer.minQuantity || 1;
   const producerRating = producer ? getAverageRating(producer.id) : 0;
@@ -266,7 +267,7 @@ export const ProductDetails: React.FC = () => {
                       <Layers className="h-5 w-5" />
                     </button>
 
-                    {isProducerMarket && offer.isNegotiable && !offer.reservedClientId && (
+                    {isNegotiationAllowed && (
                       <span className="inline-flex items-center px-2 py-1 rounded bg-blue-100 text-blue-800 text-xs font-bold">
                         <MessageCircle className="h-3 w-3 mr-1" /> Negotiable
                       </span>
@@ -467,7 +468,7 @@ export const ProductDetails: React.FC = () => {
                   <p className="text-xs text-gray-600 text-center px-1 leading-relaxed">{t('product.bookNowHint')}</p>
                 )}
 
-                {isProducerMarket && !offer.reservedClientId && (
+                {isNegotiationAllowed && (
                   <button
                     type="button"
                     disabled={negotiateLoading}
