@@ -56,7 +56,10 @@ export const ClientProfile: React.FC = () => {
 
    useEffect(() => {
       const tab = searchParams.get('tab');
-      if (isProfileTab(tab) && tab !== activeTab) setActiveTab(tab);
+      if (isProfileTab(tab)) {
+         setActiveTab((prev) => (prev === tab ? prev : tab));
+         return;
+      }
       if (tab && !isProfileTab(tab)) {
          setSearchParams((prev) => {
             const next = new URLSearchParams(prev);
@@ -64,7 +67,7 @@ export const ClientProfile: React.FC = () => {
             return next;
          }, { replace: true });
       }
-   }, [searchParams, activeTab]);
+   }, [searchParams, setSearchParams]);
 
    useEffect(() => {
       const tab = searchParams.get('tab');
