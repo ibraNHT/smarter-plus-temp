@@ -866,6 +866,18 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setReviews([]);
     setCart([]);
     localStorage.removeItem('currentUser');
+    // Drop session-scoped data so the next login/register does not reconcile against a huge
+    // in-memory graph from the previous user (slower updates, brief wrong-user flash).
+    setOrders([]);
+    setWithdrawalRequests([]);
+    setNotifications([]);
+    setChats([]);
+    setMessages([]);
+    setCompareList([]);
+    // Public catalog refresh in the background (non-blocking).
+    setTimeout(() => {
+      void fetchData(null);
+    }, 0);
   };
 
   const refreshMyReferrals = useCallback(async () => {
@@ -983,7 +995,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         localStorage.setItem('currentUser', JSON.stringify(mergedUser));
       }
 
-      await fetchData(mergedUser);
+      // Defer full catalog sync so the UI can navigate and drop loading state immediately.
+      // Awaiting here blocked the whole registration flow for 1–2s (worse after logout→register
+      // in the same SPA session when the main thread is already busy).
+      setTimeout(() => {
+        void fetchData(mergedUser);
+      }, 0);
       return { success: true, message: 'Registration successful!' };
     } catch (err: any) {
       return { success: false, message: err.message || 'Registration failed.' };
@@ -1046,7 +1063,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         localStorage.setItem('currentUser', JSON.stringify(mergedUser));
       }
 
-      await fetchData(mergedUser);
+      setTimeout(() => {
+        void fetchData(mergedUser);
+      }, 0);
       return { success: true, message: 'Registration successful!' };
     } catch (err: any) {
       return { success: false, message: err.message || 'Registration failed.' };
