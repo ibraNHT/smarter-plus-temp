@@ -241,29 +241,42 @@ export const ProducerDashboard: React.FC = () => {
       }
    };
 
-   /** Open Maps at the delivery point for this order (pin at lat/lng when available). */
+   /** Open the device's native maps app for directions to the delivery point.
+    *  Uses geo: URI on mobile (opens native app picker), Google Maps fallback on desktop. */
    const openOrderDeliveryInMaps = (order: Order) => {
+      let lat: number | undefined;
+      let lng: number | undefined;
+      let addressLine: string | undefined;
+
       if (order.deliveryMethod === 'HOME') {
          const snap = order.shippingAddress;
          if (snap && typeof snap === 'object') {
-            const lat = Number((snap as { lat?: number }).lat);
-            const lng = Number((snap as { lng?: number }).lng);
-            if (
-               Number.isFinite(lat) &&
-               Number.isFinite(lng) &&
-               (Math.abs(lat) > 1e-6 || Math.abs(lng) > 1e-6)
-            ) {
-               window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
-               return;
+            const sLat = Number((snap as { lat?: number }).lat);
+            const sLng = Number((snap as { lng?: number }).lng);
+            if (Number.isFinite(sLat) && Number.isFinite(sLng) && (Math.abs(sLat) > 1e-6 || Math.abs(sLng) > 1e-6)) {
+               lat = sLat;
+               lng = sLng;
             }
          }
       }
-      const line = getClientAddress(order);
-      if (!line || line === 'No Address') return;
-      window.open(
-         `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(line)}`,
-         '_blank',
-      );
+      addressLine = getClientAddress(order);
+      if (!lat && (!addressLine || addressLine === 'No Address')) return;
+
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (lat != null && lng != null) {
+         if (isMobile) {
+            window.location.href = `geo:${lat},${lng}?q=${lat},${lng}`;
+         } else {
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+         }
+      } else if (addressLine) {
+         const encoded = encodeURIComponent(addressLine);
+         if (isMobile) {
+            window.location.href = `geo:0,0?q=${encoded}`;
+         } else {
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${encoded}`, '_blank');
+         }
+      }
    };
 
    const openEvidenceModal = (orderId: string, e: React.MouseEvent) => {
@@ -409,20 +422,11 @@ export const ProducerDashboard: React.FC = () => {
 
                            <div className="flex flex-wrap gap-2">
                               {/* Contact & Location Buttons */}
-                              {!order.contactRevealed ? (
-                                 <button
-                                    onClick={(e) => { e.stopPropagation(); revealContactInfo(order.id); }}
-                                    className="inline-flex items-center px-3 py-2 border border-blue-200 text-sm font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100"
-                                 >
-                                    <Phone className="h-4 w-4 mr-2" /> {t('order.revealContact')}
-                                 </button>
-                              ) : (
-                                 <div className="text-xs text-gray-600 bg-gray-100 p-1.5 rounded border flex flex-col">
-                                    <span className="font-bold">Client Contact:</span>
-                                    <span className="flex items-center"><Phone className="w-3 h-3 mr-1" /> {getClientPhone(order.clientId)}</span>
-                                    <span className="flex items-center"><Mail className="w-3 h-3 mr-1" /> {getClientEmail(order.clientId)}</span>
-                                 </div>
-                              )}
+                              <div className="text-xs text-gray-600 bg-gray-100 p-1.5 rounded border flex flex-col">
+                                 <span className="font-bold">Client Contact:</span>
+                                 <span className="flex items-center"><Phone className="w-3 h-3 mr-1" /> {getClientPhone(order.clientId)}</span>
+                                 <span className="flex items-center"><Mail className="w-3 h-3 mr-1" /> {getClientEmail(order.clientId)}</span>
+                              </div>
 
                               <button
                                  onClick={(e) => { e.stopPropagation(); openOrderDeliveryInMaps(order); }}

@@ -79,6 +79,7 @@ export const CreateOffer: React.FC = () => {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [existingOffer, setExistingOffer] = useState<Offer | undefined>(undefined);
   const [imageUrl, setImageUrl] = useState<string>('');
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [imageUploading, setImageUploading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
 
@@ -178,6 +179,7 @@ export const CreateOffer: React.FC = () => {
             : (SERVICE_UNITS.has(offer.unit) ? PRODUCT_DEFAULT_UNIT : offer.unit);
         setExistingOffer(offer);
         setImageUrl(offer.imageUrl ?? '');
+        setImageUrls(offer.imageUrls ?? []);
         setFormData({
           title: offer.title,
           description: offer.description,
@@ -199,6 +201,8 @@ export const CreateOffer: React.FC = () => {
     }
   }, [offerId, getOfferById, navigate, user?.producerId, registeredLocation, fallbackProductCategory, fallbackServiceCategory, selectableProductCategories, selectableServiceCategories]);
 
+  const allOfferImages = imageUrl ? [imageUrl, ...imageUrls] : [...imageUrls];
+
   const handleImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -211,15 +215,37 @@ export const CreateOffer: React.FC = () => {
       setImageError('Image must be 5 MB or less.');
       return;
     }
+    if (allOfferImages.length >= 3) {
+      setImageError('Maximum 3 images per offer.');
+      return;
+    }
     setImageError(null);
     setImageUploading(true);
     try {
       const url = await uploadOfferImage(file);
-      setImageUrl(url);
+      if (!imageUrl) {
+        setImageUrl(url);
+      } else {
+        setImageUrls(prev => [...prev, url]);
+      }
     } catch (err) {
       setImageError(err instanceof Error ? err.message : 'Image upload failed.');
     } finally {
       setImageUploading(false);
+    }
+  };
+
+  const removeOfferImage = (index: number) => {
+    if (index === 0 && imageUrl) {
+      if (imageUrls.length > 0) {
+        setImageUrl(imageUrls[0]);
+        setImageUrls(prev => prev.slice(1));
+      } else {
+        setImageUrl('');
+      }
+    } else {
+      const adjustedIdx = imageUrl ? index - 1 : index;
+      setImageUrls(prev => prev.filter((_, i) => i !== adjustedIdx));
     }
   };
 
@@ -293,6 +319,7 @@ export const CreateOffer: React.FC = () => {
           ...existingOffer,
           ...offerData,
           imageUrl,
+          imageUrls,
         });
         if (!result.success) {
           setSubmitError(result.error ?? 'Could not update the offer.');
@@ -303,6 +330,7 @@ export const CreateOffer: React.FC = () => {
           ...offerData,
           marketType: MarketType.PRODUCER,
           imageUrl,
+          imageUrls,
         });
         if (!result.success) {
           setSubmitError(result.error ?? 'Could not publish the offer.');
@@ -562,32 +590,31 @@ export const CreateOffer: React.FC = () => {
 
              <div className="sm:col-span-6">
                <label className="block text-sm font-medium text-gray-700">
-                 {formData.type === OfferType.SERVICE ? 'Service image' : 'Product image'}
+                 {formData.type === OfferType.SERVICE ? 'Service images' : 'Product images'} <span className="text-gray-400 font-normal">({allOfferImages.length}/3)</span>
                </label>
-               {imageUrl ? (
-                 <div className="mt-2 flex items-start gap-4">
-                   <div className="relative h-28 w-28 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
-                     <img src={imageUrl} alt="Offer preview" className={offerImageInBox} />
-                     <button
-                       type="button"
-                       onClick={() => setImageUrl('')}
-                       className="absolute right-1 top-1 rounded-full bg-black/55 p-1 text-white hover:bg-black/75"
-                       aria-label="Remove image"
-                     >
-                       <X className="h-3 w-3" />
-                     </button>
-                   </div>
-                   <label className={`inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 ${imageUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}>
-                     <Camera className="h-4 w-4" />
-                     <span>{imageUploading ? 'Uploading…' : 'Replace image'}</span>
-                     <input
-                       type="file"
-                       accept="image/png,image/jpeg,image/webp"
-                       className="hidden"
-                       disabled={imageUploading}
-                       onChange={handleImagePick}
-                     />
-                   </label>
+               {allOfferImages.length > 0 ? (
+                 <div className="mt-2 flex flex-wrap items-start gap-3">
+                   {allOfferImages.map((url, idx) => (
+                     <div key={url + idx} className="relative h-28 w-28 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
+                       <img src={url} alt={`Offer image ${idx + 1}`} className={offerImageInBox} />
+                       <button
+                         type="button"
+                         onClick={() => removeOfferImage(idx)}
+                         className="absolute right-1 top-1 rounded-full bg-black/55 p-1 text-white hover:bg-black/75"
+                         aria-label="Remove image"
+                       >
+                         <X className="h-3 w-3" />
+                       </button>
+                       {idx === 0 && <span className="absolute left-1 bottom-1 bg-primary-600 text-white text-[10px] px-1 rounded">Main</span>}
+                     </div>
+                   ))}
+                   {allOfferImages.length < 3 && (
+                     <label className={`flex h-28 w-28 flex-col items-center justify-center rounded-md border-2 border-dashed border-gray-300 text-gray-400 hover:border-primary-300 hover:text-primary-500 transition-colors ${imageUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}>
+                       <Camera className="h-6 w-6 mb-1" />
+                       <span className="text-xs">{imageUploading ? 'Uploading…' : 'Add image'}</span>
+                       <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={imageUploading} onChange={handleImagePick} />
+                     </label>
+                   )}
                  </div>
                ) : (
                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md bg-white">
@@ -599,7 +626,7 @@ export const CreateOffer: React.FC = () => {
                      )}
                      <div className="flex text-sm text-gray-600">
                        <label className={`relative bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 ${imageUploading ? 'pointer-events-none opacity-60' : 'cursor-pointer'}`}>
-                         <span>{imageUploading ? 'Uploading…' : 'Upload a photo'}</span>
+                         <span>{imageUploading ? 'Uploading…' : 'Upload photos (up to 3)'}</span>
                          <input
                            type="file"
                            accept="image/png,image/jpeg,image/webp"

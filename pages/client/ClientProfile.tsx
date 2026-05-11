@@ -44,7 +44,7 @@ export const ClientProfile: React.FC = () => {
    const isProfileTab = (v: string | null): v is ProfileTab =>
       v === 'info' || v === 'orders' || v === 'security' || v === 'favorites' || v === 'reputation' || v === 'referrals';
 
-   const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, isInitialCatalogLoading } = useStore();
+   const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, isInitialCatalogLoading, pickupPoints } = useStore();
    const updateClientMutation = useUpdateClientProfileMutation();
    const { t } = useTranslation();
    const navigate = useNavigate();
@@ -115,6 +115,7 @@ export const ClientProfile: React.FC = () => {
          farmName: '',
          description: '',
          productionTypes: [] as string[],
+         taxIdentificationNumber: '',
       },
       validate: (values) => {
          const schema = z.object({
@@ -122,9 +123,13 @@ export const ClientProfile: React.FC = () => {
             farmName: z.string(),
             description: z.string().trim().min(10, 'Description should be at least 10 characters.'),
             productionTypes: z.array(z.string()),
+            taxIdentificationNumber: z.string(),
          }).superRefine((v, ctx) => {
             if (v.type === 'BUSINESS' && !v.farmName.trim()) {
                ctx.addIssue({ code: 'custom', path: ['farmName'], message: 'Farm/Business name is required for business accounts.' });
+            }
+            if (!v.taxIdentificationNumber.trim()) {
+               ctx.addIssue({ code: 'custom', path: ['taxIdentificationNumber'], message: 'Tax ID (NIU) is required.' });
             }
          });
          const parsed = schema.safeParse(values);
@@ -143,7 +148,8 @@ export const ClientProfile: React.FC = () => {
             name: values.type === 'BUSINESS' ? values.farmName : undefined,
             description: values.description,
             productionTypes: values.productionTypes,
-         });
+            taxIdentificationNumber: values.taxIdentificationNumber || undefined,
+         } as any);
          if (!ok) {
             alert('Upgrade failed. Please try again.');
             return;
@@ -1235,8 +1241,9 @@ export const ClientProfile: React.FC = () => {
                               <label className="flex items-center"><input type="radio" name="type" value="BUSINESS" checked={upgradeFormik.values.type === 'BUSINESS'} onChange={upgradeFormik.handleChange} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">Business</span></label>
                            </div>
                         </div>
-                        {upgradeFormik.values.type === 'BUSINESS' && (<div><label className="block text-sm font-medium text-gray-700">Farm/Business Name</label><input type="text" name="farmName" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.farmName} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.farmName && upgradeFormik.errors.farmName ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.farmName}</p> : null}</div>)}
-                        <div><label className="block text-sm font-medium text-gray-700">Description</label><textarea name="description" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" rows={3} value={upgradeFormik.values.description} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.description && upgradeFormik.errors.description ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.description}</p> : null}</div>
+                        {upgradeFormik.values.type === 'BUSINESS' && (<div><label className="block text-sm font-medium text-gray-700">Farm/Business Name <span className="text-red-500">*</span></label><input type="text" name="farmName" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.farmName} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.farmName && upgradeFormik.errors.farmName ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.farmName}</p> : null}</div>)}
+                        <div><label className="block text-sm font-medium text-gray-700">Tax ID (TIN / NIU) <span className="text-red-500">*</span></label><input type="text" name="taxIdentificationNumber" required placeholder="Enter your NIU" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.taxIdentificationNumber} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.taxIdentificationNumber && upgradeFormik.errors.taxIdentificationNumber ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.taxIdentificationNumber as string}</p> : null}<p className="text-xs text-gray-500 mt-1">Required for all producer accounts. You can upload certificates after account creation.</p></div>
+                        <div><label className="block text-sm font-medium text-gray-700">Description <span className="text-red-500">*</span></label><textarea name="description" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" rows={3} value={upgradeFormik.values.description} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.description && upgradeFormik.errors.description ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.description}</p> : null}</div>
                         <div><label className="block text-sm font-medium text-gray-700 mb-2">Categories (Click to select)</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded bg-white">{PRODUCTION_TYPES.map(cat => (<button key={cat} type="button" onClick={() => toggleUpgradeCategory(cat)} className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${upgradeFormik.values.productionTypes.includes(cat) ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}</button>))}</div></div>
                         <div className="mt-5 sm:mt-6 flex justify-end gap-3"><button type="button" onClick={() => setShowUpgradeModal(false)} className="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:text-sm">Cancel</button><button type="submit" className="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 sm:text-sm">Upgrade Account</button></div>
                      </form>
@@ -1437,6 +1444,18 @@ export const ClientProfile: React.FC = () => {
                         <p className="text-sm font-medium text-gray-900">
                            {t('order.soldBy')}: <Link to={`/profile/producer/${selectedOrder.producerId}`} className="text-primary-600 hover:underline">{getProducerDisplayName(selectedOrder)}</Link>
                         </p>
+                        {['IN_TRANSIT', 'DELIVERED', 'COMPLETED'].includes(selectedOrder.status) && (() => {
+                           const prod = producers.find(p => p.id === selectedOrder.producerId);
+                           const phone = (prod as any)?.phone || (prod as any)?.user?.phone;
+                           const email = (prod as any)?.email || (prod as any)?.user?.email;
+                           return (phone || email) ? (
+                              <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600">
+                                 <span className="font-bold text-gray-700">Producer Contact:</span>
+                                 {phone && <p className="mt-0.5">Phone: {phone}</p>}
+                                 {email && <p className="mt-0.5">Email: {email}</p>}
+                              </div>
+                           ) : null;
+                        })()}
                      </div>
 
                      {/* Items / scheduled services */}
@@ -1495,6 +1514,28 @@ export const ClientProfile: React.FC = () => {
                         <span className="text-base font-medium text-gray-900">Total</span>
                         <span className="text-xl font-bold text-primary-600">{(selectedOrder.totalAmount ?? 0).toLocaleString()} XAF</span>
                      </div>
+
+                     {/* Shipping / Delivery address */}
+                     {selectedOrder.deliveryMethod === 'HOME' && selectedOrder.shippingAddress && typeof selectedOrder.shippingAddress === 'object' && (
+                        <div className="mt-3 p-3 bg-gray-50 rounded-md border border-gray-200 text-sm">
+                           <p className="font-medium text-gray-700 mb-1">Shipping Address:</p>
+                           <p className="text-gray-600">
+                              {[
+                                 (selectedOrder.shippingAddress as any).address,
+                                 (selectedOrder.shippingAddress as any).city,
+                                 (selectedOrder.shippingAddress as any).region,
+                              ].filter(Boolean).join(', ')}
+                           </p>
+                        </div>
+                     )}
+                     {selectedOrder.deliveryMethod === 'PICKUP' && selectedOrder.pickupPointId && (
+                        <div className="mt-3 p-3 bg-gray-50 rounded-md border border-gray-200 text-sm">
+                           <p className="font-medium text-gray-700 mb-1">Pickup Point:</p>
+                           <p className="text-gray-600">
+                              {(() => { const pp = pickupPoints.find(p => p.id === selectedOrder.pickupPointId); return pp ? `${pp.name} — ${pp.address}, ${pp.city}` : selectedOrder.pickupPointId; })()}
+                           </p>
+                        </div>
+                     )}
 
                      <div className="mt-4 flex flex-wrap gap-2">
                         {selectedOrder.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT && (

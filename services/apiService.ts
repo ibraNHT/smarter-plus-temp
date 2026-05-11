@@ -45,10 +45,19 @@ interface ApiFetchOptions extends Omit<RequestInit, 'headers'> {
 }
 
 let refreshInFlight: Promise<boolean> | null = null;
+let lastRefreshFailed = 0;
+const REFRESH_COOLDOWN_MS = 10_000;
 
-/** Attempt to silently refresh the access token (HttpOnly cookie and/or body refresh token). */
+/** True when a recent refresh failed and the cooldown hasn't elapsed. */
+export const isRefreshOnCooldown = (): boolean =>
+    Date.now() - lastRefreshFailed < REFRESH_COOLDOWN_MS;
+
+/** Attempt to silently refresh the access token. Deduplicates concurrent calls and
+ *  enforces a cooldown after failure to prevent 429 storms. */
 const attemptTokenRefresh = async (): Promise<boolean> => {
     if (refreshInFlight) return refreshInFlight;
+    if (Date.now() - lastRefreshFailed < REFRESH_COOLDOWN_MS) return false;
+
     refreshInFlight = (async () => {
         const bodyRefresh = getRefreshToken();
         try {
@@ -60,24 +69,28 @@ const attemptTokenRefresh = async (): Promise<boolean> => {
                     bodyRefresh ? { refreshToken: bodyRefresh } : {},
                 ),
             });
-            if (!response.ok) return false;
+            if (!response.ok) {
+                lastRefreshFailed = Date.now();
+                return false;
+            }
             const data = await response.json();
             if (data.accessToken) {
                 setToken(data.accessToken);
                 if (data.refreshToken) setRefreshToken(data.refreshToken);
+                lastRefreshFailed = 0;
                 return true;
             }
         } catch {
-            // network error during refresh — fail silently
+            lastRefreshFailed = Date.now();
         }
         return false;
     })();
 
-    try {
-        return await refreshInFlight;
-    } finally {
-        refreshInFlight = null;
-    }
+    const result = await refreshInFlight;
+    // Keep the promise reference alive briefly so concurrent 401s that arrive
+    // a few ms apart still deduplicate instead of spawning new refresh calls.
+    setTimeout(() => { refreshInFlight = null; }, 2000);
+    return result;
 };
 
 /**
@@ -115,20 +128,25 @@ export const apiFetch = async <T = unknown>(
     }
 
     if (!response.ok) {
+        // 429 Too Many Requests — trigger the cooldown so all pending/future
+        // requests back off instead of continuing to hammer the server.
+        if (response.status === 429) {
+            lastRefreshFailed = Date.now();
+            const err = new Error('Too many requests — please wait a moment.') as Error & { status?: number };
+            err.status = 429;
+            throw err;
+        }
+
         if (response.status === 401) {
-            // Attempt one token refresh (cookie + optional body token), then retry once.
             if (!_isRetry) {
                 const refreshed = await attemptTokenRefresh();
                 if (refreshed) {
                     return apiFetch<T>(path, { ...options, _isRetry: true });
                 }
             }
-            // Only hard-reset session for interactive calls. Background `silent401` requests
-            // must not wipe tokens (e.g. cross-origin cookie not sent previously → spurious 401).
             if (!silent401) {
                 clearToken();
                 localStorage.removeItem('currentUser');
-                // Use hash navigation to avoid full-page reload flicker.
                 if (window.location.hash !== '#/login') {
                     window.location.hash = '#/login';
                 }

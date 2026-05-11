@@ -127,7 +127,7 @@ export const ChatPage: React.FC = () => {
 
    const mySide = user?.role === 'PRODUCER' ? 'PRODUCER' : 'CLIENT';
    const mySideProposalCount = mySide === 'PRODUCER' ? proposalCountersThisMonth.producer : proposalCountersThisMonth.client;
-   const canSendMoreCounters = mySideProposalCount < 2;
+   const canSendMoreCounters = mySideProposalCount < 3;
 
    const formatThreadDayLabel = (iso: string) => {
       const d = new Date(iso);
@@ -621,7 +621,7 @@ export const ChatPage: React.FC = () => {
                            }}
                            disabled={!activeChat?.offerId || !(getOfferById(activeChat?.offerId || '')?.isNegotiable ?? false) || !canSendMoreCounters || !canInitiateFirstProposal}
                            className="mb-1 p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                           title={!activeChat?.offerId ? 'Select an offer first' : (!canInitiateFirstProposal ? 'Only producer can open a new proposal round' : (!canSendMoreCounters ? 'Monthly counter-offer limit reached (2)' : (getOfferById(activeChat?.offerId || '')?.isNegotiable ? 'Make Proposal' : 'This offer is not open for negotiation')))}
+                           title={!activeChat?.offerId ? 'Select an offer first' : (!canInitiateFirstProposal ? 'Only producer can open a new proposal round' : (!canSendMoreCounters ? 'Counter-offer limit reached (3 per round)' : (getOfferById(activeChat?.offerId || '')?.isNegotiable ? 'Make Proposal' : 'This offer is not open for negotiation')))}
                         >
                            <Gavel className="h-6 w-6 text-primary-600" />
                         </button>

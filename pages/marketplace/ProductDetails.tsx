@@ -65,7 +65,7 @@ export const ProductDetails: React.FC = () => {
   const isComparing = offer ? compareList.includes(offer.id) : false;
 
   // Reviews for this producer
-  const producerReviews = producer ? reviews.filter(r => r.targetId === producer.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : [];
+  const producerReviews = producer ? reviews.filter(r => r.targetId === producer.id || r.targetId === producer.userId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : [];
 
   useEffect(() => {
     let alive = true;

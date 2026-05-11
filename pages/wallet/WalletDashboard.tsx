@@ -121,6 +121,8 @@ export const WalletDashboard: React.FC = () => {
       case TransactionType.PAYMENT:
       case TransactionType.WITHDRAWAL:
         return <ArrowUpRight className="h-5 w-5 text-red-500" />;
+      case TransactionType.PENDING:
+        return <Clock className="h-5 w-5 text-amber-500" />;
       default:
         return <CreditCard className="h-5 w-5 text-gray-500" />;
     }
@@ -164,12 +166,24 @@ export const WalletDashboard: React.FC = () => {
               {wallet.balance.toLocaleString()} <span className="text-2xl md:text-3xl font-bold text-gray-800 ml-1">XAF</span>
             </h2>
 
-            {/* Available Balance Display */}
-            <div className="mt-5 pt-5 border-t border-gray-200">
-              <p className="text-sm text-gray-500 uppercase tracking-wider font-semibold">{t('wallet.available')}</p>
-              <p className="text-2xl font-bold mt-1 tabular-nums text-gray-900">{availableBalance.toLocaleString()} XAF</p>
+            {/* Balance Breakdown */}
+            <div className="mt-5 pt-5 border-t border-gray-200 grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">{t('wallet.available')}</p>
+                <p className="text-xl font-bold mt-0.5 tabular-nums text-gray-900">{availableBalance.toLocaleString()} XAF</p>
+              </div>
+              {(wallet.pendingBalance ?? 0) > 0 && (
+                <div>
+                  <p className="text-xs text-amber-600 uppercase tracking-wider font-semibold">Upcoming</p>
+                  <p className="text-xl font-bold mt-0.5 tabular-nums text-amber-700">{(wallet.pendingBalance ?? 0).toLocaleString()} XAF</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Held until 5-day window</p>
+                </div>
+              )}
               {pendingAmount > 0 && (
-                <p className="text-sm text-amber-700 mt-1 font-medium">({pendingAmount.toLocaleString()} XAF Pending Withdrawals)</p>
+                <div>
+                  <p className="text-xs text-orange-600 uppercase tracking-wider font-semibold">Pending Withdrawals</p>
+                  <p className="text-xl font-bold mt-0.5 tabular-nums text-orange-700">{pendingAmount.toLocaleString()} XAF</p>
+                </div>
               )}
             </div>
 

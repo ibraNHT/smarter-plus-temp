@@ -18,6 +18,7 @@ export const ProducerMarket: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [locationQuery, setLocationQuery] = useState('');
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   // Autocomplete State
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
@@ -203,7 +204,8 @@ export const ProducerMarket: React.FC = () => {
     const isLocal = clientRegion && producer?.locations.some(l => l.region === clientRegion);
     const isFav = favorites.includes(offer.id);
     const rating = getAverageRating(offer.producerId);
-    const reviewCount = reviews.filter(r => r.targetId === offer.producerId).length;
+    const producerUserId = producer?.userId;
+    const reviewCount = reviews.filter(r => r.targetId === offer.producerId || (producerUserId && r.targetId === producerUserId)).length;
 
     const isComparing = compareList.includes(offer.id);
 
@@ -214,7 +216,7 @@ export const ProducerMarket: React.FC = () => {
     };
 
     return (
-      <div key={offer.id} className={`group relative min-w-[280px] w-[300px] flex-shrink-0 bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 border ${isLocal ? 'border-green-300 ring-2 ring-green-50' : 'border-gray-100'} h-full flex flex-col`}>
+      <div key={offer.id} className={`group relative ${expandedCategory ? 'w-full' : 'min-w-[280px] w-[300px] flex-shrink-0'} bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 border ${isLocal ? 'border-green-300 ring-2 ring-green-50' : 'border-gray-100'} h-full flex flex-col`}>
         {/* Action Buttons Overlay */}
         <div className="absolute top-2 right-2 z-10 flex flex-col gap-2">
           {/* Favorite Button (Visible for Client AND Producer) */}
@@ -442,23 +444,57 @@ export const ProducerMarket: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-12">
-                {sortedCategories.map(category => {
+                {(expandedCategory ? [expandedCategory].filter(c => groupedOffers[c]) : sortedCategories).map(category => {
                   const sortedCategoryOffers = sortOffersByRegion([...groupedOffers[category]]);
+                  const isExpanded = expandedCategory === category;
 
                   return (
                     <div key={category} className="space-y-4">
                       <div className="flex items-center justify-between border-b border-gray-200 pb-2">
                         <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+                          {isExpanded && (
+                            <button type="button" onClick={() => setExpandedCategory(null)} className="mr-2 p-1 rounded-full hover:bg-gray-100 transition-colors">
+                              <ArrowLeft className="h-5 w-5 text-gray-600" />
+                            </button>
+                          )}
                           <span className="bg-primary-100 text-primary-800 text-sm font-bold px-2 py-1 rounded mr-2 uppercase shadow-sm">
                             {t(`category.${category}`)}
                           </span>
                         </h2>
-                        <span className="text-sm text-gray-500">{sortedCategoryOffers.length} results</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm text-gray-500">{sortedCategoryOffers.length} results</span>
+                          {!isExpanded && sortedCategoryOffers.length > 4 && (
+                            <button
+                              type="button"
+                              onClick={() => { setExpandedCategory(category); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                              className="text-sm font-medium text-primary-600 hover:text-primary-800 transition-colors whitespace-nowrap"
+                            >
+                              See All &rarr;
+                            </button>
+                          )}
+                          {isExpanded && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedCategory(null)}
+                              className="text-sm font-medium text-primary-600 hover:text-primary-800 transition-colors whitespace-nowrap"
+                            >
+                              &larr; All Categories
+                            </button>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="flex overflow-x-auto pb-8 pt-2 space-x-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent px-1">
-                        {sortedCategoryOffers.map((offer) => renderOfferCard(offer))}
-                      </div>
+                      {isExpanded ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pt-2">
+                          {sortedCategoryOffers.map((offer) => (
+                            <div key={offer.id} className="w-full">{renderOfferCard(offer)}</div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex overflow-x-auto pb-8 pt-2 space-x-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent px-1">
+                          {sortedCategoryOffers.map((offer) => renderOfferCard(offer))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

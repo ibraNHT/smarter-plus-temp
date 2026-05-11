@@ -10,7 +10,7 @@ import {
   postGuestSupportMessage,
   postUserSupportMessage,
 } from './supportSessionsApi';
-import { apiFetch, apiUpload, setToken, clearToken, getToken, setRefreshToken } from './apiService';
+import { apiFetch, apiUpload, setToken, clearToken, getToken, setRefreshToken, isRefreshOnCooldown } from './apiService';
 import { logApiFailure } from './apiDebug';
 import { uploadAvatar } from './uploadService';
 
@@ -455,6 +455,51 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const socketRef = useRef<Socket | null>(null);
   const userRef = useRef<typeof user>(user);
   userRef.current = user;
+
+  // Debounced light refresh: only fetches orders + notifications (the things that change
+  // on socket events), not the full catalog. Collapses rapid-fire notifications into one call.
+  const notificationFetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchInFlightRef = useRef<boolean>(false);
+  const debouncedLightFetch = useCallback(() => {
+    if (notificationFetchTimer.current) clearTimeout(notificationFetchTimer.current);
+    notificationFetchTimer.current = setTimeout(async () => {
+      const u = userRef.current;
+      if (!u || !getToken() || isRefreshOnCooldown() || fetchInFlightRef.current) return;
+      fetchInFlightRef.current = true;
+      try {
+        const on401 = (_e: unknown) => {};
+        const [resNotif, resSessions] = await Promise.all([
+          apiFetch<Notification[]>(API_ENDPOINTS.notifications.list, { silent401: true } as any).catch((e) => { on401(e); return null; }),
+          apiFetch<ChatSession[]>(API_ENDPOINTS.chat.sessions, { silent401: true } as any).catch((e) => { on401(e); return null; }),
+        ]);
+        if (resNotif && Array.isArray(resNotif)) {
+          setNotifications((prev) => {
+            const localOnly = prev.filter((n) => n.id.startsWith('note-'));
+            const byId = new Map(resNotif.map((n) => [n.id, n]));
+            localOnly.forEach((n) => byId.set(n.id, n));
+            return Array.from(byId.values()).sort(
+              (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+            );
+          });
+        }
+        if (resSessions && Array.isArray(resSessions)) {
+          const normalized = normalizeChatSessionsFromApi(resSessions);
+          setChats((prev) => mergeChatSessionsById(prev, normalized));
+        }
+        const orderEndpoints = getOrdersEndpointsForUser(u);
+        if (orderEndpoints.length > 0) {
+          const orderResults = await Promise.all(
+            orderEndpoints.map((ep) => apiFetch<any[]>(ep, { silent401: true } as any).catch((e) => { on401(e); return []; })),
+          );
+          const merged = Array.from(new Map(orderResults.flat().map((o: any) => [o.id, o])).values());
+          setOrders(merged.map((o: any) => ({ ...o, items: Array.isArray(o.orderItems || o.items) ? (o.orderItems || o.items).map((item: any) => ({ ...item, cartQuantity: item.cartQuantity || item.quantity || 1, id: item.offerId || item.id })) : [] })));
+        }
+      } catch { /* ignore */ } finally {
+        fetchInFlightRef.current = false;
+      }
+    }, 2000);
+  }, []);
+
   useEffect(() => {
     const token = getToken();
     if (!user?.id || !token) {
@@ -464,17 +509,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }
       return;
     }
-    // Socket must connect to backend; in dev with proxy, origin is Vite (5173) so use explicit backend URL when no env set
     const apiBase = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:3000' : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'))).replace(/\/$/, '');
     const socket = io(apiBase + '/notifications', {
       path: '/socket.io',
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
+      withCredentials: true,
     });
     socketRef.current = socket;
     socket.on('notification', () => {
-      // Any notification (e.g. order status change) → refetch orders and notifications so UI updates without refresh
-      fetchData(userRef.current);
+      debouncedLightFetch();
     });
     socket.on('connect_error', () => {
       // Fallback: polling will still refresh orders every 15s
@@ -482,6 +526,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return () => {
       socket.disconnect();
       socketRef.current = null;
+      if (notificationFetchTimer.current) clearTimeout(notificationFetchTimer.current);
     };
   }, [user?.id]);
 
@@ -490,10 +535,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     let interval: NodeJS.Timeout;
     if (user && getToken()) {
       interval = setInterval(async () => {
+        if (!getToken() || isRefreshOnCooldown()) return;
         try {
-          // Background polling endpoints may return 401 for domain reasons
-          // (e.g. missing client profile) even when token is valid.
-          // Do not drop the session here; let interactive auth flows handle logout.
           const on401 = (_e: unknown) => {};
           const resSessions = await apiFetch<ChatSession[]>(API_ENDPOINTS.chat.sessions, { silent401: true } as any).catch((e) => { on401(e); return null; });
           if (resSessions && Array.isArray(resSessions)) {
@@ -503,11 +546,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
           const resNotif = await apiFetch<Notification[]>(API_ENDPOINTS.notifications.list, { silent401: true } as any).catch((e) => { on401(e); return null; });
           if (resNotif && Array.isArray(resNotif)) {
-            setNotifications(
-              [...resNotif].sort(
+            setNotifications((prev) => {
+              const localOnly = prev.filter((n) => n.id.startsWith('note-'));
+              const byId = new Map(resNotif.map((n) => [n.id, n]));
+              localOnly.forEach((n) => byId.set(n.id, n));
+              return Array.from(byId.values()).sort(
                 (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-              ),
-            );
+              );
+            });
           }
 
           const orderEndpoints = getOrdersEndpointsForUser(userRef.current);
@@ -564,7 +610,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const shouldFetchProducerPortfolios = isProducerSession && Boolean(activeUser?.producerId);
     const ordersEndpoints = getOrdersEndpointsForUser(activeUser);
     try {
-      // Keep session on background/bootstrapping 401 responses from feature endpoints.
+      if (isRefreshOnCooldown()) return;
       const on401 = (_e: unknown) => {};
       if (activeUser && getToken()) await fetchChats().catch(on401);
       const [resProducers, resClients, resOffers, resPickup] = await Promise.all([
@@ -603,7 +649,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             : Promise.resolve([] as Portfolio[]),
           apiFetch<Notification[]>(API_ENDPOINTS.notifications.list, { silent401: true } as any).catch((e) => {
             on401(e);
-            return [];
+            return null;
           }),
         ]);
         setMyReferrals(referralsPayload);
@@ -633,12 +679,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           }));
         }
         setPortfolios(Array.isArray(resMyPortfolios) ? resMyPortfolios : []);
-        if (Array.isArray(resNotifications)) {
-          setNotifications(
-            [...resNotifications].sort(
+        if (resNotifications && Array.isArray(resNotifications)) {
+          setNotifications((prev) => {
+            const localOnly = prev.filter((n) => n.id.startsWith('note-'));
+            const byId = new Map(resNotifications.map((n) => [n.id, n]));
+            localOnly.forEach((n) => byId.set(n.id, n));
+            return Array.from(byId.values()).sort(
               (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-            ),
-          );
+            );
+          });
         }
         if (Array.isArray(resMyReviews)) {
           const mappedReviews = resMyReviews.map(mapReviewFromApi);
@@ -1331,7 +1380,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(updatedOffer),
       });
       setOffers(prev => prev.map(o => o.id === saved.id ? saved : o));
-      addNotification(user?.id || saved.producerId, 'Offer updated successfully.', 'SUCCESS');
+      if (user) addNotification(user.id, 'Offer updated successfully.', 'SUCCESS');
       return { success: true };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to update offer.';
@@ -1480,8 +1529,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           return next;
         });
       }
-      // Refresh from server after a short delay to ensure both parties see the accurate state
-      setTimeout(() => fetchData(user), 1500);
+      debouncedLightFetch();
       clearCart();
       return true;
     } catch (error: unknown) {
@@ -1502,7 +1550,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       await apiFetch(API_ENDPOINTS.orders.confirm(orderId), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CONFIRMED_AWAITING_PAYMENT } : o));
-      addNotification(targetOrder.clientId, `Order #${targetOrder.id.substring(targetOrder.id.length - 6).toUpperCase()} confirmed.`, 'SUCCESS');
+      addNotification(user.id, `Order #${targetOrder.id.substring(targetOrder.id.length - 6).toUpperCase()} confirmed.`, 'SUCCESS');
     } catch (error) {
       logApiFailure('Failed to confirm order', error);
     }
@@ -1517,7 +1565,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       await apiFetch(API_ENDPOINTS.orders.reject(orderId), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CANCELLED } : o));
-      addNotification(order.clientId, `Order #${orderId.substring(orderId.length - 6).toUpperCase()} cancelled by producer.`, 'WARNING');
+      addNotification(user!.id, `Order #${orderId.substring(orderId.length - 6).toUpperCase()} cancelled by producer.`, 'WARNING');
     } catch (error) {
       logApiFailure('Failed to reject order', error);
     }
@@ -1532,7 +1580,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       await apiFetch(API_ENDPOINTS.orders.cancel(orderId), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CANCELLED } : o));
-      addNotification(order.producerId, `Order #${orderId.substring(orderId.length - 6).toUpperCase()} cancelled by client.`, 'WARNING');
+      addNotification(user!.id, `Order #${orderId.substring(orderId.length - 6).toUpperCase()} cancelled.`, 'WARNING');
     } catch (error) {
       logApiFailure('Failed to cancel order', error);
     }
@@ -1560,7 +1608,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       await apiFetch(API_ENDPOINTS.orders.deliver(id), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status: OrderStatus.IN_TRANSIT } : o));
       const order = orders.find(o => o.id === id);
-      if (order) addNotification(order.clientId, 'Order in transit', 'INFO');
+      if (user) addNotification(user.id, 'Order marked as in transit.', 'INFO');
     } catch (error) {
       logApiFailure('Failed to start delivery', error);
     }
@@ -1571,9 +1619,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       await apiFetch(API_ENDPOINTS.orders.confirmReceipt(id), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status: OrderStatus.DELIVERED } : o));
       const order = orders.find(o => o.id === id);
-      if (order) {
-        // Assume backend updates wallet, so we might need to fetch updated wallet. Just show notification:
-        addNotification(order.producerId, 'Order delivered. Funds released to wallet.', 'SUCCESS');
+      if (user) {
+        addNotification(user.id, 'Delivery confirmed. Thank you!', 'SUCCESS');
       }
     } catch (error) {
       logApiFailure('Failed to confirm receipt', error);
@@ -1591,7 +1638,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       evidence = result.evidence;
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.DISPUTE, disputeReason: reason, disputeEvidence: evidence } : o));
       const order = orders.find(o => o.id === orderId);
-      if (order) addNotification(order.producerId, 'Dispute opened', 'WARNING');
+      if (user) addNotification(user.id, 'Dispute opened.', 'WARNING');
     } catch (error) {
       logApiFailure('Failed to report problem', error);
       addNotification(user!.id, 'Failed to report problem. Please try again.', 'ERROR');

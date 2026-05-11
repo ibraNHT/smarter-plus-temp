@@ -79,6 +79,7 @@ export enum TransactionType {
   RECEIVED = 'RECEIVED', // Getting paid for goods
   WITHDRAWAL = 'WITHDRAWAL', // Mobile Money Out
   REFUND = 'REFUND',
+  PENDING = 'PENDING', // Funds held pending order settlement
   FEE = 'FEE' // Service fees
 }
 
@@ -120,6 +121,7 @@ export interface WalletTransaction {
 export interface Wallet {
   userId: string;
   balance: number;
+  pendingBalance?: number;
   transactions: WalletTransaction[];
 }
 
@@ -283,6 +285,7 @@ export interface Offer {
   quantity: number;
   price: number;
   imageUrl: string;
+  imageUrls?: string[];
   isNegotiable: boolean; // Sprint 6
   isDeliveryAvailable: boolean; // New field
   offerLocation: string; // New field
