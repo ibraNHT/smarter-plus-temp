@@ -53,7 +53,9 @@ export const isRefreshOnCooldown = (): boolean =>
     Date.now() - lastRefreshFailed < REFRESH_COOLDOWN_MS;
 
 /** Attempt to silently refresh the access token. Deduplicates concurrent calls and
- *  enforces a cooldown after failure to prevent 429 storms. */
+ *  enforces a cooldown after failure to prevent 429 storms.
+ *  When the refresh endpoint itself returns 401 the session is truly dead —
+ *  clear tokens and redirect to login immediately. */
 const attemptTokenRefresh = async (): Promise<boolean> => {
     if (refreshInFlight) return refreshInFlight;
     if (Date.now() - lastRefreshFailed < REFRESH_COOLDOWN_MS) return false;
@@ -71,6 +73,13 @@ const attemptTokenRefresh = async (): Promise<boolean> => {
             });
             if (!response.ok) {
                 lastRefreshFailed = Date.now();
+                if (response.status === 401) {
+                    clearToken();
+                    localStorage.removeItem('currentUser');
+                    if (window.location.hash !== '#/login') {
+                        window.location.hash = '#/login';
+                    }
+                }
                 return false;
             }
             const data = await response.json();
@@ -87,8 +96,6 @@ const attemptTokenRefresh = async (): Promise<boolean> => {
     })();
 
     const result = await refreshInFlight;
-    // Keep the promise reference alive briefly so concurrent 401s that arrive
-    // a few ms apart still deduplicate instead of spawning new refresh calls.
     setTimeout(() => { refreshInFlight = null; }, 2000);
     return result;
 };
