@@ -158,7 +158,7 @@ export const AtiStore: React.FC = () => {
                         </h2>
                         <div className="flex items-center gap-3">
                           <span className="text-xs text-gray-500 uppercase tracking-wider">{categoryOffers.length} Items</span>
-                          {!isExpanded && categoryOffers.length > 4 && (
+                          {!isExpanded && (
                             <button
                               type="button"
                               onClick={() => { setExpandedCategory(category); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
