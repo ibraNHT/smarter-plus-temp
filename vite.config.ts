@@ -4,7 +4,8 @@ import { VitePWA } from "vite-plugin-pwa";
 
 const isVercel = process.env.VERCEL === "1";
 const enablePwaOnVercel = process.env.ENABLE_PWA_ON_VERCEL === "true";
-const enablePwa = !isVercel || enablePwaOnVercel;
+const disablePwa = process.env.DISABLE_PWA === "true";
+const enablePwa = !disablePwa && (!isVercel || enablePwaOnVercel);
 
 // https://vitejs.dev/config/
 // Environment variables prefixed with VITE_ are automatically exposed
@@ -26,6 +27,13 @@ export default defineConfig({
             registerType: "autoUpdate",
             injectRegister: "auto",
             includeAssets: ["favicon.ico", "apple-touch-icon.png"],
+            workbox: {
+              maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+              cleanupOutdatedCaches: true,
+              skipWaiting: true,
+              clientsClaim: true,
+              runtimeCaching: [],
+            },
             manifest: {
               name: "AgriMarket Connect",
               short_name: "AgriMarket",
@@ -64,6 +72,7 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: false,
+    minify: "esbuild",
     rollupOptions: {
       output: {
         manualChunks(id) {
