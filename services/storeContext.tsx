@@ -1621,7 +1621,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       await apiFetch(API_ENDPOINTS.orders.deliver(id), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status: OrderStatus.IN_TRANSIT } : o));
-      const order = orders.find(o => o.id === id);
       if (user) addNotification(user.id, 'Order marked as in transit.', 'INFO');
     } catch (error) {
       logApiFailure('Failed to start delivery', error);
@@ -1632,7 +1631,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       await apiFetch(API_ENDPOINTS.orders.confirmReceipt(id), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status: OrderStatus.DELIVERED } : o));
-      const order = orders.find(o => o.id === id);
       if (user) {
         addNotification(user.id, 'Delivery confirmed. Thank you!', 'SUCCESS');
       }
@@ -1651,7 +1649,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const result = await apiUpload<{ evidence: DisputeEvidence[] }>(API_ENDPOINTS.orders.dispute(orderId), formData);
       evidence = result.evidence;
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.DISPUTE, disputeReason: reason, disputeEvidence: evidence } : o));
-      const order = orders.find(o => o.id === orderId);
       if (user) addNotification(user.id, 'Dispute opened.', 'WARNING');
     } catch (error) {
       logApiFailure('Failed to report problem', error);
