@@ -85,6 +85,7 @@ export const API_ENDPOINTS = {
   reviews: {
     create: "/api/reviews",
     byUser: (userId: string) => `/api/reviews/user/${userId}`,
+    all: "/api/reviews",
   },
   portfolios: {
     list: "/api/portfolios",

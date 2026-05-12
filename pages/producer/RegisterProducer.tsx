@@ -6,7 +6,6 @@ import { useTranslation } from '../../services/i18nContext';
 import { MapPin, X, Plus, Lock, Phone, Eye, EyeOff } from 'lucide-react';
 import { ProducerType, Location } from '../../types';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
-import { uploadDocument } from '../../services/uploadService';
 import { useFormik } from 'formik';
 import { z } from 'zod';
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
@@ -62,7 +61,6 @@ export const RegisterProducer: React.FC = () => {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [taxDocUploading, setTaxDocUploading] = useState(false);
 
   const registerProducerSchema = z.object({
     type: z.enum(['BUSINESS', 'INDIVIDUAL']),
@@ -75,13 +73,12 @@ export const RegisterProducer: React.FC = () => {
     description: z.string().trim().min(10, 'Description should be at least 10 characters.'),
     productionTypes: z.array(z.string()),
     taxIdentificationNumber: z.string(),
-    taxClearanceCertificateUrl: z.string(),
   }).superRefine((values, ctx) => {
     if (values.password !== values.confirmPassword) {
       ctx.addIssue({ code: 'custom', path: ['confirmPassword'], message: 'Passwords do not match.' });
     }
-    if (values.type === 'BUSINESS' && !values.taxIdentificationNumber.trim()) {
-      ctx.addIssue({ code: 'custom', path: ['taxIdentificationNumber'], message: 'Tax ID is required for business accounts.' });
+    if (!values.taxIdentificationNumber.trim()) {
+      ctx.addIssue({ code: 'custom', path: ['taxIdentificationNumber'], message: 'NIU / Tax ID is required.' });
     }
   });
 
@@ -97,7 +94,6 @@ export const RegisterProducer: React.FC = () => {
       description: '',
       productionTypes: [] as string[],
       taxIdentificationNumber: '',
-      taxClearanceCertificateUrl: '',
     },
     validate: (values) => {
       const parsed = registerProducerSchema.safeParse(values);
@@ -115,10 +111,7 @@ export const RegisterProducer: React.FC = () => {
         alert("Please add at least one location.");
         return;
       }
-      if (taxDocUploading) {
-        setError('Please wait for the tax document upload to finish.');
-        return;
-      }
+
       const result = await registerProducer({
         type: values.type,
         name: values.name,
@@ -129,12 +122,7 @@ export const RegisterProducer: React.FC = () => {
         certifications: [],
         productionTypes: values.productionTypes.length > 0 ? values.productionTypes : ['Agriculture'],
         referrerCode: refCode || undefined,
-        ...(values.type === 'BUSINESS'
-          ? {
-              taxIdentificationNumber: values.taxIdentificationNumber.trim() || undefined,
-              taxClearanceCertificateUrl: values.taxClearanceCertificateUrl.trim() || undefined,
-            }
-          : {}),
+        taxIdentificationNumber: values.taxIdentificationNumber.trim() || undefined,
       }, values.password);
 
       if (result.success) {
@@ -263,30 +251,6 @@ export const RegisterProducer: React.FC = () => {
     );
   }, []);
 
-  const handleTaxDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    const allowedTypes = ['image/png', 'image/jpeg', 'application/pdf'];
-    if (!allowedTypes.includes(file.type)) {
-      setError('Tax document must be PNG, JPG, JPEG, or PDF.');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      setError('Tax document must be 10 MB or less.');
-      return;
-    }
-    setError('');
-    setTaxDocUploading(true);
-    try {
-      const url = await uploadDocument(file);
-      formik.setFieldValue('taxClearanceCertificateUrl', url);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Tax document upload failed.');
-    } finally {
-      setTaxDocUploading(false);
-    }
-  };
 
   const addLocation = () => {
     const address = String(currentLoc.address ?? '').trim();
@@ -369,58 +333,32 @@ export const RegisterProducer: React.FC = () => {
             </div>
           </div>
 
-          {formik.values.type === 'BUSINESS' && (
-            <>
-              <div className="sm:col-span-6">
-                <label htmlFor="tin" className="block text-sm font-medium text-gray-700">
-                  Tax ID (TIN / NIU) 
-                </label>
-                <p className="text-xs text-gray-500 mt-0.5">Required for business accounts; validated by the platform.</p>
-                <input
-                  id="tin"
-                  type="text"
-                  name="taxIdentificationNumber"
-                  required={formik.values.type === 'BUSINESS'}
-                  className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
-                  value={formik.values.taxIdentificationNumber}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                />
-                {formik.touched.taxIdentificationNumber && formik.errors.taxIdentificationNumber ? <p className="text-xs text-red-600 mt-1">{formik.errors.taxIdentificationNumber}</p> : null}
-              </div>
-              <div className="sm:col-span-6">
-                <label htmlFor="taxCert" className="block text-sm font-medium text-gray-700">
-                  Tax clearance certificate (PNG, JPG, PDF)
-                </label>
-                <p className="text-xs text-gray-500 mt-0.5">Upload your Attestation de non-redevance document.</p>
-                <input
-                  id="taxCert"
-                  type="file"
-                  name="taxClearanceCertificateUrl"
-                  accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf"
-                  className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900 disabled:opacity-50"
-                  onChange={handleTaxDocumentUpload}
-                  disabled={taxDocUploading}
-                />
-                {taxDocUploading && (
-                  <p className="text-xs text-gray-500 mt-1">Uploading document…</p>
-                )}
-                {!taxDocUploading && formik.values.taxClearanceCertificateUrl && (
-                  <p className="text-xs text-green-600 mt-1">
-                    Document uploaded.{' '}
-                    <a
-                      href={formik.values.taxClearanceCertificateUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline"
-                    >
-                      View
-                    </a>
-                  </p>
-                )}
-              </div>
-            </>
-          )}
+          {/* NIU and certificates required for ALL producer types */}
+          <div className="sm:col-span-6">
+            <label htmlFor="tin" className="block text-sm font-medium text-gray-700">
+              NIU / Tax ID <span className="text-red-500">*</span>
+            </label>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {formik.values.type === 'BUSINESS'
+                ? 'Required for business accounts; validated by the platform.'
+                : 'National Identification Number — required for all producers.'}
+            </p>
+            <input
+              id="tin"
+              type="text"
+              name="taxIdentificationNumber"
+              required
+              className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
+              value={formik.values.taxIdentificationNumber}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+            />
+            {formik.touched.taxIdentificationNumber && formik.errors.taxIdentificationNumber ? <p className="text-xs text-red-600 mt-1">{formik.errors.taxIdentificationNumber}</p> : null}
+          </div>
+
+          <div className="sm:col-span-6">
+            <p className="text-xs text-gray-400 mt-1">You can upload supporting documents (NIU certificate, ID) from your profile after registration.</p>
+          </div>
 
           <div className="sm:col-span-3">
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">{t('form.email')}</label>

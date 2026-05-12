@@ -460,6 +460,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // on socket events), not the full catalog. Collapses rapid-fire notifications into one call.
   const notificationFetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchInFlightRef = useRef<boolean>(false);
+  const globalPollInFlightRef = useRef<boolean>(false);
   const debouncedLightFetch = useCallback(() => {
     if (notificationFetchTimer.current) clearTimeout(notificationFetchTimer.current);
     notificationFetchTimer.current = setTimeout(async () => {
@@ -535,7 +536,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     let interval: NodeJS.Timeout;
     if (user && getToken()) {
       interval = setInterval(async () => {
-        if (!getToken() || isRefreshOnCooldown()) return;
+        if (!getToken() || isRefreshOnCooldown() || globalPollInFlightRef.current) return;
+        globalPollInFlightRef.current = true;
         try {
           const on401 = (_e: unknown) => {};
           const resSessions = await apiFetch<ChatSession[]>(API_ENDPOINTS.chat.sessions, { silent401: true } as any).catch((e) => { on401(e); return null; });
@@ -582,6 +584,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           }
         } catch {
           // ignore background polling errors
+        } finally {
+          globalPollInFlightRef.current = false;
         }
       }, 15000); // 15 seconds
     }
@@ -613,13 +617,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (isRefreshOnCooldown()) return;
       const on401 = (_e: unknown) => {};
       if (activeUser && getToken()) await fetchChats().catch(on401);
-      const [resProducers, resClients, resOffers, resPickup] = await Promise.all([
+      const [resProducers, resClients, resOffers, resPickup, resAllReviews] = await Promise.all([
         apiFetch<ProducerProfile[]>(API_ENDPOINTS.producers.list, { silent401: true } as any).catch((e) => { on401(e); return []; }),
         shouldFetchBuyerProfile
           ? apiFetch<ClientProfile[]>(API_ENDPOINTS.clients.list, { silent401: true } as any).catch((e) => { on401(e); return []; })
           : Promise.resolve([] as ClientProfile[]),
         apiFetch<Offer[]>(API_ENDPOINTS.offers.list, { silent401: true } as any).catch((e) => { on401(e); return []; }),
         apiFetch<PickupPoint[]>(API_ENDPOINTS.pickupPoints.list, { silent401: true } as any).catch((e) => { on401(e); return []; }),
+        apiFetch<any[]>(API_ENDPOINTS.reviews.all, { silent401: true } as any).catch(() => [] as any[]),
       ]);
       // Only fetch orders, wallet, and referral stats when authenticated and we have a token (avoids 401 spam when token expired)
       if (activeUser && getToken()) {
@@ -673,7 +678,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             ...prev,
             [activeUser.id]: {
               userId: resWallet.userId,
-              balance: Number(resWallet.balance) ?? 0,
+              balance: Number(resWallet.balance) || 0,
+              pendingBalance: Number(resWallet.pendingBalance) || 0,
               transactions: Array.isArray(resWallet.transactions) ? resWallet.transactions : [],
             },
           }));
@@ -740,6 +746,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const offersList = Array.isArray(resOffers) ? resOffers : ((resOffers as any)?.data || []);
       setOffers(offersList);
       setPickupPoints(Array.isArray(resPickup) ? resPickup : []);
+      if (Array.isArray(resAllReviews) && resAllReviews.length > 0) {
+        const mapped = resAllReviews.map(mapReviewFromApi);
+        setReviews((prev) => {
+          const byId = new Map(prev.map((x) => [x.id, x]));
+          mapped.forEach((x) => byId.set(x.id, x));
+          return Array.from(byId.values());
+        });
+      }
 
       if (activeUser && getToken() && offersList.length > 0) {
         const cartPayload = await apiFetch<{ items?: Array<{ offerId: string; quantity: number; bookingDate?: string }> }>(
@@ -2191,7 +2205,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             : c,
         ),
       );
-      void fetchChats();
     } catch (e) {
       logApiFailure('Failed to fetch messages:', e);
     }
@@ -2238,6 +2251,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     if (action === 'COUNTER') {
       const original = messages.find(m => m.id === msgId);
+      // Optimistically mark the countered proposal as SUPERSEDED so the round counter resets.
+      // This prevents the 3-counter limit from freezing the button after accepting/rejecting
+      // the full round when the previous proposals are still technically PENDING on the server.
+      if (original?.proposal) {
+        setMessages(prev => prev.map(m =>
+          m.id === msgId && m.proposal
+            ? { ...m, proposal: { ...m.proposal, status: ProposalStatus.SUPERSEDED } }
+            : m,
+        ));
+      }
       return sendMessage(
         chatId,
         `Counter-offer: ${qty} units @ ${price?.toLocaleString()} XAF each`,

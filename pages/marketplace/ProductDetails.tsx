@@ -64,8 +64,35 @@ export const ProductDetails: React.FC = () => {
   const isFav = favorites.includes(offer?.id || '');
   const isComparing = offer ? compareList.includes(offer.id) : false;
 
-  // Reviews for this producer
-  const producerReviews = producer ? reviews.filter(r => r.targetId === producer.id || r.targetId === producer.userId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : [];
+  // Reviews for this producer — fetch from API if not already in global state
+  const [fetchedProducerReviews, setFetchedProducerReviews] = useState<any[]>([]);
+  useEffect(() => {
+    if (!producer?.userId) return;
+    apiFetch<any[]>(API_ENDPOINTS.reviews.byUser(producer.userId)).then(data => {
+      if (Array.isArray(data)) setFetchedProducerReviews(data);
+    }).catch(() => {});
+  }, [producer?.userId]);
+
+  const allProducerReviews = React.useMemo(() => {
+    const localReviews = producer ? reviews.filter(r => r.targetId === producer.id || r.targetId === producer.userId) : [];
+    const remoteReviews = fetchedProducerReviews.map((r: any) => ({
+      id: String(r.id),
+      orderId: String(r.orderId),
+      reviewerId: String(r.reviewerId),
+      targetId: String(r.targetId),
+      rating: Number(r.rating) || 0,
+      comment: typeof r.comment === 'string' ? r.comment : '',
+      createdAt: r.createdAt ?? new Date().toISOString(),
+      reviewerName: r.reviewerDisplayName ?? r.reviewerName,
+      reviewerProfileImageUrl: r.reviewerProfileImageUrl,
+    }));
+    // Merge, de-duplicate by id
+    const byId = new Map<string, any>();
+    [...localReviews, ...remoteReviews].forEach(r => byId.set(r.id, r));
+    return Array.from(byId.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [producer, reviews, fetchedProducerReviews]);
+
+  const producerReviews = allProducerReviews;
 
   useEffect(() => {
     let alive = true;

@@ -4,7 +4,7 @@ import { useStore, clientProfileMatchesSession } from '../../services/storeConte
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order, Review, OfferType } from '../../types';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle, Loader2, Calendar } from 'lucide-react';
+import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle, Loader2, Calendar, Phone } from 'lucide-react';
 import { useUpdateClientProfileMutation } from '../../client-api/hooks/useUpdateClientProfileMutation';
 import { SEO } from '../../components/SEO';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
@@ -44,7 +44,7 @@ export const ClientProfile: React.FC = () => {
    const isProfileTab = (v: string | null): v is ProfileTab =>
       v === 'info' || v === 'orders' || v === 'security' || v === 'favorites' || v === 'reputation' || v === 'referrals';
 
-   const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, isInitialCatalogLoading, pickupPoints } = useStore();
+   const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, isInitialCatalogLoading, pickupPoints, revealContactInfo } = useStore();
    const updateClientMutation = useUpdateClientProfileMutation();
    const { t } = useTranslation();
    const navigate = useNavigate();
@@ -149,6 +149,7 @@ export const ClientProfile: React.FC = () => {
             description: values.description,
             productionTypes: values.productionTypes,
             taxIdentificationNumber: values.taxIdentificationNumber || undefined,
+            certifications: [],
          } as any);
          if (!ok) {
             alert('Upgrade failed. Please try again.');
@@ -648,6 +649,7 @@ export const ClientProfile: React.FC = () => {
       };
    };
    const getProducerDisplayName = (order: Order) => order.producerDisplayName || getProducerName(order.producerId);
+   const getProducerPhone = (producerId: string) => { const p = producers.find(prod => prod.id === producerId) as any; return p?.phone || p?.user?.phone || null; };
    const getOrderItemImage = (item: any) => {
       if (item?.imageUrl) return item.imageUrl as string;
       const offerId = item?.offerId || item?.id;
@@ -691,6 +693,15 @@ export const ClientProfile: React.FC = () => {
                               <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200 flex items-center font-normal"><Eye className="h-3 w-3 mr-1" /> {t('dash.viewDetails')}</span>
                            </h4>
                            <p className="text-xs text-gray-500">{clientOrderMetaLine(order)}</p>
+                           {order.deliveryMethod === 'HOME' && order.shippingAddress && typeof order.shippingAddress === 'object' && (
+                              <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                                 <MapPin className="h-3 w-3 shrink-0" />
+                                 {[(order.shippingAddress as any).address, (order.shippingAddress as any).city, (order.shippingAddress as any).region].filter(Boolean).join(', ')}
+                              </p>
+                           )}
+                           {order.deliveryMethod === 'PICKUP' && (
+                              <p className="text-xs text-gray-500 mt-0.5">📦 Pickup delivery</p>
+                           )}
                         </div>
                         <div className="flex items-center gap-2">
                            {getStatusBadge(order.status)}
@@ -1242,7 +1253,14 @@ export const ClientProfile: React.FC = () => {
                            </div>
                         </div>
                         {upgradeFormik.values.type === 'BUSINESS' && (<div><label className="block text-sm font-medium text-gray-700">Farm/Business Name <span className="text-red-500">*</span></label><input type="text" name="farmName" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.farmName} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.farmName && upgradeFormik.errors.farmName ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.farmName}</p> : null}</div>)}
-                        <div><label className="block text-sm font-medium text-gray-700">Tax ID (TIN / NIU) <span className="text-red-500">*</span></label><input type="text" name="taxIdentificationNumber" required placeholder="Enter your NIU" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.taxIdentificationNumber} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.taxIdentificationNumber && upgradeFormik.errors.taxIdentificationNumber ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.taxIdentificationNumber as string}</p> : null}<p className="text-xs text-gray-500 mt-1">Required for all producer accounts. You can upload certificates after account creation.</p></div>
+                        <div>
+                           <label className="block text-sm font-medium text-gray-700">NIU / Tax ID <span className="text-red-500">*</span></label>
+                           <input type="text" name="taxIdentificationNumber" required placeholder="Enter your NIU" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.taxIdentificationNumber} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />
+                           {upgradeFormik.touched.taxIdentificationNumber && upgradeFormik.errors.taxIdentificationNumber ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.taxIdentificationNumber as string}</p> : null}
+                        </div>
+                        <div>
+                           <p className="text-xs text-gray-400">You can upload supporting documents (NIU certificate, ID) from your producer profile after account creation.</p>
+                        </div>
                         <div><label className="block text-sm font-medium text-gray-700">Description <span className="text-red-500">*</span></label><textarea name="description" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" rows={3} value={upgradeFormik.values.description} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.description && upgradeFormik.errors.description ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.description}</p> : null}</div>
                         <div><label className="block text-sm font-medium text-gray-700 mb-2">Categories (Click to select)</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded bg-white">{PRODUCTION_TYPES.map(cat => (<button key={cat} type="button" onClick={() => toggleUpgradeCategory(cat)} className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${upgradeFormik.values.productionTypes.includes(cat) ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}</button>))}</div></div>
                         <div className="mt-5 sm:mt-6 flex justify-end gap-3"><button type="button" onClick={() => setShowUpgradeModal(false)} className="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:text-sm">Cancel</button><button type="submit" className="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 sm:text-sm">Upgrade Account</button></div>
@@ -1534,6 +1552,23 @@ export const ClientProfile: React.FC = () => {
                            <p className="text-gray-600">
                               {(() => { const pp = pickupPoints.find(p => p.id === selectedOrder.pickupPointId); return pp ? `${pp.name} — ${pp.address}, ${pp.city}` : selectedOrder.pickupPointId; })()}
                            </p>
+                        </div>
+                     )}
+
+                     {/* Phone reveal for IN_TRANSIT orders */}
+                     {selectedOrder.status === OrderStatus.IN_TRANSIT && (
+                        <div className="mt-3 p-3 bg-blue-50 rounded-md border border-blue-200 text-sm">
+                           <p className="font-medium text-blue-800 mb-1 flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> Producer Contact</p>
+                           {selectedOrder.contactRevealed ? (
+                              <p className="text-blue-700">{getProducerPhone(selectedOrder.producerId) ?? 'Phone not available'}</p>
+                           ) : (
+                              <button
+                                 onClick={() => revealContactInfo(selectedOrder.id)}
+                                 className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 font-medium"
+                              >
+                                 {t('order.revealContact')}
+                              </button>
+                           )}
                         </div>
                      )}
 

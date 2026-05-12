@@ -4,18 +4,19 @@ import { Link } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { MarketType, UserRole } from '../../types';
-import { ShoppingBasket, Search, Star, Filter, Heart, Layers } from 'lucide-react';
+import { ShoppingBasket, Search, Star, Filter, Heart, Layers, ArrowLeft } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 
 export const AtiStore: React.FC = () => {
-  const { offers, toggleFavorite, user, clients, producers, compareList, addToCompare, removeFromCompare, isInitialCatalogLoading } = useStore();
+  const { offers, toggleFavorite, user, clients, producers, compareList, addToCompare, removeFromCompare, isInitialCatalogLoading, getAverageRating, reviews } = useStore();
   const { t } = useTranslation();
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   // Base data
   const atiOffers = offers.filter(offer => offer.marketType === MarketType.ATI);
@@ -136,76 +137,166 @@ export const AtiStore: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-10">
-                {sortedCategories.map(category => (
-                  <div key={category}>
-                    <div className="flex items-center justify-between mb-4 px-1">
-                      <h2 className="text-xl font-bold text-gray-900">{t(`category.${category}`)}</h2>
-                      <span className="text-xs text-gray-500 uppercase tracking-wider">{groupedOffers[category].length} Items</span>
-                    </div>
+                {(expandedCategory ? [expandedCategory].filter(c => groupedOffers[c]) : sortedCategories).map(category => {
+                  const categoryOffers = groupedOffers[category];
+                  const isExpanded = expandedCategory === category;
 
-                    <div className="flex overflow-x-auto pb-4 space-x-5 scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-gray-50 px-1">
-                      {groupedOffers[category].map((offer) => {
-                        const isFav = favorites.includes(offer.id);
-                        const isComparing = compareList.includes(offer.id);
+                  return (
+                    <div key={category}>
+                      <div className="flex items-center justify-between mb-4 px-1 border-b border-gray-100 pb-3">
+                        <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                          {isExpanded && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedCategory(null)}
+                              className="mr-2 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                            >
+                              <ArrowLeft className="h-5 w-5 text-gray-600" />
+                            </button>
+                          )}
+                          {t(`category.${category}`)}
+                        </h2>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-gray-500 uppercase tracking-wider">{categoryOffers.length} Items</span>
+                          {!isExpanded && categoryOffers.length > 4 && (
+                            <button
+                              type="button"
+                              onClick={() => { setExpandedCategory(category); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                              className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
+                            >
+                              See All &rarr;
+                            </button>
+                          )}
+                          {isExpanded && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedCategory(null)}
+                              className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
+                            >
+                              &larr; All Categories
+                            </button>
+                          )}
+                        </div>
+                      </div>
 
-                        return (
-                          <div key={offer.id} className="relative min-w-[220px] w-[240px] flex-shrink-0">
-                            {/* Action Buttons */}
-                            <div className="absolute top-2 right-2 z-10 flex gap-1">
-                              {(user?.role === UserRole.CLIENT || user?.role === UserRole.PRODUCER) && (
-                                <button
-                                  onClick={(e) => { e.preventDefault(); toggleFavorite(offer.id); }}
-                                  className="p-1.5 rounded-full bg-white/80 hover:bg-white shadow-sm transition-colors"
-                                >
-                                  <Heart className={`h-4 w-4 ${isFav ? 'fill-red-500 text-red-500' : 'text-gray-400 hover:text-red-500'}`} />
-                                </button>
-                              )}
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  if (isComparing) removeFromCompare(offer.id);
-                                  else addToCompare(offer.id);
-                                }}
-                                className={`p-1.5 rounded-full bg-white/80 hover:bg-white shadow-sm transition-colors ${isComparing ? 'text-blue-600' : 'text-gray-400'}`}
-                              >
-                                <Layers className="h-4 w-4" />
-                              </button>
-                            </div>
-
-                            <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-200 rounded-lg flex flex-col overflow-hidden hover:shadow-lg transition-all h-full">
-                              <div className="aspect-w-1 aspect-h-1 bg-gray-100 h-36 relative">
-                                <img
-                                  src={offer.imageUrl}
-                                  alt={offer.title}
-                                  className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`}
-                                />
-                                <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">ATI Choice</div>
-                              </div>
-                              <div className="flex-1 p-3 space-y-2 flex flex-col">
-                                <h3 className="text-sm font-medium text-gray-900 line-clamp-2 h-10">
-                                  {offer.title}
-                                </h3>
-                                <div className="flex items-center mb-1">
-                                  {[...Array(5)].map((_, i) => (
-                                    <Star key={i} className="w-3 h-3 text-yellow-400 fill-current" />
-                                  ))}
-                                  <span className="text-xs text-gray-400 ml-1">(4.8)</span>
+                      {isExpanded ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pt-2">
+                          {categoryOffers.map((offer) => {
+                            const isFav = favorites.includes(offer.id);
+                            const isComparing = compareList.includes(offer.id);
+                            const rating = getAverageRating(offer.producerId);
+                            const producer = producers.find(p => p.id === offer.producerId);
+                            const reviewCount = reviews.filter(r => r.targetId === offer.producerId || (producer?.userId && r.targetId === producer.userId)).length;
+                            return (
+                              <div key={offer.id} className="relative">
+                                <div className="absolute top-2 right-2 z-10 flex gap-1">
+                                  {(user?.role === UserRole.CLIENT || user?.role === UserRole.PRODUCER) && (
+                                    <button
+                                      onClick={(e) => { e.preventDefault(); toggleFavorite(offer.id); }}
+                                      className="p-1.5 rounded-full bg-white/80 hover:bg-white shadow-sm transition-colors"
+                                    >
+                                      <Heart className={`h-4 w-4 ${isFav ? 'fill-red-500 text-red-500' : 'text-gray-400 hover:text-red-500'}`} />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={(e) => { e.preventDefault(); if (isComparing) removeFromCompare(offer.id); else addToCompare(offer.id); }}
+                                    className={`p-1.5 rounded-full bg-white/80 hover:bg-white shadow-sm transition-colors ${isComparing ? 'text-blue-600' : 'text-gray-400'}`}
+                                  >
+                                    <Layers className="h-4 w-4" />
+                                  </button>
                                 </div>
-                                <div className="flex flex-col pt-2 border-t border-gray-100 mt-auto">
-                                  <span className="text-lg font-bold text-gray-900">{offer.price.toLocaleString()} XAF</span>
-                                  <span className="text-xs text-gray-500">{t('market.per')} {offer.unit}</span>
-                                </div>
-                                <button className="w-full mt-2 bg-blue-600 text-white py-2 rounded-md text-xs font-bold uppercase tracking-wide hover:bg-blue-700 transition-colors">
-                                  {t('market.view')}
-                                </button>
+                                <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-200 rounded-lg flex flex-col overflow-hidden hover:shadow-lg transition-all h-full">
+                                  <div className="bg-gray-100 h-40 relative">
+                                    <img src={offer.imageUrl} alt={offer.title} className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`} />
+                                    <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">ATI Choice</div>
+                                  </div>
+                                  <div className="flex-1 p-3 space-y-2 flex flex-col">
+                                    <h3 className="text-sm font-medium text-gray-900 line-clamp-2 h-10">{offer.title}</h3>
+                                    <div className="flex items-center mb-1">
+                                      {[...Array(5)].map((_, i) => <Star key={i} className={`w-3 h-3 ${i < Math.round(rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} />)}
+                                      <span className="text-xs text-gray-400 ml-1">{reviewCount > 0 ? `(${rating.toFixed(1)})` : '(No reviews)'}</span>
+                                    </div>
+                                    <div className="flex flex-col pt-2 border-t border-gray-100 mt-auto">
+                                      <span className="text-lg font-bold text-gray-900">{offer.price.toLocaleString()} XAF</span>
+                                      <span className="text-xs text-gray-500">{t('market.per')} {offer.unit}</span>
+                                    </div>
+                                    <button className="w-full mt-2 bg-blue-600 text-white py-2 rounded-md text-xs font-bold uppercase tracking-wide hover:bg-blue-700 transition-colors">
+                                      {t('market.view')}
+                                    </button>
+                                  </div>
+                                </Link>
                               </div>
-                            </Link>
-                          </div>
-                        )
-                      })}
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="flex overflow-x-auto pb-4 space-x-5 scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-gray-50 px-1">
+                          {categoryOffers.map((offer) => {
+                            const isFav = favorites.includes(offer.id);
+                            const isComparing = compareList.includes(offer.id);
+                            const rating = getAverageRating(offer.producerId);
+                            const producer = producers.find(p => p.id === offer.producerId);
+                            const reviewCount = reviews.filter(r => r.targetId === offer.producerId || (producer?.userId && r.targetId === producer.userId)).length;
+
+                            return (
+                              <div key={offer.id} className="relative min-w-[220px] w-[240px] flex-shrink-0">
+                                <div className="absolute top-2 right-2 z-10 flex gap-1">
+                                  {(user?.role === UserRole.CLIENT || user?.role === UserRole.PRODUCER) && (
+                                    <button
+                                      onClick={(e) => { e.preventDefault(); toggleFavorite(offer.id); }}
+                                      className="p-1.5 rounded-full bg-white/80 hover:bg-white shadow-sm transition-colors"
+                                    >
+                                      <Heart className={`h-4 w-4 ${isFav ? 'fill-red-500 text-red-500' : 'text-gray-400 hover:text-red-500'}`} />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      if (isComparing) removeFromCompare(offer.id);
+                                      else addToCompare(offer.id);
+                                    }}
+                                    className={`p-1.5 rounded-full bg-white/80 hover:bg-white shadow-sm transition-colors ${isComparing ? 'text-blue-600' : 'text-gray-400'}`}
+                                  >
+                                    <Layers className="h-4 w-4" />
+                                  </button>
+                                </div>
+
+                                <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-200 rounded-lg flex flex-col overflow-hidden hover:shadow-lg transition-all h-full">
+                                  <div className="aspect-w-1 aspect-h-1 bg-gray-100 h-36 relative">
+                                    <img
+                                      src={offer.imageUrl}
+                                      alt={offer.title}
+                                      className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`}
+                                    />
+                                    <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">ATI Choice</div>
+                                  </div>
+                                  <div className="flex-1 p-3 space-y-2 flex flex-col">
+                                    <h3 className="text-sm font-medium text-gray-900 line-clamp-2 h-10">
+                                      {offer.title}
+                                    </h3>
+                                    <div className="flex items-center mb-1">
+                                      {[...Array(5)].map((_, i) => (
+                                        <Star key={i} className={`w-3 h-3 ${i < Math.round(rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} />
+                                      ))}
+                                      <span className="text-xs text-gray-400 ml-1">{reviewCount > 0 ? `(${rating.toFixed(1)})` : '(No reviews)'}</span>
+                                    </div>
+                                    <div className="flex flex-col pt-2 border-t border-gray-100 mt-auto">
+                                      <span className="text-lg font-bold text-gray-900">{offer.price.toLocaleString()} XAF</span>
+                                      <span className="text-xs text-gray-500">{t('market.per')} {offer.unit}</span>
+                                    </div>
+                                    <button className="w-full mt-2 bg-blue-600 text-white py-2 rounded-md text-xs font-bold uppercase tracking-wide hover:bg-blue-700 transition-colors">
+                                      {t('market.view')}
+                                    </button>
+                                  </div>
+                                </Link>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

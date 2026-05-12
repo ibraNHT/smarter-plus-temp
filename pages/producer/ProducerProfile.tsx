@@ -155,7 +155,6 @@ export const ProducerProfile: React.FC = () => {
       certifications: Array.isArray(currentProducer.certifications) ? currentProducer.certifications : [],
       favorites: Array.isArray(currentProducer.favorites) ? currentProducer.favorites : [],
       taxIdentificationNumber: (currentProducer as any).taxIdentificationNumber ?? '',
-      taxClearanceCertificateUrl: (currentProducer as any).taxClearanceCertificateUrl ?? '',
     };
     setFormData((prev) => {
       if (!prev) return normalized;
@@ -190,7 +189,6 @@ export const ProducerProfile: React.FC = () => {
           certifications: Array.isArray(mine.certifications) ? mine.certifications : [],
           favorites: Array.isArray(mine.favorites) ? mine.favorites : [],
           taxIdentificationNumber: (mine as any).taxIdentificationNumber ?? '',
-          taxClearanceCertificateUrl: (mine as any).taxClearanceCertificateUrl ?? '',
         } as ProducerProfileType;
         setFormData((prev) => (prev?.id === normalized.id ? prev : normalized));
       } finally {
