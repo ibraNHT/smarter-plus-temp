@@ -64,13 +64,13 @@ export const ComparePage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 pb-32">
-       <div className="flex items-center justify-between mb-8">
-          <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 hover:text-primary-600 font-medium">
-             <ArrowLeft className="h-5 w-5 mr-2" /> {t('product.back')}
+    <div className="max-w-7xl mx-auto py-6 sm:py-8 px-4 sm:px-6 lg:px-8 pb-32">
+       <div className="flex items-center justify-between mb-6 sm:mb-8 gap-3 flex-wrap">
+          <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 hover:text-primary-600 font-medium text-sm sm:text-base">
+             <ArrowLeft className="h-5 w-5 mr-1 sm:mr-2" /> {t('product.back')}
           </button>
-          <div className="flex items-center gap-4">
-             <h1 className="text-2xl font-bold text-gray-900">{t('compare.page.title')}</h1>
+          <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
+             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{t('compare.page.title')}</h1>
              <button onClick={clearCompare} className="text-sm text-red-600 hover:underline">{t('compare.clear')}</button>
           </div>
        </div>

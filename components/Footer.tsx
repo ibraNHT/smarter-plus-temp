@@ -8,15 +8,15 @@ export const Footer: React.FC = () => {
   const { t } = useTranslation();
 
   return (
-    <footer className="bg-primary-900 text-white border-t border-primary-800 mt-auto">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+    <footer className="bg-primary-900 text-white border-t border-primary-800 mt-auto" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
           
           {/* Brand Column */}
-          <div className="space-y-4">
+          <div className="space-y-4 col-span-2 lg:col-span-1">
             <div className="flex items-center">
-              <Sprout className="h-8 w-8 text-green-400" />
-              <span className="ml-2 text-xl font-bold text-white">AgriMarket Connect</span>
+              <Sprout className="h-7 w-7 sm:h-8 sm:w-8 text-green-400" />
+              <span className="ml-2 text-lg sm:text-xl font-bold text-white">AgriMarket Connect</span>
             </div>
             <p className="text-primary-200 text-sm">
               {t('footer.tagline')}
@@ -116,8 +116,8 @@ export const Footer: React.FC = () => {
 
         </div>
         
-        <div className="mt-12 border-t border-primary-800 pt-8">
-          <p className="text-base text-primary-300 text-center">
+        <div className="mt-10 sm:mt-12 border-t border-primary-800 pt-6 sm:pt-8">
+          <p className="text-sm sm:text-base text-primary-300 text-center">
             &copy; {new Date().getFullYear()} AgriMarket Connect. {t('footer.rights')}
           </p>
         </div>

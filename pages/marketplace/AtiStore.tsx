@@ -61,24 +61,24 @@ export const AtiStore: React.FC = () => {
         url="/market/ati"
       />
       {/* Header */}
-      <div className="bg-blue-800 text-white py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <ShoppingBasket className="h-8 w-8 text-blue-300" />
-            <div>
-              <h1 className="text-2xl font-bold">{t('landing.atiStore.title')}</h1>
-              <p className="text-blue-100 text-sm">{t('landing.atiStore.desc')}</p>
+      <div className="bg-blue-800 text-white py-6 sm:py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <ShoppingBasket className="h-7 w-7 sm:h-8 sm:w-8 text-blue-300 flex-shrink-0" />
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold truncate">{t('landing.atiStore.title')}</h1>
+              <p className="text-blue-100 text-xs sm:text-sm line-clamp-2">{t('landing.atiStore.desc')}</p>
             </div>
           </div>
-          <div className="hidden md:block bg-blue-700 px-4 py-2 rounded-lg text-sm">
+          <div className="hidden md:block bg-blue-700 px-4 py-2 rounded-lg text-sm flex-shrink-0">
             Official ATI Products • Verified Quality • Fast Delivery
           </div>
         </div>
       </div>
 
       {/* Store Container */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-col md:flex-row gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div className="flex flex-col md:flex-row gap-6 md:gap-8">
           {/* Sidebar Filters */}
           <div className="w-full md:w-64 flex-shrink-0 space-y-6">
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">

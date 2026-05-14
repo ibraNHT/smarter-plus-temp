@@ -143,58 +143,61 @@ export const WalletDashboard: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center space-x-3">
-            <button onClick={() => navigate(-1)} className="p-2 bg-white border border-gray-200 rounded-full hover:bg-gray-50 transition-colors shadow-sm">
+        <div className="flex items-center justify-between mb-6 sm:mb-8 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <button onClick={() => navigate(-1)} className="p-2 bg-white border border-gray-200 rounded-full hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0" aria-label="Back">
               <ArrowLeft className="h-5 w-5 text-gray-600" />
             </button>
-            <div className="p-3 bg-primary-100 rounded-full">
-              <WalletIcon className="h-8 w-8 text-primary-600" />
+            <div className="p-2 sm:p-3 bg-primary-100 rounded-full flex-shrink-0">
+              <WalletIcon className="h-6 w-6 sm:h-8 sm:w-8 text-primary-600" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{t('wallet.title')}</h1>
-              <p className="text-sm text-gray-500">{user.name}</p>
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">{t('wallet.title')}</h1>
+              <p className="text-xs sm:text-sm text-gray-500 truncate">{user.name}</p>
             </div>
           </div>
         </div>
 
         {/* Balance Card - light background so dark balance text is clearly visible */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="md:col-span-2 bg-white rounded-2xl shadow-xl overflow-hidden p-8 relative border border-gray-200">
-            <p className="text-gray-600 text-base font-semibold mb-2 tracking-wide">{t('wallet.balance')}</p>
-            <h2 className="text-5xl md:text-6xl font-bold mb-1 tabular-nums tracking-tight text-gray-900">
-              {wallet.balance.toLocaleString()} <span className="text-2xl md:text-3xl font-bold text-gray-800 ml-1">XAF</span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-8">
+          <div className="md:col-span-2 bg-white rounded-2xl shadow-xl overflow-hidden p-5 sm:p-8 relative border border-gray-200">
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <p className="text-gray-600 text-sm sm:text-base font-semibold tracking-wide">{t('wallet.balance')}</p>
+              <button
+                onClick={() => setShowTopUp(true)}
+                className="p-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-colors flex-shrink-0"
+                aria-label={t('wallet.topup')}
+              >
+                <Plus className="h-5 w-5 sm:h-6 sm:w-6" />
+              </button>
+            </div>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-1 tabular-nums tracking-tight text-gray-900 break-words">
+              {wallet.balance.toLocaleString()} <span className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800 ml-1">XAF</span>
             </h2>
 
             {/* Balance Breakdown */}
-            <div className="mt-5 pt-5 border-t border-gray-200 grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="mt-5 pt-5 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">{t('wallet.available')}</p>
-                <p className="text-xl font-bold mt-0.5 tabular-nums text-gray-900">{availableBalance.toLocaleString()} XAF</p>
+                <p className="text-lg sm:text-xl font-bold mt-0.5 tabular-nums text-gray-900 break-words">{availableBalance.toLocaleString()} XAF</p>
               </div>
               {(wallet.pendingBalance ?? 0) > 0 && (
                 <div>
                   <p className="text-xs text-amber-600 uppercase tracking-wider font-semibold">Upcoming</p>
-                  <p className="text-xl font-bold mt-0.5 tabular-nums text-amber-700">{(wallet.pendingBalance ?? 0).toLocaleString()} XAF</p>
+                  <p className="text-lg sm:text-xl font-bold mt-0.5 tabular-nums text-amber-700 break-words">{(wallet.pendingBalance ?? 0).toLocaleString()} XAF</p>
                   <p className="text-[10px] text-gray-400 mt-0.5">Held until 5-day window</p>
                 </div>
               )}
               {pendingAmount > 0 && (
                 <div>
                   <p className="text-xs text-orange-600 uppercase tracking-wider font-semibold">Pending Withdrawals</p>
-                  <p className="text-xl font-bold mt-0.5 tabular-nums text-orange-700">{pendingAmount.toLocaleString()} XAF</p>
+                  <p className="text-lg sm:text-xl font-bold mt-0.5 tabular-nums text-orange-700 break-words">{pendingAmount.toLocaleString()} XAF</p>
                 </div>
               )}
             </div>
-
-            <div className="absolute top-8 right-8 flex space-x-3">
-              <button onClick={() => setShowTopUp(true)} className="p-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-colors">
-                <Plus className="h-6 w-6" />
-              </button>
-            </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-lg p-6 flex flex-col justify-center space-y-4 border border-gray-100">
+          <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-6 flex flex-col justify-center gap-3 sm:gap-4 border border-gray-100">
             <button
               onClick={() => setShowTopUp(true)}
               className="w-full flex items-center justify-center bg-primary-50 text-primary-700 px-4 py-3 rounded-lg font-bold hover:bg-primary-100 transition-colors"
@@ -207,7 +210,7 @@ export const WalletDashboard: React.FC = () => {
             {isProducer && (
               <button
                 onClick={() => setShowWithdraw(true)}
-                className="w-full flex items-center justify-center bg-gray-900 text-white px-4 py-3 rounded-lg font-bold hover:bg-gray-800 transition-colors"
+                className="w-full flex items-center justify-center bg-gray-900 text-white px-4 py-3 rounded-lg font-bold hover:bg-gray-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 disabled={availableBalance <= 0}
               >
                 <MinusCircle className="h-5 w-5 mr-2" />

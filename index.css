@@ -1,1 +1,122 @@
 /* App-level styles; Tailwind is loaded from CDN in index.html */
+
+/* ---------------------------------------------------------------
+   Global responsive baseline
+--------------------------------------------------------------- */
+
+html,
+body {
+  /* Hard cap horizontal scroll caused by rogue components on small screens. */
+  overflow-x: hidden;
+  /* Slightly nicer text rendering on retina mobile screens. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  /* Reserve space for iOS safe areas around the entire app shell. */
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+#root {
+  min-height: 100vh;
+  /* Use dynamic viewport height where supported to avoid the iOS toolbar gap. */
+  min-height: 100dvh;
+}
+
+/* Make every focusable target at least 40px on touch devices for accessibility. */
+@media (hover: none) and (pointer: coarse) {
+  button,
+  [role='button'],
+  a.btn,
+  input[type='button'],
+  input[type='submit'] {
+    min-height: 40px;
+  }
+}
+
+/* Prevent iOS Safari from auto-zooming on focus when fonts are < 16px. */
+@media screen and (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Keep long URLs / order ids from breaking layout in chat bubbles & tables. */
+.break-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Hide scrollbar visually but keep scroll behavior, for horizontal product carousels. */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.18);
+  border-radius: 9999px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Slide-up animation used by the compare widget. */
+@keyframes agm-slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.animate-slide-up {
+  animation: agm-slide-up 0.2s ease-out;
+}
+
+/* Fade-in animation for floating panels (calendar, popovers). */
+@keyframes agm-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: agm-fade-in 0.15s ease-out;
+}
+
+/* ---------------------------------------------------------------
+   App layout helpers
+--------------------------------------------------------------- */
+
+/* Reserve vertical space for the sticky navbar (h-16 = 4rem) across pages. */
+.app-screen {
+  min-height: calc(100vh - 4rem);
+  min-height: calc(100dvh - 4rem);
+}
+
+/* Body-level padding to keep page content above the floating
+   bottom widgets (Install banner, Compare bar, support chat) on small screens.
+   Pages can override on a per-route basis. */
+.app-page-pad-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* Floating action stack — multiple bottom-pinned widgets stack cleanly. */
+.bottom-stack {
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+/* Full-height chat shell that accounts for the sticky navbar (h-16) on every
+   viewport, falling back gracefully on browsers without `dvh` support. */
+.agm-chat-shell {
+  height: calc(100vh - 4rem);
+  height: calc(100dvh - 4rem);
+}
+

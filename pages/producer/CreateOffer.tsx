@@ -346,10 +346,10 @@ export const CreateOffer: React.FC = () => {
   const isEditMode = !!existingOffer;
 
   return (
-    <div className="max-w-3xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
-       <h1 className="text-3xl font-bold text-gray-900 mb-8">{isEditMode ? t('form.editOffer') : t('nav.newOffer')}</h1>
-       
-       <form onSubmit={handleSubmit} aria-busy={submitting} className="space-y-8 divide-y divide-gray-200 bg-white p-8 shadow rounded-lg">
+    <div className="max-w-3xl mx-auto py-6 sm:py-10 px-4 sm:px-6 lg:px-8">
+       <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6 sm:mb-8">{isEditMode ? t('form.editOffer') : t('nav.newOffer')}</h1>
+
+       <form onSubmit={handleSubmit} aria-busy={submitting} className="space-y-6 sm:space-y-8 divide-y divide-gray-200 bg-white p-4 sm:p-6 md:p-8 shadow rounded-lg">
         {submitError && (
            <div
              className="rounded-md bg-red-50 p-4 border border-red-200 text-sm text-red-800"

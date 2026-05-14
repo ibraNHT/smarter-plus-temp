@@ -315,31 +315,31 @@ export const ProducerMarket: React.FC = () => {
         url="/market/producers"
       />
       {/* Header */}
-      <div className="bg-primary-900 text-white pt-8 pb-16 relative">
+      <div className="bg-primary-900 text-white pt-6 sm:pt-8 pb-12 sm:pb-16 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <button
             onClick={() => {
               if (window.history.length > 2) navigate(-1);
               else navigate('/producer/dashboard');
             }}
-            className="absolute top-6 left-4 md:left-8 flex items-center text-primary-200 hover:text-white transition-colors"
+            className="inline-flex items-center text-primary-200 hover:text-white transition-colors text-sm sm:text-base"
           >
             <ArrowLeft className="h-5 w-5 mr-1" /> Back
           </button>
 
-          <div className="mt-8">
-            <div className="flex items-center space-x-3 mb-2">
-              <div className="p-2 bg-green-700 rounded-lg">
-                <Tractor className="h-8 w-8 text-green-200" />
+          <div className="mt-4 sm:mt-6">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-green-700 rounded-lg flex-shrink-0">
+                <Tractor className="h-6 w-6 sm:h-8 sm:w-8 text-green-200" />
               </div>
-              <h1 className="text-3xl font-bold">{t('landing.producerMarket.title')}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold">{t('landing.producerMarket.title')}</h1>
             </div>
-            <p className="text-primary-100 text-lg max-w-2xl ml-14">
+            <p className="text-primary-100 text-sm sm:text-lg max-w-2xl sm:ml-14">
               {t('landing.producerMarket.desc')}
             </p>
             {clientRegion && (
-              <div className="mt-4 ml-14 inline-flex items-center px-3 py-1 rounded-full bg-green-800 border border-green-600 text-sm text-green-100">
-                <MapPin className="h-4 w-4 mr-1" /> Prioritizing offers in: <strong>{clientRegion}</strong>
+              <div className="mt-3 sm:mt-4 sm:ml-14 inline-flex items-center px-3 py-1 rounded-full bg-green-800 border border-green-600 text-xs sm:text-sm text-green-100">
+                <MapPin className="h-4 w-4 mr-1" /> Prioritizing offers in: <strong className="ml-1">{clientRegion}</strong>
               </div>
             )}
           </div>

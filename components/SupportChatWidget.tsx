@@ -18,6 +18,7 @@ export const SupportChatWidget: React.FC = () => {
   const toggleSupportChat = store?.toggleSupportChat ?? (() => {});
   const supportMessages = store?.supportMessages ?? [];
   const sendSupportMessage = store?.sendSupportMessage ?? (async () => {});
+  const compareCount = store?.compareList?.length ?? 0;
   
   // Guest form state
   const user = store?.user ?? null;
@@ -111,9 +112,20 @@ export const SupportChatWidget: React.FC = () => {
     submitGuestForm(guestEmailInput.trim(), guestNameInput.trim() || 'Guest');
   };
 
+  // On small screens, ignore any drag-saved position so the widget always
+  // anchors to the bottom-right and uses safe-area aware bottom padding.
+  const isNarrowViewport = typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches;
+
+  // When the compare bar is open at the bottom, lift the chat widget above it.
+  const dockBottom = compareCount > 0
+    ? 'calc(max(1rem, env(safe-area-inset-bottom)) + 5rem)'
+    : 'max(1rem, env(safe-area-inset-bottom))';
+
   const widgetStyle: React.CSSProperties = {
-      height: '500px',
-      ...(position ? { top: position.top, left: position.left } : { bottom: '24px', right: '24px' })
+      maxHeight: 'min(560px, calc(100dvh - 5rem))',
+      ...(position && !isNarrowViewport
+          ? { top: position.top, left: position.left }
+          : { bottom: dockBottom, right: 'max(0.75rem, env(safe-area-inset-right))' })
   };
 
   if (!store) return null;
@@ -124,7 +136,8 @@ export const SupportChatWidget: React.FC = () => {
       {!isSupportChatOpen && (
         <button
           onClick={toggleSupportChat}
-          className="fixed bottom-6 right-6 z-50 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-all hover:scale-110 flex items-center justify-center"
+          className="fixed z-50 bg-blue-600 text-white p-3.5 sm:p-4 rounded-full shadow-lg hover:bg-blue-700 transition-all hover:scale-110 flex items-center justify-center"
+          style={{ bottom: dockBottom, right: 'max(0.75rem, env(safe-area-inset-right))' }}
           aria-label="Open Support Chat"
         >
           <Headphones className="h-6 w-6" />
@@ -134,12 +147,12 @@ export const SupportChatWidget: React.FC = () => {
       {/* Chat Window */}
       <div
         ref={widgetRef}
-        className={`fixed z-50 w-80 md:w-96 bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden flex flex-col transition-opacity duration-200 ${isSupportChatOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed z-50 w-[min(22rem,calc(100vw-1rem))] sm:w-80 md:w-96 h-[70dvh] sm:h-[500px] max-h-[calc(100dvh-5rem)] bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden flex flex-col transition-opacity duration-200 ${isSupportChatOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
         style={widgetStyle}
       >
-        {/* Header (Draggable Handle) */}
+        {/* Header (Draggable Handle on desktop only) */}
         <div 
-           className="bg-blue-600 p-4 flex justify-between items-center cursor-move select-none"
+           className="bg-blue-600 p-3 sm:p-4 flex justify-between items-center sm:cursor-move select-none"
            onMouseDown={handleMouseDown}
         >
            <div className="flex items-center text-white">

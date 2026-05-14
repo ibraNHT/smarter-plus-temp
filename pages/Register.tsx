@@ -14,18 +14,18 @@ export const Register: React.FC = () => {
   const clientLink = refCode ? `/register/client?ref=${refCode}` : '/register/client';
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="app-screen bg-gray-50 flex flex-col justify-center py-10 sm:py-12 px-4 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+        <h2 className="mt-4 sm:mt-6 text-center text-2xl sm:text-3xl font-extrabold text-gray-900">
           {t('register.title')}
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
+        <p className="mt-2 text-center text-sm text-gray-600 px-2">
           {t('register.subtitle')}
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-2xl">
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2">
           {/* Producer Card */}
           <Link to={producerLink} className="group relative rounded-lg bg-white p-6 shadow-md hover:shadow-lg transition-shadow cursor-pointer border border-gray-200 hover:border-primary-500 flex flex-col items-center text-center">
             <div className="h-16 w-16 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center mb-4 group-hover:bg-primary-600 group-hover:text-white transition-colors">

@@ -8,7 +8,7 @@ import { UserRole } from '../types';
 import { getToken } from '../services/apiService';
 import { isWebAppSessionBlocked } from '../services/authRoles';
 import { LogoutConfirmModal } from './LogoutConfirmModal';
-import { LogOut, Sprout, ShoppingBasket, Tractor, ShoppingCart, Globe, Bell, X, User, MessageCircle, ChevronDown, Download, CheckCheck, Trash2 } from 'lucide-react';
+import { LogOut, Sprout, ShoppingBasket, Tractor, ShoppingCart, Globe, Bell, X, User, MessageCircle, ChevronDown, Download, CheckCheck, Trash2, Menu, Wallet } from 'lucide-react';
 
 const marketplaceVisible = (user: { role?: UserRole } | null) =>
   !user || user.role === UserRole.CLIENT || user.role === UserRole.PRODUCER;
@@ -25,8 +25,16 @@ export const Navbar: React.FC = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close mobile menu when route changes.
+  useEffect(() => {
+    setMobileMenuOpen(false);
+    setShowNotifications(false);
+    setProfileMenuOpen(false);
+  }, [location.pathname]);
 
   const performLogout = async () => {
     await logout();
@@ -171,22 +179,25 @@ export const Navbar: React.FC = () => {
   return (
     <>
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex items-center">
-            <Link to={getHomeLink()} className="flex-shrink-0 flex items-center cursor-pointer">
-              <Sprout className="h-8 w-8 text-primary-600" />
-              <span className="ml-2 text-xl font-bold text-gray-900">AgriMarket Connect</span>
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16 gap-2">
+          <div className="flex items-center min-w-0">
+            <Link to={getHomeLink()} className="flex-shrink-0 flex items-center cursor-pointer min-w-0">
+              <Sprout className="h-7 w-7 sm:h-8 sm:w-8 text-primary-600 flex-shrink-0" />
+              <span className="ml-2 text-base sm:text-lg lg:text-xl font-bold text-gray-900 truncate">
+                <span className="sm:hidden">AgriMarket</span>
+                <span className="hidden sm:inline">AgriMarket Connect</span>
+              </span>
             </Link>
-            <div className="hidden sm:ml-8 sm:flex sm:space-x-4">
+            <div className="hidden md:ml-6 lg:ml-8 md:flex md:space-x-2 lg:space-x-4">
               {/* Marketplace Links - Visible to Guests, Clients, and Producers */}
               {marketplaceVisible(user) && (
                 <>
-                  <Link to="/market/producers" className={`flex items-center space-x-1 ${linkClass('/market/producers')}`}>
+                  <Link to="/market/producers" className={`flex items-center space-x-1 whitespace-nowrap ${linkClass('/market/producers')}`}>
                     <Tractor className="h-4 w-4" />
                     <span>{t('nav.producerMarket')}</span>
                   </Link>
-                  <Link to="/market/ati" className={`flex items-center space-x-1 ${linkClass('/market/ati')}`}>
+                  <Link to="/market/ati" className={`flex items-center space-x-1 whitespace-nowrap ${linkClass('/market/ati')}`}>
                     <ShoppingBasket className="h-4 w-4" />
                     <span>{t('nav.atiStore')}</span>
                   </Link>
@@ -195,11 +206,12 @@ export const Navbar: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
-            {/* Language Toggle */}
+          <div className="flex items-center gap-1 sm:gap-2 md:gap-3 flex-shrink-0">
+            {/* Language Toggle - hidden on xs to save space; available in mobile menu */}
             <button
               onClick={toggleLanguage}
-              className="flex items-center text-gray-500 hover:text-primary-600 px-2 py-1 rounded-md transition-colors"
+              className="hidden sm:flex items-center text-gray-500 hover:text-primary-600 px-2 py-1 rounded-md transition-colors"
+              aria-label={`Switch language. Current: ${language.toUpperCase()}`}
             >
               <Globe className="h-5 w-5 mr-1" />
               <span className="text-sm font-medium uppercase">{language}</span>
@@ -207,18 +219,18 @@ export const Navbar: React.FC = () => {
 
             {/* Shopping Cart Icon - Visible to Clients/Producers (Hide for Guests until they add something, or keep visible to prompt login) */}
             {(marketplaceVisible(user)) && (
-              <Link to="/cart" className="relative p-2 text-gray-400 hover:text-primary-600 transition-colors">
+              <Link to="/cart" className="relative p-2 text-gray-400 hover:text-primary-600 transition-colors" aria-label="Shopping cart">
                 <ShoppingCart className="h-6 w-6" />
                 {cartItemCount > 0 && (
-                  <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-600 rounded-full">
-                    {cartItemCount}
+                  <span className="absolute top-0 right-0 inline-flex items-center justify-center min-h-[1.125rem] min-w-[1.125rem] px-1.5 text-[10px] font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-600 rounded-full">
+                    {cartItemCount > 99 ? '99+' : cartItemCount}
                   </span>
                 )}
               </Link>
             )}
 
             {user ? (
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center gap-1 sm:gap-2">
                 {/* Messages Link */}
                 <Link
                   to="/messages"
@@ -232,7 +244,7 @@ export const Navbar: React.FC = () => {
                 >
                   <MessageCircle className="h-6 w-6" />
                   {unreadChatTotal > 0 && (
-                    <span className="absolute top-0 right-0 inline-flex min-h-[1.25rem] min-w-[1.25rem] items-center justify-center px-1 text-[10px] font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-600 rounded-full ring-2 ring-white pointer-events-none">
+                    <span className="absolute top-0 right-0 inline-flex min-h-[1.125rem] min-w-[1.125rem] items-center justify-center px-1 text-[10px] font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-600 rounded-full ring-2 ring-white pointer-events-none">
                       {unreadChatTotal > 99 ? '99+' : unreadChatTotal}
                     </span>
                   )}
@@ -253,7 +265,7 @@ export const Navbar: React.FC = () => {
                   </button>
 
                   {showNotifications && (
-                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg overflow-hidden z-50 border border-gray-200">
+                    <div className="absolute right-0 mt-2 w-[min(20rem,calc(100vw-1.5rem))] bg-white rounded-md shadow-lg overflow-hidden z-50 border border-gray-200">
                       <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                         <h3 className="text-sm font-semibold text-gray-700">{t('nav.notifications')}</h3>
                         <div className="flex items-center gap-2">
@@ -331,7 +343,7 @@ export const Navbar: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setProfileMenuOpen((o) => !o)}
-                      className="flex items-center text-gray-600 hover:text-primary-600 p-1 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      className="flex items-center text-gray-600 hover:text-primary-600 p-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                       aria-expanded={profileMenuOpen}
                       aria-haspopup="true"
                       title={t('nav.profile')}
@@ -340,7 +352,13 @@ export const Navbar: React.FC = () => {
                       <ChevronDown className="h-4 w-4 ml-0.5 hidden sm:inline opacity-70" />
                     </button>
                     {profileMenuOpen && (
-                      <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
+                      <div className="absolute right-0 mt-2 w-[min(14rem,calc(100vw-1.5rem))] bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
+                        <div className="px-4 py-2 border-b border-gray-100 sm:hidden">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {isUserNameResolving ? '…' : getUserDisplayName()}
+                          </p>
+                          <span className="text-xs text-gray-500">{user.role}</span>
+                        </div>
                         <Link
                           to={user.role === UserRole.CLIENT ? '/client/profile' : '/producer/profile'}
                           className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -366,8 +384,8 @@ export const Navbar: React.FC = () => {
                   </div>
                 )}
 
-                <div className="hidden md:flex flex-col items-end">
-                  <span className="text-sm font-medium text-gray-900">
+                <div className="hidden lg:flex flex-col items-end">
+                  <span className="text-sm font-medium text-gray-900 truncate max-w-[10rem]">
                     {isUserNameResolving ? (
                       <span className="inline-block h-4 w-28 animate-pulse rounded bg-gray-200 align-middle" />
                     ) : (
@@ -381,46 +399,113 @@ export const Navbar: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setLogoutConfirmOpen(true)}
-                  className="p-2 text-gray-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50"
+                  className="hidden sm:inline-flex p-2 text-gray-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50"
                   title={t('nav.logout')}
+                  aria-label={t('nav.logout')}
                 >
                   <LogOut className="h-5 w-5" />
                 </button>
               </div>
             ) : (
-              <div className="flex space-x-4">
-                <Link to="/login" className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">
+              <div className="hidden sm:flex items-center space-x-2">
+                <Link to="/login" className="text-gray-600 hover:text-gray-900 px-2 sm:px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap">
                   {t('nav.login')}
                 </Link>
-                <Link to="/register" className="bg-primary-600 text-white hover:bg-primary-700 px-4 py-2 rounded-md text-sm font-medium shadow-sm">
+                <Link to="/register" className="bg-primary-600 text-white hover:bg-primary-700 px-3 sm:px-4 py-2 rounded-md text-sm font-medium shadow-sm whitespace-nowrap">
                   {t('nav.signup')}
                 </Link>
               </div>
             )}
+
+            {/* Mobile hamburger toggle */}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((o) => !o)}
+              className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-600 hover:text-primary-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              aria-expanded={mobileMenuOpen}
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </button>
           </div>
         </div>
 
-        {/* Mobile menu (basic implementation) */}
-        <div className="sm:hidden border-t border-gray-200 pt-2 pb-2">
-          <div className="flex flex-col space-y-1">
-            {marketplaceVisible(user) && (
-              <>
-                <Link to="/market/producers" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">{t('nav.producerMarket')}</Link>
-                <Link to="/market/ati" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">{t('nav.atiStore')}</Link>
-              </>
-            )}
-            {!user && canInstall && (
+        {/* Mobile menu drawer (collapses below header) */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-gray-200 pt-2 pb-3 max-h-[calc(100dvh-4rem)] overflow-y-auto">
+            <div className="flex flex-col space-y-1">
+              {marketplaceVisible(user) && (
+                <>
+                  <Link to="/market/producers" className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+                    <Tractor className="h-5 w-5 text-primary-600" /> {t('nav.producerMarket')}
+                  </Link>
+                  <Link to="/market/ati" className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+                    <ShoppingBasket className="h-5 w-5 text-blue-600" /> {t('nav.atiStore')}
+                  </Link>
+                </>
+              )}
+              {user && (
+                <>
+                  <Link to="/messages" className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">
+                    <MessageCircle className="h-5 w-5" /> {t('nav.messages')}
+                    {unreadChatTotal > 0 && (
+                      <span className="ml-auto bg-red-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
+                        {unreadChatTotal > 99 ? '99+' : unreadChatTotal}
+                      </span>
+                    )}
+                  </Link>
+                  {(user.role === UserRole.CLIENT || user.role === UserRole.PRODUCER) && (
+                    <Link to="/wallet" className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">
+                      <Wallet className="h-5 w-5" /> {t('nav.wallet')}
+                    </Link>
+                  )}
+                  <Link
+                    to={user.role === UserRole.CLIENT ? '/client/profile' : '/producer/profile'}
+                    className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <User className="h-5 w-5" /> {t('nav.profile')}
+                  </Link>
+                </>
+              )}
               <button
                 type="button"
-                onClick={() => void promptInstall()}
-                className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-md text-base font-medium text-primary-700 hover:bg-primary-50 border border-primary-200 mt-1"
+                onClick={() => { toggleLanguage(); }}
+                className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50 text-left"
               >
-                <Download className="h-5 w-5 flex-shrink-0" />
-                {t('pwa.installMenu')}
+                <Globe className="h-5 w-5" /> <span className="uppercase">{language === 'en' ? 'FR' : 'EN'}</span>
               </button>
-            )}
+              {!user && (
+                <div className="flex gap-2 px-3 pt-2">
+                  <Link to="/login" className="flex-1 text-center text-gray-700 px-3 py-2 rounded-md text-sm font-medium border border-gray-200 hover:bg-gray-50">
+                    {t('nav.login')}
+                  </Link>
+                  <Link to="/register" className="flex-1 text-center bg-primary-600 text-white hover:bg-primary-700 px-3 py-2 rounded-md text-sm font-medium shadow-sm">
+                    {t('nav.signup')}
+                  </Link>
+                </div>
+              )}
+              {canInstall && (
+                <button
+                  type="button"
+                  onClick={() => { setMobileMenuOpen(false); void promptInstall(); }}
+                  className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-md text-base font-medium text-primary-700 hover:bg-primary-50 border border-primary-200 mt-2"
+                >
+                  <Download className="h-5 w-5 flex-shrink-0" />
+                  {t('pwa.installMenu')}
+                </button>
+              )}
+              {user && (
+                <button
+                  type="button"
+                  onClick={() => { setMobileMenuOpen(false); setLogoutConfirmOpen(true); }}
+                  className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-md text-base font-medium text-red-600 hover:bg-red-50 mt-2"
+                >
+                  <LogOut className="h-5 w-5" /> {t('nav.logout')}
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </nav>
     <LogoutConfirmModal

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { ToastContainer } from './components/ToastContainer';
@@ -74,69 +74,84 @@ const GuardedRoute: React.FC<{ children: React.ReactNode; allowedRoles: UserRole
   return <>{children}</>;
 };
 
+/**
+ * Pages where the global Footer would push content below the fold (e.g. full-height chat).
+ * Listed here as exact prefixes so deep routes still match.
+ */
+const FOOTER_HIDDEN_PREFIXES = ['/messages'];
+
+const AppShell: React.FC = () => {
+  const location = useLocation();
+  const hideFooter = FOOTER_HIDDEN_PREFIXES.some((p) => location.pathname.startsWith(p));
+
+  return (
+    <div className="min-h-screen bg-gray-50 font-sans flex flex-col overflow-x-hidden">
+      <Navbar />
+      <InstallAppBanner />
+      <ToastContainer />
+      <SupportChatWidget />
+      <CompareWidget />
+      <RoleScopeBoundary>
+        <main className="flex-grow w-full min-w-0">
+          <Routes>
+            <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
+            <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+
+            {/* Registration Routes */}
+            <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+            <Route path="/verify-email" element={<PublicRoute><VerifyEmail /></PublicRoute>} />
+            <Route path="/register/producer" element={<PublicRoute><RegisterProducer /></PublicRoute>} />
+            <Route path="/register/client" element={<PublicRoute><RegisterClient /></PublicRoute>} />
+
+            {/* Marketplaces */}
+            <Route path="/market/producers" element={<ProducerMarket />} />
+            <Route path="/market/ati" element={<AtiStore />} />
+            <Route path="/offer/:offerId" element={<ProductDetails />} />
+            <Route path="/cart" element={<ShoppingCart />} />
+            <Route path="/compare" element={<ComparePage />} />
+
+            {/* Public Profiles */}
+            <Route path="/profile/producer/:id" element={<PublicProfile role="PRODUCER" />} />
+            <Route path="/profile/client/:id" element={<PublicProfile role="CLIENT" />} />
+
+            {/* User Feature Routes */}
+            <Route path="/wallet" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER]}><WalletDashboard /></GuardedRoute>} />
+            <Route path="/messages" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER]}><ChatPage /></GuardedRoute>} />
+            <Route path="/messages/:chatId" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER]}><ChatPage /></GuardedRoute>} />
+            <Route path="/client/profile" element={<GuardedRoute allowedRoles={[UserRole.CLIENT]}><ClientProfile /></GuardedRoute>} />
+
+            {/* Producer Routes */}
+            <Route path="/producer/dashboard" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><ProducerDashboard /></GuardedRoute>} />
+            <Route path="/producer/profile/:tab?" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><ProducerProfile /></GuardedRoute>} />
+            <Route path="/producer/availability" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><ProducerAvailability /></GuardedRoute>} />
+            <Route path="/producer/offers/new" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><CreateOffer /></GuardedRoute>} />
+            <Route path="/producer/offers/edit/:offerId" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><CreateOffer /></GuardedRoute>} />
+
+            {/* Footer Routes */}
+            <Route path="/blog" element={<Blog />} />
+            <Route path="/faq" element={<FAQ />} />
+            <Route path="/jobs" element={<Jobs />} />
+            <Route path="/partners" element={<Partners />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/privacy" element={<Privacy />} />
+
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </RoleScopeBoundary>
+      {!hideFooter && <Footer />}
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   return (
     <I18nProvider>
       <StoreProvider>
         <PwaInstallProvider>
           <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
-              <Navbar />
-              <InstallAppBanner />
-              <ToastContainer />
-              <SupportChatWidget />
-              <CompareWidget />
-              <RoleScopeBoundary>
-              <main className="flex-grow pb-16 md:pb-0">
-              <Routes>
-                <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
-                <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-
-                {/* Registration Routes */}
-                <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
-                <Route path="/verify-email" element={<PublicRoute><VerifyEmail /></PublicRoute>} />
-                <Route path="/register/producer" element={<PublicRoute><RegisterProducer /></PublicRoute>} />
-                <Route path="/register/client" element={<PublicRoute><RegisterClient /></PublicRoute>} />
-
-                {/* Marketplaces */}
-                <Route path="/market/producers" element={<ProducerMarket />} />
-                <Route path="/market/ati" element={<AtiStore />} />
-                <Route path="/offer/:offerId" element={<ProductDetails />} />
-                <Route path="/cart" element={<ShoppingCart />} />
-                <Route path="/compare" element={<ComparePage />} />
-
-                {/* Public Profiles */}
-                <Route path="/profile/producer/:id" element={<PublicProfile role="PRODUCER" />} />
-                <Route path="/profile/client/:id" element={<PublicProfile role="CLIENT" />} />
-
-                {/* User Feature Routes */}
-                <Route path="/wallet" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER]}><WalletDashboard /></GuardedRoute>} />
-                <Route path="/messages" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER]}><ChatPage /></GuardedRoute>} />
-                <Route path="/messages/:chatId" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER]}><ChatPage /></GuardedRoute>} />
-                <Route path="/client/profile" element={<GuardedRoute allowedRoles={[UserRole.CLIENT]}><ClientProfile /></GuardedRoute>} />
-
-                {/* Producer Routes */}
-                <Route path="/producer/dashboard" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><ProducerDashboard /></GuardedRoute>} />
-                <Route path="/producer/profile/:tab?" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><ProducerProfile /></GuardedRoute>} />
-                <Route path="/producer/availability" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><ProducerAvailability /></GuardedRoute>} />
-                <Route path="/producer/offers/new" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><CreateOffer /></GuardedRoute>} />
-                <Route path="/producer/offers/edit/:offerId" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><CreateOffer /></GuardedRoute>} />
-
-                {/* Footer Routes */}
-                <Route path="/blog" element={<Blog />} />
-                <Route path="/faq" element={<FAQ />} />
-                <Route path="/jobs" element={<Jobs />} />
-                <Route path="/partners" element={<Partners />} />
-                <Route path="/terms" element={<Terms />} />
-                <Route path="/privacy" element={<Privacy />} />
-
-                {/* Fallback */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-              </main>
-              </RoleScopeBoundary>
-              <Footer />
-            </div>
+            <AppShell />
           </Router>
         </PwaInstallProvider>
       </StoreProvider>

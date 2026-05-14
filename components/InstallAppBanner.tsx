@@ -2,16 +2,28 @@ import React from 'react';
 import { Smartphone, X } from 'lucide-react';
 import { usePwaInstall } from '../contexts/PwaInstallContext';
 import { useTranslation } from '../services/i18nContext';
+import { useStoreOptional } from '../services/storeContext';
 
 /** Small bottom banner when the browser fires `beforeinstallprompt` (mainly Chrome/Android). */
 export const InstallAppBanner: React.FC = () => {
   const { canInstall, bannerDismissed, dismissBanner, promptInstall } = usePwaInstall();
   const { t } = useTranslation();
+  const store = useStoreOptional();
+  const compareCount = store?.compareList?.length ?? 0;
 
   if (!canInstall || bannerDismissed) return null;
 
+  // Push the banner above the compare bar (~5rem tall on mobile) when both
+  // are visible to avoid overlapping floating UI.
+  const bottomOffset = compareCount > 0
+    ? 'calc(max(0.75rem, env(safe-area-inset-bottom)) + 5rem)'
+    : 'max(0.75rem, env(safe-area-inset-bottom))';
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 px-3 pt-2 pb-3 md:pb-4 pointer-events-none [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))]">
+    <div
+      className="fixed left-0 right-0 z-40 px-3 pointer-events-none"
+      style={{ bottom: bottomOffset }}
+    >
       <div className="max-w-2xl mx-auto pointer-events-auto flex items-center gap-3 rounded-xl border border-primary-200 bg-white shadow-lg px-3 py-2 sm:px-4">
         <div className="flex-shrink-0 p-2 rounded-lg bg-primary-50 text-primary-700">
           <Smartphone className="h-5 w-5" aria-hidden />

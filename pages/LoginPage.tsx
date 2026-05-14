@@ -270,20 +270,20 @@ export const LoginPage: React.FC = () => {
   const forgotFullPhone = () => buildFullPhone(forgotPhoneFormik.values.forgotPhoneCode, forgotPhoneFormik.values.forgotPhoneLocal);
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex flex-col md:flex-row bg-gray-50">
+    <div className="app-screen flex flex-col md:flex-row bg-gray-50">
 
       {/* Left Side - Image/Branding */}
-      <div className="hidden md:flex md:w-1/2 bg-primary-900 items-center justify-center p-12 relative overflow-hidden">
+      <div className="hidden md:flex md:w-1/2 bg-primary-900 items-center justify-center p-8 lg:p-12 relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80')] bg-cover opacity-20"></div>
         <div className="relative z-10 text-center text-white">
-          <Sprout className="h-20 w-20 mx-auto mb-6" />
-          <h1 className="text-4xl font-extrabold mb-4">AgriMarket Connect</h1>
-          <p className="text-xl text-primary-200">Bridging the gap between producers and consumers.</p>
+          <Sprout className="h-16 w-16 lg:h-20 lg:w-20 mx-auto mb-6" />
+          <h1 className="text-3xl lg:text-4xl font-extrabold mb-4">AgriMarket Connect</h1>
+          <p className="text-lg lg:text-xl text-primary-200">Bridging the gap between producers and consumers.</p>
         </div>
       </div>
 
       {/* Right Side - Login Form */}
-      <div className="flex-1 flex items-center justify-center p-8 md:p-12">
+      <div className="flex-1 flex items-center justify-center px-4 py-8 sm:px-6 sm:py-12 md:p-12">
         <div className="max-w-md w-full space-y-8">
           <div>
             <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
@@ -433,8 +433,8 @@ export const LoginPage: React.FC = () => {
 
       {/* Forgot Password — SMS OTP + reset (matches API) */}
       {isForgotPasswordOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg max-w-sm w-full p-6 relative shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-black bg-opacity-50">
+          <div className="bg-white rounded-t-lg sm:rounded-lg max-w-sm w-full p-5 sm:p-6 relative shadow-xl max-h-[90vh] overflow-y-auto">
             <button
               type="button"
               onClick={closeForgotModal}

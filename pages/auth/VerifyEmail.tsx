@@ -37,19 +37,19 @@ export const VerifyEmail: React.FC = () => {
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow-lg">
+    <div className="app-screen flex items-center justify-center bg-gray-50 py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-6 sm:space-y-8 bg-white p-5 sm:p-8 rounded-lg shadow-lg">
         <div className="text-center">
-          <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-            <Mail className="h-8 w-8 text-blue-600" />
+          <div className="mx-auto h-14 w-14 sm:h-16 sm:w-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+            <Mail className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600" />
           </div>
-          <h2 className="text-3xl font-extrabold text-gray-900">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
             {t('verify.title')}
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             {t('verify.desc')}
           </p>
-          <p className="mt-2 text-xs font-mono bg-gray-100 p-2 rounded inline-block text-gray-500">
+          <p className="mt-2 text-xs font-mono bg-gray-100 p-2 rounded inline-block text-gray-500 break-all max-w-full">
             Sent to: {pendingRegistration.email}
           </p>
         </div>

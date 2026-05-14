@@ -31,28 +31,28 @@ export const FAQ: React.FC = () => {
   ];
 
   return (
-    <div className="bg-white min-h-screen py-12">
+    <div className="bg-white min-h-screen py-8 sm:py-12">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-12">
-          <HelpCircle className="mx-auto h-12 w-12 text-primary-600 mb-4" />
-          <h1 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
+        <div className="text-center mb-8 sm:mb-12">
+          <HelpCircle className="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-primary-600 mb-4" />
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900">
             {t('faq.title')}
           </h1>
-          <p className="mt-4 text-lg text-gray-500">
+          <p className="mt-3 sm:mt-4 text-base sm:text-lg text-gray-500 px-2">
             Everything you need to know about buying and selling on AgriMarket Connect.
           </p>
         </div>
 
-        <dl className="space-y-6 divide-y divide-gray-200">
+        <dl className="space-y-4 sm:space-y-6 divide-y divide-gray-200">
           {faqs.map((faq, index) => (
-            <div key={index} className="pt-6">
-              <dt className="text-lg">
+            <div key={index} className="pt-4 sm:pt-6">
+              <dt className="text-base sm:text-lg">
                 <button
                   onClick={() => setOpenIndex(openIndex === index ? null : index)}
-                  className="text-left w-full flex justify-between items-start text-gray-400 focus:outline-none"
+                  className="text-left w-full flex justify-between items-start text-gray-400 focus:outline-none gap-3"
                 >
                   <span className="font-medium text-gray-900">{faq.q}</span>
-                  <span className="ml-6 h-7 flex items-center">
+                  <span className="h-7 flex items-center flex-shrink-0">
                     {openIndex === index ? (
                       <ChevronUp className="h-6 w-6 transform text-primary-600" />
                     ) : (
@@ -62,8 +62,8 @@ export const FAQ: React.FC = () => {
                 </button>
               </dt>
               {openIndex === index && (
-                <dd className="mt-2 pr-12">
-                  <p className="text-base text-gray-600">{faq.a}</p>
+                <dd className="mt-2 pr-2 sm:pr-12">
+                  <p className="text-sm sm:text-base text-gray-600">{faq.a}</p>
                 </dd>
               )}
             </div>

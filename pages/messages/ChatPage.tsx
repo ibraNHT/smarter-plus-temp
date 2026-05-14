@@ -417,7 +417,7 @@ export const ChatPage: React.FC = () => {
       })();
 
    return (
-      <div className="flex h-[calc(100vh-4rem)] bg-gray-100 overflow-hidden">
+      <div className="agm-chat-shell flex bg-gray-100 overflow-hidden">
          {/* Sidebar List */}
          <div className={`${chatId ? 'hidden md:flex' : 'flex'} w-full md:w-80 bg-white border-r border-gray-200 flex-col`}>
             <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
@@ -665,8 +665,8 @@ export const ChatPage: React.FC = () => {
 
          {/* Proposal Modal */}
          {showProposalModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-               <div className="bg-white rounded-lg max-w-sm w-full p-6 shadow-xl">
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4">
+               <div className="bg-white rounded-t-lg sm:rounded-lg max-w-sm w-full p-5 sm:p-6 shadow-xl max-h-[90vh] overflow-y-auto">
                   <h3 className="text-lg font-bold text-gray-900 mb-1">{t('chat.makeProposal')}</h3>
                   {maxPricePerUnit != null && (
                      <p className="text-xs text-gray-500 mb-3">
@@ -758,8 +758,8 @@ export const ChatPage: React.FC = () => {
 
          {/* Counter-Offer Modal */}
          {showCounterModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-               <div className="bg-white rounded-lg max-w-sm w-full p-6 shadow-xl">
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4">
+               <div className="bg-white rounded-t-lg sm:rounded-lg max-w-sm w-full p-5 sm:p-6 shadow-xl max-h-[90vh] overflow-y-auto">
                   <h3 className="text-lg font-bold text-gray-900 mb-1">Send a Counter-Offer</h3>
                   <p className="text-sm text-gray-500 mb-4">
                      Propose your own price and quantity. The other party will receive it as a new proposal.

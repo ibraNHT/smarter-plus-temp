@@ -275,7 +275,7 @@ export const RegisterProducer: React.FC = () => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+    <div className="max-w-3xl mx-auto py-6 sm:py-12 px-4 sm:px-6 lg:px-8">
       <div className="md:flex md:items-center md:justify-between mb-8">
         <div className="flex-1 min-w-0">
           <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
@@ -287,7 +287,7 @@ export const RegisterProducer: React.FC = () => {
         </div>
       </div>
 
-      <form onSubmit={formik.handleSubmit} className="space-y-8 bg-white p-8 shadow sm:rounded-lg">
+      <form onSubmit={formik.handleSubmit} className="space-y-6 sm:space-y-8 bg-white p-4 sm:p-6 md:p-8 shadow sm:rounded-lg">
 
         {/* Basic Info */}
         <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">

@@ -208,16 +208,16 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
       : "Location not set";
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <div className="max-w-4xl mx-auto py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
       <button
         onClick={() => navigate(-1)}
-        className="flex items-center text-gray-600 hover:text-primary-600 mb-6 transition-colors font-medium"
+        className="flex items-center text-gray-600 hover:text-primary-600 mb-4 sm:mb-6 transition-colors font-medium"
       >
         <ArrowLeft className="h-5 w-5 mr-2" /> Back
       </button>
 
       <div className="bg-white shadow-xl rounded-lg overflow-hidden border border-gray-100">
-        <div className="px-6 pt-6 pb-6">
+        <div className="p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-5 border-b border-gray-100">
             <div className="flex items-center min-w-0">
               <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full ring-2 ring-gray-100 bg-white flex items-center justify-center overflow-hidden shadow-sm shrink-0">
@@ -264,7 +264,7 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
           </div>
 
           {/* Details Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 mt-6 sm:mt-8">
             {/* Left Column: Info */}
             <div className="md:col-span-1 space-y-6">
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">

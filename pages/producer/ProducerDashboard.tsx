@@ -336,17 +336,17 @@ export const ProducerDashboard: React.FC = () => {
             </div>
          )}
 
-         <div className="md:flex md:items-center md:justify-between mb-8">
+         <div className="md:flex md:items-center md:justify-between mb-6 sm:mb-8">
             <div className="flex-1 min-w-0">
-               <div className="flex items-center mb-2">
-                  <button onClick={() => navigate(-1)} className="mr-4 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
+               <div className="flex items-center mb-2 gap-2 sm:gap-3 min-w-0">
+                  <button onClick={() => navigate(-1)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors flex-shrink-0">
                      <ArrowLeft className="h-5 w-5 text-gray-600" />
                   </button>
-                  <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
+                  <h2 className="text-xl sm:text-2xl md:text-3xl font-bold leading-tight text-gray-900 truncate min-w-0">
                      Dashboard: {currentProducer.name}
                   </h2>
                </div>
-               <div className="mt-1 flex flex-col sm:flex-row sm:flex-wrap sm:mt-0 sm:space-x-6 ml-12">
+               <div className="mt-1 flex flex-col sm:flex-row sm:flex-wrap sm:mt-0 sm:space-x-6 sm:ml-12">
                   <div className="mt-2 flex items-center text-sm text-gray-500">
                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${currentProducer.status === ProducerStatus.VALIDATED ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
                         {t('dash.status')}: {currentProducer.status}

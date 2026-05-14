@@ -405,16 +405,16 @@ export const ShoppingCart: React.FC = () => {
     <div className="min-h-screen bg-gray-50 py-8">
       <SEO title="Shopping Cart" noindex={true} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-extrabold text-gray-900 flex items-center flex-wrap gap-2">
-            <ShoppingBag className="h-8 w-8 mr-3 text-primary-600" />
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 flex items-center flex-wrap gap-2">
+            <ShoppingBag className="h-7 w-7 sm:h-8 sm:w-8 mr-2 sm:mr-3 text-primary-600" />
             {t('cart.title')}
             {cartHasService(cart) && (
-              <span className="text-sm font-bold bg-purple-100 text-purple-800 px-2 py-1 rounded-full">{t('service.badge')}</span>
+              <span className="text-xs sm:text-sm font-bold bg-purple-100 text-purple-800 px-2 py-1 rounded-full">{t('service.badge')}</span>
             )}
           </h1>
           {cartHasService(cart) && (
-            <p className="text-sm text-gray-600 mt-2 ml-11">{t('cart.includesServices')}</p>
+            <p className="text-sm text-gray-600 mt-2 ml-9 sm:ml-11">{t('cart.includesServices')}</p>
           )}
         </div>
 
@@ -435,9 +435,9 @@ export const ShoppingCart: React.FC = () => {
                 {cart.map((item) => (
                   <li
                     key={item.id}
-                    className={`p-6 flex ${item.type === OfferType.SERVICE ? 'bg-purple-50/40 border-l-4 border-l-purple-300' : ''}`}
+                    className={`p-4 sm:p-6 flex gap-3 sm:gap-4 ${item.type === OfferType.SERVICE ? 'bg-purple-50/40 border-l-4 border-l-purple-300' : ''}`}
                   >
-                    <div className="flex-shrink-0 w-24 h-24 border border-gray-200 bg-gray-100 rounded-md overflow-hidden relative">
+                    <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 border border-gray-200 bg-gray-100 rounded-md overflow-hidden relative">
                       <img
                         src={item.imageUrl}
                         alt={item.title}
@@ -450,22 +450,22 @@ export const ShoppingCart: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="ml-4 flex-1 flex flex-col">
+                    <div className="flex-1 min-w-0 flex flex-col">
                       <div>
-                        <div className="flex justify-between text-base font-medium text-gray-900">
-                          <h3>
-                            <Link to={`/offer/${item.id}`}>{item.title}</Link>
+                        <div className="flex justify-between gap-3 text-sm sm:text-base font-medium text-gray-900">
+                          <h3 className="min-w-0 break-words">
+                            <Link to={`/offer/${item.id}`} className="hover:text-primary-600 line-clamp-2 sm:line-clamp-none">{item.title}</Link>
                           </h3>
-                          <p className="ml-4">{(item.price * item.cartQuantity).toLocaleString()} XAF</p>
+                          <p className="whitespace-nowrap flex-shrink-0">{(item.price * item.cartQuantity).toLocaleString()} XAF</p>
                         </div>
-                        <p className="mt-1 text-sm text-gray-500">{item.category}</p>
+                        <p className="mt-1 text-xs sm:text-sm text-gray-500">{item.category}</p>
 
                         {/* Display Booking Date for Services */}
                         {item.bookingDate && (
-                          <div className="mt-2 flex items-center text-sm text-purple-800 bg-purple-100 border border-purple-200 px-2 py-1 rounded w-fit max-w-full">
-                            <Calendar className="h-3 w-3 mr-1 shrink-0" />
+                          <div className="mt-2 flex items-start flex-wrap gap-1 text-xs sm:text-sm text-purple-800 bg-purple-100 border border-purple-200 px-2 py-1 rounded max-w-full">
+                            <Calendar className="h-3 w-3 mr-1 shrink-0 mt-0.5" />
                             <span className="font-medium">{t('service.appointment')}:</span>
-                            <span className="ml-1">
+                            <span>
                               {new Date(item.bookingDate).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                             </span>
                           </div>
@@ -476,7 +476,7 @@ export const ShoppingCart: React.FC = () => {
                           </p>
                         )}
                       </div>
-                      <div className="flex-1 flex items-end justify-between text-sm mt-2">
+                      <div className="flex-1 flex flex-col sm:flex-row sm:items-end sm:justify-between text-xs sm:text-sm mt-3 gap-2">
                         <p className="text-gray-500">
                           {item.type === OfferType.SERVICE ? (
                             <>
@@ -489,7 +489,7 @@ export const ShoppingCart: React.FC = () => {
                           )}
                         </p>
 
-                        <div className="flex space-x-4">
+                        <div className="flex flex-wrap gap-3 sm:gap-4">
                           <button
                             type="button"
                             onClick={() => moveToFavorites(item.id)}
@@ -517,7 +517,7 @@ export const ShoppingCart: React.FC = () => {
           <section
             ref={checkoutSectionRef}
             id="agm-cart-checkout"
-            className="lg:col-span-5 mt-16 lg:mt-0 space-y-6"
+            className="lg:col-span-5 mt-8 lg:mt-0 space-y-4 sm:space-y-6"
           >
             {fromServiceBooking && cart.some((i) => i.type === OfferType.SERVICE) && (
               <div

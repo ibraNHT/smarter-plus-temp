@@ -185,7 +185,7 @@ export const RegisterClient: React.FC = () => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+    <div className="max-w-2xl mx-auto py-6 sm:py-12 px-4 sm:px-6 lg:px-8">
       <div className="md:flex md:items-center md:justify-between mb-8">
         <div className="flex-1 min-w-0">
           <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
@@ -197,7 +197,7 @@ export const RegisterClient: React.FC = () => {
         </div>
       </div>
 
-      <form onSubmit={formik.handleSubmit} className="space-y-6 bg-white p-8 shadow sm:rounded-lg">
+      <form onSubmit={formik.handleSubmit} className="space-y-5 sm:space-y-6 bg-white p-5 sm:p-8 shadow sm:rounded-lg">
 
         {/* Profile Picture Upload */}
         <div className="flex justify-center mb-6">

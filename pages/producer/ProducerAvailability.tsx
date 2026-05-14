@@ -74,28 +74,28 @@ export const ProducerAvailability: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-      <div className="mb-6 flex items-center justify-between">
-         <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 hover:text-primary-600 transition-colors">
-           <ArrowLeft className="h-5 w-5 mr-2" /> Back
+    <div className="max-w-4xl mx-auto py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
+      <div className="mb-4 sm:mb-6 flex items-center justify-between gap-3 flex-wrap">
+         <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 hover:text-primary-600 transition-colors text-sm sm:text-base">
+           <ArrowLeft className="h-5 w-5 mr-1 sm:mr-2" /> Back
          </button>
-         <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-            <Calendar className="h-6 w-6 mr-2 text-primary-600"/>
+         <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
+            <Calendar className="h-5 w-5 sm:h-6 sm:w-6 mr-2 text-primary-600"/>
             {t('avail.title')}
          </h1>
       </div>
 
-      <div className="bg-white shadow rounded-lg p-6 mb-8">
-         <h2 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+      <div className="bg-white shadow rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
+         <h2 className="text-base sm:text-lg font-medium text-gray-900 mb-4 flex items-center">
             <Clock className="h-5 w-5 mr-2 text-gray-400"/> {t('avail.workHours')}
          </h2>
-         <div className="space-y-4">
+         <div className="space-y-3 sm:space-y-4">
             {DAYS.map(day => {
                const ranges = schedule[day] || [];
                const isActive = ranges.length > 0;
                
                return (
-                 <div key={day} className={`flex items-center justify-between p-3 rounded-md border ${isActive ? 'border-primary-200 bg-primary-50' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
+                 <div key={day} className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 p-3 rounded-md border ${isActive ? 'border-primary-200 bg-primary-50' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
                     <div className="flex items-center min-w-[120px]">
                        <input 
                          type="checkbox" 
@@ -106,21 +106,21 @@ export const ProducerAvailability: React.FC = () => {
                        <span className="font-medium text-gray-900">{day}</span>
                     </div>
                     
-                    <div className="flex items-center space-x-4">
+                    <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
                        {isActive ? (
                          <>
                            <input 
                              type="time" 
                              value={ranges[0].start} 
                              onChange={(e) => handleTimeChange(day, 'start', e.target.value)}
-                             className="border-gray-300 rounded-md text-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900"
+                             className="border-gray-300 rounded-md text-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900 px-2 py-1"
                            />
                            <span className="text-gray-400">-</span>
                            <input 
                              type="time" 
                              value={ranges[0].end} 
                              onChange={(e) => handleTimeChange(day, 'end', e.target.value)}
-                             className="border-gray-300 rounded-md text-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900"
+                             className="border-gray-300 rounded-md text-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900 px-2 py-1"
                            />
                          </>
                        ) : (
@@ -133,15 +133,15 @@ export const ProducerAvailability: React.FC = () => {
          </div>
       </div>
 
-      <div className="bg-white shadow rounded-lg p-6 mb-8">
-         <h2 className="text-lg font-medium text-gray-900 mb-4">{t('avail.exceptions')}</h2>
+      <div className="bg-white shadow rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
+         <h2 className="text-base sm:text-lg font-medium text-gray-900 mb-4">{t('avail.exceptions')}</h2>
          
-         <div className="flex gap-3 mb-4">
+         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4">
             <input 
               type="date" 
               value={newExceptionDate}
               onChange={e => setNewExceptionDate(e.target.value)}
-              className="border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900"
+              className="border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900 sm:w-auto"
             />
             <input 
               type="text" 
@@ -152,7 +152,7 @@ export const ProducerAvailability: React.FC = () => {
             />
             <button 
               onClick={addException}
-              className="bg-gray-100 text-gray-700 p-2 rounded-md hover:bg-gray-200"
+              className="bg-gray-100 text-gray-700 p-2 rounded-md hover:bg-gray-200 inline-flex items-center justify-center sm:w-auto"
             >
                <Plus className="h-5 w-5" />
             </button>

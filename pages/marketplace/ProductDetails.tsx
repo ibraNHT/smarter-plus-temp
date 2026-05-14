@@ -337,13 +337,13 @@ export const ProductDetails: React.FC = () => {
           <div className="md:flex">
 
             {/* Image Section — show full photo without cropping (letterbox in frame). */}
-            <div className="md:w-1/2 h-96 min-h-96 flex items-center justify-center relative bg-gray-100 p-4">
+            <div className="md:w-1/2 h-72 sm:h-80 md:h-96 md:min-h-96 flex items-center justify-center relative bg-gray-100 p-3 sm:p-4">
               <img
                 src={offer.imageUrl}
                 alt={offer.title}
                 className={offerImageHero}
               />
-              <div className="absolute top-4 left-4 flex flex-col gap-2">
+              <div className="absolute top-3 left-3 sm:top-4 sm:left-4 flex flex-col gap-2">
                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold shadow-sm ${isProducerMarket ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
                   }`}>
                   {isProducerMarket ? t('product.producerOffer') : t('product.atiOffer')}
@@ -364,11 +364,11 @@ export const ProductDetails: React.FC = () => {
             </div>
 
             {/* Details Section */}
-            <div className="md:w-1/2 p-8 flex flex-col">
+            <div className="md:w-1/2 p-5 sm:p-6 md:p-8 flex flex-col">
               <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-primary-600 uppercase tracking-wide">{offer.category}</p>
-                  <div className="flex gap-2 items-center">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <p className="text-xs sm:text-sm font-medium text-primary-600 uppercase tracking-wide">{offer.category}</p>
+                  <div className="flex gap-1.5 sm:gap-2 items-center flex-wrap">
                     {/* Fav Button */}
                     {(user?.role === UserRole.CLIENT || user?.role === UserRole.PRODUCER) && (
                       <button
@@ -406,11 +406,11 @@ export const ProductDetails: React.FC = () => {
                   </div>
                 </div>
 
-                <h1 className="text-3xl font-extrabold text-gray-900 mt-2 mb-4 leading-tight">{offer.title}</h1>
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mt-2 mb-4 leading-tight break-words">{offer.title}</h1>
 
-                <div className="flex items-baseline mb-6 pb-6 border-b border-gray-100">
-                  <span className="text-4xl font-bold text-primary-600">{offer.price.toLocaleString()} XAF</span>
-                  <span className="text-gray-500 ml-2 font-medium">/ {t(`unit.${offer.unit}`)}</span>
+                <div className="flex items-baseline flex-wrap mb-6 pb-6 border-b border-gray-100 gap-x-2">
+                  <span className="text-3xl sm:text-4xl font-bold text-primary-600 break-words">{offer.price.toLocaleString()} XAF</span>
+                  <span className="text-gray-500 font-medium">/ {t(`unit.${offer.unit}`)}</span>
                 </div>
 
                 <div className="prose prose-sm text-gray-600 mb-8">
@@ -598,18 +598,14 @@ export const ProductDetails: React.FC = () => {
               <div className="flex flex-col gap-3 mt-6">
                 <button
                   onClick={handleAddToCart}
-                  className="flex items-center justify-center bg-primary-600 text-white px-6 py-4 rounded-xl font-bold hover:bg-primary-700 transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                  className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 bg-primary-600 text-white px-4 sm:px-6 py-3.5 sm:py-4 rounded-xl font-bold hover:bg-primary-700 transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 text-sm sm:text-base"
                 >
                   {offer.type === OfferType.SERVICE ? (
-                    <>
-                      <Calendar className="h-5 w-5 mr-3" /> {t('product.bookNow')}
-                    </>
+                    <span className="inline-flex items-center"><Calendar className="h-5 w-5 mr-2" /> {t('product.bookNow')}</span>
                   ) : (
-                    <>
-                      <ShoppingCart className="h-5 w-5 mr-3" /> {t('product.addToCart')}
-                    </>
+                    <span className="inline-flex items-center"><ShoppingCart className="h-5 w-5 mr-2" /> {t('product.addToCart')}</span>
                   )}
-                  <span className="ml-2">- {(offer.price * quantity).toLocaleString()} XAF</span>
+                  <span className="whitespace-nowrap">- {(offer.price * quantity).toLocaleString()} XAF</span>
                 </button>
                 {offer.type === OfferType.SERVICE && (
                   <p className="text-xs text-gray-600 text-center px-1 leading-relaxed">{t('product.bookNowHint')}</p>
