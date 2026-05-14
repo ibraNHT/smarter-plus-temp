@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { useNavigate } from 'react-router-dom';
@@ -8,11 +8,13 @@ import { OfferType } from '../../types';
 import { comparePageAddQuantity, effectiveMinOrder } from '../../utils/offerCart';
 import { ComparePageSkeleton } from '../../components/skeletons/ComparePageSkeleton';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
+import { ConfirmModal } from '../../components/ConfirmModal';
 
 export const ComparePage: React.FC = () => {
   const { compareList, offers, producers, getAverageRating, removeFromCompare, addToCart, clearCart, clearCompare, isInitialCatalogLoading } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [pendingClear, setPendingClear] = useState<{ offer: any; qty: number } | null>(null);
 
   const selectedOffers = compareList.map(id => offers.find(o => o.id === id)).filter(Boolean) as any[];
   const compareStillLoading =
@@ -53,11 +55,7 @@ export const ComparePage: React.FC = () => {
       return;
     }
     if (!result.success && result.error === 'PRODUCER_CONFLICT') {
-      if (window.confirm(t('cart.confirmClear'))) {
-        clearCart();
-        addToCart(canonical, qty);
-        navigate('/cart');
-      }
+      setPendingClear({ offer: canonical, qty });
     } else {
       navigate('/cart');
     }
@@ -179,6 +177,22 @@ export const ComparePage: React.FC = () => {
              </tbody>
           </table>
        </div>
+
+       <ConfirmModal
+         open={pendingClear !== null}
+         tone="warning"
+         title={t('cart.confirmClearTitle')}
+         description={t('cart.confirmClearBody')}
+         confirmLabel={t('cart.confirmClearConfirm')}
+         onClose={() => setPendingClear(null)}
+         onConfirm={() => {
+           if (!pendingClear) return;
+           clearCart();
+           addToCart(pendingClear.offer, pendingClear.qty);
+           setPendingClear(null);
+           navigate('/cart');
+         }}
+       />
     </div>
   );
 };

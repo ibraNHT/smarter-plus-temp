@@ -6,11 +6,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2 } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
+import { ConfirmModal } from '../../components/ConfirmModal';
+import { SectionLoader, ListSkeleton } from '../../components/Loaders';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { orderHasService, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
 
 export const ProducerDashboard: React.FC = () => {
-   const { user, getProducerOffers, deleteOffer, producers, clients, orders, confirmOrder, rejectOrder, startDelivery, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating, pickupPoints } = useStore();
+   const { user, getProducerOffers, deleteOffer, producers, clients, orders, confirmOrder, rejectOrder, startDelivery, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating, pickupPoints, isInitialCatalogLoading } = useStore();
    const { t } = useTranslation();
    const navigate = useNavigate();
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -28,6 +30,7 @@ export const ProducerDashboard: React.FC = () => {
    const [evidenceOrderId, setEvidenceOrderId] = useState<string | null>(null);
    const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
    const [orderActionBusy, setOrderActionBusy] = useState<string | null>(null);
+   const [rejectOrderTarget, setRejectOrderTarget] = useState<string | null>(null);
    const [offerDeleteTarget, setOfferDeleteTarget] = useState<{ id: string; title: string } | null>(null);
    const [isDeletingOffer, setIsDeletingOffer] = useState(false);
 
@@ -85,25 +88,49 @@ export const ProducerDashboard: React.FC = () => {
       return <div className="p-8 text-center">Access Denied</div>;
    }
 
+   /*
+    * Note: we no longer block the entire dashboard with a skeleton takeover
+    * while the producer profile is hydrating. The page shell (back button,
+    * title placeholder) renders immediately and each data section reveals its
+    * own scoped loader. This matches the behaviour of /client/profile and
+    * /producer/profile after the latest UX pass.
+    */
    if (isProducerProfileLoading) {
       return (
          <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 px-4">
             <SEO title="Producer Dashboard | AgriMarket" noindex={true} />
-            <div className="animate-pulse space-y-4">
-               <div className="h-8 bg-gray-200 rounded w-64" />
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="h-24 bg-gray-200 rounded" />
-                  <div className="h-24 bg-gray-200 rounded" />
-                  <div className="h-24 bg-gray-200 rounded" />
-               </div>
-               <div className="h-72 bg-gray-200 rounded" />
+            <div className="mb-4 sm:mb-6 flex items-center gap-2 sm:gap-3 min-w-0">
+               <button onClick={() => navigate(-1)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors flex-shrink-0" aria-label="Back">
+                  <ArrowLeft className="h-5 w-5 text-gray-600" />
+               </button>
+               <h2 className="text-xl sm:text-2xl md:text-3xl font-bold leading-tight text-gray-900 truncate min-w-0">
+                  Dashboard
+               </h2>
+            </div>
+            <div className="bg-white shadow rounded-lg p-6 sm:p-8">
+               <SectionLoader message={t('form.loading')} />
             </div>
          </div>
       );
    }
 
    if (!currentProducer) {
-      return <div className="p-8 text-center">Producer profile not found. Please complete your producer profile setup.</div>;
+      return (
+         <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 px-4">
+            <SEO title="Producer Dashboard | AgriMarket" noindex={true} />
+            <div className="mb-4 sm:mb-6 flex items-center gap-2 sm:gap-3 min-w-0">
+               <button onClick={() => navigate(-1)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors flex-shrink-0" aria-label="Back">
+                  <ArrowLeft className="h-5 w-5 text-gray-600" />
+               </button>
+               <h2 className="text-xl sm:text-2xl md:text-3xl font-bold leading-tight text-gray-900 truncate min-w-0">
+                  Dashboard
+               </h2>
+            </div>
+            <div className="bg-white shadow rounded-lg p-6 sm:p-8 text-center text-gray-600">
+               Producer profile not found. Please complete your producer profile setup.
+            </div>
+         </div>
+      );
    }
 
    const getClientDetails = (clientId: string) => {
@@ -456,7 +483,9 @@ export const ProducerDashboard: React.FC = () => {
                <h3 className="text-lg leading-6 font-medium text-gray-900">{t('dash.incomingOrders')}</h3>
             </div>
             <ul className="divide-y divide-gray-200">
-               {pendingValidationOrders.length === 0 ? (
+               {isInitialCatalogLoading && pendingValidationOrders.length === 0 ? (
+                  <li className="px-4 py-6"><SectionLoader message={t('form.loading')} /></li>
+               ) : pendingValidationOrders.length === 0 ? (
                   <li className="px-4 py-8 text-center text-gray-500">No new orders waiting validation.</li>
                ) : (
                   pendingValidationOrders.map(order => (
@@ -493,10 +522,7 @@ export const ProducerDashboard: React.FC = () => {
                               <button
                                  type="button"
                                  disabled={!!orderActionBusy}
-                                 onClick={() => {
-                                    setOrderActionBusy(`${order.id}:reject`);
-                                    void rejectOrder(order.id).finally(() => setOrderActionBusy(null));
-                                 }}
+                                 onClick={() => setRejectOrderTarget(order.id)}
                                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-red-600 hover:bg-red-700 disabled:opacity-60"
                               >
                                  {orderActionBusy === `${order.id}:reject` ? <Spinner className="h-4 w-4 mr-1" /> : <XCircle className="h-4 w-4 mr-1" />}
@@ -544,7 +570,9 @@ export const ProducerDashboard: React.FC = () => {
                <p className="text-sm text-gray-500 mt-1">{t('dash.allOrdersDesc')}</p>
             </div>
             <ul className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
-               {allMyOrders.length === 0 ? (
+               {isInitialCatalogLoading && allMyOrders.length === 0 ? (
+                  <li className="px-4 py-6"><SectionLoader message={t('form.loading')} /></li>
+               ) : allMyOrders.length === 0 ? (
                   <li className="px-4 py-8 text-center text-gray-500">No orders yet.</li>
                ) : (
                   allMyOrders.map(order => (
@@ -577,7 +605,9 @@ export const ProducerDashboard: React.FC = () => {
                </h3>
             </div>
             <ul className="divide-y divide-gray-200">
-               {pastOrders.length === 0 ? (
+               {isInitialCatalogLoading && pastOrders.length === 0 ? (
+                  <li className="px-4 py-6"><ListSkeleton rows={2} /></li>
+               ) : pastOrders.length === 0 ? (
                   <li className="px-4 py-8 text-center text-gray-500">No past order history.</li>
                ) : (
                   pastOrders.map(order => (
@@ -759,9 +789,9 @@ export const ProducerDashboard: React.FC = () => {
          {/* Order Details Modal */}
          {selectedOrder && (
             <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-               <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+               <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
                   <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setSelectedOrder(null)}></div>
-                  <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+                  <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
                      <div className="flex justify-between items-start mb-4 gap-2">
                         <div>
                            <h3 className="text-lg leading-6 font-bold text-gray-900" id="modal-title">
@@ -938,10 +968,10 @@ export const ProducerDashboard: React.FC = () => {
          {/* Review Modal */}
          {showReviewModal && (
             <div className="fixed inset-0 z-50 overflow-y-auto">
-               <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+               <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
                   <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowReviewModal(false)}></div>
                   <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-                  <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-sm sm:w-full sm:p-6">
+                  <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-sm sm:p-6 max-h-[90vh] overflow-y-auto">
                      <h3 className="text-lg font-medium text-gray-900 mb-4 text-center">{t('dash.rateClient')}</h3>
                      <form onSubmit={handleSubmitReview}>
                         <div className="flex justify-center space-x-2 mb-6">
@@ -980,9 +1010,9 @@ export const ProducerDashboard: React.FC = () => {
          {/* Evidence Upload Modal */}
          {showEvidenceModal && (
             <div className="fixed inset-0 z-50 overflow-y-auto">
-               <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+               <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
                   <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowEvidenceModal(false)}></div>
-                  <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+                  <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
                      <div className="flex justify-between items-center mb-4">
                         <h3 className="text-lg font-bold text-gray-900">{t('dash.uploadEvidence')}</h3>
                         <button onClick={() => setShowEvidenceModal(false)}><X className="h-5 w-5 text-gray-400" /></button>
@@ -1027,50 +1057,41 @@ export const ProducerDashboard: React.FC = () => {
             </div>
          )}
 
-         {/* Delete Offer Modal */}
-         {offerDeleteTarget && (
-            <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="delete-offer-modal-title" role="dialog" aria-modal="true">
-               <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !isDeletingOffer && setOfferDeleteTarget(null)}></div>
-                  <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-                  <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full sm:p-6">
-                     <div className="sm:flex sm:items-start">
-                        <div className="mx-auto flex-shrink-0 flex items-center justify-center h-10 w-10 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
-                           <AlertTriangle className="h-5 w-5 text-red-600" />
-                        </div>
-                        <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                           <h3 className="text-lg leading-6 font-medium text-gray-900" id="delete-offer-modal-title">
-                              Delete offer
-                           </h3>
-                           <div className="mt-2">
-                              <p className="text-sm text-gray-500">
-                                 Delete offer "{offerDeleteTarget.title}"? This action cannot be undone.
-                              </p>
-                           </div>
-                        </div>
-                     </div>
-                     <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-                        <button
-                           type="button"
-                           disabled={isDeletingOffer}
-                           onClick={() => void handleDeleteOffer()}
-                           className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 disabled:opacity-60 sm:ml-3 sm:w-auto sm:text-sm"
-                        >
-                           {isDeletingOffer ? 'Deleting...' : 'Delete'}
-                        </button>
-                        <button
-                           type="button"
-                           disabled={isDeletingOffer}
-                           onClick={() => setOfferDeleteTarget(null)}
-                           className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60 sm:mt-0 sm:w-auto sm:text-sm"
-                        >
-                           Cancel
-                        </button>
-                     </div>
-                  </div>
-               </div>
-            </div>
-         )}
+         <ConfirmModal
+            open={offerDeleteTarget !== null}
+            tone="danger"
+            title="Delete offer?"
+            description={offerDeleteTarget && (
+               <>
+                  <p>This action cannot be undone.</p>
+                  <p className="mt-2 break-words text-sm font-semibold text-gray-900">{offerDeleteTarget.title}</p>
+               </>
+            )}
+            confirmLabel="Delete"
+            busy={isDeletingOffer}
+            onClose={() => { if (!isDeletingOffer) setOfferDeleteTarget(null); }}
+            onConfirm={() => handleDeleteOffer()}
+         />
+
+         <ConfirmModal
+            open={rejectOrderTarget !== null}
+            tone="danger"
+            title="Reject this order?"
+            description="The client will be notified that this order was rejected. This action cannot be undone."
+            confirmLabel={t('dash.reject')}
+            busy={orderActionBusy === `${rejectOrderTarget}:reject`}
+            onClose={() => { if (orderActionBusy !== `${rejectOrderTarget}:reject`) setRejectOrderTarget(null); }}
+            onConfirm={async () => {
+               if (!rejectOrderTarget) return;
+               try {
+                  setOrderActionBusy(`${rejectOrderTarget}:reject`);
+                  await rejectOrder(rejectOrderTarget);
+               } finally {
+                  setOrderActionBusy(null);
+                  setRejectOrderTarget(null);
+               }
+            }}
+         />
       </div>
    );
 };

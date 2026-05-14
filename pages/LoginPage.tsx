@@ -5,7 +5,7 @@ import { useStore } from '../services/storeContext';
 import { useTranslation } from '../services/i18nContext';
 import { apiFetch } from '../services/apiService';
 import { API_ENDPOINTS } from '../client-api/endpoints';
-import { Sprout, Lock, Mail, X, Phone, Eye, EyeOff } from 'lucide-react';
+import { Sprout, Lock, Mail, X, Phone, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useFormik } from 'formik';
 import { z } from 'zod';
 
@@ -416,8 +416,9 @@ export const LoginPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 shadow-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                className="group relative w-full inline-flex items-center justify-center gap-2 py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 shadow-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
+                {isLoading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                 {isLoading ? 'Signing in…' : t('login.signIn')}
               </button>
             </div>

@@ -3,7 +3,7 @@ import React, { useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
-import { User, Mail, Phone, MapPin, Camera, Lock, Eye, EyeOff } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Camera, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { useFormik } from 'formik';
 import { z } from 'zod';
@@ -449,7 +449,8 @@ export const RegisterClient: React.FC = () => {
             <button type="button" onClick={() => navigate('/')} className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none">
               {t('form.cancel')}
             </button>
-            <button type="submit" disabled={isLoading} className="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-60">
+            <button type="submit" disabled={isLoading} className="ml-3 inline-flex justify-center items-center gap-2 py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-60">
+              {isLoading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
               {isLoading ? 'Creating…' : t('form.create')}
             </button>
           </div>

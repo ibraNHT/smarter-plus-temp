@@ -90,9 +90,9 @@ export const OtpVerificationModal: React.FC<OtpVerificationModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[60] overflow-y-auto" aria-modal="true" role="dialog">
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex min-h-screen items-end sm:items-center justify-center p-2 sm:p-4">
         <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-        <div className="relative bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+        <div className="relative bg-white rounded-t-lg sm:rounded-lg shadow-xl w-full sm:max-w-sm p-5 sm:p-6 max-h-[90vh] overflow-y-auto">
           <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
           {step === 'request' && (
             <>

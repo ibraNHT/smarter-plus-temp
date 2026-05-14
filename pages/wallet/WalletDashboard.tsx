@@ -6,11 +6,12 @@ import { SEO } from '../../components/SEO';
 import { TransactionType, UserRole, WithdrawalStatus, PaymentMethod } from '../../types';
 import { Link, useNavigate } from 'react-router-dom';
 import { OtpVerificationModal } from '../../components/OtpVerificationModal';
+import { SectionLoader } from '../../components/Loaders';
 import { useFormik } from 'formik';
 import { z } from 'zod';
 
 export const WalletDashboard: React.FC = () => {
-  const { user, getWallet, fundWallet, requestWithdrawal, requestOtp, verifyOtp, producers, withdrawalRequests } = useStore();
+  const { user, getWallet, fundWallet, requestWithdrawal, requestOtp, verifyOtp, producers, withdrawalRequests, isInitialCatalogLoading } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -222,9 +223,9 @@ export const WalletDashboard: React.FC = () => {
 
         {/* Producer Withdrawal History */}
         {isProducer && (
-          <div className="bg-white shadow rounded-lg overflow-hidden mb-8">
-            <div className="px-6 py-5 border-b border-gray-200 flex justify-between items-center">
-              <h3 className="text-lg font-medium leading-6 text-gray-900">{t('wallet.requests')}</h3>
+          <div className="bg-white shadow rounded-lg overflow-hidden mb-6 sm:mb-8">
+            <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="text-base sm:text-lg font-medium leading-6 text-gray-900">{t('wallet.requests')}</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -237,7 +238,9 @@ export const WalletDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {myRequests.length === 0 ? (
+                  {isInitialCatalogLoading && myRequests.length === 0 ? (
+                    <tr><td colSpan={4} className="px-6 py-4"><SectionLoader message={t('form.loading')} /></td></tr>
+                  ) : myRequests.length === 0 ? (
                     <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500 text-sm">{t('wallet.noReq')}</td></tr>
                   ) : (
                     myRequests.map(req => (
@@ -257,30 +260,32 @@ export const WalletDashboard: React.FC = () => {
 
         {/* Transaction History */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-200">
-            <h3 className="text-lg font-medium leading-6 text-gray-900">{t('wallet.history')}</h3>
+          <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200">
+            <h3 className="text-base sm:text-lg font-medium leading-6 text-gray-900">{t('wallet.history')}</h3>
           </div>
           <ul className="divide-y divide-gray-200">
-            {wallet.transactions.length === 0 ? (
-              <li className="px-6 py-12 text-center text-gray-500">
+            {isInitialCatalogLoading && wallet.transactions.length === 0 ? (
+              <li className="px-4 sm:px-6 py-6"><SectionLoader message={t('form.loading')} /></li>
+            ) : wallet.transactions.length === 0 ? (
+              <li className="px-4 sm:px-6 py-10 sm:py-12 text-center text-gray-500">
                 <TrendingUp className="mx-auto h-12 w-12 text-gray-300 mb-3" />
                 {t('wallet.noTx')}
               </li>
             ) : (
               wallet.transactions.map((tx) => (
-                <li key={tx.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
+                <li key={tx.id} className="px-4 sm:px-6 py-3 sm:py-4 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center min-w-0 flex-1">
                       <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
                         {getIcon(tx.type)}
                       </div>
-                      <div className="ml-4">
-                        <p className="text-sm font-medium text-gray-900">{tx.description}</p>
-                        <p className="text-xs text-gray-500">{new Date(tx.date).toLocaleString()} • {tx.reference || 'System'}</p>
+                      <div className="ml-3 sm:ml-4 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{tx.description}</p>
+                        <p className="text-xs text-gray-500 truncate">{new Date(tx.date).toLocaleString()} • {tx.reference || 'System'}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-bold ${tx.type === TransactionType.DEPOSIT || tx.type === TransactionType.RECEIVED ? 'text-green-700' : 'text-gray-900'}`}>
+                    <div className="text-right flex-shrink-0">
+                      <p className={`text-sm font-bold whitespace-nowrap ${tx.type === TransactionType.DEPOSIT || tx.type === TransactionType.RECEIVED ? 'text-green-700' : 'text-gray-900'}`}>
                         {tx.type === TransactionType.DEPOSIT || tx.type === TransactionType.RECEIVED ? '+' : '-'}
                         {tx.amount.toLocaleString()} XAF
                       </p>
@@ -296,10 +301,10 @@ export const WalletDashboard: React.FC = () => {
         {/* Top Up Modal */}
         {showTopUp && (
           <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
               <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowTopUp(false)}></div>
               <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-              <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+              <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
                 <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">{t('wallet.topup')}</h3>
                 <form onSubmit={topUpFormik.handleSubmit} className="space-y-4">
                   <div>
@@ -324,9 +329,9 @@ export const WalletDashboard: React.FC = () => {
         {/* Withdrawal Modal */}
         {showWithdraw && (
           <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
               <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowWithdraw(false)}></div>
-              <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+              <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
                 <div className="w-full">
                   <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">{t('wallet.requestWithdraw')}</h3>
                   <p className="text-sm text-gray-500 mt-2 mb-4">{t('wallet.withdrawDesc')}</p>

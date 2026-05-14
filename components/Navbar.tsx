@@ -8,6 +8,7 @@ import { UserRole } from '../types';
 import { getToken } from '../services/apiService';
 import { isWebAppSessionBlocked } from '../services/authRoles';
 import { LogoutConfirmModal } from './LogoutConfirmModal';
+import { ConfirmModal } from './ConfirmModal';
 import { LogOut, Sprout, ShoppingBasket, Tractor, ShoppingCart, Globe, Bell, X, User, MessageCircle, ChevronDown, Download, CheckCheck, Trash2, Menu, Wallet } from 'lucide-react';
 
 const marketplaceVisible = (user: { role?: UserRole } | null) =>
@@ -26,6 +27,8 @@ export const Navbar: React.FC = () => {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showClearNotifsConfirm, setShowClearNotifsConfirm] = useState(false);
+  const [notifToDelete, setNotifToDelete] = useState<string | null>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
@@ -282,7 +285,7 @@ export const Navbar: React.FC = () => {
                               )}
                               <button
                                 type="button"
-                                onClick={() => void clearNotifications()}
+                                onClick={() => setShowClearNotifsConfirm(true)}
                                 className="text-xs text-red-600 hover:text-red-700 inline-flex items-center gap-1"
                               >
                                 <Trash2 className="h-3.5 w-3.5" /> Clear all
@@ -322,7 +325,7 @@ export const Navbar: React.FC = () => {
                                   )}
                                   <button
                                     type="button"
-                                    onClick={(e) => { e.stopPropagation(); void deleteNotification(notif.id); }}
+                                    onClick={(e) => { e.stopPropagation(); setNotifToDelete(notif.id); }}
                                     className="text-xs text-red-600 hover:text-red-700"
                                   >
                                     Delete
@@ -512,6 +515,31 @@ export const Navbar: React.FC = () => {
       open={logoutConfirmOpen}
       onClose={() => setLogoutConfirmOpen(false)}
       onConfirm={performLogout}
+    />
+    <ConfirmModal
+      open={showClearNotifsConfirm}
+      tone="danger"
+      title={t('notif.clearAllTitle')}
+      description={t('notif.clearAllBody')}
+      confirmLabel={t('form.delete')}
+      onClose={() => setShowClearNotifsConfirm(false)}
+      onConfirm={async () => {
+        await clearNotifications();
+        setShowClearNotifsConfirm(false);
+      }}
+    />
+    <ConfirmModal
+      open={notifToDelete !== null}
+      tone="danger"
+      title={t('notif.deleteTitle')}
+      description={t('notif.deleteBody')}
+      confirmLabel={t('form.delete')}
+      onClose={() => setNotifToDelete(null)}
+      onConfirm={async () => {
+        if (!notifToDelete) return;
+        await deleteNotification(notifToDelete);
+        setNotifToDelete(null);
+      }}
     />
     </>
   );

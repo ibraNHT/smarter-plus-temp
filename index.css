@@ -120,3 +120,66 @@ body {
   height: calc(100dvh - 4rem);
 }
 
+/* ---------------------------------------------------------------
+   Profile tab strip (horizontal pills on mobile/tablet, vertical on lg+)
+--------------------------------------------------------------- */
+
+.agm-profile-nav {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.5rem;
+  /* Negative margin so the strip bleeds to the screen edges on phones,
+     keeping the first/last pill aligned with the page gutter. */
+  margin-left: -1rem;
+  margin-right: -1rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  scrollbar-width: thin;
+}
+.agm-profile-nav::-webkit-scrollbar {
+  height: 4px;
+}
+.agm-profile-nav::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.15);
+  border-radius: 9999px;
+}
+.agm-profile-nav > * {
+  flex-shrink: 0;
+  white-space: nowrap;
+  width: auto !important;
+}
+
+@media (min-width: 1024px) {
+  .agm-profile-nav {
+    flex-direction: column;
+    gap: 0.25rem;
+    overflow: visible;
+    padding-bottom: 0;
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .agm-profile-nav > * {
+    white-space: normal;
+    width: 100% !important;
+  }
+}
+
+/* Allow ApexCharts / tables / wide content to scroll horizontally without
+   blowing out the parent on mobile. Apply to any container that wraps wide
+   content. */
+.agm-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Guard against full-width images / media in cards. */
+img, video, canvas, svg, iframe {
+  max-width: 100%;
+}
+

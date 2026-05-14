@@ -9,6 +9,8 @@ import { useUpdateProducerProfileMutation } from '../../client-api/hooks/useUpda
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 import { OtpVerificationModal } from '../../components/OtpVerificationModal';
+import { ConfirmModal } from '../../components/ConfirmModal';
+import { SectionLoader } from '../../components/Loaders';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { LocationMapPicker } from '../../components/LocationMapPicker';
 import { uploadAvatar, uploadDocument, uploadPortfolioImage, uploadPortfolioVideo } from '../../services/uploadService';
@@ -104,6 +106,11 @@ export const ProducerProfile: React.FC = () => {
   });
   const [portfolioPendingDelete, setPortfolioPendingDelete] = useState<Portfolio | null>(null);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [paymentToRemove, setPaymentToRemove] = useState<{ id: string; provider: string; accountNumber: string } | null>(null);
+  const [locationToRemoveIdx, setLocationToRemoveIdx] = useState<number | null>(null);
+  const [favoriteToRemove, setFavoriteToRemove] = useState<{ id: string; title?: string } | null>(null);
+  const [deletingPortfolio, setDeletingPortfolio] = useState(false);
+  const [deletingPayment, setDeletingPayment] = useState(false);
 
   // Password Modal
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -588,79 +595,89 @@ export const ProducerProfile: React.FC = () => {
     }
     setShowPortfolioModal(false);
   };
-  const confirmDeletePortfolio = () => {
+  const confirmDeletePortfolio = async () => {
     if (!portfolioPendingDelete) return;
-    void deletePortfolio(portfolioPendingDelete.id);
-    setShowPortfolioPreview((prev) => (prev?.id === portfolioPendingDelete.id ? null : prev));
-    setPortfolioPendingDelete(null);
+    try {
+      setDeletingPortfolio(true);
+      await deletePortfolio(portfolioPendingDelete.id);
+      setShowPortfolioPreview((prev) => (prev?.id === portfolioPendingDelete.id ? null : prev));
+    } finally {
+      setDeletingPortfolio(false);
+      setPortfolioPendingDelete(null);
+    }
   };
 
   if (!user || user.role !== UserRole.PRODUCER) {
     return <div className="p-8 text-center">Access Denied</div>;
   }
-  if (!currentProducer && (isInitialCatalogLoading || profileHydrating)) {
-    return <div className="p-8 text-center text-gray-600">Loading your profile...</div>;
-  }
-  if (!currentProducer && !isInitialCatalogLoading) {
+  /**
+   * Note: we deliberately avoid blocking the full page with a "Loading your
+   * profile..." takeover. The page shell (back button + sidebar tabs) is
+   * rendered immediately, and the active tab shows its own scoped loader
+   * until `formData` / `currentProducer` is hydrated. See `isProducerHydrating`.
+   */
+  const isProducerHydrating = !currentProducer || !formData;
+  if (!currentProducer && !isInitialCatalogLoading && !profileHydrating) {
     return (
       <div className="p-8 text-center text-gray-700">
         No producer profile was found for your account.
       </div>
     );
   }
-  if (!formData) return <div className="p-8 text-center text-gray-600">Loading your profile...</div>;
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <div className="max-w-7xl mx-auto py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
       {/* ... [Navigation Sidebar Logic] ... */}
-      <div className="mb-6">
-        <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 hover:text-primary-600 transition-colors font-medium">
+      <div className="mb-4 sm:mb-6">
+        <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 hover:text-primary-600 transition-colors font-medium text-sm sm:text-base">
           <ArrowLeft className="h-5 w-5 mr-2" /> Back
         </button>
       </div>
 
       <div className="lg:grid lg:grid-cols-12 lg:gap-x-5">
-        <aside className="py-6 px-2 sm:px-6 lg:py-0 lg:px-0 lg:col-span-3">
-          <nav className="space-y-1">
-            <button onClick={() => navigateToTab('info')} className={`${activeTab === 'info' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
-              <User className={`${activeTab === 'info' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.info')}</span>
+        <aside className="lg:col-span-3 mb-4 lg:mb-0">
+          <nav className="agm-profile-nav">
+            <button onClick={() => navigateToTab('info')} className={`${activeTab === 'info' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
+              <User className={`${activeTab === 'info' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.info')}</span>
             </button>
-            <Link to="/producer/dashboard" className="text-gray-900 hover:text-gray-900 hover:bg-gray-50 group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full">
-              <Tractor className="text-gray-400 group-hover:text-gray-500 flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> <span className="truncate">{t('nav.dashboard')}</span>
+            <Link to="/producer/dashboard" className="bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50 group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors">
+              <Tractor className="text-gray-400 group-hover:text-gray-500 flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6" /> <span className="truncate">{t('nav.dashboard')}</span>
             </Link>
-            <button onClick={() => navigateToTab('favorites')} className={`${activeTab === 'favorites' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
-              <Heart className={`${activeTab === 'favorites' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.favorites')}</span>
+            <button onClick={() => navigateToTab('favorites')} className={`${activeTab === 'favorites' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
+              <Heart className={`${activeTab === 'favorites' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.favorites')}</span>
             </button>
-            <button onClick={() => navigateToTab('portfolio')} className={`${activeTab === 'portfolio' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
-              <ImageIcon className={`${activeTab === 'portfolio' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.portfolio')}</span>
+            <button onClick={() => navigateToTab('portfolio')} className={`${activeTab === 'portfolio' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
+              <ImageIcon className={`${activeTab === 'portfolio' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.portfolio')}</span>
             </button>
-            <button onClick={() => navigateToTab('referrals')} className={`${activeTab === 'referrals' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
-              <Users className={`${activeTab === 'referrals' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">Referrals</span>
+            <button onClick={() => navigateToTab('referrals')} className={`${activeTab === 'referrals' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
+              <Users className={`${activeTab === 'referrals' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">Referrals</span>
             </button>
-            <Link to="/wallet" className="text-gray-900 hover:text-gray-900 hover:bg-gray-50 group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full">
-              <Wallet className="text-gray-400 group-hover:text-gray-500 flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> <span className="truncate">{t('nav.wallet')}</span>
+            <Link to="/wallet" className="bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50 group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors">
+              <Wallet className="text-gray-400 group-hover:text-gray-500 flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6" /> <span className="truncate">{t('nav.wallet')}</span>
             </Link>
-            <button onClick={() => navigateToTab('payment')} className={`${activeTab === 'payment' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
-              <CreditCard className={`${activeTab === 'payment' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.payment')}</span>
+            <button onClick={() => navigateToTab('payment')} className={`${activeTab === 'payment' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
+              <CreditCard className={`${activeTab === 'payment' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.payment')}</span>
             </button>
-            <button onClick={() => navigateToTab('security')} className={`${activeTab === 'security' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
-              <Shield className={`${activeTab === 'security' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.security')}</span>
+            <button onClick={() => navigateToTab('security')} className={`${activeTab === 'security' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
+              <Shield className={`${activeTab === 'security' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.security')}</span>
             </button>
-            <div className="pt-4 mt-4 border-t border-gray-200">
-              <button type="button" onClick={() => setLogoutConfirmOpen(true)} className="text-red-600 hover:bg-red-50 group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors">
-                <LogOut className="flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> <span className="truncate">{t('nav.logout')}</span>
-              </button>
-            </div>
+            <button type="button" onClick={() => setLogoutConfirmOpen(true)} className="hidden lg:flex text-red-600 hover:bg-red-50 group rounded-md px-3 py-2 items-center text-sm font-medium w-full transition-colors mt-4 pt-4 border-t border-gray-200">
+              <LogOut className="flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> <span className="truncate">{t('nav.logout')}</span>
+            </button>
           </nav>
         </aside>
 
         {/* Main Content */}
-        <div className="space-y-6 sm:px-6 lg:px-0 lg:col-span-9">
+        <div className="space-y-6 lg:col-span-9 min-w-0">
 
-          {/* ... [Info, Referrals, Portfolio, Favorites, Payment Tabs remain same] ... */}
+          {isProducerHydrating && (
+            <div className="shadow sm:rounded-md bg-white p-4 sm:p-6">
+              <SectionLoader message={t('form.loading')} />
+            </div>
+          )}
 
-          {activeTab === 'info' && (
-            <form onSubmit={savePersonalInfo} className="shadow sm:rounded-md sm:overflow-hidden bg-white p-6">
+          {!isProducerHydrating && formData && activeTab === 'info' && (
+            <form onSubmit={savePersonalInfo} className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
               {/* ... [Existing Info Form Code] ... */}
               <div className="flex justify-between items-center border-b border-gray-200 pb-4 mb-4"><h3 className="text-lg font-medium text-gray-900">{t('profile.tabs.info')}</h3></div>
               <div className={`mb-4 rounded-md border p-3 ${formData.status === 'VALIDATED' ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'}`}>
@@ -674,7 +691,7 @@ export const ProducerProfile: React.FC = () => {
                 </p>
               </div>
               {/* Simplified view for brevity, functionality preserved */}
-              <div className="flex items-center mb-6"><div className="relative"><div className="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">{formData.profileImageUrl ? (<img src={formData.profileImageUrl} alt="Profile" className="h-full w-full object-cover" />) : (<User className="h-12 w-12 text-gray-400" />)}</div><label className={`absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white shadow-sm ${avatarUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-primary-700'}`}><Camera className="h-4 w-4" /><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={avatarUploading} onChange={(e) => void handleFileUpload(e, 'profileImageUrl')} /></label></div><div className="ml-4"><p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p><p className="text-xs text-gray-500">{avatarUploading ? 'Uploading…' : 'JPG, PNG, or WebP. Max 2 MB.'}</p></div></div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6"><div className="relative flex-shrink-0"><div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">{formData.profileImageUrl ? (<img src={formData.profileImageUrl} alt="Profile" className="h-full w-full object-cover" />) : (<User className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400" />)}</div><label className={`absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white shadow-sm ${avatarUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-primary-700'}`}><Camera className="h-4 w-4" /><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={avatarUploading} onChange={(e) => void handleFileUpload(e, 'profileImageUrl')} /></label></div><div className="min-w-0"><p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p><p className="text-xs text-gray-500">{avatarUploading ? 'Uploading…' : 'JPG, PNG, or WebP. Max 2 MB.'}</p></div></div>
               <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
                 <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-2">{t('profile.type')}</label><div className="flex space-x-4"><span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-primary-100 text-primary-800">{formData.type === 'BUSINESS' ? t('profile.business') : t('profile.individual')}</span><span className="text-xs text-gray-400 self-center ml-2">Cannot be changed after registration</span></div></div>
                 {formData.type === 'BUSINESS' ? (<><div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">{t('form.farmName')}</label><input type="text" name="name" value={formData.name ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">Tax ID (TIN / NIU) <span className="text-red-500">*</span></label><input type="text" name="taxIdentificationNumber" value={formData.taxIdentificationNumber ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-1">Certifications</label>{Array.isArray(formData.certifications) && formData.certifications.length > 0 && (<div className="flex flex-wrap gap-2 mb-2">{formData.certifications.map((url, i) => (<a key={i} href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-xs text-primary-700 bg-primary-50 px-2 py-1 rounded hover:underline">Document {i + 1}</a>))}</div>)}<label className={`inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 ${certUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-gray-50'}`}>{certUploading ? 'Uploading…' : 'Upload certificate (PDF, JPG, PNG)'}<input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" disabled={certUploading} onChange={(e) => void handleFileUpload(e, 'certifications')} /></label><p className="text-xs text-gray-500 mt-1">NIU certificate, business registration, or other compliance documents</p></div></>) : (<><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.firstName')}</label><input type="text" name="firstName" value={formData.firstName || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.lastName')}</label><input type="text" name="lastName" value={formData.lastName || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.gender')}</label><select name="gender" value={formData.gender || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900"><option value="">Select Gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.dob')}</label><input type="date" name="dateOfBirth" value={formData.dateOfBirth || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">Tax ID (TIN / NIU) <span className="text-red-500">*</span></label><input type="text" name="taxIdentificationNumber" value={formData.taxIdentificationNumber ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-1">Certifications</label>{Array.isArray(formData.certifications) && formData.certifications.length > 0 && (<div className="flex flex-wrap gap-2 mb-2">{formData.certifications.map((url, i) => (<a key={i} href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-xs text-primary-700 bg-primary-50 px-2 py-1 rounded hover:underline">Document {i + 1}</a>))}</div>)}<label className={`inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 ${certUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-gray-50'}`}>{certUploading ? 'Uploading…' : 'Upload certificate (PDF, JPG, PNG)'}<input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" disabled={certUploading} onChange={(e) => void handleFileUpload(e, 'certifications')} /></label><p className="text-xs text-gray-500 mt-1">NIU certificate, ID, or other compliance documents</p></div></>)}
@@ -702,9 +719,10 @@ export const ProducerProfile: React.FC = () => {
                         </div>
                         <button
                           type="button"
+                          aria-label={t('location.removeTitle')}
                           onClick={(e) => {
                             e.stopPropagation();
-                            removeLocation(idx);
+                            setLocationToRemoveIdx(idx);
                           }}
                           className="text-gray-400 hover:text-red-500"
                         >
@@ -867,10 +885,10 @@ export const ProducerProfile: React.FC = () => {
             </form>
           )}
 
-          {activeTab === 'referrals' && currentProducer && (
-            <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-6">
+          {!isProducerHydrating && activeTab === 'referrals' && currentProducer && (
+            <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center"><Users className="h-5 w-5 mr-2 text-primary-600" /> Referrals</h3>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6"><p className="text-sm text-blue-800 mb-2 font-bold">Your Referral Link</p><div className="flex gap-2"><input type="text" readOnly value={`${window.location.origin}/#/register?ref=${referralCodeDisplay}`} className="block w-full border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-700" /><button type="button" onClick={copyReferralLink} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center"><Copy className="h-4 w-4 mr-2" /> Copy</button></div><p className="text-xs text-blue-600 mt-2">Share this link with friends to invite them to the platform.</p></div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6"><p className="text-sm text-blue-800 mb-2 font-bold">Your Referral Link</p><div className="flex flex-col sm:flex-row gap-2"><input type="text" readOnly value={`${window.location.origin}/#/register?ref=${referralCodeDisplay}`} className="block w-full min-w-0 border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-700" /><button type="button" onClick={copyReferralLink} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center justify-center flex-shrink-0"><Copy className="h-4 w-4 mr-2" /> Copy</button></div><p className="text-xs text-blue-600 mt-2">Share this link with friends to invite them to the platform.</p></div>
               {myReferrals?.activeProgram ? (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
                   <h4 className="text-sm font-bold text-gray-900">{myReferrals.activeProgram.name}</h4>
@@ -893,36 +911,36 @@ export const ProducerProfile: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'portfolio' && (
-            <div className="bg-white shadow sm:rounded-md sm:overflow-hidden p-6">
-              <div className="flex justify-between items-center border-b border-gray-200 pb-4 mb-4"><h3 className="text-lg font-medium text-gray-900">{t('portfolio.title')}</h3><button onClick={() => openPortfolioModal()} className="flex items-center bg-primary-600 text-white px-3 py-2 rounded-md text-sm hover:bg-primary-700"><Plus className="h-4 w-4 mr-1" /> {t('portfolio.add')}</button></div>
+          {!isProducerHydrating && activeTab === 'portfolio' && (
+            <div className="bg-white shadow sm:rounded-md sm:overflow-hidden p-4 sm:p-6">
+              <div className="flex flex-wrap gap-3 justify-between items-center border-b border-gray-200 pb-4 mb-4"><h3 className="text-lg font-medium text-gray-900">{t('portfolio.title')}</h3><button onClick={() => openPortfolioModal()} className="flex items-center bg-primary-600 text-white px-3 py-2 rounded-md text-sm hover:bg-primary-700"><Plus className="h-4 w-4 mr-1" /> {t('portfolio.add')}</button></div>
               {myPortfolios.length === 0 ? (<div className="text-center py-12 text-gray-500"><ImageIcon className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('portfolio.empty')}</p></div>) : (<div className="grid grid-cols-1 md:grid-cols-2 gap-6">{myPortfolios.map(p => (<div key={p.id} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"><div className="h-40 bg-gray-100 relative">{(p.imageUrls?.length ?? 0) > 0 ? (<img src={p.imageUrls?.[0] ?? ''} alt={p.title} className={offerImageInBox} />) : (<div className="flex items-center justify-center h-full text-gray-400"><ImageIcon className="h-8 w-8" /></div>)}<span className={`absolute top-2 right-2 px-2 py-1 text-xs font-bold rounded ${p.isPublished ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-800'}`}>{p.isPublished ? t('portfolio.published') : t('portfolio.draft')}</span><span className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">{portfolioCategoryLabel(p.category, t)}</span></div><div className="p-4"><h4 className="font-bold text-gray-900 mb-1 line-clamp-2 break-words">{p.title}</h4><p className="text-xs text-gray-500 mb-3 line-clamp-2 break-words">{p.description}</p><div className="flex justify-between items-center pt-3 border-t border-gray-100"><div className="flex space-x-2"><span className="flex items-center text-xs text-gray-500"><ImageIcon className="w-3 h-3 mr-1" /> {p.imageUrls?.length ?? 0}</span>{p.videoUrl && <span className="flex items-center text-xs text-gray-500"><Video className="w-3 h-3 mr-1" /> 1</span>}</div><div className="flex space-x-2"><button onClick={() => setShowPortfolioPreview(p)} className="text-blue-600 hover:text-blue-800"><Eye className="h-4 w-4" /></button><button onClick={() => openPortfolioModal(p)} className="text-gray-600 hover:text-primary-600"><Edit className="h-4 w-4" /></button><button type="button" onClick={() => setPortfolioPendingDelete(p)} className="text-red-600 hover:text-red-800"><Trash2 className="h-4 w-4" /></button></div></div></div></div>))}</div>)}
             </div>
           )}
 
-          {activeTab === 'favorites' && (
-            <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-6">
+          {!isProducerHydrating && activeTab === 'favorites' && (
+            <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
               <div className="border-b border-gray-200 pb-4 mb-4"><h3 className="text-lg font-medium text-gray-900">{t('profile.tabs.favorites')}</h3></div>
-              {unavailableFavoriteIds && unavailableFavoriteIds.length > 0 && (<div className="mb-6 bg-yellow-50 p-4 rounded-md border border-yellow-100"><h4 className="text-sm font-bold text-yellow-800 mb-2">Unavailable Items</h4><ul className="space-y-2">{unavailableFavoriteIds.map(id => (<li key={id} className="flex items-center justify-between text-sm text-yellow-700"><span>Item #{id} is no longer available.</span><div className="flex items-center gap-2"><button onClick={() => toggleFavorite(id)} className="text-xs text-red-600 hover:underline">{t('cart.remove')}</button><Link to="/market/producers" className="text-xs bg-yellow-200 px-2 py-1 rounded hover:bg-yellow-300 flex items-center"><Search className="w-3 h-3 mr-1" /> {t('profile.findSimilar')}</Link></div></li>))}</ul></div>)}
-              {(!favoriteOffers || favoriteOffers.length === 0) ? (<div className="text-center py-12 text-gray-500"><Heart className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('profile.favorites.empty')}</p></div>) : (<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{favoriteOffers.map((offer: any) => (<div key={offer.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow flex items-center"><div className="mr-4 h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100"><img src={offer.imageUrl} alt="" className={offerImageInBox} /></div><div className="flex-1 min-w-0"><h4 className="font-bold text-gray-900 truncate">{offer.title}</h4><p className="text-sm text-gray-500">{offer.price} XAF / {offer.unit}</p></div><div className="flex flex-col gap-2 ml-2"><Link to={`/offer/${offer.id}`} className="text-primary-600 hover:bg-primary-50 p-2 rounded-full"><ArrowLeft className="h-5 w-5 rotate-180" /></Link><button onClick={() => toggleFavorite(offer.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-full"><Trash2 className="h-5 w-5" /></button></div></div>))}</div>)}
+              {unavailableFavoriteIds && unavailableFavoriteIds.length > 0 && (<div className="mb-6 bg-yellow-50 p-4 rounded-md border border-yellow-100"><h4 className="text-sm font-bold text-yellow-800 mb-2">Unavailable Items</h4><ul className="space-y-2">{unavailableFavoriteIds.map(id => (<li key={id} className="flex items-center justify-between text-sm text-yellow-700"><span>Item #{id} is no longer available.</span><div className="flex items-center gap-2"><button onClick={() => setFavoriteToRemove({ id, title: `Item #${id}` })} className="text-xs text-red-600 hover:underline">{t('cart.remove')}</button><Link to="/market/producers" className="text-xs bg-yellow-200 px-2 py-1 rounded hover:bg-yellow-300 flex items-center"><Search className="w-3 h-3 mr-1" /> {t('profile.findSimilar')}</Link></div></li>))}</ul></div>)}
+              {isInitialCatalogLoading && (!favoriteOffers || favoriteOffers.length === 0) ? (<SectionLoader message={t('form.loading')} />) : (!favoriteOffers || favoriteOffers.length === 0) ? (<div className="text-center py-12 text-gray-500"><Heart className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('profile.favorites.empty')}</p></div>) : (<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{favoriteOffers.map((offer: any) => (<div key={offer.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow flex items-center"><div className="mr-4 h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100"><img src={offer.imageUrl} alt="" className={offerImageInBox} /></div><div className="flex-1 min-w-0"><h4 className="font-bold text-gray-900 truncate">{offer.title}</h4><p className="text-sm text-gray-500">{offer.price} XAF / {offer.unit}</p></div><div className="flex flex-col gap-2 ml-2"><Link to={`/offer/${offer.id}`} className="text-primary-600 hover:bg-primary-50 p-2 rounded-full"><ArrowLeft className="h-5 w-5 rotate-180" /></Link><button onClick={() => setFavoriteToRemove({ id: offer.id, title: offer.title })} className="text-red-500 hover:bg-red-50 p-2 rounded-full" aria-label={t('favorites.removeTitle')}><Trash2 className="h-5 w-5" /></button></div></div>))}</div>)}
             </div>
           )}
 
-          {activeTab === 'payment' && (
-            <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-6">
-              <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-medium text-gray-900">{t('profile.payment.saved')}</h3><button onClick={() => setShowAddPayment(true)} className="flex items-center text-sm bg-primary-600 text-white px-3 py-2 rounded-md hover:bg-primary-700"><Plus className="h-4 w-4 mr-1" /> {t('form.add')}</button></div>
-              <ul className="divide-y divide-gray-200 mb-6">{(!currentProducer?.paymentMethods || currentProducer.paymentMethods.length === 0) ? (<li className="py-4 text-gray-500 italic">{t('profile.payment.none')}</li>) : (currentProducer.paymentMethods.map(pm => (<li key={pm.id} className="py-4 flex justify-between items-center"><div className="flex items-center"><div className={`h-10 w-10 rounded-full flex items-center justify-center mr-3 ${pm.provider === 'ORANGE' ? 'bg-orange-100 text-orange-600' : pm.provider === 'MTN' ? 'bg-yellow-100 text-yellow-600' : 'bg-blue-100 text-blue-600'}`}><CreditCard className="h-5 w-5" /></div><div><p className="text-sm font-medium text-gray-900">{pm.provider} - {pm.accountNumber}</p><p className="text-xs text-gray-500">{pm.accountName}</p></div></div><button onClick={() => user.producerId && deleteProducerPaymentMethod(user.producerId, pm.id)} className="text-red-600 hover:text-red-800 p-2"><Trash2 className="h-5 w-5" /></button></li>)))}</ul>
+          {!isProducerHydrating && activeTab === 'payment' && (
+            <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
+              <div className="flex flex-wrap gap-3 justify-between items-center mb-6"><h3 className="text-lg font-medium text-gray-900">{t('profile.payment.saved')}</h3><button onClick={() => setShowAddPayment(true)} className="flex items-center text-sm bg-primary-600 text-white px-3 py-2 rounded-md hover:bg-primary-700"><Plus className="h-4 w-4 mr-1" /> {t('form.add')}</button></div>
+              <ul className="divide-y divide-gray-200 mb-6">{(!currentProducer?.paymentMethods || currentProducer.paymentMethods.length === 0) ? (<li className="py-4 text-gray-500 italic">{t('profile.payment.none')}</li>) : (currentProducer.paymentMethods.map(pm => (<li key={pm.id} className="py-4 flex justify-between items-center"><div className="flex items-center"><div className={`h-10 w-10 rounded-full flex items-center justify-center mr-3 ${pm.provider === 'ORANGE' ? 'bg-orange-100 text-orange-600' : pm.provider === 'MTN' ? 'bg-yellow-100 text-yellow-600' : 'bg-blue-100 text-blue-600'}`}><CreditCard className="h-5 w-5" /></div><div><p className="text-sm font-medium text-gray-900">{pm.provider} - {pm.accountNumber}</p><p className="text-xs text-gray-500">{pm.accountName}</p></div></div><button onClick={() => setPaymentToRemove({ id: pm.id, provider: pm.provider, accountNumber: pm.accountNumber })} className="text-red-600 hover:text-red-800 p-2" aria-label={t('payment.removeTitle')}><Trash2 className="h-5 w-5" /></button></li>)))}</ul>
               {showAddPayment && (<div className="bg-gray-50 p-4 rounded-md border border-gray-200 animate-fade-in"><h4 className="text-sm font-bold text-gray-700 mb-3">{t('profile.payment.add')}</h4><form onSubmit={handleAddPayment} className="space-y-4"><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.provider')}</label><select name="provider" className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" value={paymentFormik.values.provider} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur}><option value="ORANGE">Orange Money</option><option value="MTN">MTN Mobile Money</option><option value="BANK">Bank Transfer</option></select></div><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.accNum')}</label><input type="text" name="accountNumber" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder={paymentFormik.values.provider === 'BANK' ? 'IBAN / Account No' : '6...'} value={paymentFormik.values.accountNumber} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur} />{paymentFormik.touched.accountNumber && paymentFormik.errors.accountNumber ? <p className="text-xs text-red-600 mt-1">{paymentFormik.errors.accountNumber}</p> : null}</div><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.accName')}</label><input type="text" name="accountName" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder="Full Name on Account" value={paymentFormik.values.accountName} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur} />{paymentFormik.touched.accountName && paymentFormik.errors.accountName ? <p className="text-xs text-red-600 mt-1">{paymentFormik.errors.accountName}</p> : null}</div><div className="flex justify-end space-x-3 mt-4"><button type="button" onClick={() => setShowAddPayment(false)} className="text-gray-600 text-sm hover:text-gray-800">{t('form.cancel')}</button><button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded-md text-sm hover:bg-primary-700">{t('form.save')}</button></div></form></div>)}
             </div>
           )}
 
           {activeTab === 'security' && (
-            <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-6">
+            <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
               <h3 className="text-lg font-medium text-gray-900">{t('profile.tabs.security')}</h3>
               <div className="mt-4">
                 <button
                   onClick={() => setShowPasswordModal(true)}
-                  className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-300 transition-colors"
+                  className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-300 transition-colors w-full sm:w-auto"
                 >
                   {t('profile.password')}
                 </button>
@@ -954,7 +972,7 @@ export const ProducerProfile: React.FC = () => {
       )}
 
       {/* Portfolio Edit/Add Modal (Omitted code block for brevity but functional logic is above) */}
-      {showPortfolioModal && (<div className="fixed inset-0 z-50 overflow-y-auto"><div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0"><div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowPortfolioModal(false)}></div><span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span><div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6"><h3 className="text-lg font-medium text-gray-900 mb-4">{portfolioForm.id ? 'Edit' : 'Add'} Portfolio Item</h3><form onSubmit={savePortfolio} className="space-y-4"><div><label className="block text-sm font-medium text-gray-700">{t('form.title')}</label><input type="text" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.title} onChange={e => setPortfolioForm({ ...portfolioForm, title: e.target.value })} /></div><div><label className="block text-sm font-medium text-gray-700">{t('form.category')}</label><select required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.category} onChange={e => setPortfolioForm({ ...portfolioForm, category: e.target.value })}><option value="">Select Category</option>{currentProducer?.productionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select><p className="text-xs text-gray-500 mt-1">{t('portfolio.categoryTip')}</p></div><div><label className="block text-sm font-medium text-gray-700">{t('form.desc')}</label><textarea required rows={3} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.description} onChange={e => setPortfolioForm({ ...portfolioForm, description: e.target.value })} /></div><div className="bg-gray-50 p-3 rounded border border-gray-200"><label className="block text-sm font-medium text-gray-700 mb-2">Media</label><div className="mb-3"><label className={`flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 ${portfolioImageUploading ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}><ImageIcon className="h-4 w-4" /><span>{portfolioImageUploading ? 'Uploading…' : 'Add Images (Max 10)'}</span><input type="file" multiple accept="image/png,image/jpeg,image/webp" className="hidden" disabled={portfolioImageUploading} onChange={handlePortfolioImageUpload} /></label><div className="flex flex-wrap gap-2 mt-2">{portfolioForm.imageUrls?.map((url, idx) => (<div key={idx} className="relative w-16 h-16 border rounded overflow-hidden group bg-gray-100"><img src={url} alt="" className={offerImageInBox} /><button type="button" onClick={() => setPortfolioForm(prev => ({ ...prev, imageUrls: prev.imageUrls?.filter((_, i) => i !== idx) }))} className="absolute top-0 right-0 bg-red-500 text-white p-0.5 rounded-bl opacity-0 group-hover:opacity-100"><X className="h-3 w-3" /></button></div>))}</div><p className="text-xs text-gray-500 mt-1">{t('portfolio.maxImages')}</p></div><div><label className={`flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 ${portfolioVideoUploading ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}><Video className="h-4 w-4" /><span>{portfolioVideoUploading ? 'Uploading…' : (portfolioForm.videoUrl ? 'Replace Video' : 'Add Video')}</span><input type="file" accept="video/*" className="hidden" disabled={portfolioVideoUploading} onChange={handlePortfolioVideoUpload} /></label>{portfolioForm.videoUrl && (<div className="mt-2 text-xs text-green-600 flex items-center"><CheckCircle className="h-3 w-3 mr-1" /> Video attached<button type="button" onClick={() => setPortfolioForm(prev => ({ ...prev, videoUrl: undefined }))} className="ml-2 text-red-500 hover:underline">Remove</button></div>)}<p className="text-xs text-gray-500 mt-1">{t('portfolio.video')}</p></div></div><div className="flex items-center"><input type="checkbox" id="publish" className="h-4 w-4 text-primary-600 border-gray-300 rounded" checked={portfolioForm.isPublished} onChange={e => setPortfolioForm({ ...portfolioForm, isPublished: e.target.checked })} /><label htmlFor="publish" className="ml-2 block text-sm text-gray-900">{t('form.publish')}</label></div><div className="flex justify-end space-x-3"><button type="button" onClick={() => setShowPortfolioModal(false)} className="text-gray-600 hover:text-gray-900">{t('form.cancel')}</button><button type="submit" disabled={portfolioImageUploading || portfolioVideoUploading} className="bg-primary-600 text-white px-4 py-2 rounded hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed">{portfolioImageUploading || portfolioVideoUploading ? 'Uploading…' : t('form.save')}</button></div></form></div></div></div>)}
+      {showPortfolioModal && (<div className="fixed inset-0 z-50 overflow-y-auto"><div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4"><div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowPortfolioModal(false)}></div><div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto"><h3 className="text-lg font-medium text-gray-900 mb-4">{portfolioForm.id ? 'Edit' : 'Add'} Portfolio Item</h3><form onSubmit={savePortfolio} className="space-y-4"><div><label className="block text-sm font-medium text-gray-700">{t('form.title')}</label><input type="text" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.title} onChange={e => setPortfolioForm({ ...portfolioForm, title: e.target.value })} /></div><div><label className="block text-sm font-medium text-gray-700">{t('form.category')}</label><select required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.category} onChange={e => setPortfolioForm({ ...portfolioForm, category: e.target.value })}><option value="">Select Category</option>{currentProducer?.productionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select><p className="text-xs text-gray-500 mt-1">{t('portfolio.categoryTip')}</p></div><div><label className="block text-sm font-medium text-gray-700">{t('form.desc')}</label><textarea required rows={3} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.description} onChange={e => setPortfolioForm({ ...portfolioForm, description: e.target.value })} /></div><div className="bg-gray-50 p-3 rounded border border-gray-200"><label className="block text-sm font-medium text-gray-700 mb-2">Media</label><div className="mb-3"><label className={`flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 ${portfolioImageUploading ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}><ImageIcon className="h-4 w-4" /><span>{portfolioImageUploading ? 'Uploading…' : 'Add Images (Max 10)'}</span><input type="file" multiple accept="image/png,image/jpeg,image/webp" className="hidden" disabled={portfolioImageUploading} onChange={handlePortfolioImageUpload} /></label><div className="flex flex-wrap gap-2 mt-2">{portfolioForm.imageUrls?.map((url, idx) => (<div key={idx} className="relative w-16 h-16 border rounded overflow-hidden group bg-gray-100"><img src={url} alt="" className={offerImageInBox} /><button type="button" onClick={() => setPortfolioForm(prev => ({ ...prev, imageUrls: prev.imageUrls?.filter((_, i) => i !== idx) }))} className="absolute top-0 right-0 bg-red-500 text-white p-0.5 rounded-bl opacity-0 group-hover:opacity-100"><X className="h-3 w-3" /></button></div>))}</div><p className="text-xs text-gray-500 mt-1">{t('portfolio.maxImages')}</p></div><div><label className={`flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 ${portfolioVideoUploading ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}><Video className="h-4 w-4" /><span>{portfolioVideoUploading ? 'Uploading…' : (portfolioForm.videoUrl ? 'Replace Video' : 'Add Video')}</span><input type="file" accept="video/*" className="hidden" disabled={portfolioVideoUploading} onChange={handlePortfolioVideoUpload} /></label>{portfolioForm.videoUrl && (<div className="mt-2 text-xs text-green-600 flex items-center"><CheckCircle className="h-3 w-3 mr-1" /> Video attached<button type="button" onClick={() => setPortfolioForm(prev => ({ ...prev, videoUrl: undefined }))} className="ml-2 text-red-500 hover:underline">Remove</button></div>)}<p className="text-xs text-gray-500 mt-1">{t('portfolio.video')}</p></div></div><div className="flex items-center"><input type="checkbox" id="publish" className="h-4 w-4 text-primary-600 border-gray-300 rounded" checked={portfolioForm.isPublished} onChange={e => setPortfolioForm({ ...portfolioForm, isPublished: e.target.checked })} /><label htmlFor="publish" className="ml-2 block text-sm text-gray-900">{t('form.publish')}</label></div><div className="flex justify-end space-x-3"><button type="button" onClick={() => setShowPortfolioModal(false)} className="text-gray-600 hover:text-gray-900">{t('form.cancel')}</button><button type="submit" disabled={portfolioImageUploading || portfolioVideoUploading} className="bg-primary-600 text-white px-4 py-2 rounded hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed">{portfolioImageUploading || portfolioVideoUploading ? 'Uploading…' : t('form.save')}</button></div></form></div></div></div>)}
 
       {/* Portfolio Preview Modal */}
       {showPortfolioPreview && (() => {
@@ -1059,46 +1077,78 @@ export const ProducerProfile: React.FC = () => {
         );
       })()}
 
-      {portfolioPendingDelete && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <button
-            type="button"
-            className="fixed inset-0 bg-gray-900/50 transition-opacity"
-            aria-label={t('pwa.dismiss')}
-            onClick={() => setPortfolioPendingDelete(null)}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="portfolio-delete-title"
-            className="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl"
-          >
-            <h3 id="portfolio-delete-title" className="text-lg font-medium text-gray-900">
-              {t('portfolio.deleteConfirmTitle')}
-            </h3>
-            <p className="mt-2 text-sm text-gray-600">{t('portfolio.deleteConfirmBody')}</p>
-            <p className="mt-2 break-words text-sm font-semibold text-gray-900">
-              {portfolioPendingDelete.title}
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setPortfolioPendingDelete(null)}
-                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
-              >
-                {t('form.cancel')}
-              </button>
-              <button
-                type="button"
-                onClick={confirmDeletePortfolio}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-              >
-                {t('form.delete')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={portfolioPendingDelete !== null}
+        tone="danger"
+        title={t('portfolio.deleteConfirmTitle')}
+        description={
+          <>
+            <p>{t('portfolio.deleteConfirmBody')}</p>
+            {portfolioPendingDelete?.title && (
+              <p className="mt-2 break-words text-sm font-semibold text-gray-900">{portfolioPendingDelete.title}</p>
+            )}
+          </>
+        }
+        confirmLabel={t('form.delete')}
+        busy={deletingPortfolio}
+        onClose={() => { if (!deletingPortfolio) setPortfolioPendingDelete(null); }}
+        onConfirm={confirmDeletePortfolio}
+      />
+
+      <ConfirmModal
+        open={paymentToRemove !== null}
+        tone="danger"
+        title={t('payment.removeTitle')}
+        description={
+          <>
+            <p>{t('payment.removeBody')}</p>
+            {paymentToRemove && (
+              <p className="mt-2 break-words text-sm font-semibold text-gray-900">{paymentToRemove.provider} — {paymentToRemove.accountNumber}</p>
+            )}
+          </>
+        }
+        confirmLabel={t('form.delete')}
+        busy={deletingPayment}
+        onClose={() => { if (!deletingPayment) setPaymentToRemove(null); }}
+        onConfirm={async () => {
+          if (!paymentToRemove || !user?.producerId) return;
+          try {
+            setDeletingPayment(true);
+            await deleteProducerPaymentMethod(user.producerId, paymentToRemove.id);
+          } finally {
+            setDeletingPayment(false);
+            setPaymentToRemove(null);
+          }
+        }}
+      />
+
+      <ConfirmModal
+        open={locationToRemoveIdx !== null}
+        tone="danger"
+        title={t('location.removeTitle')}
+        description={t('location.removeBody')}
+        confirmLabel={t('form.delete')}
+        onClose={() => setLocationToRemoveIdx(null)}
+        onConfirm={() => {
+          if (locationToRemoveIdx === null) return;
+          removeLocation(locationToRemoveIdx);
+          setLocationToRemoveIdx(null);
+        }}
+      />
+
+      <ConfirmModal
+        open={favoriteToRemove !== null}
+        tone="danger"
+        title={t('favorites.removeTitle')}
+        description={favoriteToRemove?.title ? <><span className="font-medium text-gray-900">{favoriteToRemove.title}</span> — {t('favorites.removeBody')}</> : t('favorites.removeBody')}
+        confirmLabel={t('cart.remove')}
+        onClose={() => setFavoriteToRemove(null)}
+        onConfirm={async () => {
+          if (!favoriteToRemove) return;
+          await toggleFavorite(favoriteToRemove.id);
+          setFavoriteToRemove(null);
+        }}
+      />
 
       <LogoutConfirmModal
         open={logoutConfirmOpen}

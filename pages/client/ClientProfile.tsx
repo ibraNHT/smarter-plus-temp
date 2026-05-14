@@ -9,6 +9,8 @@ import { useUpdateClientProfileMutation } from '../../client-api/hooks/useUpdate
 import { SEO } from '../../components/SEO';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
+import { ConfirmModal } from '../../components/ConfirmModal';
+import { SectionLoader, ListSkeleton } from '../../components/Loaders';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { LocationMapPicker } from '../../components/LocationMapPicker';
 import { uploadAvatar } from '../../services/uploadService';
@@ -106,6 +108,12 @@ export const ClientProfile: React.FC = () => {
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
    const [avatarUploading, setAvatarUploading] = useState(false);
    const [profileHydrating, setProfileHydrating] = useState(false);
+   const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
+   const [cancelingOrder, setCancelingOrder] = useState(false);
+   const [confirmReceiptId, setConfirmReceiptId] = useState<string | null>(null);
+   const [confirmingReceipt, setConfirmingReceipt] = useState(false);
+   const [favoriteToRemove, setFavoriteToRemove] = useState<{ id: string; title?: string } | null>(null);
+   const [locationToRemoveIdx, setLocationToRemoveIdx] = useState<number | null>(null);
    /** Seeds the map/address editor once per loaded profile — do not re-run when the user clears the form to add another address. */
    const lastSeededLocationFormForProfileId = useRef<string | null>(null);
 
@@ -460,19 +468,18 @@ export const ClientProfile: React.FC = () => {
       );
    }
 
-   if (!currentClient?.id && user.role === UserRole.CLIENT && (isInitialCatalogLoading || profileHydrating)) {
-      return (
-         <div className="max-w-7xl mx-auto py-8 px-4">
-            <SEO title="Client Profile | AgriMarket" noindex={true} />
-            <div className="p-8 text-center max-w-lg mx-auto space-y-2 text-gray-600">
-               <p>Loading your profile…</p>
-               <p className="text-sm text-gray-500">Please wait while we fetch your account data.</p>
-            </div>
-         </div>
-      );
-   }
+   /**
+    * Note: we intentionally do NOT block the whole page with a full-screen
+    * loader while the client profile or catalog is still being fetched.
+    * The page shell (sidebar + active tab) is rendered immediately and each
+    * tab is responsible for showing its own scoped loader / skeleton until
+    * the data it needs becomes available. This keeps loaders contextual and
+    * avoids the jarring "loading the whole app" experience on refresh.
+    */
+   const isClientProfileHydrating =
+      !currentClient?.id && user.role === UserRole.CLIENT && (isInitialCatalogLoading || profileHydrating);
 
-   if (!currentClient?.id && user.role === UserRole.CLIENT) {
+   if (!currentClient?.id && user.role === UserRole.CLIENT && !isClientProfileHydrating) {
       return (
          <div className="max-w-7xl mx-auto py-8 px-4">
             <SEO title="Client Profile | AgriMarket" noindex={true} />
@@ -729,10 +736,10 @@ export const ClientProfile: React.FC = () => {
                                  <button onClick={() => initiatePayment(order.id)} className="bg-primary-600 text-white px-4 py-1.5 rounded-md text-xs font-bold hover:bg-primary-700 shadow-sm flex items-center gap-1"><CreditCard className="w-3 h-3" /> {t('order.payNow')}</button>
                               )}
                               {order.status === OrderStatus.IN_TRANSIT && (
-                                 <button onClick={() => confirmReceipt(order.id)} className="bg-green-600 text-white px-4 py-1.5 rounded-md text-xs font-bold hover:bg-green-700 shadow-sm flex items-center gap-1"><CheckCircle className="w-3 h-3" /> {t('order.confirmReceipt')}</button>
+                                 <button onClick={() => setConfirmReceiptId(order.id)} className="bg-green-600 text-white px-4 py-1.5 rounded-md text-xs font-bold hover:bg-green-700 shadow-sm flex items-center gap-1"><CheckCircle className="w-3 h-3" /> {t('order.confirmReceipt')}</button>
                               )}
                               {([OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(order.status)) && (
-                                 <button onClick={() => cancelOrder(order.id)} className="text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-md text-xs font-medium border border-red-100">{t('order.cancel')}</button>
+                                 <button onClick={() => setCancelOrderId(order.id)} className="text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-md text-xs font-medium border border-red-100">{t('order.cancel')}</button>
                               )}
                               {(order.status === OrderStatus.PAID_IN_PREPARATION || order.status === OrderStatus.IN_TRANSIT || order.status === OrderStatus.DELIVERED) && (
                                  <button onClick={() => openDisputeModal(order.id)} className="text-orange-600 hover:bg-orange-50 px-3 py-1.5 rounded-md text-xs font-medium border border-orange-100 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {t('order.reportProblem')}</button>
@@ -751,70 +758,73 @@ export const ClientProfile: React.FC = () => {
    };
 
    return (
-      <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
          <SEO title="Client Profile | AgriMarket" noindex={true} />
-         <div className="mb-6">
-            <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 hover:text-primary-600 transition-colors font-medium">
+         <div className="mb-4 sm:mb-6">
+            <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 hover:text-primary-600 transition-colors font-medium text-sm sm:text-base">
                <ArrowLeft className="h-5 w-5 mr-2" /> Back
             </button>
          </div>
 
          <div className="lg:grid lg:grid-cols-12 lg:gap-x-5">
-            <aside className="py-6 px-2 sm:px-6 lg:py-0 lg:px-0 lg:col-span-3">
-               <nav className="space-y-1">
-                  <button onClick={() => setActiveTab('info')} className={`${activeTab === 'info' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
-                     <User className={`${activeTab === 'info' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.info')}</span>
+            <aside className="lg:col-span-3 mb-4 lg:mb-0">
+               <nav className="agm-profile-nav">
+                  <button onClick={() => setActiveTab('info')} className={`${activeTab === 'info' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
+                     <User className={`${activeTab === 'info' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.info')}</span>
                   </button>
-                  <button onClick={() => setActiveTab('orders')} className={`${activeTab === 'orders' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
-                     <Package className={`${activeTab === 'orders' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.orders')}</span>
+                  <button onClick={() => setActiveTab('orders')} className={`${activeTab === 'orders' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
+                     <Package className={`${activeTab === 'orders' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.orders')}</span>
                   </button>
-                  <button onClick={() => setActiveTab('favorites')} className={`${activeTab === 'favorites' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
-                     <Heart className={`${activeTab === 'favorites' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.favorites')}</span>
+                  <button onClick={() => setActiveTab('favorites')} className={`${activeTab === 'favorites' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
+                     <Heart className={`${activeTab === 'favorites' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.favorites')}</span>
                   </button>
-                  <button onClick={() => setActiveTab('reputation')} className={`${activeTab === 'reputation' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
-                     <ThumbsUp className={`${activeTab === 'reputation' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.reputation')}</span>
+                  <button onClick={() => setActiveTab('reputation')} className={`${activeTab === 'reputation' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
+                     <ThumbsUp className={`${activeTab === 'reputation' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.reputation')}</span>
                   </button>
-                  <button onClick={() => setActiveTab('referrals')} className={`${activeTab === 'referrals' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
-                     <Users className={`${activeTab === 'referrals' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">Referrals</span>
+                  <button onClick={() => setActiveTab('referrals')} className={`${activeTab === 'referrals' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
+                     <Users className={`${activeTab === 'referrals' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">Referrals</span>
                   </button>
-                  <Link to="/wallet" className="text-gray-900 hover:text-gray-900 hover:bg-gray-50 group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full">
-                     <Wallet className="text-gray-400 group-hover:text-gray-500 flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> <span className="truncate">{t('nav.wallet')}</span>
+                  <Link to="/wallet" className="bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50 group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors">
+                     <Wallet className="text-gray-400 group-hover:text-gray-500 flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6" /> <span className="truncate">{t('nav.wallet')}</span>
                   </Link>
-                  <button onClick={() => setActiveTab('security')} className={`${activeTab === 'security' ? 'bg-gray-50 text-primary-700 hover:text-primary-700 hover:bg-white' : 'text-gray-900 hover:text-gray-900 hover:bg-gray-50'} group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full`}>
-                     <Shield className={`${activeTab === 'security' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 -ml-1 mr-3 h-6 w-6`} /> <span className="truncate">{t('profile.tabs.security')}</span>
+                  <button onClick={() => setActiveTab('security')} className={`${activeTab === 'security' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
+                     <Shield className={`${activeTab === 'security' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.security')}</span>
                   </button>
-                  {user.role === UserRole.CLIENT && (
-                     <div className="pt-6">
-                        <button onClick={() => setShowUpgradeModal(true)} className="bg-primary-600 text-white group rounded-md px-3 py-3 flex items-center text-sm font-bold w-full hover:bg-primary-700 shadow-md transition-all">
-                           <Tractor className="flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> {t('profile.upgrade')}
-                        </button>
-                        <p className="text-xs text-gray-500 mt-2 px-1">{t('profile.upgradeDesc')}</p>
-                     </div>
-                  )}
-                  <div className="pt-4 mt-4 border-t border-gray-200">
-                     <button type="button" onClick={() => setLogoutConfirmOpen(true)} className="text-red-600 hover:bg-red-50 group rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors">
-                        <LogOut className="flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> <span className="truncate">{t('nav.logout')}</span>
-                     </button>
-                  </div>
+                  <button type="button" onClick={() => setLogoutConfirmOpen(true)} className="hidden lg:flex text-red-600 hover:bg-red-50 group rounded-md px-3 py-2 items-center text-sm font-medium w-full transition-colors mt-4 pt-4 border-t border-gray-200">
+                     <LogOut className="flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> <span className="truncate">{t('nav.logout')}</span>
+                  </button>
                </nav>
+               {user.role === UserRole.CLIENT && (
+                  <div className="mt-4 lg:mt-6 hidden lg:block">
+                     <button onClick={() => setShowUpgradeModal(true)} className="bg-primary-600 text-white group rounded-md px-3 py-3 flex items-center text-sm font-bold w-full hover:bg-primary-700 shadow-md transition-all">
+                        <Tractor className="flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> {t('profile.upgrade')}
+                     </button>
+                     <p className="text-xs text-gray-500 mt-2 px-1">{t('profile.upgradeDesc')}</p>
+                  </div>
+               )}
             </aside>
 
-            <div className="space-y-6 sm:px-6 lg:px-0 lg:col-span-9">
-               {activeTab === 'info' && !formData && currentClient?.id && (
-                  <div className="shadow sm:rounded-md bg-white p-8 text-center text-gray-600">
-                     Loading profile…
+            <div className="space-y-6 lg:col-span-9 min-w-0">
+               {user.role === UserRole.CLIENT && (
+                  <button onClick={() => setShowUpgradeModal(true)} className="lg:hidden bg-primary-600 text-white group rounded-md px-3 py-3 flex items-center justify-center text-sm font-bold w-full hover:bg-primary-700 shadow-md transition-all">
+                     <Tractor className="flex-shrink-0 mr-2 h-5 w-5" /> {t('profile.upgrade')}
+                  </button>
+               )}
+               {activeTab === 'info' && !formData && (
+                  <div className="shadow sm:rounded-md bg-white p-4 sm:p-6">
+                     <SectionLoader message={t('form.loading')} />
                   </div>
                )}
                {activeTab === 'info' && formData && (
-                  <form onSubmit={savePersonalInfo} className="shadow sm:rounded-md sm:overflow-hidden bg-white p-6">
+                  <form onSubmit={savePersonalInfo} className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
                      <h3 className="text-lg font-medium text-gray-900 mb-4">{t('profile.tabs.info')}</h3>
-                     <div className="flex items-center mb-6">
-                        <div className="relative">
-                           <div className="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">
+                     <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
+                        <div className="relative flex-shrink-0">
+                           <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">
                               {formData.profileImageUrl ? (
                                  <img src={formData.profileImageUrl} alt="Profile" className="h-full w-full object-cover" />
                               ) : (
-                                 <User className="h-12 w-12 text-gray-400" />
+                                 <User className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400" />
                               )}
                            </div>
                            <label className={`absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white shadow-sm ${avatarUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-primary-700'}`}>
@@ -822,7 +832,7 @@ export const ClientProfile: React.FC = () => {
                               <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={avatarUploading} onChange={handleFileUpload} />
                            </label>
                         </div>
-                        <div className="ml-4">
+                        <div className="min-w-0">
                            <p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p>
                            <p className="text-xs text-gray-500">{avatarUploading ? 'Uploading…' : 'JPG, PNG, or WebP. Max 2 MB.'}</p>
                         </div>
@@ -877,9 +887,10 @@ export const ClientProfile: React.FC = () => {
                                        type="button"
                                        onClick={(e) => {
                                           e.stopPropagation();
-                                          removeLocation(idx);
+                                          setLocationToRemoveIdx(idx);
                                        }}
                                        className="text-gray-400 hover:text-red-500"
+                                       aria-label={t('location.removeTitle')}
                                     >
                                        <Trash2 className="h-4 w-4" />
                                     </button>
@@ -1046,17 +1057,19 @@ export const ClientProfile: React.FC = () => {
                   <div className="space-y-8">
                      {/* All orders — view any order from booking to receiving, including completed/cancelled */}
                      <section className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-                        <div className="px-4 py-5 border-b border-gray-200 bg-gray-50">
-                           <h3 className="text-lg font-bold text-gray-900 flex items-center"><Package className="w-5 h-5 mr-2 text-gray-500" /> {t('dash.allOrders')}</h3>
-                           <p className="text-sm text-gray-500 mt-1">{t('dash.allOrdersDesc')}</p>
+                        <div className="px-4 py-4 sm:py-5 border-b border-gray-200 bg-gray-50">
+                           <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center"><Package className="w-5 h-5 mr-2 text-gray-500" /> {t('dash.allOrders')}</h3>
+                           <p className="text-xs sm:text-sm text-gray-500 mt-1">{t('dash.allOrdersDesc')}</p>
                         </div>
                         <ul className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
-                           {allMyOrders.length === 0 ? (
+                           {(isInitialCatalogLoading || isClientProfileHydrating) && allMyOrders.length === 0 ? (
+                              <li className="px-4 py-6"><SectionLoader message={t('form.loading')} /></li>
+                           ) : allMyOrders.length === 0 ? (
                               <li className="px-4 py-8 text-center text-gray-500">No orders yet.</li>
                            ) : (
                               allMyOrders.map(order => (
-                                 <li key={order.id} className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex justify-between items-center" onClick={() => setSelectedOrder(order)}>
-                                    <div>
+                                 <li key={order.id} className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2" onClick={() => setSelectedOrder(order)}>
+                                    <div className="min-w-0">
                                        <p className="font-medium text-gray-900 flex items-center gap-2 flex-wrap">
                                           {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
                                           #{order.id.substring(order.id.length - 6).toUpperCase()}
@@ -1064,9 +1077,9 @@ export const ClientProfile: React.FC = () => {
                                              <span className="text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
                                           )}
                                        </p>
-                                       <p className="text-xs text-gray-500">{clientOrderMetaLine(order)} · {getProducerDisplayName(order)}</p>
+                                       <p className="text-xs text-gray-500 truncate">{clientOrderMetaLine(order)} · {getProducerDisplayName(order)}</p>
                                     </div>
-                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${order.status === OrderStatus.CANCELLED || order.status === OrderStatus.DISPUTE ? 'bg-red-100 text-red-800' : order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0 self-start sm:self-auto ${order.status === OrderStatus.CANCELLED || order.status === OrderStatus.DISPUTE ? 'bg-red-100 text-red-800' : order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                                        {order.status.replace(/_/g, ' ')}
                                     </span>
                                  </li>
@@ -1076,17 +1089,25 @@ export const ClientProfile: React.FC = () => {
                      </section>
                      <section>
                         <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><Archive className="w-5 h-5 mr-2 text-primary-600" /> {t('order.active')}</h3>
-                        {renderOrderList(activeOrders, "No active orders.")}
+                        {(isInitialCatalogLoading || isClientProfileHydrating) && activeOrders.length === 0 ? (
+                           <ListSkeleton rows={3} />
+                        ) : (
+                           renderOrderList(activeOrders, "No active orders.")
+                        )}
                      </section>
                      <section>
                         <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><History className="w-5 h-5 mr-2 text-gray-400" /> {t('order.past')}</h3>
-                        {renderOrderList(pastOrders, "No order history.")}
+                        {(isInitialCatalogLoading || isClientProfileHydrating) && pastOrders.length === 0 ? (
+                           <ListSkeleton rows={2} />
+                        ) : (
+                           renderOrderList(pastOrders, "No order history.")
+                        )}
                      </section>
                   </div>
                )}
 
                {activeTab === 'favorites' && (
-                  <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-6">
+                  <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
                      <div className="border-b border-gray-200 pb-4 mb-4">
                         <h3 className="text-lg font-medium text-gray-900">{t('profile.tabs.favorites')}</h3>
                      </div>
@@ -1095,27 +1116,29 @@ export const ClientProfile: React.FC = () => {
                            <h4 className="text-sm font-bold text-yellow-800 mb-2">Unavailable Items</h4>
                            <ul className="space-y-2">
                               {unavailableFavoriteIds.map(id => (
-                                 <li key={id} className="flex items-center justify-between text-sm text-yellow-700">
+                                 <li key={id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-yellow-700">
                                     <span>Item #{id} is no longer available.</span>
-                                    <div className="flex items-center gap-2"><button onClick={() => toggleFavorite(id)} className="text-xs text-red-600 hover:underline">{t('cart.remove')}</button><Link to="/market/producers" className="text-xs bg-yellow-200 px-2 py-1 rounded hover:bg-yellow-300 flex items-center"><Search className="w-3 h-3 mr-1" /> {t('profile.findSimilar')}</Link></div>
+                                    <div className="flex items-center gap-2 flex-shrink-0"><button onClick={() => setFavoriteToRemove({ id, title: `Item #${id}` })} className="text-xs text-red-600 hover:underline">{t('cart.remove')}</button><Link to="/market/producers" className="text-xs bg-yellow-200 px-2 py-1 rounded hover:bg-yellow-300 flex items-center"><Search className="w-3 h-3 mr-1" /> {t('profile.findSimilar')}</Link></div>
                                  </li>
                               ))}
                            </ul>
                         </div>
                      )}
-                     {(!favoriteOffers || favoriteOffers.length === 0) ? (
+                     {(isInitialCatalogLoading || isClientProfileHydrating) && (!favoriteOffers || favoriteOffers.length === 0) ? (
+                        <SectionLoader message={t('form.loading')} />
+                     ) : (!favoriteOffers || favoriteOffers.length === 0) ? (
                         <div className="text-center py-12 text-gray-500"><Heart className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('profile.favorites.empty')}</p></div>
                      ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                            {favoriteOffers.map((offer: any) => (
-                              <div key={offer.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow flex items-center">
-                                 <div className="mr-4 h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
+                              <div key={offer.id} className="border border-gray-200 rounded-lg p-3 sm:p-4 hover:shadow-md transition-shadow flex items-center gap-3">
+                                 <div className="h-14 w-14 sm:h-16 sm:w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
                                     <img src={offer.imageUrl} alt="" className={offerImageInBox} />
                                  </div>
                                  <div className="flex-1 min-w-0"><h4 className="font-bold text-gray-900 truncate">{offer.title}</h4><p className="text-sm text-gray-500">{offer.price} XAF / {offer.unit}</p></div>
-                                 <div className="flex flex-col gap-2 ml-2">
-                                    <Link to={`/offer/${offer.id}`} className="text-primary-600 hover:bg-primary-50 p-2 rounded-full"><ArrowLeft className="h-5 w-5 rotate-180" /></Link>
-                                    <button onClick={() => toggleFavorite(offer.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-full"><Trash2 className="h-5 w-5" /></button>
+                                 <div className="flex flex-col gap-1 sm:gap-2 flex-shrink-0">
+                                    <Link to={`/offer/${offer.id}`} className="text-primary-600 hover:bg-primary-50 p-1.5 sm:p-2 rounded-full"><ArrowLeft className="h-5 w-5 rotate-180" /></Link>
+                                    <button onClick={() => setFavoriteToRemove({ id: offer.id, title: offer.title })} className="text-red-500 hover:bg-red-50 p-1.5 sm:p-2 rounded-full" aria-label={t('favorites.removeTitle')}><Trash2 className="h-5 w-5" /></button>
                                  </div>
                               </div>
                            ))}
@@ -1125,8 +1148,8 @@ export const ClientProfile: React.FC = () => {
                )}
 
                {activeTab === 'reputation' && (
-                  <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-6">
-                     <div className="border-b border-gray-200 pb-4 mb-6 flex items-center justify-between">
+                  <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
+                     <div className="border-b border-gray-200 pb-4 mb-6 flex flex-wrap gap-3 items-center justify-between">
                         <h3 className="text-lg font-medium text-gray-900">{t('profile.tabs.reputation')}</h3>
                         <div className="flex items-center bg-yellow-50 px-3 py-1 rounded-full border border-yellow-100">
                            <Star className="w-5 h-5 text-yellow-400 fill-current mr-1" />
@@ -1134,7 +1157,9 @@ export const ClientProfile: React.FC = () => {
                            <span className="text-xs text-yellow-600 ml-1">/ 5</span>
                         </div>
                      </div>
-                     {myReviews.length === 0 ? (
+                     {(isInitialCatalogLoading || isClientProfileHydrating) && myReviews.length === 0 ? (
+                        <SectionLoader message={t('form.loading')} />
+                     ) : myReviews.length === 0 ? (
                         <div className="text-center py-12 text-gray-500"><Star className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('review.noReviews')}</p></div>
                      ) : (
                         <div className="space-y-4">
@@ -1163,16 +1188,21 @@ export const ClientProfile: React.FC = () => {
                   </div>
                )}
 
+               {activeTab === 'referrals' && !currentClient && (
+                  <div className="shadow sm:rounded-md bg-white p-4 sm:p-6">
+                     <SectionLoader message={t('form.loading')} />
+                  </div>
+               )}
                {activeTab === 'referrals' && currentClient && (
-                  <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-6">
+                  <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
                      <div className="border-b border-gray-200 pb-4 mb-4">
                         <h3 className="text-lg font-medium text-gray-900">Referrals</h3>
                      </div>
                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                         <p className="text-sm text-blue-800 mb-2 font-bold">Your Referral Link</p>
-                        <div className="flex gap-2">
-                           <input type="text" readOnly value={`${window.location.origin}/#/register/client?ref=${referralCodeDisplay}`} className="block w-full border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-700" />
-                           <button type="button" onClick={copyReferralLink} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center">
+                        <div className="flex flex-col sm:flex-row gap-2">
+                           <input type="text" readOnly value={`${window.location.origin}/#/register/client?ref=${referralCodeDisplay}`} className="block w-full min-w-0 border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-700" />
+                           <button type="button" onClick={copyReferralLink} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center justify-center flex-shrink-0">
                               Copy
                            </button>
                         </div>
@@ -1226,10 +1256,10 @@ export const ClientProfile: React.FC = () => {
                )}
 
                {activeTab === 'security' && (
-                  <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-6">
+                  <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
                      <h3 className="text-lg font-medium text-gray-900">{t('profile.tabs.security')}</h3>
                      <div className="mt-4">
-                        <button onClick={() => setShowPasswordModal(true)} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-300 transition-colors">{t('profile.password')}</button>
+                        <button onClick={() => setShowPasswordModal(true)} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-300 transition-colors w-full sm:w-auto">{t('profile.password')}</button>
                      </div>
                   </div>
                )}
@@ -1240,9 +1270,9 @@ export const ClientProfile: React.FC = () => {
 
          {showUpgradeModal && (
             <div className="fixed inset-0 z-50 overflow-y-auto">
-               <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+               <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
                   <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowUpgradeModal(false)}></div>
-                  <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+                  <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
                      <h3 className="text-lg font-medium text-gray-900 mb-4">{t('profile.upgrade')}</h3>
                      <form onSubmit={upgradeFormik.handleSubmit} className="space-y-4">
                         <div>
@@ -1280,10 +1310,9 @@ export const ClientProfile: React.FC = () => {
 
             return (
                <div className="fixed inset-0 z-50 overflow-y-auto">
-                  <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                  <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
                      <div className="fixed inset-0 bg-gray-900 bg-opacity-60 transition-opacity" onClick={() => setShowPaymentRecap(false)} />
-                     <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-                     <div className="inline-block align-bottom bg-white rounded-xl px-4 pt-5 pb-4 text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+                     <div className="relative bg-white rounded-t-xl sm:rounded-xl px-4 pt-5 pb-4 text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
 
                         {/* Header */}
                         <div className="flex justify-between items-center mb-5 pb-3 border-b border-gray-100">
@@ -1411,9 +1440,9 @@ export const ClientProfile: React.FC = () => {
          {/* Order Details Modal (booking → receiving, including completed/cancelled) */}
          {selectedOrder && (
             <div className="fixed inset-0 z-50 overflow-y-auto" aria-modal="true" role="dialog">
-               <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+               <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
                   <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setSelectedOrder(null)} />
-                  <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+                  <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
                      <div className="flex justify-between items-start mb-4 gap-2">
                         <div>
                            <h3 className="text-lg leading-6 font-bold text-gray-900">
@@ -1577,10 +1606,10 @@ export const ClientProfile: React.FC = () => {
                            <button onClick={() => { initiatePayment(selectedOrder.id); setSelectedOrder(null); }} className="bg-primary-600 text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-primary-700"><CreditCard className="w-4 h-4 inline mr-1" /> {t('order.payNow')}</button>
                         )}
                         {selectedOrder.status === OrderStatus.IN_TRANSIT && (
-                           <button onClick={() => { confirmReceipt(selectedOrder.id); setSelectedOrder(null); }} className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-green-700"><CheckCircle className="w-4 h-4 inline mr-1" /> {t('order.confirmReceipt')}</button>
+                           <button onClick={() => { setConfirmReceiptId(selectedOrder.id); setSelectedOrder(null); }} className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-green-700"><CheckCircle className="w-4 h-4 inline mr-1" /> {t('order.confirmReceipt')}</button>
                         )}
                         {[OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(selectedOrder.status) && (
-                           <button onClick={() => { cancelOrder(selectedOrder.id); setSelectedOrder(null); }} className="text-red-600 hover:bg-red-50 px-4 py-2 rounded-md text-sm font-medium border border-red-100">{t('order.cancel')}</button>
+                           <button onClick={() => { setCancelOrderId(selectedOrder.id); setSelectedOrder(null); }} className="text-red-600 hover:bg-red-50 px-4 py-2 rounded-md text-sm font-medium border border-red-100">{t('order.cancel')}</button>
                         )}
                         {[OrderStatus.PAID_IN_PREPARATION, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED].includes(selectedOrder.status) && (
                            <button onClick={() => { openDisputeModal(selectedOrder.id); setSelectedOrder(null); }} className="text-orange-600 hover:bg-orange-50 px-4 py-2 rounded-md text-sm font-medium border border-orange-100"><AlertTriangle className="w-4 h-4 inline mr-1" /> {t('order.reportProblem')}</button>
@@ -1602,10 +1631,9 @@ export const ClientProfile: React.FC = () => {
 
          {showReviewModal && reviewOrderId && (
             <div className="fixed inset-0 z-50 overflow-y-auto">
-               <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+               <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
                   <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowReviewModal(false)}></div>
-                  <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-                  <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-sm sm:w-full sm:p-6">
+                  <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-sm sm:p-6 max-h-[90vh] overflow-y-auto">
                      <h3 className="text-lg font-medium text-gray-900 mb-4 text-center">{t('review.rate')}</h3>
                      <form onSubmit={reviewFormik.handleSubmit}>
                         <div className="flex justify-center space-x-2 mb-6">
@@ -1627,9 +1655,9 @@ export const ClientProfile: React.FC = () => {
 
          {showDisputeModal && disputeOrderId && (
             <div className="fixed inset-0 z-50 overflow-y-auto">
-               <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+               <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
                   <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowDisputeModal(false)}></div>
-                  <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+                  <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
                      <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2"><h3 className="text-lg font-bold text-gray-900">{t('order.reportProblem')}</h3><button onClick={() => setShowDisputeModal(false)}><X className="h-5 w-5 text-gray-400" /></button></div>
                      <form onSubmit={disputeFormik.handleSubmit} className="space-y-4">
                         <div><label className="block text-sm font-medium text-gray-700 mb-1">{t('order.reason')}</label><textarea name="disputeReason" required rows={3} className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" value={disputeFormik.values.disputeReason} onChange={disputeFormik.handleChange} onBlur={disputeFormik.handleBlur} placeholder="What's the issue?" />{disputeFormik.touched.disputeReason && disputeFormik.errors.disputeReason ? <p className="text-xs text-red-600 mt-1">{disputeFormik.errors.disputeReason}</p> : null}</div>
@@ -1645,6 +1673,75 @@ export const ClientProfile: React.FC = () => {
             open={logoutConfirmOpen}
             onClose={() => setLogoutConfirmOpen(false)}
             onConfirm={performLogout}
+         />
+
+         <ConfirmModal
+            open={cancelOrderId !== null}
+            tone="danger"
+            title={t('order.cancelConfirmTitle')}
+            description={t('order.cancelConfirmBody')}
+            confirmLabel={t('order.cancel')}
+            cancelLabel={t('order.cancelKeep')}
+            busy={cancelingOrder}
+            onClose={() => { if (!cancelingOrder) setCancelOrderId(null); }}
+            onConfirm={async () => {
+               if (!cancelOrderId) return;
+               try {
+                  setCancelingOrder(true);
+                  await cancelOrder(cancelOrderId);
+               } finally {
+                  setCancelingOrder(false);
+                  setCancelOrderId(null);
+               }
+            }}
+         />
+
+         <ConfirmModal
+            open={confirmReceiptId !== null}
+            tone="info"
+            title={t('order.receiptConfirmTitle')}
+            description={t('order.receiptConfirmBody')}
+            confirmLabel={t('order.confirmReceipt')}
+            busy={confirmingReceipt}
+            onClose={() => { if (!confirmingReceipt) setConfirmReceiptId(null); }}
+            onConfirm={async () => {
+               if (!confirmReceiptId) return;
+               try {
+                  setConfirmingReceipt(true);
+                  await confirmReceipt(confirmReceiptId);
+               } finally {
+                  setConfirmingReceipt(false);
+                  setConfirmReceiptId(null);
+               }
+            }}
+         />
+
+         <ConfirmModal
+            open={favoriteToRemove !== null}
+            tone="danger"
+            title={t('favorites.removeTitle')}
+            description={favoriteToRemove?.title ? <><span className="font-medium text-gray-900">{favoriteToRemove.title}</span> — {t('favorites.removeBody')}</> : t('favorites.removeBody')}
+            confirmLabel={t('cart.remove')}
+            onClose={() => setFavoriteToRemove(null)}
+            onConfirm={async () => {
+               if (!favoriteToRemove) return;
+               await toggleFavorite(favoriteToRemove.id);
+               setFavoriteToRemove(null);
+            }}
+         />
+
+         <ConfirmModal
+            open={locationToRemoveIdx !== null}
+            tone="danger"
+            title={t('location.removeTitle')}
+            description={t('location.removeBody')}
+            confirmLabel={t('form.delete')}
+            onClose={() => setLocationToRemoveIdx(null)}
+            onConfirm={() => {
+               if (locationToRemoveIdx === null) return;
+               removeLocation(locationToRemoveIdx);
+               setLocationToRemoveIdx(null);
+            }}
          />
       </div>
    );

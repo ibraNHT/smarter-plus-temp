@@ -6,11 +6,12 @@ import { useTranslation } from '../../services/i18nContext';
 import { Send, MessageCircle, ChevronLeft, Gavel, ArrowLeft } from 'lucide-react';
 import { ProposalStatus } from '../../types';
 import { Spinner } from '../../components/Spinner';
+import { SectionLoader } from '../../components/Loaders';
 
 export const ChatPage: React.FC = () => {
    const { chatId } = useParams<{ chatId: string }>();
    const navigate = useNavigate();
-   const { user, chats, messages, sendMessage, respondToProposal, clients, producers, getOfferById, fetchChats, fetchMessages } = useStore();
+   const { user, chats, messages, sendMessage, respondToProposal, clients, producers, getOfferById, fetchChats, fetchMessages, isInitialCatalogLoading } = useStore();
    const { t } = useTranslation();
 
    const [inputText, setInputText] = useState('');
@@ -427,7 +428,9 @@ export const ChatPage: React.FC = () => {
                </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-               {chats.filter(c => c.participantIds?.includes(user.id)).length === 0 ? (
+               {isInitialCatalogLoading && chats.filter(c => c.participantIds?.includes(user.id)).length === 0 ? (
+                  <SectionLoader message={t('form.loading')} />
+               ) : chats.filter(c => c.participantIds?.includes(user.id)).length === 0 ? (
                   <div className="p-8 text-center text-gray-500 text-sm">{t('chat.noChats')}</div>
                ) : (
                   chats.filter(c => c.participantIds?.includes(user.id)).map(chat => {

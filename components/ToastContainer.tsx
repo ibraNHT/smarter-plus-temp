@@ -76,7 +76,8 @@ export const ToastContainer: React.FC = () => {
   if (!store || visibleToasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-3 max-w-sm w-full pointer-events-none px-4 sm:px-0">
+    <div className="fixed top-20 left-1/2 -translate-x-1/2 sm:translate-x-0 sm:top-auto sm:left-auto sm:bottom-4 sm:right-4 z-[9999] flex flex-col gap-3 w-[calc(100vw-2rem)] max-w-sm pointer-events-none"
+         style={{ paddingTop: 'env(safe-area-inset-top)' }}>
       {visibleToasts.map((toast) => {
         const isSuccess = toast.type === 'SUCCESS';
         const isError = toast.type === 'ERROR';

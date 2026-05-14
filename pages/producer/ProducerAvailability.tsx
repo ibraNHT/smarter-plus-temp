@@ -4,12 +4,13 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, WeeklySchedule, AvailabilityException, DayOfWeek } from '../../types';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, Clock, Plus, Trash2, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, Plus, Trash2, CheckCircle, Loader2 } from 'lucide-react';
+import { SectionLoader } from '../../components/Loaders';
 
 const DAYS: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export const ProducerAvailability: React.FC = () => {
-  const { user, producers, updateProducerAvailability } = useStore();
+  const { user, producers, updateProducerAvailability, isInitialCatalogLoading } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -20,6 +21,7 @@ export const ProducerAvailability: React.FC = () => {
   const [exceptions, setExceptions] = useState<AvailabilityException[]>([]);
   const [newExceptionDate, setNewExceptionDate] = useState('');
   const [newExceptionReason, setNewExceptionReason] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (currentProducer) {
@@ -28,9 +30,14 @@ export const ProducerAvailability: React.FC = () => {
     }
   }, [currentProducer]);
 
-  if (!user || user.role !== UserRole.PRODUCER || !currentProducer) {
+  // Access guard runs against the session itself, NOT against `currentProducer`
+  // (which is null while the producer catalog hydrates on hard refresh).
+  if (!user || user.role !== UserRole.PRODUCER) {
     return <div className="p-8 text-center">Access Denied</div>;
   }
+
+  const isAvailabilityHydrating = !currentProducer && isInitialCatalogLoading;
+  const profileMissing = !currentProducer && !isInitialCatalogLoading;
 
   const handleTimeChange = (day: string, type: 'start' | 'end', value: string) => {
     setSchedule(prev => {
@@ -66,10 +73,14 @@ export const ProducerAvailability: React.FC = () => {
     setExceptions(prev => prev.filter(e => e.id !== id));
   };
 
-  const handleSave = () => {
-    if (user.producerId) {
-      updateProducerAvailability(user.producerId, schedule, exceptions);
+  const handleSave = async () => {
+    if (!user.producerId) return;
+    try {
+      setSaving(true);
+      await updateProducerAvailability(user.producerId, schedule, exceptions);
       navigate('/producer/dashboard');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -84,6 +95,20 @@ export const ProducerAvailability: React.FC = () => {
             {t('avail.title')}
          </h1>
       </div>
+
+      {isAvailabilityHydrating && (
+         <div className="bg-white shadow rounded-lg p-4 sm:p-6">
+            <SectionLoader message={t('form.loading')} />
+         </div>
+      )}
+
+      {profileMissing && (
+         <div className="bg-white shadow rounded-lg p-6 sm:p-8 text-center text-gray-600">
+            Producer profile not found. Please complete your producer profile setup before configuring availability.
+         </div>
+      )}
+
+      {!isAvailabilityHydrating && !profileMissing && (<>
 
       <div className="bg-white shadow rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
          <h2 className="text-base sm:text-lg font-medium text-gray-900 mb-4 flex items-center">
@@ -165,7 +190,7 @@ export const ProducerAvailability: React.FC = () => {
                      <p className="text-sm font-bold text-gray-900">{new Date(ex.date).toLocaleDateString()}</p>
                      <p className="text-xs text-gray-500">{ex.reason}</p>
                   </div>
-                  <button onClick={() => removeException(ex.id)} className="text-red-500 hover:text-red-700">
+                  <button onClick={() => removeException(ex.id)} className="text-red-500 hover:text-red-700" aria-label="Remove exception">
                      <Trash2 className="h-4 w-4" />
                   </button>
                </li>
@@ -178,12 +203,15 @@ export const ProducerAvailability: React.FC = () => {
 
       <div className="flex justify-end">
          <button 
-           onClick={handleSave}
-           className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none"
+           onClick={() => void handleSave()}
+           disabled={saving}
+           className="inline-flex items-center gap-2 px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
          >
-            <CheckCircle className="h-5 w-5 mr-2" /> {t('avail.save')}
+            {saving ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" /> : <CheckCircle className="h-5 w-5" />} {saving ? t('form.saving') : t('avail.save')}
          </button>
       </div>
+
+      </>)}
     </div>
   );
 };

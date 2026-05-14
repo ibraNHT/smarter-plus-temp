@@ -8,6 +8,7 @@ import { MarketType, OfferType, OrderStatus, UserRole } from '../../types';
 import { SEO } from '../../components/SEO';
 import { ProductDetailsSkeleton } from '../../components/skeletons/ProductDetailsSkeleton';
 import { Spinner } from '../../components/Spinner';
+import { ConfirmModal } from '../../components/ConfirmModal';
 import { offerImageHero, offerImageInBox } from '../../utils/offerImageDisplay';
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
@@ -45,6 +46,8 @@ export const ProductDetails: React.FC = () => {
   const [relevantPortfolios, setRelevantPortfolios] = useState<any[]>([]);
   const [activePortfolioMedia, setActivePortfolioMedia] = useState<string | null>(null); // For Lightbox
   const [negotiateLoading, setNegotiateLoading] = useState(false);
+  const [showClearCartConfirm, setShowClearCartConfirm] = useState(false);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   // Get Favorites (session id is auth-user id; profiles use separate ids)
   let favorites: string[] = [];
@@ -245,15 +248,7 @@ export const ProductDetails: React.FC = () => {
       return;
     }
     if (!result.success && result.error === 'PRODUCER_CONFLICT') {
-      const confirmClear = window.confirm(t('cart.confirmClear'));
-
-      if (confirmClear) {
-        clearCart();
-        const second = addToCart(offer, quantity, selectedSlot || undefined);
-        if (second.success) {
-          navigate(offer.type === OfferType.SERVICE ? '/cart?booking=1' : '/cart');
-        }
-      }
+      setShowClearCartConfirm(true);
       return;
     }
     if (!result.success && result.error === 'DUPLICATE_SERVICE_SLOT') {
@@ -265,10 +260,7 @@ export const ProductDetails: React.FC = () => {
 
   const handleNegotiate = async () => {
     if (!user) {
-      const confirmLogin = window.confirm("You must be logged in to negotiate prices.");
-      if (confirmLogin) {
-        navigate('/login');
-      }
+      setShowLoginPrompt(true);
       return;
     }
     if (negotiateLoading) return;
@@ -727,6 +719,36 @@ export const ProductDetails: React.FC = () => {
           <img src={activePortfolioMedia} className="max-h-[90vh] max-w-[90vw] rounded-lg shadow-2xl" />
         </div>
       )}
+
+      <ConfirmModal
+        open={showClearCartConfirm}
+        tone="warning"
+        title={t('cart.confirmClearTitle')}
+        description={t('cart.confirmClearBody')}
+        confirmLabel={t('cart.confirmClearConfirm')}
+        onClose={() => setShowClearCartConfirm(false)}
+        onConfirm={() => {
+          clearCart();
+          const second = addToCart(offer, quantity, selectedSlot || undefined);
+          setShowClearCartConfirm(false);
+          if (second.success) {
+            navigate(offer.type === OfferType.SERVICE ? '/cart?booking=1' : '/cart');
+          }
+        }}
+      />
+
+      <ConfirmModal
+        open={showLoginPrompt}
+        tone="info"
+        title="Sign in required"
+        description="You need to be signed in to negotiate prices with this producer."
+        confirmLabel="Sign in"
+        onClose={() => setShowLoginPrompt(false)}
+        onConfirm={() => {
+          setShowLoginPrompt(false);
+          navigate('/login');
+        }}
+      />
     </div>
   );
 };

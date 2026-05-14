@@ -439,13 +439,13 @@ export const CreateOffer: React.FC = () => {
                  <Sparkles className="h-4 w-4 text-blue-500" />
                </div>
                <p className="text-xs text-blue-700 mb-3">Enter key features (comma separated) and let AI write your description.</p>
-               <div className="flex gap-2">
-                 <input type="text" className="block w-full border border-blue-200 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" 
+               <div className="flex flex-col sm:flex-row gap-2">
+                 <input type="text" className="block w-full min-w-0 border border-blue-200 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" 
                     placeholder="e.g. sweet, crunchy, grown without pesticides, harvest 2023"
                     value={formData.features} onChange={e => setFormData({...formData, features: e.target.value})}
                  />
                  <button type="button" onClick={handleGenerateDescription} disabled={loadingAI || !formData.features}
-                   className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none disabled:opacity-50"
+                   className="inline-flex items-center justify-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none disabled:opacity-50 flex-shrink-0"
                  >
                    {loadingAI ? <Loader2 className="animate-spin h-4 w-4" /> : 'Generate'}
                  </button>

@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
-import { MapPin, X, Plus, Lock, Phone, Eye, EyeOff } from 'lucide-react';
+import { MapPin, X, Plus, Lock, Phone, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { ProducerType, Location } from '../../types';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { useFormik } from 'formik';
@@ -630,8 +630,9 @@ export const RegisterProducer: React.FC = () => {
             <button type="button" onClick={() => navigate('/')} className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none">
               {t('form.cancel')}
             </button>
-            <button type="submit" className="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-              {t('register.producer.btn')}
+            <button type="submit" disabled={formik.isSubmitting} className="ml-3 inline-flex justify-center items-center gap-2 py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed">
+              {formik.isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              {formik.isSubmitting ? t('form.processing') : t('register.producer.btn')}
             </button>
           </div>
         </div>

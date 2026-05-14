@@ -6,6 +6,7 @@ import { useTranslation } from '../../services/i18nContext';
 import { Trash2, ArrowLeft, ShoppingBag, CheckCircle, Calendar, X, MapPin, Heart, Tag, ChevronLeft, ChevronRight, Truck, Home } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
+import { ConfirmModal } from '../../components/ConfirmModal';
 import { OfferType, MarketType, UserRole, Location, PreferredHomeDeliverySnapshot } from '../../types';
 
 function pickDefaultHomeLocationIndex(
@@ -60,6 +61,7 @@ export const ShoppingCart: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [showRecap, setShowRecap] = useState(false);
   const [showGuestEmailModal, setShowGuestEmailModal] = useState(false);
+  const [itemToRemove, setItemToRemove] = useState<{ id: string; title?: string } | null>(null);
   const guestEmailSchema = z.object({
     tempEmail: z.string().trim().email('Please enter a valid email address.'),
   });
@@ -499,7 +501,7 @@ export const ShoppingCart: React.FC = () => {
                           </button>
                           <button
                             type="button"
-                            onClick={() => removeFromCart(item.id)}
+                            onClick={() => setItemToRemove({ id: item.id, title: item.title })}
                             className="font-medium text-red-600 hover:text-red-500 flex items-center"
                           >
                             <Trash2 className="h-4 w-4 mr-1" /> {t('cart.remove')}
@@ -839,9 +841,9 @@ export const ShoppingCart: React.FC = () => {
       {/* Recap Modal */}
       {showRecap && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+          <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
             <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowRecap(false)}></div>
-            <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+            <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
                 <h3 className="text-lg font-bold text-gray-900">{t('cart.recap')}</h3>
                 <button onClick={() => setShowRecap(false)}><X className="h-5 w-5 text-gray-400" /></button>
@@ -960,9 +962,9 @@ export const ShoppingCart: React.FC = () => {
       {/* Guest Email Modal */}
       {showGuestEmailModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+          <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
             <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowGuestEmailModal(false)}></div>
-            <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full sm:p-6">
+            <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-md sm:p-6 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-bold text-gray-900">Checkout as Guest</h3>
                 <button onClick={() => setShowGuestEmailModal(false)}>
@@ -998,6 +1000,20 @@ export const ShoppingCart: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={itemToRemove !== null}
+        tone="danger"
+        title={t('cart.confirmRemoveTitle')}
+        description={itemToRemove?.title ? <><span className="font-medium text-gray-900">{itemToRemove.title}</span> — {t('cart.confirmRemoveBody')}</> : t('cart.confirmRemoveBody')}
+        confirmLabel={t('cart.remove')}
+        onClose={() => setItemToRemove(null)}
+        onConfirm={() => {
+          if (!itemToRemove) return;
+          removeFromCart(itemToRemove.id);
+          setItemToRemove(null);
+        }}
+      />
     </div>
   );
 };
