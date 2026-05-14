@@ -13,6 +13,12 @@ import {
 import { apiFetch, apiUpload, setToken, clearToken, getToken, setRefreshToken, isRefreshOnCooldown } from './apiService';
 import { logApiFailure } from './apiDebug';
 import { uploadAvatar } from './uploadService';
+// `clientProfileMatchesSession` lives in its own module so this file only
+// exports React-related symbols (provider + hooks). Vite's React plugin
+// disables Fast Refresh on files with mixed exports, which led to two copies
+// of the store module being loaded during HMR and the runtime crash
+//   "useStore must be used within a StoreProvider".
+import { clientProfileMatchesSession } from './clientProfileMatcher';
 
 /** Map Prisma withdrawal row (+ nested paymentMethod) to app `WithdrawalRequest`. */
 function mapWithdrawalFromApi(d: any): WithdrawalRequest {
@@ -88,16 +94,6 @@ function normalizePreferredHomeFromApi(raw: unknown): PreferredHomeDeliverySnaps
     lat: o.lat != null ? Number(o.lat) : undefined,
     lng: o.lng != null ? Number(o.lng) : undefined,
   };
-}
-
-/** `UserSession.id` is the auth user row; `ClientProfile.id` is the profile row. */
-export function clientProfileMatchesSession(
-  c: ClientProfile,
-  session: UserSession,
-): boolean {
-  if (session.clientId && c.id === session.clientId) return true;
-  if (c.userId && c.userId === session.id) return true;
-  return false;
 }
 
 /** Coerce API/Prisma JSON unread map to numeric counts keyed by user id. */
@@ -187,6 +183,54 @@ import { io, Socket } from 'socket.io-client';
 import { isWebAppAllowedRole, isWebAppSessionBlocked } from './authRoles';
 import { useSessionStore } from '../stores/sessionStore';
 import { API_ENDPOINTS } from '../client-api/endpoints';
+import { queryClient } from '../client-api/queryClient';
+
+/**
+ * Feature-scoped cache keys + stale-times for lazy `refreshX()` helpers.
+ *
+ * These map every data slice we previously slurped in a single bootstrap call
+ * into a React Query entry. With React Query already provided via
+ * `QueryClientProvider`, calling `queryClient.fetchQuery({queryKey, staleTime})`
+ * means:
+ *   - first call hits the API and caches the result
+ *   - subsequent calls within `staleTime` are no-ops (no network)
+ *   - mutations invalidate the relevant key and the next read refetches
+ *
+ * That replaces the old "fetch everything on mount" pattern with on-demand,
+ * per-page fetching while preserving the existing `useStore()` API for
+ * downstream components (we still write the result into our useState arrays).
+ */
+const QK = {
+  producers: () => ['producers'] as const,
+  clients: () => ['clients'] as const,
+  offers: () => ['offers'] as const,
+  pickupPoints: () => ['pickup-points'] as const,
+  allReviews: () => ['reviews', 'all'] as const,
+  myReviews: (userId: string) => ['reviews', 'byUser', userId] as const,
+  orders: (userId: string, role: string, clientId?: string) =>
+    ['orders', userId, role, clientId ?? null] as const,
+  wallet: (userId: string) => ['wallet', userId] as const,
+  withdrawals: (userId: string) => ['wallet', 'withdrawals', userId] as const,
+  notifications: (userId: string) => ['notifications', userId] as const,
+  chats: (userId: string) => ['chats', userId] as const,
+  myPortfolios: (userId: string) => ['portfolios', 'mine', userId] as const,
+  cart: (userId: string) => ['cart', userId] as const,
+  myReferrals: (userId: string) => ['referrals', 'me', userId] as const,
+};
+
+const STALE = {
+  catalog: 60_000,          // offers / producers / clients — re-fetch at most once / minute
+  reviews: 60_000,
+  pickupPoints: 5 * 60_000, // rarely changes
+  orders: 30_000,
+  wallet: 15_000,           // wallet balance is sensitive after payment
+  withdrawals: 30_000,
+  notifications: 15_000,
+  chats: 15_000,
+  portfolios: 30_000,
+  cart: 30_000,
+  referrals: 60_000,
+};
 
 interface StoreContextType {
   user: UserSession | null;
@@ -210,10 +254,19 @@ interface StoreContextType {
   // Chat & Negotiation
   chats: ChatSession[];
   messages: ChatMessage[];
+  /**
+   * True while the /notifications WebSocket is connected. Pages can use this
+   * to switch between an aggressive poll fallback (WS down) and a slow
+   * safety-net poll (WS up). Chat pushes are delivered over WS as
+   * `chat:message`/`chat:session-update`/`chat:proposal-resolved`.
+   */
+  realtimeConnected: boolean;
   fetchChats: () => Promise<void>;
   fetchMessages: (chatId: string) => Promise<void>;
   startNegotiation: (producerId: string, offerId: string) => Promise<string>;
   sendMessage: (chatId: string, text: string, proposal?: Proposal) => Promise<boolean>;
+  /** Re-send a message currently in `FAILED` state. Identified by its local clientId. */
+  retryMessage: (clientId: string) => Promise<boolean>;
   respondToProposal: (chatId: string, messageId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', counterPrice?: number, counterQty?: number) => Promise<boolean>;
 
   // Support Chat (Client Side)
@@ -235,12 +288,12 @@ interface StoreContextType {
 
   login: (identifier: string, password: string) => Promise<{ success: boolean; message: string }>;
   logout: () => Promise<void>;
-  registerProducer: (data: Omit<ProducerProfile, 'id' | 'status' | 'joinedDate' | 'paymentMethods' | 'favorites' | 'searchHistory' | 'referrals' | 'referralCode'> & { referrerCode?: string }, password: string) => Promise<{ success: boolean; message: string }>;
+  registerProducer: (data: Omit<ProducerProfile, 'id' | 'status' | 'joinedDate' | 'paymentMethods' | 'favorites' | 'searchHistory' | 'referrals' | 'referralCode'> & { referrerCode?: string; phoneVerificationToken?: string }, password: string) => Promise<{ success: boolean; message: string }>;
   updateProducerProfile: (producer: ProducerProfile, otpToken?: string) => Promise<boolean>;
   requestOtp: (action: 'PROFILE_UPDATE' | 'WITHDRAWAL') => Promise<{ success: boolean; message: string }>;
   verifyOtp: (action: 'PROFILE_UPDATE' | 'WITHDRAWAL', code: string) => Promise<{ success: boolean; token?: string; message: string }>;
   updateProducerAvailability: (producerId: string, schedule: WeeklySchedule, exceptions: AvailabilityException[]) => Promise<void>;
-  registerClient: (data: Omit<ClientProfile, 'id' | 'joinedDate' | 'referrals' | 'referralCode'> & { referrerCode?: string }, password: string, avatarFile?: File | null) => Promise<{ success: boolean; message: string }>;
+  registerClient: (data: Omit<ClientProfile, 'id' | 'joinedDate' | 'referrals' | 'referralCode'> & { referrerCode?: string; phoneVerificationToken?: string }, password: string, avatarFile?: File | null) => Promise<{ success: boolean; message: string }>;
   verifyEmail: (code: string) => Promise<boolean>;
   updateClientProfile: (client: ClientProfile) => Promise<boolean>;
   upgradeClientToProducer: (clientId: string, producerDetails: Partial<ProducerProfile>) => Promise<boolean>;
@@ -323,6 +376,25 @@ interface StoreContextType {
 
   /** True until the first bootstrap fetch that loads offers (and related catalog data) finishes. */
   isInitialCatalogLoading: boolean;
+
+  /**
+   * Lazy, dedup-protected refreshers. Each one is backed by React Query — calling
+   * within the slice's `staleTime` is a no-op (no network), so pages can call
+   * them on mount without worrying about thrash. Pass `{force:true}` to bypass
+   * the cache (used by mutations after server writes).
+   */
+  refreshOffers: (opts?: { force?: boolean }) => Promise<void>;
+  refreshProducers: (opts?: { force?: boolean }) => Promise<void>;
+  refreshClients: (opts?: { force?: boolean }) => Promise<void>;
+  refreshAllReviews: (opts?: { force?: boolean }) => Promise<void>;
+  refreshPickupPoints: (opts?: { force?: boolean }) => Promise<void>;
+  refreshOrders: (opts?: { force?: boolean }) => Promise<void>;
+  refreshWallet: (opts?: { force?: boolean }) => Promise<void>;
+  refreshWithdrawals: (opts?: { force?: boolean }) => Promise<void>;
+  refreshMyPortfolios: (opts?: { force?: boolean }) => Promise<void>;
+  refreshMyReviews: (opts?: { force?: boolean }) => Promise<void>;
+  refreshNotifications: (opts?: { force?: boolean }) => Promise<void>;
+  refreshCart: (opts?: { force?: boolean }) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -412,7 +484,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     useSessionStore.getState().setUser(user);
     const savedGuestEmail = localStorage.getItem('guestEmail');
     if (savedGuestEmail) setGuestEmail(savedGuestEmail);
-    fetchData(user); // Pass user directly to avoid stale-closure on first render
+    // Route-aware bootstrap: only fetch what the current page actually needs.
+    // Other slices load lazily when pages mount their own `refreshX()` calls.
+    // See `bootstrapForRoute` below.
+    void bootstrapForRoute();
   }, []);
 
   // Drop admin/staff sessions using JWT role (source of truth) even if localStorage user is stale.
@@ -425,6 +500,29 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       useSessionStore.getState().clear();
     }
   }, [user]);
+
+  // Force a clean React state wipe when the API layer hard-logs-out the user
+  // (refresh token expired/revoked, server 401 the SPA can't recover from).
+  // Without this, the in-memory store keeps showing the previous user even
+  // though localStorage / hash route have already moved to /login.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onSessionExpired = () => {
+      setUser(null);
+      useSessionStore.getState().clear();
+      setMyReferrals(null);
+      setReviews([]);
+      setCart([]);
+      setOrders([]);
+      setWithdrawalRequests([]);
+      setNotifications([]);
+      setChats([]);
+      setMessages([]);
+      setCompareList([]);
+    };
+    window.addEventListener('agm:session-expired', onSessionExpired);
+    return () => window.removeEventListener('agm:session-expired', onSessionExpired);
+  }, []);
 
   // ─── DEBOUNCED CART SYNC ───────────────────────────────────────────────────
   useEffect(() => {
@@ -455,6 +553,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const socketRef = useRef<Socket | null>(null);
   const userRef = useRef<typeof user>(user);
   userRef.current = user;
+  // True while the /notifications socket is connected. The chat page reads
+  // this via `useStore()` to decide whether to fall back to polling.
+  const [realtimeConnected, setRealtimeConnected] = useState<boolean>(false);
 
   // Debounced light refresh: only fetches orders + notifications (the things that change
   // on socket events), not the full catalog. Collapses rapid-fire notifications into one call.
@@ -518,81 +619,496 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       withCredentials: true,
     });
     socketRef.current = socket;
+
+    socket.on('connect', () => setRealtimeConnected(true));
+    socket.on('disconnect', () => setRealtimeConnected(false));
+
     socket.on('notification', () => {
       debouncedLightFetch();
     });
+
+    // ─── Chat message push (new). Replaces the 3s message-poll. ─────────────
+    //
+    // The backend now emits `chat:message` to every participant when a chat
+    // message is saved. We append it in-place so the recipient's UI updates
+    // instantly without hitting the messages endpoint. The chat page keeps a
+    // long-interval visibility-gated safety-net poll for missed events.
+    socket.on('chat:message', (payload: any) => {
+      if (!payload?.message?.id) return;
+      const sessionId = String(payload.sessionId ?? payload.message.chatSessionId ?? '');
+      const m = payload.message;
+      const incoming: ChatMessage = {
+        id: String(m.id),
+        chatId: sessionId,
+        senderId: String(m.senderId),
+        text: String(m.text ?? ''),
+        systemMessage: Boolean(m.systemMessage),
+        createdAt: typeof m.createdAt === 'string' ? m.createdAt : new Date(m.createdAt).toISOString(),
+        proposal: m.proposalOfferId
+          ? {
+              offerId: String(m.proposalOfferId),
+              pricePerUnit: Number(m.proposalPricePerUnit ?? 0),
+              quantity: Number(m.proposalQuantity ?? 0),
+              status: (m.proposalStatus as ProposalStatus) || ProposalStatus.PENDING,
+            }
+          : undefined,
+        status: 'SENT',
+      };
+      setMessages((prev) => {
+        // Already present (e.g. sender's own POST response wrote it): replace.
+        const idx = prev.findIndex((x) => x.id === incoming.id);
+        if (idx >= 0) {
+          const next = prev.slice();
+          next[idx] = { ...prev[idx], ...incoming };
+          return next;
+        }
+        // Collapse the optimistic placeholder (same chat/sender/text within 2 min).
+        const optIdx = prev.findIndex(
+          (x) =>
+            x.status === 'SENDING' &&
+            x.chatId === incoming.chatId &&
+            x.senderId === incoming.senderId &&
+            (x.text || '') === (incoming.text || '') &&
+            Math.abs(new Date(x.createdAt).getTime() - new Date(incoming.createdAt).getTime()) < 120_000,
+        );
+        if (optIdx >= 0) {
+          const next = prev.slice();
+          next[optIdx] = { ...incoming, clientId: prev[optIdx].clientId };
+          return next;
+        }
+        // Append only if this chat is the one currently loaded in state.
+        // Other chats stay lazy — they'll fetch on open. This keeps the
+        // store small and avoids leaking history across sessions.
+        const isCurrentChat = prev.some((x) => x.chatId === incoming.chatId);
+        if (!isCurrentChat) return prev;
+        return [...prev, incoming].sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        );
+      });
+    });
+
+    // Sidebar preview + unread badge — update in-place, no refetch.
+    socket.on('chat:session-update', (payload: any) => {
+      if (!payload?.sessionId) return;
+      const me = userRef.current?.id;
+      setChats((prev) =>
+        prev.map((c) => {
+          if (c.id !== payload.sessionId) return c;
+          const nextUnread = { ...(c.unreadCounts || {}) };
+          if (me && payload.senderId && me !== payload.senderId) {
+            nextUnread[me] = (nextUnread[me] || 0) + 1;
+          }
+          return {
+            ...c,
+            lastMessage: payload.lastMessage ?? c.lastMessage,
+            lastMessageAt: payload.lastMessageAt ?? c.lastMessageAt,
+            unreadCounts: nextUnread,
+          };
+        }),
+      );
+    });
+
+    // Live proposal resolution — flip PENDING → ACCEPTED/REJECTED in place.
+    socket.on('chat:proposal-resolved', (payload: any) => {
+      if (!payload?.messageId || !payload?.proposalStatus) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === payload.messageId && m.proposal
+            ? { ...m, proposal: { ...m.proposal, status: payload.proposalStatus as ProposalStatus } }
+            : m,
+        ),
+      );
+    });
+
     socket.on('connect_error', () => {
-      // Fallback: polling will still refresh orders every 15s
+      setRealtimeConnected(false);
+      // Fallback: storeContext's 60s global poll + ChatPage's safety-net poll
+      // (30s when WS is alive, 10s when WS is down) keep the UI fresh.
     });
     return () => {
       socket.disconnect();
       socketRef.current = null;
+      setRealtimeConnected(false);
       if (notificationFetchTimer.current) clearTimeout(notificationFetchTimer.current);
     };
   }, [user?.id]);
 
-  // ─── GLOBAL POLLING (Orders, Notifications, Chats) — fallback when WebSocket is unavailable ─
+  // ─── GLOBAL POLLING (lightweight, visibility-gated) ─────────────────────────
+  //
+  // Previously polled orders + notifications + chat sessions every 15s for every
+  // authenticated user — even an idle tab. Now:
+  //   - 60s cadence
+  //   - paused when the tab is hidden (visibilitychange listener)
+  //   - orders dropped from the poll: pages re-fetch via `refreshOrders()` on
+  //     mount (dedup-cached) and sockets push real-time updates anyway
+  //
+  // Only notifications + chat-session unread counts run here because the navbar
+  // badges need to stay live without forcing the user to be on a particular page.
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (user && getToken()) {
-      interval = setInterval(async () => {
-        if (!getToken() || isRefreshOnCooldown() || globalPollInFlightRef.current) return;
-        globalPollInFlightRef.current = true;
-        try {
-          const on401 = (_e: unknown) => {};
-          const resSessions = await apiFetch<ChatSession[]>(API_ENDPOINTS.chat.sessions, { silent401: true } as any).catch((e) => { on401(e); return null; });
-          if (resSessions && Array.isArray(resSessions)) {
-            const normalized = normalizeChatSessionsFromApi(resSessions);
-            setChats((prev) => mergeChatSessionsById(prev, normalized));
-          }
+    let interval: NodeJS.Timeout | null = null;
+    const isVisible = () =>
+      typeof document === 'undefined' || document.visibilityState === 'visible';
 
-          const resNotif = await apiFetch<Notification[]>(API_ENDPOINTS.notifications.list, { silent401: true } as any).catch((e) => { on401(e); return null; });
-          if (resNotif && Array.isArray(resNotif)) {
-            setNotifications((prev) => {
-              const localOnly = prev.filter((n) => n.id.startsWith('note-'));
-              const byId = new Map(resNotif.map((n) => [n.id, n]));
-              localOnly.forEach((n) => byId.set(n.id, n));
-              return Array.from(byId.values()).sort(
-                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-              );
-            });
-          }
-
-          const orderEndpoints = getOrdersEndpointsForUser(userRef.current);
-          if (orderEndpoints.length > 0) {
-            const orderResults = await Promise.all(
-              orderEndpoints.map((endpoint) =>
-                apiFetch<any[]>(endpoint, { silent401: true } as any).catch((e) => {
-                  on401(e);
-                  return [];
-                }),
-              ),
-            );
-            const mergedOrders = Array.from(
-              new Map(orderResults.flat().map((o: any) => [o.id, o])).values(),
-            );
-            setOrders(mergedOrders.map((o: any) => ({
-              ...o,
-              items: Array.isArray(o.orderItems || o.items)
-                ? (o.orderItems || o.items).map((item: any) => ({
-                  ...item,
-                  cartQuantity: item.cartQuantity || item.quantity || 1,
-                  id: item.offerId || item.id
-                }))
-                : []
-            })));
-          }
-        } catch {
-          // ignore background polling errors
-        } finally {
-          globalPollInFlightRef.current = false;
+    const tick = async () => {
+      if (!getToken() || isRefreshOnCooldown() || globalPollInFlightRef.current) return;
+      if (!isVisible()) return;
+      globalPollInFlightRef.current = true;
+      try {
+        const resSessions = await apiFetch<ChatSession[]>(
+          API_ENDPOINTS.chat.sessions,
+          { silent401: true } as any,
+        ).catch(() => null);
+        if (resSessions && Array.isArray(resSessions)) {
+          const normalized = normalizeChatSessionsFromApi(resSessions);
+          setChats((prev) => mergeChatSessionsById(prev, normalized));
         }
-      }, 15000); // 15 seconds
+        // Use the dedup-aware refresher; it skips if cache is still fresh.
+        await refreshNotifications();
+      } catch {
+        // ignore background polling errors
+      } finally {
+        globalPollInFlightRef.current = false;
+      }
+    };
+
+    if (user && getToken()) {
+      interval = setInterval(tick, 60_000); // 60s
+      // Run once immediately on tab becoming visible so badges don't lag.
+      const onVisibility = () => { if (isVisible()) void tick(); };
+      document.addEventListener('visibilitychange', onVisibility);
+      return () => {
+        if (interval) clearInterval(interval);
+        document.removeEventListener('visibilitychange', onVisibility);
+      };
     }
     return () => {
       if (interval) clearInterval(interval);
     };
   }, [user?.id]);
+
+  /**
+   * Mark a feature's query cache as stale so the next `refreshX()` call hits
+   * the API instead of replaying cached data. Most mutations already update
+   * local state optimistically, but if the cache stayed "fresh" the next page
+   * mount would call `refreshX()` → cached() → `setX(staleCache)` and revert
+   * the mutation. This helper prevents that.
+   */
+  const bustCache = (queryKey: readonly unknown[]) => {
+    void queryClient.invalidateQueries({ queryKey: queryKey as any, exact: false });
+  };
+
+  // ─── PER-FEATURE REFRESHERS (React Query backed) ───────────────────────────
+  //
+  // Each helper is a thin wrapper around `queryClient.fetchQuery` so calls
+  // within the slice's `staleTime` window are no-ops (dedup + cache). After
+  // a successful fetch we mirror the result into the existing `useState`
+  // arrays so every downstream `useStore()` consumer keeps reading from a
+  // single source of truth.
+
+  const mapOrderRow = (o: any) => ({
+    ...o,
+    items: Array.isArray(o.orderItems || o.items)
+      ? (o.orderItems || o.items).map((item: any) => ({
+          ...item,
+          cartQuantity: item.cartQuantity || item.quantity || 1,
+          id: item.offerId || item.id,
+        }))
+      : [],
+  });
+
+  const mapProducerRow = (p: any): ProducerProfile => {
+    const displayName =
+      (p as any).user?.displayName ??
+      `${String((p as any).firstName ?? '').trim()} ${String((p as any).lastName ?? '').trim()}`.trim();
+    return {
+      ...p,
+      name: displayName || 'Unknown',
+      profileImageUrl: (p as any).user?.profileImageUrl ?? (p as any).profileImageUrl,
+      locations: Array.isArray(p.locations) ? p.locations.map(normalizeLocationFromApi) : [],
+      preferredHomeDelivery: normalizePreferredHomeFromApi((p as any).preferredHomeDelivery),
+      certifications: p.certifications || [],
+      paymentMethods: p.paymentMethods || [],
+      referrals: p.referrals || [],
+      favorites: p.favorites || [],
+      productionTypes: p.productionTypes || [],
+      searchHistory: p.searchHistory || [],
+    };
+  };
+
+  const mapClientRow = (c: any) => {
+    const displayName =
+      (c as any).user?.displayName ??
+      `${String((c as any).firstName ?? '').trim()} ${String((c as any).lastName ?? '').trim()}`.trim();
+    return {
+      ...c,
+      name: displayName || 'Unknown',
+      profileImageUrl: (c as any).user?.profileImageUrl ?? (c as any).profileImageUrl,
+      locations: Array.isArray(c.locations) ? c.locations.map(normalizeLocationFromApi) : [],
+      preferredHomeDelivery: normalizePreferredHomeFromApi(c.preferredHomeDelivery),
+      favorites: c.favorites || [],
+      referrals: c.referrals || [],
+      searchHistory: c.searchHistory || [],
+    };
+  };
+
+  /** `queryClient.fetchQuery` honours `staleTime`; passing `force` invalidates first. */
+  const cached = async <T,>(
+    queryKey: readonly unknown[],
+    queryFn: () => Promise<T>,
+    staleTime: number,
+    force?: boolean,
+  ): Promise<T | null> => {
+    try {
+      if (force) {
+        await queryClient.invalidateQueries({ queryKey: queryKey as any, exact: false });
+      }
+      return await queryClient.fetchQuery({
+        queryKey: queryKey as any,
+        queryFn,
+        staleTime,
+      });
+    } catch (e) {
+      logApiFailure('cached fetch failed', e);
+      return null;
+    }
+  };
+
+  const refreshOffers = async (opts?: { force?: boolean }) => {
+    const data = await cached(
+      QK.offers(),
+      () => apiFetch<Offer[] | { data: Offer[] }>(API_ENDPOINTS.offers.list, { silent401: true } as any),
+      STALE.catalog,
+      opts?.force,
+    );
+    if (!data) return;
+    const list = Array.isArray(data) ? data : ((data as any).data ?? []);
+    setOffers(list);
+  };
+
+  const refreshProducers = async (opts?: { force?: boolean }) => {
+    const data = await cached(
+      QK.producers(),
+      () => apiFetch<any[]>(API_ENDPOINTS.producers.list, { silent401: true } as any),
+      STALE.catalog,
+      opts?.force,
+    );
+    if (!Array.isArray(data)) return;
+    setProducers(data.map(mapProducerRow));
+  };
+
+  const refreshClients = async (opts?: { force?: boolean }) => {
+    if (!getToken()) return;
+    const data = await cached(
+      QK.clients(),
+      () => apiFetch<any[]>(API_ENDPOINTS.clients.list, { silent401: true } as any),
+      STALE.catalog,
+      opts?.force,
+    );
+    if (!Array.isArray(data)) return;
+    setClients(data.map(mapClientRow));
+  };
+
+  const refreshPickupPoints = async (opts?: { force?: boolean }) => {
+    const data = await cached(
+      QK.pickupPoints(),
+      () => apiFetch<PickupPoint[]>(API_ENDPOINTS.pickupPoints.list, { silent401: true } as any),
+      STALE.pickupPoints,
+      opts?.force,
+    );
+    if (Array.isArray(data)) setPickupPoints(data);
+  };
+
+  const refreshAllReviews = async (opts?: { force?: boolean }) => {
+    const data = await cached(
+      QK.allReviews(),
+      () => apiFetch<any[]>(API_ENDPOINTS.reviews.all, { silent401: true } as any),
+      STALE.reviews,
+      opts?.force,
+    );
+    if (!Array.isArray(data) || data.length === 0) return;
+    const mapped = data.map(mapReviewFromApi);
+    setReviews((prev) => {
+      const byId = new Map(prev.map((x) => [x.id, x]));
+      mapped.forEach((x) => byId.set(x.id, x));
+      return Array.from(byId.values());
+    });
+  };
+
+  const refreshOrders = async (opts?: { force?: boolean }) => {
+    const u = userRef.current;
+    if (!u || !getToken()) return;
+    const endpoints = getOrdersEndpointsForUser(u);
+    if (endpoints.length === 0) return;
+    const data = await cached(
+      QK.orders(u.id, u.role, u.clientId),
+      async () => {
+        const rows = await Promise.all(
+          endpoints.map((ep) =>
+            apiFetch<any[]>(ep, { silent401: true } as any).catch(() => [] as any[]),
+          ),
+        );
+        return Array.from(new Map(rows.flat().map((o: any) => [o.id, o])).values());
+      },
+      STALE.orders,
+      opts?.force,
+    );
+    if (Array.isArray(data)) setOrders(data.map(mapOrderRow));
+  };
+
+  const refreshWallet = async (opts?: { force?: boolean }) => {
+    const u = userRef.current;
+    if (!u || !getToken()) return;
+    const data = await cached(
+      QK.wallet(u.id),
+      () => apiFetch<any>(API_ENDPOINTS.wallet.me, { silent401: true } as any),
+      STALE.wallet,
+      opts?.force,
+    );
+    if (!data || !data.userId) return;
+    setWallets((prev) => ({
+      ...prev,
+      [u.id]: {
+        userId: data.userId,
+        balance: Number(data.balance) || 0,
+        pendingBalance: Number(data.pendingBalance) || 0,
+        transactions: Array.isArray(data.transactions) ? data.transactions : [],
+      },
+    }));
+  };
+
+  const refreshWithdrawals = async (opts?: { force?: boolean }) => {
+    const u = userRef.current;
+    if (!u || !getToken()) return;
+    const data = await cached(
+      QK.withdrawals(u.id),
+      () => apiFetch<any[]>(API_ENDPOINTS.wallet.myWithdrawals, { silent401: true } as any),
+      STALE.withdrawals,
+      opts?.force,
+    );
+    setWithdrawalRequests(Array.isArray(data) ? data.map(mapWithdrawalFromApi) : []);
+  };
+
+  const refreshMyPortfolios = async (opts?: { force?: boolean }) => {
+    const u = userRef.current;
+    if (!u || !getToken()) return;
+    if (u.role !== UserRole.PRODUCER || !u.producerId) return;
+    const data = await cached(
+      QK.myPortfolios(u.id),
+      () => apiFetch<Portfolio[]>(API_ENDPOINTS.portfolios.list, { silent401: true } as any),
+      STALE.portfolios,
+      opts?.force,
+    );
+    if (Array.isArray(data)) setPortfolios(data);
+  };
+
+  const refreshMyReviews = async (opts?: { force?: boolean }) => {
+    const u = userRef.current;
+    if (!u || !getToken()) return;
+    const data = await cached(
+      QK.myReviews(u.id),
+      () => apiFetch<any[]>(API_ENDPOINTS.reviews.byUser(u.id), { silent401: true } as any),
+      STALE.reviews,
+      opts?.force,
+    );
+    if (!Array.isArray(data)) return;
+    const mapped = data.map(mapReviewFromApi);
+    setReviews((prev) => {
+      const byId = new Map(prev.map((x) => [x.id, x]));
+      mapped.forEach((x) => byId.set(x.id, x));
+      return Array.from(byId.values());
+    });
+  };
+
+  const refreshNotifications = async (opts?: { force?: boolean }) => {
+    const u = userRef.current;
+    if (!u || !getToken()) return;
+    const data = await cached(
+      QK.notifications(u.id),
+      () => apiFetch<Notification[]>(API_ENDPOINTS.notifications.list, { silent401: true } as any),
+      STALE.notifications,
+      opts?.force,
+    );
+    if (!Array.isArray(data)) return;
+    setNotifications((prev) => {
+      const localOnly = prev.filter((n) => n.id.startsWith('note-'));
+      const byId = new Map(data.map((n) => [n.id, n]));
+      localOnly.forEach((n) => byId.set(n.id, n));
+      return Array.from(byId.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+    });
+  };
+
+  const refreshCart = async (opts?: { force?: boolean }) => {
+    const u = userRef.current;
+    if (!u || !getToken()) return;
+    const payload = await cached(
+      QK.cart(u.id),
+      () =>
+        apiFetch<{ items?: Array<{ offerId: string; quantity: number; bookingDate?: string }> }>(
+          API_ENDPOINTS.cart.get,
+          { silent401: true } as any,
+        ),
+      STALE.cart,
+      opts?.force,
+    );
+    const rows = payload?.items;
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    // Read offers from the React Query cache (always current after a refresh
+    // in the same render cycle, unlike `offers` from useState which is stale
+    // inside the same closure). Fall back to component state when missing.
+    let offersList = (queryClient.getQueryData<Offer[] | { data: Offer[] }>(QK.offers()) ?? null) as
+      | Offer[]
+      | { data: Offer[] }
+      | null;
+    let offersArr: Offer[] = Array.isArray(offersList)
+      ? offersList
+      : Array.isArray((offersList as any)?.data)
+        ? ((offersList as any).data as Offer[])
+        : offers;
+    if (offersArr.length === 0) return; // bootstrap will retry on next page mount
+    setCart((prev) => {
+      if (prev.length > 0) return prev;
+      const hydrated = rows
+        .map((row) => {
+          const off = offersArr.find((o: any) => o.id === row.offerId) as Offer | undefined;
+          if (!off) return null;
+          return {
+            ...off,
+            cartQuantity: Math.max(1, Math.floor(Number(row.quantity)) || 1),
+            bookingDate: row.bookingDate ? new Date(row.bookingDate).toISOString() : undefined,
+          } as CartItem;
+        })
+        .filter(Boolean) as CartItem[];
+      return hydrated.length ? hydrated : prev;
+    });
+  };
+
+  /**
+   * Minimal bootstrap.
+   *
+   * Only fetches the data the navbar needs to render its badges (unread
+   * notifications + chat sessions) for authenticated users. Every other slice
+   * is fetched lazily by the page (or even by the active tab within a page)
+   * that actually needs it.
+   *
+   * This is the React Query pattern: pages own their queries, and the cache
+   * dedupes repeat reads within `staleTime`, so a second visit to a page is
+   * instant.
+   */
+  const bootstrapForRoute = async () => {
+    const authed = Boolean(user && getToken());
+    try {
+      if (authed) {
+        await Promise.all([refreshNotifications(), fetchChats()]);
+      }
+    } finally {
+      if (!initialCatalogLoadDoneRef.current) {
+        initialCatalogLoadDoneRef.current = true;
+        setIsInitialCatalogLoading(false);
+      }
+    }
+  };
 
   // ─── DATA FETCHING ──────────────────────────────────────────────────────────
 
@@ -804,6 +1320,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       await apiFetch(API_ENDPOINTS.notifications.markRead, { method: 'PATCH', silent401: true } as any);
       setNotifications(prev => prev.map(n => n.userId === user.id ? { ...n, isRead: true } : n));
+      bustCache(['notifications']);
     } catch (e) {
       logApiFailure('Failed to mark notifications as read:', e);
     }
@@ -821,6 +1338,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           n.id === notificationId && n.userId === user.id ? { ...n, isRead: true } : n,
         ),
       );
+      bustCache(['notifications']);
     } catch (e) {
       logApiFailure('Failed to mark notification as read:', e);
     }
@@ -834,6 +1352,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         silent401: true,
       } as any);
       setNotifications((prev) => prev.filter((n) => !(n.id === notificationId && n.userId === user.id)));
+      bustCache(['notifications']);
     } catch (e) {
       logApiFailure('Failed to delete notification:', e);
     }
@@ -847,6 +1366,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         silent401: true,
       } as any);
       setNotifications((prev) => prev.filter((n) => n.userId !== user.id));
+      bustCache(['notifications']);
     } catch (e) {
       logApiFailure('Failed to clear notifications:', e);
     }
@@ -1210,6 +1730,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         useSessionStore.getState().setUser(nextUser);
         localStorage.setItem('currentUser', JSON.stringify(nextUser));
       }
+      bustCache(QK.producers());
       if (user) addNotification(user.id, 'Profile updated', 'SUCCESS');
       return true;
     } catch (error) {
@@ -1242,6 +1763,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify({ schedule, exceptions }),
       });
       setProducers(prev => prev.map(p => p.id === producerId ? { ...p, availability: schedule, exceptions } : p));
+      bustCache(QK.producers());
       if (user) addNotification(user.id, 'Availability updated', 'SUCCESS');
     } catch (error) {
       logApiFailure('Failed to update availability', error);
@@ -1255,6 +1777,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify({ status }),
       });
       setProducers(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+      bustCache(QK.producers());
     } catch (error) {
       logApiFailure('Failed to validate producer', error);
     }
@@ -1298,10 +1821,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const saveProducerPaymentMethod = (producerId: string, method: PaymentMethod) => {
     setProducers(prev => prev.map(p => p.id === producerId ? { ...p, paymentMethods: p.paymentMethods.some(pm => pm.id === method.id) ? p.paymentMethods.map(pm => pm.id === method.id ? method : pm) : [...p.paymentMethods, method] } : p));
+    bustCache(QK.producers());
   };
 
   const deleteProducerPaymentMethod = (producerId: string, methodId: string) => {
     setProducers(prev => prev.map(p => p.id === producerId ? { ...p, paymentMethods: p.paymentMethods.filter(pm => pm.id !== methodId) } : p));
+    bustCache(QK.producers());
   };
 
   // ─── CLIENT PROFILE ──────────────────────────────────────────────────────────
@@ -1356,6 +1881,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         useSessionStore.getState().setUser(nextUser);
         localStorage.setItem('currentUser', JSON.stringify(nextUser));
       }
+      bustCache(QK.clients());
       if (user) addNotification(user.id, 'Profile updated', 'SUCCESS');
       return true;
     } catch (error) {
@@ -1377,6 +1903,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(offerData),
       });
       setOffers(prev => [...prev, newOffer]);
+      bustCache(QK.offers());
       addNotification(user.id, 'Offer created successfully.', 'SUCCESS');
       return { success: true };
     } catch (err: unknown) {
@@ -1394,6 +1921,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(updatedOffer),
       });
       setOffers(prev => prev.map(o => o.id === saved.id ? saved : o));
+      bustCache(QK.offers());
       if (user) addNotification(user.id, 'Offer updated successfully.', 'SUCCESS');
       return { success: true };
     } catch (error: unknown) {
@@ -1424,6 +1952,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         method: 'DELETE',
       });
       setOffers(prev => prev.filter(o => o.id !== offerId));
+      bustCache(QK.offers());
       if (user) addNotification(user.id, 'Offer deleted successfully.', 'SUCCESS');
       return { success: true };
     } catch (error: unknown) {
@@ -1473,12 +2002,17 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const exists = prev.find(i => i.id === offer.id);
       return exists ? prev.map(i => i.id === offer.id ? { ...i, cartQuantity: i.cartQuantity + quantity } : i) : [...prev, { ...offer, cartQuantity: quantity }];
     });
+    if (user?.id) bustCache(QK.cart(user.id));
     return { success: true };
   };
 
-  const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
+  const removeFromCart = (id: string) => {
+    setCart(prev => prev.filter(i => i.id !== id));
+    if (user?.id) bustCache(QK.cart(user.id));
+  };
   const clearCart = () => {
     setCart([]);
+    if (user?.id) bustCache(QK.cart(user.id));
     if (user && getToken()) {
       apiFetch(API_ENDPOINTS.cart.clear, {
         method: 'DELETE',
@@ -1534,6 +2068,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           }))
           : []
       }]);
+      bustCache(['orders']);
+      bustCache(['offers']);
+      if (user?.id) bustCache(QK.cart(user.id));
       if (user) addNotification(user.id, `Order #${saved.id.substring(saved.id.length - 6).toUpperCase()} placed!`, 'SUCCESS');
       if (user?.role === UserRole.PRODUCER && saved?.clientId) {
         setUser(prev => {
@@ -1564,6 +2101,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       await apiFetch(API_ENDPOINTS.orders.confirm(orderId), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CONFIRMED_AWAITING_PAYMENT } : o));
+      bustCache(['orders']);
       addNotification(user.id, `Order #${targetOrder.id.substring(targetOrder.id.length - 6).toUpperCase()} confirmed.`, 'SUCCESS');
     } catch (error) {
       logApiFailure('Failed to confirm order', error);
@@ -1579,6 +2117,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       await apiFetch(API_ENDPOINTS.orders.reject(orderId), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CANCELLED } : o));
+      bustCache(['orders']);
       addNotification(user!.id, `Order #${orderId.substring(orderId.length - 6).toUpperCase()} cancelled by producer.`, 'WARNING');
     } catch (error) {
       logApiFailure('Failed to reject order', error);
@@ -1594,6 +2133,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       await apiFetch(API_ENDPOINTS.orders.cancel(orderId), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.CANCELLED } : o));
+      bustCache(['orders']);
       addNotification(user!.id, `Order #${orderId.substring(orderId.length - 6).toUpperCase()} cancelled.`, 'WARNING');
     } catch (error) {
       logApiFailure('Failed to cancel order', error);
@@ -1609,6 +2149,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (!result.success) return { success: false, error: result.error === 'INSUFFICIENT_FUNDS' ? 'INSUFFICIENT_FUNDS' : undefined };
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.PAID_IN_PREPARATION } : o));
       if (result.wallet) setWallets(prev => ({ ...prev, [user.id]: result.wallet! }));
+      bustCache(['orders']);
+      bustCache(QK.wallet(user.id));
       addNotification(user.id, 'Payment successful!', 'SUCCESS');
       return { success: true };
     } catch (error) {
@@ -1621,6 +2163,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       await apiFetch(API_ENDPOINTS.orders.deliver(id), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status: OrderStatus.IN_TRANSIT } : o));
+      bustCache(['orders']);
       if (user) addNotification(user.id, 'Order marked as in transit.', 'INFO');
     } catch (error) {
       logApiFailure('Failed to start delivery', error);
@@ -1631,6 +2174,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       await apiFetch(API_ENDPOINTS.orders.confirmReceipt(id), { method: 'PATCH' });
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status: OrderStatus.DELIVERED } : o));
+      bustCache(['orders']);
       if (user) {
         addNotification(user.id, 'Delivery confirmed. Thank you!', 'SUCCESS');
       }
@@ -1649,6 +2193,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const result = await apiUpload<{ evidence: DisputeEvidence[] }>(API_ENDPOINTS.orders.dispute(orderId), formData);
       evidence = result.evidence;
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.DISPUTE, disputeReason: reason, disputeEvidence: evidence } : o));
+      bustCache(['orders']);
       if (user) addNotification(user.id, 'Dispute opened.', 'WARNING');
     } catch (error) {
       logApiFailure('Failed to report problem', error);
@@ -1693,6 +2238,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           return o;
         }),
       );
+      bustCache(['reviews']);
+      bustCache(['orders']);
     } catch (error) {
       logApiFailure('Failed to submit review', error);
     }
@@ -1726,6 +2273,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify({ amount, provider, referenceId: refId }),
       });
       if (result.wallet) setWallets(prev => ({ ...prev, [user.id]: result.wallet }));
+      bustCache(QK.wallet(user.id));
       return { success: result.success, message: result.message };
     } catch (error: any) {
       logApiFailure('Failed to fund wallet', error);
@@ -1749,6 +2297,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       } catch {
         setWithdrawalRequests([]);
       }
+      bustCache(QK.wallet(user.id));
+      bustCache(QK.withdrawals(user.id));
       return { success: result.success, message: result.message };
     } catch (error: any) {
       logApiFailure('Failed to request withdrawal', error);
@@ -1770,6 +2320,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(payload),
       });
       setPortfolios(prev => [...prev, saved]);
+      bustCache(['portfolios']);
     } catch (error) {
       logApiFailure('Failed to add portfolio', error);
     }
@@ -1782,6 +2333,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(updated),
       });
       setPortfolios(prev => prev.map(p => p.id === saved.id ? saved : p));
+      bustCache(['portfolios']);
     } catch (error) {
       logApiFailure('Failed to update portfolio', error);
     }
@@ -1791,6 +2343,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       await apiFetch(API_ENDPOINTS.portfolios.remove(id), { method: 'DELETE' });
       setPortfolios(prev => prev.filter(p => p.id !== id));
+      bustCache(['portfolios']);
     } catch (error) {
       logApiFailure('Failed to delete portfolio', error);
     }
@@ -2183,14 +2736,45 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           pricePerUnit: m.proposalPricePerUnit,
           quantity: m.proposalQuantity,
           status: m.proposalStatus as ProposalStatus || ProposalStatus.PENDING
-        } : undefined
+        } : undefined,
+        status: 'SENT',
       }));
 
-      // Merge: update existing messages (status may have changed) + append new ones
+      // Merge with reconciliation:
+      // 1. Server messages overwrite by id (canonical truth).
+      // 2. Any local optimistic bubble (status: 'SENDING') whose senderId/text/chatId
+      //    matches an incoming server message within a 2-minute window is collapsed
+      //    into the server record (carries the clientId across) so we don't render
+      //    duplicates when the 3s poll races the POST response.
+      // 3. Local 'SENDING' / 'FAILED' bubbles that have no server counterpart yet
+      //    are preserved as-is.
       setMessages(prev => {
-        const existingMap = new Map(prev.map(msg => [msg.id, msg]));
-        mappedMessages.forEach(msg => existingMap.set(msg.id, msg)); // overwrite with server truth
-        return Array.from(existingMap.values()).sort(
+        const out = new Map<string, ChatMessage>();
+        // First copy everything we already have keyed by id.
+        for (const m of prev) out.set(m.id, m);
+        // Then merge in server messages, collapsing optimistic matches.
+        for (const server of mappedMessages) {
+          // Try to find an optimistic local bubble that this server record represents.
+          let optimisticKey: string | null = null;
+          for (const [key, local] of out) {
+            if (local.status !== 'SENDING') continue;
+            if (local.chatId !== server.chatId) continue;
+            if (local.senderId !== server.senderId) continue;
+            if ((local.text || '') !== (server.text || '')) continue;
+            const drift = Math.abs(new Date(local.createdAt).getTime() - new Date(server.createdAt).getTime());
+            if (drift > 120_000) continue;
+            optimisticKey = key;
+            break;
+          }
+          if (optimisticKey) {
+            const optimistic = out.get(optimisticKey)!;
+            out.delete(optimisticKey);
+            out.set(server.id, { ...server, clientId: optimistic.clientId });
+          } else {
+            out.set(server.id, server);
+          }
+        }
+        return Array.from(out.values()).sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
       });
@@ -2373,16 +2957,47 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return false;
   };
 
-  const sendMessage = async (chatId: string, text: string, proposal?: any) => {
-    if (!user) return false;
-    const hasEmail = text.match(/[a-zA-Z0-9._%+-]+@?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-    const hasPhone = hasPhoneNumber(text);
-    const hasLink = text.match(/https?:\/\/\S+|www\.\S+/i);
-    if (!proposal && !text.startsWith('Counter') && !text.startsWith('Formal') && (hasEmail || hasPhone || hasLink)) {
-      addNotification(user.id, hasPhone ? 'Sharing phone numbers is not allowed in chat.' : hasEmail ? 'Sharing email addresses is not allowed in chat.' : 'Sharing links is not allowed in chat.', 'ERROR');
-      return Promise.resolve(false);
+  /**
+   * Translate raw error from the chat POST into a friendly, actionable string.
+   * Pulled out so `sendMessage` and `retryMessage` show identical wording.
+   */
+  const friendlyChatErrorMessage = (e: any): string => {
+    let errorMessage = e?.message || 'Failed to send message';
+    if (errorMessage.toLowerCase().includes('offer') && errorMessage.toLowerCase().includes('not negotiable')) {
+      errorMessage = '❌ This offer is not open for negotiation.';
+    } else if (errorMessage.toLowerCase().includes('offer') && errorMessage.toLowerCase().includes('not exist')) {
+      errorMessage = '❌ The offer no longer exists.';
+    } else if (errorMessage.toLowerCase().includes('exceed') && errorMessage.toLowerCase().includes('listing')) {
+      errorMessage = '❌ Proposed price per unit cannot be higher than the listing price.';
+    } else if (errorMessage.toLowerCase().includes('price') || errorMessage.toLowerCase().includes('quantity')) {
+      errorMessage = '❌ Price per unit and quantity must be greater than 0.';
+    } else if (e?.status === 400) {
+      errorMessage = '❌ Invalid proposal. Please check your price and quantity values.';
     }
+    return errorMessage;
+  };
 
+  /** Generate a stable, collision-resistant temporary id for an optimistic bubble. */
+  const generateClientMessageId = () => {
+    // Browsers without crypto.randomUUID still get a reasonably unique fallback.
+    const rand = (typeof crypto !== 'undefined' && (crypto as any).randomUUID)
+      ? (crypto as any).randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    return `tmp-${rand}`;
+  };
+
+  /**
+   * Performs the actual POST for an already-inserted optimistic bubble. Used by
+   * both first-time send and retry. The optimistic record must already be in
+   * `messages` keyed by `clientId`.
+   */
+  const dispatchChatMessage = async (
+    chatId: string,
+    clientId: string,
+    text: string,
+    proposal?: any,
+  ): Promise<boolean> => {
+    if (!user) return false;
     try {
       const body: any = { text };
       if (proposal) {
@@ -2407,53 +3022,122 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           offerId: res.proposalOfferId,
           pricePerUnit: res.proposalPricePerUnit,
           quantity: res.proposalQuantity,
-          status: res.proposalStatus as ProposalStatus || ProposalStatus.PENDING
-        } : undefined
+          status: res.proposalStatus as ProposalStatus || ProposalStatus.PENDING,
+        } : undefined,
+        status: 'SENT',
+        clientId,
       };
 
-      // Optimistic updates for new messages
+      // Swap the optimistic placeholder for the canonical server record.
+      // Identify the optimistic by clientId (preferred) or by temp id (fallback).
       setMessages((prev) => {
-        const idx = prev.findIndex((m) => m.id === mappedMsg.id);
-        if (idx === -1) return [...prev, mappedMsg];
-        const next = [...prev];
-        next[idx] = mappedMsg; // server truth wins if poll already inserted it
-        return next;
+        const next: ChatMessage[] = [];
+        let swapped = false;
+        for (const m of prev) {
+          if (!swapped && (m.clientId === clientId || m.id === clientId)) {
+            next.push(mappedMsg);
+            swapped = true;
+            continue;
+          }
+          // Avoid duplicate if the poll already inserted the server message under its real id.
+          if (m.id === mappedMsg.id) continue;
+          next.push(m);
+        }
+        if (!swapped) next.push(mappedMsg);
+        return next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       });
-      setChats(prev => prev.map(c => c.id === chatId ? { ...c, lastMessage: text, lastMessageAt: res.createdAt } : c));
+
+      setChats((prev) => prev.map((c) =>
+        c.id === chatId ? { ...c, lastMessage: text, lastMessageAt: res.createdAt } : c,
+      ));
       void fetchChats();
       return true;
     } catch (e: any) {
       logApiFailure('Failed to send message:', e);
-      
-      // Parse and provide user-friendly error messages
-      let errorMessage = e?.message || 'Failed to send message';
-      
-      // Map common backend errors to user-friendly messages
-      if (errorMessage.toLowerCase().includes('offer') && errorMessage.toLowerCase().includes('not negotiable')) {
-        errorMessage = '❌ This offer is not open for negotiation.';
-      } else if (errorMessage.toLowerCase().includes('offer') && errorMessage.toLowerCase().includes('not exist')) {
-        errorMessage = '❌ The offer no longer exists.';
-      } else if (errorMessage.toLowerCase().includes('exceed') && errorMessage.toLowerCase().includes('listing')) {
-        errorMessage = '❌ Proposed price per unit cannot be higher than the listing price.';
-      } else if (errorMessage.toLowerCase().includes('price') || errorMessage.toLowerCase().includes('quantity')) {
-        errorMessage = '❌ Price per unit and quantity must be greater than 0.';
-      } else if (e?.status === 400) {
-        errorMessage = '❌ Invalid proposal. Please check your price and quantity values.';
-      }
-      
+      const errorMessage = friendlyChatErrorMessage(e);
       addNotification(user.id, errorMessage, 'ERROR');
-      // Never add the message to the UI when the request failed — server may have rejected it (e.g. phone number / link)
+      // Keep the bubble visible but flip it to FAILED so the user can retry.
+      setMessages((prev) => prev.map((m) =>
+        (m.clientId === clientId || m.id === clientId) ? { ...m, status: 'FAILED' } : m,
+      ));
       return false;
     }
+  };
+
+  const sendMessage = async (chatId: string, text: string, proposal?: any) => {
+    if (!user) return false;
+    const hasEmail = text.match(/[a-zA-Z0-9._%+-]+@?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    const hasPhone = hasPhoneNumber(text);
+    const hasLink = text.match(/https?:\/\/\S+|www\.\S+/i);
+    if (!proposal && !text.startsWith('Counter') && !text.startsWith('Formal') && (hasEmail || hasPhone || hasLink)) {
+      addNotification(user.id, hasPhone ? 'Sharing phone numbers is not allowed in chat.' : hasEmail ? 'Sharing email addresses is not allowed in chat.' : 'Sharing links is not allowed in chat.', 'ERROR');
+      return Promise.resolve(false);
+    }
+
+    // Insert the optimistic bubble synchronously so the UI shows the message
+    // immediately ("WhatsApp"-style). It carries a temporary id we'll swap for
+    // the server's id once the POST resolves.
+    const clientId = generateClientMessageId();
+    const optimistic: ChatMessage = {
+      id: clientId,
+      clientId,
+      chatId,
+      senderId: user.id,
+      text,
+      systemMessage: false,
+      createdAt: new Date().toISOString(),
+      status: 'SENDING',
+      proposal: proposal
+        ? {
+            offerId: proposal.offerId,
+            pricePerUnit: proposal.pricePerUnit,
+            quantity: proposal.quantity,
+            status: ProposalStatus.PENDING,
+          }
+        : undefined,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    // Also nudge the sidebar preview so the conversation jumps to the top instantly.
+    setChats((prev) => prev.map((c) =>
+      c.id === chatId ? { ...c, lastMessage: text, lastMessageAt: optimistic.createdAt } : c,
+    ));
+
+    return dispatchChatMessage(chatId, clientId, text, proposal);
+  };
+
+  const retryMessage = async (clientId: string): Promise<boolean> => {
+    if (!user) return false;
+    // Look up the failed bubble; flip it back to SENDING and re-dispatch.
+    let target: ChatMessage | undefined;
+    setMessages((prev) => {
+      const next = prev.map((m) => {
+        if (m.clientId === clientId || m.id === clientId) {
+          target = m;
+          return { ...m, status: 'SENDING' as const, createdAt: new Date().toISOString() };
+        }
+        return m;
+      });
+      return next;
+    });
+    if (!target) return false;
+    const proposalPayload = target.proposal
+      ? {
+          offerId: target.proposal.offerId,
+          pricePerUnit: target.proposal.pricePerUnit,
+          quantity: target.proposal.quantity,
+        }
+      : undefined;
+    return dispatchChatMessage(target.chatId, clientId, target.text, proposalPayload);
   };
   const storeValue: StoreContextType = {
     user, pendingRegistration, guestEmail, setGuestEmail, producers, clients, offers, cart, orders, wallets, notifications, withdrawalRequests, reviews, portfolios, coupons, pickupPoints,
     chats,
     messages,
+    realtimeConnected,
     fetchChats,
     fetchMessages,
     startNegotiation,
-    sendMessage, respondToProposal,
+    sendMessage, retryMessage, respondToProposal,
     login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, deleteOffer, getProducerOffers, getOfferById,
     addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, confirmReceipt, reportProblem, addDisputeEvidence, revealContactInfo,
     getWallet, fundWallet, requestWithdrawal, markNotificationsAsRead, markNotificationAsRead, deleteNotification, clearNotifications, getAvailableSlots, submitReview, getAverageRating,
@@ -2467,18 +3151,36 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     myReferrals,
     refreshMyReferrals,
     isInitialCatalogLoading,
+    refreshOffers,
+    refreshProducers,
+    refreshClients,
+    refreshAllReviews,
+    refreshPickupPoints,
+    refreshOrders,
+    refreshWallet,
+    refreshWithdrawals,
+    refreshMyPortfolios,
+    refreshMyReviews,
+    refreshNotifications,
+    refreshCart,
   };
 
   return <StoreContext.Provider value={storeValue}>{children}</StoreContext.Provider>;
 };
 
-export const useStore = (): StoreContextType => {
+// Hooks are declared as `function` (not `const` arrows) so Vite's React
+// plugin reliably recognises them as hooks for Fast Refresh. Const-arrow
+// exports next to a component force HMR invalidate -> module duplication ->
+// "useStore must be used within a StoreProvider" at runtime.
+export function useStore(): StoreContextType {
   const snapshot = useContext(StoreContext);
   if (!snapshot) {
     throw new Error('useStore must be used within a StoreProvider');
   }
   return snapshot;
-};
+}
 
 /** Use when component may render outside StoreProvider (e.g. global widgets). Returns undefined when outside provider. */
-export const useStoreOptional = (): StoreContextType | undefined => useContext(StoreContext);
+export function useStoreOptional(): StoreContextType | undefined {
+  return useContext(StoreContext);
+}

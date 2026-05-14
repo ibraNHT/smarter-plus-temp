@@ -3,15 +3,15 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
-import { Send, MessageCircle, ChevronLeft, Gavel, ArrowLeft } from 'lucide-react';
-import { ProposalStatus } from '../../types';
+import { Send, MessageCircle, ChevronLeft, Gavel, ArrowLeft, Check, AlertCircle, ChevronDown, Clock } from 'lucide-react';
+import { ProposalStatus, type ChatMessage } from '../../types';
 import { Spinner } from '../../components/Spinner';
 import { SectionLoader } from '../../components/Loaders';
 
 export const ChatPage: React.FC = () => {
    const { chatId } = useParams<{ chatId: string }>();
    const navigate = useNavigate();
-   const { user, chats, messages, sendMessage, respondToProposal, clients, producers, getOfferById, fetchChats, fetchMessages, isInitialCatalogLoading } = useStore();
+   const { user, chats, messages, realtimeConnected, sendMessage, retryMessage, respondToProposal, clients, producers, getOfferById, fetchChats, fetchMessages, refreshOffers, refreshProducers, refreshClients } = useStore();
    const { t } = useTranslation();
 
    const [inputText, setInputText] = useState('');
@@ -31,17 +31,26 @@ export const ChatPage: React.FC = () => {
    const [counterPriceError, setCounterPriceError] = useState('');
    const [counterQtyError, setCounterQtyError] = useState('');
 
-   const [messageSending, setMessageSending] = useState(false);
    const [proposalSending, setProposalSending] = useState(false);
    const [counterSending, setCounterSending] = useState(false);
    const [proposalActionBusy, setProposalActionBusy] = useState<string | null>(null);
 
    const messagesEndRef = useRef<HTMLDivElement>(null);
+   const messagesContainerRef = useRef<HTMLDivElement>(null);
    const messageInputRef = useRef<HTMLTextAreaElement>(null);
    const proposalModalWasOpenRef = useRef(false);
    const isPollingMessagesRef = useRef(false);
    const isPollingChatsRef = useRef(false);
    const chatPollTickRef = useRef(0);
+   // Track which message ids we've already rendered, so newly-arrived bubbles
+   // can be tagged for a one-time fade-in animation without re-animating older
+   // messages on every render.
+   const seenMessageIdsRef = useRef<Set<string>>(new Set());
+   const [animatingIds, setAnimatingIds] = useState<Set<string>>(new Set());
+   // Sticky-to-bottom behaviour: only auto-scroll when the user is already
+   // near the bottom; otherwise show a pill telling them new messages arrived.
+   const [isNearBottom, setIsNearBottom] = useState(true);
+   const [newIncomingCount, setNewIncomingCount] = useState(0);
 
    const TEXTAREA_MAX_PX = 160;
 
@@ -154,62 +163,163 @@ export const ChatPage: React.FC = () => {
       return d.toLocaleDateString();
    };
 
-   const scrollToBottom = () => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-   };
+   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+      messagesEndRef.current?.scrollIntoView({ behavior });
+   }, []);
 
-   // Only auto-scroll when a NEW message arrives or chat changes
+   const handleMessagesScroll = useCallback(() => {
+      const el = messagesContainerRef.current;
+      if (!el) return;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const nearBottom = distanceFromBottom < 120;
+      setIsNearBottom(nearBottom);
+      if (nearBottom && newIncomingCount > 0) setNewIncomingCount(0);
+   }, [newIncomingCount]);
+
+   // Reset scroll bookkeeping when switching chats so we don't carry over the
+   // previous conversation's "new messages" pill.
    useEffect(() => {
-      scrollToBottom();
-   }, [activeMessages.length, chatId]);
+      seenMessageIdsRef.current = new Set();
+      setAnimatingIds(new Set());
+      setNewIncomingCount(0);
+      setIsNearBottom(true);
+      requestAnimationFrame(() => scrollToBottom('auto'));
+   }, [chatId, scrollToBottom]);
+
+   // React to changes in the message list:
+   // - If the user is at the bottom (reading the live thread), auto-scroll.
+   // - Otherwise track how many new incoming bubbles arrived so we can show
+   //   the "↓ N new messages" pill.
+   // - Always tag genuinely-new ids for the one-time fade-in animation.
+   useEffect(() => {
+      if (activeMessages.length === 0) {
+         seenMessageIdsRef.current = new Set();
+         return;
+      }
+      const prevSeen = seenMessageIdsRef.current;
+      const newlyArrived: ChatMessage[] = [];
+      for (const m of activeMessages) {
+         if (!prevSeen.has(m.id)) newlyArrived.push(m);
+      }
+      // Update the seen set to the current list (covers both arrivals and removals).
+      seenMessageIdsRef.current = new Set(activeMessages.map((m) => m.id));
+
+      if (newlyArrived.length === 0) return;
+
+      // Animate every new bubble exactly once; drop the tag after the animation
+      // completes so subsequent re-renders don't re-trigger it.
+      setAnimatingIds((prev) => {
+         const next = new Set(prev);
+         for (const m of newlyArrived) next.add(m.id);
+         return next;
+      });
+      const ids = newlyArrived.map((m) => m.id);
+      const animationTimer = setTimeout(() => {
+         setAnimatingIds((prev) => {
+            const next = new Set(prev);
+            for (const id of ids) next.delete(id);
+            return next;
+         });
+      }, 450);
+
+      const incomingFromOthers = newlyArrived.filter((m) => m.senderId !== user?.id && !m.systemMessage).length;
+      if (isNearBottom) {
+         requestAnimationFrame(() => scrollToBottom('smooth'));
+      } else if (incomingFromOthers > 0) {
+         setNewIncomingCount((n) => n + incomingFromOthers);
+      }
+
+      return () => clearTimeout(animationTimer);
+   }, [activeMessages, isNearBottom, scrollToBottom, user?.id]);
 
    useEffect(() => {
       adjustMessageInputHeight();
    }, [inputText, chatId, adjustMessageInputHeight]);
 
-   // Fetch all chats for the user when the component loads
+   // Fetch chats + catalog slices on mount; `chatListLoading` shows a
+   // scoped loader inside the conversations list only.
+   const [chatListLoading, setChatListLoading] = useState(true);
    useEffect(() => {
-      if (user) {
-         fetchChats();
+      if (!user) return;
+      let cancelled = false;
+      setChatListLoading(true);
+      Promise.all([
+         fetchChats(),
+         refreshOffers(),
+         refreshProducers(),
+         refreshClients(),
+      ]).finally(() => {
+         if (!cancelled) setChatListLoading(false);
+      });
+      return () => { cancelled = true; };
+   }, [user?.id]);
+
+   // Fetch messages when a specific chat is selected, and keep a SAFETY-NET
+   // poll running as a backup to the real-time WebSocket push.
+   //
+   // PRODUCTION-LEVEL CHANGE: Previously this polled the `messages` endpoint
+   // every 3s (and `sessions` every 6s) — which translated into an essentially
+   // continuous stream of `GET /chat/sessions/.../messages` requests (each
+   // taking ~2.5–3s server-side) for every user with the chat tab open.
+   //
+   // Now:
+   //   - New messages arrive instantly over the `/notifications` socket as
+   //     `chat:message` / `chat:session-update` events (see storeContext.tsx).
+   //   - The poll is a long-interval visibility-gated FALLBACK only:
+   //       • 30 s while WS is connected & tab visible (recovers any dropped
+   //         events without hammering the API)
+   //       • 10 s while WS is disconnected (degrade gracefully)
+   //       •  paused entirely while the tab is hidden
+   //   - In-flight de-dup is preserved so requests never queue.
+   useEffect(() => {
+      if (!user || !chatId) return;
+
+      let interval: ReturnType<typeof setInterval> | null = null;
+
+      const isVisible = () =>
+         typeof document === 'undefined' || document.visibilityState === 'visible';
+
+      // One initial fetch on chat open / user change (the WS handles every
+      // subsequent message — but we still need the initial render).
+      if (!isPollingMessagesRef.current) {
+         isPollingMessagesRef.current = true;
+         Promise.resolve(fetchMessages(chatId)).finally(() => {
+            isPollingMessagesRef.current = false;
+         });
       }
-   }, [user?.id]); // Only re-fetch if the logged-in user changes
 
-   // Fetch messages when a specific chat is selected, and poll for new ones
-   useEffect(() => {
-      let interval: NodeJS.Timeout;
-
-      if (user && chatId) {
-         // Initial fetch
+      const tick = () => {
+         if (!isVisible()) return;
          if (!isPollingMessagesRef.current) {
             isPollingMessagesRef.current = true;
             Promise.resolve(fetchMessages(chatId)).finally(() => {
                isPollingMessagesRef.current = false;
             });
          }
+         // Refresh the sidebar/session list on every other tick to keep last-
+         // message previews in sync if a WS update was missed.
+         chatPollTickRef.current += 1;
+         if (chatPollTickRef.current % 2 === 0 && !isPollingChatsRef.current) {
+            isPollingChatsRef.current = true;
+            Promise.resolve(fetchChats()).finally(() => {
+               isPollingChatsRef.current = false;
+            });
+         }
+      };
 
-         // Poll exactly every 3 seconds
-         interval = setInterval(() => {
-            chatPollTickRef.current += 1;
-            if (!isPollingMessagesRef.current) {
-               isPollingMessagesRef.current = true;
-               Promise.resolve(fetchMessages(chatId)).finally(() => {
-                  isPollingMessagesRef.current = false;
-               });
-            }
-            // Poll sessions less frequently (every 6s) and never overlap.
-            if (chatPollTickRef.current % 2 === 0 && !isPollingChatsRef.current) {
-               isPollingChatsRef.current = true;
-               Promise.resolve(fetchChats()).finally(() => {
-                  isPollingChatsRef.current = false;
-               });
-            }
-         }, 3000);
-      }
+      const pollMs = realtimeConnected ? 30_000 : 10_000;
+      interval = setInterval(tick, pollMs);
+
+      // Catch-up fetch whenever the tab is brought back to the foreground so
+      // the user doesn't see stale messages after a long hide.
+      const onVisibility = () => { if (isVisible()) tick(); };
+      document.addEventListener('visibilitychange', onVisibility);
 
       return () => {
          if (interval) clearInterval(interval);
+         document.removeEventListener('visibilitychange', onVisibility);
       };
-   }, [chatId, user?.id]);
+   }, [chatId, user?.id, realtimeConnected]);
 
    useEffect(() => {
       proposalModalWasOpenRef.current = false;
@@ -246,22 +356,30 @@ export const ChatPage: React.FC = () => {
       return `${typeLabel}: ${offer.title}`;
    };
 
-   const handleSendMessage = async (e?: React.FormEvent) => {
+   const handleSendMessage = (e?: React.FormEvent) => {
       e?.preventDefault();
-      if (!inputText.trim() || !chatId || messageSending) return;
-      setMessageSending(true);
-      try {
-         const sent = await sendMessage(chatId, inputText);
-         if (sent) {
-            setInputText('');
-            requestAnimationFrame(() => {
-               adjustMessageInputHeight();
-            });
-         }
-      } finally {
-         setMessageSending(false);
-      }
+      const trimmed = inputText.trim();
+      if (!trimmed || !chatId) return;
+      // Clear the composer immediately so the user can keep typing while the
+      // POST is in flight — the optimistic bubble is the source of truth for
+      // "did it go". `sendMessage` resolves later and updates that bubble's
+      // status (SENT / FAILED) without blocking input.
+      setInputText('');
+      requestAnimationFrame(() => {
+         adjustMessageInputHeight();
+         messageInputRef.current?.focus();
+      });
+      // Pin the user to the bottom so they actually see their own bubble.
+      setIsNearBottom(true);
+      setNewIncomingCount(0);
+      // We deliberately don't await — the bubble already renders.
+      void sendMessage(chatId, trimmed);
    };
+
+   const handleRetryMessage = useCallback(async (clientId?: string) => {
+      if (!clientId) return;
+      await retryMessage(clientId);
+   }, [retryMessage]);
 
    const handleSendProposal = async () => {
       if (!activeChat || !activeChat.offerId) return;
@@ -428,7 +546,7 @@ export const ChatPage: React.FC = () => {
                </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-               {isInitialCatalogLoading && chats.filter(c => c.participantIds?.includes(user.id)).length === 0 ? (
+               {chatListLoading && chats.filter(c => c.participantIds?.includes(user.id)).length === 0 ? (
                   <SectionLoader message={t('form.loading')} />
                ) : chats.filter(c => c.participantIds?.includes(user.id)).length === 0 ? (
                   <div className="p-8 text-center text-gray-500 text-sm">{t('chat.noChats')}</div>
@@ -489,7 +607,11 @@ export const ChatPage: React.FC = () => {
                   </div>
 
                   {/* Messages */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+                  <div
+                     ref={messagesContainerRef}
+                     onScroll={handleMessagesScroll}
+                     className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 relative"
+                  >
                      {activeChat.offerId ? (
                         <div className="flex justify-center">
                            <div className="bg-gray-200 text-gray-700 text-[11px] px-3 py-1 rounded-full">
@@ -505,6 +627,13 @@ export const ChatPage: React.FC = () => {
                            !prev ||
                            new Date(prev.createdAt).toDateString() !==
                               new Date(msg.createdAt).toDateString();
+                        const isAnimating = animatingIds.has(msg.id);
+                        const isFailed = isMe && msg.status === 'FAILED';
+                        const isSending = isMe && msg.status === 'SENDING';
+                        const bubbleAnim = isAnimating ? 'agm-chat-bubble-in' : '';
+                        const bubbleBaseSide = isMe
+                           ? `bg-primary-600 text-white rounded-br-none ${isFailed ? 'opacity-75 ring-2 ring-red-300' : ''} ${isSending ? 'opacity-90' : ''}`
+                           : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none';
 
                         return (
                            <React.Fragment key={msg.id}>
@@ -516,15 +645,14 @@ export const ChatPage: React.FC = () => {
                                  </div>
                               ) : null}
                               {isSystem ? (
-                                 <div className="flex justify-center my-4">
+                                 <div className={`flex justify-center my-4 ${bubbleAnim}`}>
                                     <div className="bg-gray-200 text-gray-600 text-xs px-3 py-1 rounded-full">
                                        {msg.text}
                                     </div>
                                  </div>
                               ) : (
-                                 <div className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                              <div className={`max-w-[85%] md:max-w-[70%] rounded-lg p-3 shadow-sm ${isMe ? 'bg-primary-600 text-white rounded-br-none' : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none'
-                                 }`}>
+                                 <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} ${bubbleAnim}`}>
+                              <div className={`max-w-[85%] md:max-w-[70%] rounded-lg p-3 shadow-sm transition-opacity ${bubbleBaseSide}`}>
                                  {msg.proposal ? (
                                     // Proposal Card
                                     <div className={`border rounded-md p-3 ${isMe ? 'border-primary-400 bg-primary-700' : 'border-gray-200 bg-gray-50'}`}>
@@ -596,9 +724,29 @@ export const ChatPage: React.FC = () => {
                                  ) : (
                                     <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
                                  )}
-                                 <span className={`text-[10px] block text-right mt-1 ${isMe ? 'text-primary-200' : 'text-gray-400'}`}>
-                                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                 </span>
+                                 <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isMe ? 'text-primary-200' : 'text-gray-400'}`}>
+                                    <span>
+                                       {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                    {isMe ? (
+                                       isFailed ? (
+                                          <button
+                                             type="button"
+                                             onClick={() => void handleRetryMessage(msg.clientId)}
+                                             className="inline-flex items-center gap-0.5 text-red-200 hover:text-white"
+                                             title="Failed to send — tap to retry"
+                                             aria-label="Retry sending message"
+                                          >
+                                             <AlertCircle className="h-3 w-3" />
+                                             <span className="underline underline-offset-2">retry</span>
+                                          </button>
+                                       ) : isSending ? (
+                                          <Clock className="h-3 w-3 opacity-80" aria-label="Sending" />
+                                       ) : (
+                                          <Check className="h-3 w-3 opacity-90" aria-label="Sent" />
+                                       )
+                                    ) : null}
+                                 </div>
                               </div>
                            </div>
                               )}
@@ -606,6 +754,20 @@ export const ChatPage: React.FC = () => {
                         );
                      })}
                      <div ref={messagesEndRef} />
+                     {newIncomingCount > 0 && !isNearBottom ? (
+                        <button
+                           type="button"
+                           onClick={() => {
+                              setNewIncomingCount(0);
+                              setIsNearBottom(true);
+                              scrollToBottom('smooth');
+                           }}
+                           className="sticky bottom-4 mx-auto block bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg inline-flex items-center gap-1.5"
+                        >
+                           <ChevronDown className="h-3.5 w-3.5" />
+                           {newIncomingCount === 1 ? '1 new message' : `${newIncomingCount} new messages`}
+                        </button>
+                     ) : null}
                   </div>
 
                   {/* Input Area — auto-growing textarea for long messages */}
@@ -637,7 +799,7 @@ export const ChatPage: React.FC = () => {
                            onKeyDown={(e) => {
                               if (e.key === 'Enter' && !e.shiftKey) {
                                  e.preventDefault();
-                                 void handleSendMessage();
+                                 handleSendMessage();
                               }
                            }}
                            placeholder={t('chat.typeMessage')}
@@ -646,10 +808,11 @@ export const ChatPage: React.FC = () => {
                         />
                         <button
                            type="submit"
-                           disabled={!inputText.trim() || messageSending}
+                           disabled={!inputText.trim()}
+                           aria-label="Send message"
                            className="mb-1 p-2 bg-primary-600 text-white rounded-full hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 inline-flex items-center justify-center"
                         >
-                           {messageSending ? <Spinner className="h-5 w-5" label="Sending message" /> : <Send className="h-5 w-5" />}
+                           <Send className="h-5 w-5" />
                         </button>
                      </form>
                      <p className="mt-1.5 text-[11px] text-gray-400 hidden sm:block">

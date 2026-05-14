@@ -55,8 +55,22 @@ import { useFormik } from 'formik';
 import { z } from 'zod';
 
 export const ShoppingCart: React.FC = () => {
-  const { cart, removeFromCart, placeOrder, user, clearCart, clients, producers, moveToFavorites, validateCoupon, pickupPoints, guestEmail, setGuestEmail } = useStore();
+  const { cart, removeFromCart, placeOrder, user, clearCart, clients, producers, moveToFavorites, validateCoupon, pickupPoints, guestEmail, setGuestEmail, refreshOffers, refreshProducers, refreshPickupPoints, refreshCart, refreshClients } = useStore();
   const { t } = useTranslation();
+
+  // Cart page hydrates everything it actually renders: offers (item details),
+  // producers (delivery options), pickup points (PICKUP method), clients
+  // (saved home addresses), and the server-side cart. React Query dedupes
+  // within `staleTime` so repeat visits don't refire requests.
+  useEffect(() => {
+    void refreshOffers();
+    void refreshProducers();
+    void refreshPickupPoints();
+    if (user) {
+      void refreshClients();
+      void refreshCart();
+    }
+  }, [user?.id]);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [showRecap, setShowRecap] = useState(false);

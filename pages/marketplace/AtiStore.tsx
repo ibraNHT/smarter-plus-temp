@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
@@ -10,8 +10,18 @@ import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 
 export const AtiStore: React.FC = () => {
-  const { offers, toggleFavorite, user, clients, producers, compareList, addToCompare, removeFromCompare, isInitialCatalogLoading, getAverageRating, reviews } = useStore();
+  const { offers, toggleFavorite, user, clients, producers, compareList, addToCompare, removeFromCompare, getAverageRating, reviews, refreshOffers, refreshProducers, refreshAllReviews } = useStore();
   const { t } = useTranslation();
+
+  const [pageLoading, setPageLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setPageLoading(true);
+    Promise.all([refreshOffers(), refreshProducers(), refreshAllReviews()]).finally(() => {
+      if (!cancelled) setPageLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -119,7 +129,7 @@ export const AtiStore: React.FC = () => {
             </div>
 
             {/* Horizontal Categories */}
-            {isInitialCatalogLoading ? (
+            {pageLoading ? (
               <div className="space-y-10">
                 <div>
                   <div className="h-7 bg-gray-200 rounded w-48 mb-4 animate-pulse" />

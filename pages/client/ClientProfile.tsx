@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useStore, clientProfileMatchesSession } from '../../services/storeContext';
+import { useStore } from '../../services/storeContext';
+import { clientProfileMatchesSession } from '../../services/clientProfileMatcher';
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order, Review, OfferType } from '../../types';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -46,15 +47,61 @@ export const ClientProfile: React.FC = () => {
    const isProfileTab = (v: string | null): v is ProfileTab =>
       v === 'info' || v === 'orders' || v === 'security' || v === 'favorites' || v === 'reputation' || v === 'referrals';
 
-   const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, isInitialCatalogLoading, pickupPoints, revealContactInfo } = useStore();
+   const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, pickupPoints, revealContactInfo, refreshClients, refreshOrders, refreshOffers, refreshProducers, refreshAllReviews, refreshMyReviews, refreshWallet } = useStore();
    const updateClientMutation = useUpdateClientProfileMutation();
    const { t } = useTranslation();
    const navigate = useNavigate();
+
    const [searchParams, setSearchParams] = useSearchParams();
    const [activeTab, setActiveTab] = useState<ProfileTab>(() => {
       const tab = searchParams.get('tab');
       return isProfileTab(tab) ? tab : 'orders';
    });
+
+   // ─── Per-tab lazy fetching ────────────────────────────────────────────
+   //
+   // Only the data the active tab actually renders is fetched. Switching
+   // tabs (or hard-reloading on a deep-linked tab) fires just that tab's
+   // refreshers; the React Query cache makes subsequent visits instant.
+   // `tabLoading` is local so each tab shows its own scoped loader.
+   const [tabLoading, setTabLoading] = useState(true);
+   useEffect(() => {
+      let cancelled = false;
+      setTabLoading(true);
+
+      // The profile shell (avatar, name) needs `currentClient` from the
+      // `clients` array — always required regardless of active tab.
+      const tasks: Promise<unknown>[] = [refreshClients()];
+
+      switch (activeTab) {
+         case 'orders':
+            tasks.push(refreshOrders(), refreshOffers(), refreshProducers(), refreshAllReviews(), refreshWallet());
+            break;
+         case 'favorites':
+            tasks.push(refreshOffers(), refreshProducers());
+            break;
+         case 'reputation':
+            tasks.push(refreshMyReviews(), refreshAllReviews(), refreshProducers());
+            break;
+         case 'referrals':
+            tasks.push(refreshMyReferrals());
+            break;
+         case 'info':
+            // Info tab uses producer regions / production types for the
+            // upgrade-to-producer form.
+            tasks.push(refreshProducers());
+            break;
+         case 'security':
+            // No remote data; only the password modal.
+            break;
+      }
+
+      Promise.all(tasks).finally(() => {
+         if (!cancelled) setTabLoading(false);
+      });
+
+      return () => { cancelled = true; };
+   }, [activeTab]);
 
    useEffect(() => {
       const tab = searchParams.get('tab');
@@ -477,7 +524,7 @@ export const ClientProfile: React.FC = () => {
     * avoids the jarring "loading the whole app" experience on refresh.
     */
    const isClientProfileHydrating =
-      !currentClient?.id && user.role === UserRole.CLIENT && (isInitialCatalogLoading || profileHydrating);
+      !currentClient?.id && user.role === UserRole.CLIENT && (tabLoading || profileHydrating);
 
    if (!currentClient?.id && user.role === UserRole.CLIENT && !isClientProfileHydrating) {
       return (
@@ -1062,7 +1109,7 @@ export const ClientProfile: React.FC = () => {
                            <p className="text-xs sm:text-sm text-gray-500 mt-1">{t('dash.allOrdersDesc')}</p>
                         </div>
                         <ul className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
-                           {(isInitialCatalogLoading || isClientProfileHydrating) && allMyOrders.length === 0 ? (
+                           {(tabLoading || isClientProfileHydrating) && allMyOrders.length === 0 ? (
                               <li className="px-4 py-6"><SectionLoader message={t('form.loading')} /></li>
                            ) : allMyOrders.length === 0 ? (
                               <li className="px-4 py-8 text-center text-gray-500">No orders yet.</li>
@@ -1089,7 +1136,7 @@ export const ClientProfile: React.FC = () => {
                      </section>
                      <section>
                         <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><Archive className="w-5 h-5 mr-2 text-primary-600" /> {t('order.active')}</h3>
-                        {(isInitialCatalogLoading || isClientProfileHydrating) && activeOrders.length === 0 ? (
+                        {(tabLoading || isClientProfileHydrating) && activeOrders.length === 0 ? (
                            <ListSkeleton rows={3} />
                         ) : (
                            renderOrderList(activeOrders, "No active orders.")
@@ -1097,7 +1144,7 @@ export const ClientProfile: React.FC = () => {
                      </section>
                      <section>
                         <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><History className="w-5 h-5 mr-2 text-gray-400" /> {t('order.past')}</h3>
-                        {(isInitialCatalogLoading || isClientProfileHydrating) && pastOrders.length === 0 ? (
+                        {(tabLoading || isClientProfileHydrating) && pastOrders.length === 0 ? (
                            <ListSkeleton rows={2} />
                         ) : (
                            renderOrderList(pastOrders, "No order history.")
@@ -1124,7 +1171,7 @@ export const ClientProfile: React.FC = () => {
                            </ul>
                         </div>
                      )}
-                     {(isInitialCatalogLoading || isClientProfileHydrating) && (!favoriteOffers || favoriteOffers.length === 0) ? (
+                     {(tabLoading || isClientProfileHydrating) && (!favoriteOffers || favoriteOffers.length === 0) ? (
                         <SectionLoader message={t('form.loading')} />
                      ) : (!favoriteOffers || favoriteOffers.length === 0) ? (
                         <div className="text-center py-12 text-gray-500"><Heart className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('profile.favorites.empty')}</p></div>
@@ -1157,7 +1204,7 @@ export const ClientProfile: React.FC = () => {
                            <span className="text-xs text-yellow-600 ml-1">/ 5</span>
                         </div>
                      </div>
-                     {(isInitialCatalogLoading || isClientProfileHydrating) && myReviews.length === 0 ? (
+                     {(tabLoading || isClientProfileHydrating) && myReviews.length === 0 ? (
                         <SectionLoader message={t('form.loading')} />
                      ) : myReviews.length === 0 ? (
                         <div className="text-center py-12 text-gray-500"><Star className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('review.noReviews')}</p></div>

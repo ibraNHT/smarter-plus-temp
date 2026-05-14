@@ -7,6 +7,14 @@ import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 const getSeenToastStorageKey = (userId?: string) =>
   userId ? `seen_toast_notifications:${userId}` : null;
 
+/**
+ * Window during which a freshly created notification is still considered
+ * "live" enough to surface as a popup toast. Notifications older than this
+ * are silently marked as seen on first load so the bell badge updates but
+ * the screen does not flood with historical popups (the bug we are fixing).
+ */
+const TOAST_FRESHNESS_WINDOW_MS = 60_000;
+
 const loadSeenToastIds = (userId?: string): Set<string> => {
   if (!userId || typeof window === 'undefined') return new Set();
   const key = getSeenToastStorageKey(userId);
@@ -34,32 +42,73 @@ export const ToastContainer: React.FC = () => {
   const [visibleToasts, setVisibleToasts] = useState<Notification[]>([]);
   const seenNotifyIdsRef = useRef<Set<string>>(new Set());
   const activeUserIdRef = useRef<string | null>(null);
+  // Tracks whether we've completed the initial notification reconciliation
+  // for the active user. Until then we *seed* the seen-set instead of
+  // toasting, so historical notifications never spam the screen after login
+  // or a fresh tab open.
+  const initialReconcileDoneRef = useRef<boolean>(false);
+  const loginAtRef = useRef<number>(Date.now());
 
   const notifications = store?.notifications ?? [];
   const user = store?.user ?? null;
 
   useLayoutEffect(() => {
-    if (!store || !user?.id) return;
+    if (!store) return;
 
-    // Restore per-user seen toast ids after reload.
-    if (activeUserIdRef.current !== user.id) {
-      activeUserIdRef.current = user.id;
-      seenNotifyIdsRef.current = loadSeenToastIds(user.id);
+    // User switched (login, logout, account swap). Reset toast state per-user
+    // so notifications from another account never bleed into the new session.
+    if (activeUserIdRef.current !== (user?.id ?? null)) {
+      activeUserIdRef.current = user?.id ?? null;
+      seenNotifyIdsRef.current = user?.id ? loadSeenToastIds(user.id) : new Set();
+      initialReconcileDoneRef.current = false;
+      loginAtRef.current = Date.now();
       setVisibleToasts([]);
     }
   }, [store, user?.id]);
 
   useLayoutEffect(() => {
-    if (!store || notifications.length === 0) return;
-    const userToasts = notifications.filter(
-      (n) => n.userId === user?.id && !seenNotifyIdsRef.current.has(n.id),
-    );
+    if (!store || !user?.id) return;
+    if (notifications.length === 0) {
+      // Nothing to reconcile yet, but consider the initial pass "done" so
+      // the first real notification still toasts even if the inbox starts empty.
+      initialReconcileDoneRef.current = true;
+      return;
+    }
+
+    // Always restrict to the active user — defensive guard against stale state.
+    const ownNotifs = notifications.filter((n) => n.userId === user.id);
+
+    // === FIRST PASS AFTER LOGIN / RELOAD ============================
+    // The user has already seen these notifications in the bell icon and
+    // may have read them. Showing them as popup toasts now is noise. We
+    // seed the seen-set with everything currently in the inbox so only
+    // GENUINELY NEW notifications (arriving via socket / poll AFTER login)
+    // will trigger a toast going forward.
+    if (!initialReconcileDoneRef.current) {
+      ownNotifs.forEach((n) => seenNotifyIdsRef.current.add(n.id));
+      persistSeenToastIds(user.id, seenNotifyIdsRef.current);
+      initialReconcileDoneRef.current = true;
+      return;
+    }
+
+    const userToasts = ownNotifs.filter((n) => {
+      if (seenNotifyIdsRef.current.has(n.id)) return false;
+      // Skip notifications the user already read elsewhere (e.g. on another
+      // device or via the bell dropdown) — re-toasting them is annoying.
+      if (n.isRead) return false;
+      // Skip notifications older than the freshness window. A backfill from
+      // the server (after the cache went stale) should not retroactively
+      // raise toasts for events that happened hours ago.
+      const createdAtMs = new Date(n.createdAt).getTime();
+      if (!Number.isFinite(createdAtMs)) return false;
+      if (createdAtMs < loginAtRef.current - TOAST_FRESHNESS_WINDOW_MS) return false;
+      return true;
+    });
+
     if (userToasts.length === 0) return;
 
     userToasts.forEach((toast) => seenNotifyIdsRef.current.add(toast.id));
-    if (user?.id) {
-      persistSeenToastIds(user.id, seenNotifyIdsRef.current);
-    }
+    persistSeenToastIds(user.id, seenNotifyIdsRef.current);
     setVisibleToasts((prev) => [...userToasts, ...prev]);
 
     userToasts.forEach((toast) => {

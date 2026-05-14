@@ -390,6 +390,13 @@ export interface Proposal {
   status: ProposalStatus;
 }
 
+/**
+ * Local-only delivery status used to drive WhatsApp-style optimistic UX.
+ * Real "delivered" / "read" receipts would need a server-side acknowledgement
+ * channel; today we only track the round-trip of the user's own POST.
+ */
+export type ChatMessageStatus = 'SENDING' | 'SENT' | 'FAILED';
+
 export interface ChatMessage {
   id: string;
   chatId: string;
@@ -398,6 +405,13 @@ export interface ChatMessage {
   proposal?: Proposal; // Optional attached proposal
   systemMessage?: boolean; // If true, rendered as a system notification
   createdAt: string;
+  /**
+   * Local-only fields for optimistic UX. Not present on server payloads.
+   * `clientId` is the stable id assigned at compose time, used to swap
+   * the optimistic bubble for the server record once the POST resolves.
+   */
+  status?: ChatMessageStatus;
+  clientId?: string;
 }
 
 export interface ChatSession {

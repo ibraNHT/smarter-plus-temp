@@ -10,9 +10,19 @@ import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 
 export const ProducerMarket: React.FC = () => {
-  const { offers, producers, user, clients, trackUserSearch, toggleFavorite, getRecommendedOffers, getAverageRating, reviews, compareList, addToCompare, removeFromCompare, isInitialCatalogLoading } = useStore();
+  const { offers, producers, user, clients, trackUserSearch, toggleFavorite, getRecommendedOffers, getAverageRating, reviews, compareList, addToCompare, removeFromCompare, refreshOffers, refreshProducers, refreshAllReviews } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
+
+  const [pageLoading, setPageLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setPageLoading(true);
+    Promise.all([refreshOffers(), refreshProducers(), refreshAllReviews()]).finally(() => {
+      if (!cancelled) setPageLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // State for filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -404,7 +414,7 @@ export const ProducerMarket: React.FC = () => {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
 
-        {isInitialCatalogLoading ? (
+        {pageLoading ? (
           <div className="space-y-12">
             <div>
               <div className="h-8 bg-gray-200 rounded w-64 mb-4 animate-pulse" />

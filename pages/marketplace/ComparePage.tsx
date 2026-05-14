@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { useNavigate } from 'react-router-dom';
@@ -11,14 +11,24 @@ import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { ConfirmModal } from '../../components/ConfirmModal';
 
 export const ComparePage: React.FC = () => {
-  const { compareList, offers, producers, getAverageRating, removeFromCompare, addToCart, clearCart, clearCompare, isInitialCatalogLoading } = useStore();
+  const { compareList, offers, producers, getAverageRating, removeFromCompare, addToCart, clearCart, clearCompare, refreshOffers, refreshProducers } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
+
+  const [pageLoading, setPageLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setPageLoading(true);
+    Promise.all([refreshOffers(), refreshProducers()]).finally(() => {
+      if (!cancelled) setPageLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
   const [pendingClear, setPendingClear] = useState<{ offer: any; qty: number } | null>(null);
 
   const selectedOffers = compareList.map(id => offers.find(o => o.id === id)).filter(Boolean) as any[];
   const compareStillLoading =
-    isInitialCatalogLoading && compareList.length > 0 && selectedOffers.length < compareList.length;
+    pageLoading && compareList.length > 0 && selectedOffers.length < compareList.length;
 
   if (compareStillLoading) {
     return (

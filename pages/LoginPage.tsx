@@ -232,7 +232,17 @@ export const LoginPage: React.FC = () => {
             : `${values.phoneCode}${values.phone}`;
         const result = await login(identifier, values.password);
         if (result.success) {
-          navigate('/');
+          // If the user was bounced to /login by a 401 elsewhere, send them back
+          // to the page they were on after a successful sign-in.
+          let redirectTo = '/';
+          try {
+            const saved = sessionStorage.getItem('postLoginRedirect');
+            if (saved) {
+              sessionStorage.removeItem('postLoginRedirect');
+              if (!saved.startsWith('/login')) redirectTo = saved;
+            }
+          } catch { /* sessionStorage may be unavailable */ }
+          navigate(redirectTo);
         } else {
           setError(result.message || 'Login failed. Please check your credentials.');
         }

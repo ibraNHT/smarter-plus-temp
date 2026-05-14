@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { Wallet as WalletIcon, ArrowUpRight, ArrowDownLeft, Plus, CreditCard, Smartphone, Building, MinusCircle, Clock, CheckCircle, XCircle, ArrowLeft, TrendingUp } from 'lucide-react';
@@ -11,9 +11,21 @@ import { useFormik } from 'formik';
 import { z } from 'zod';
 
 export const WalletDashboard: React.FC = () => {
-  const { user, getWallet, fundWallet, requestWithdrawal, requestOtp, verifyOtp, producers, withdrawalRequests, isInitialCatalogLoading } = useStore();
+  const { user, getWallet, fundWallet, requestWithdrawal, requestOtp, verifyOtp, producers, withdrawalRequests, refreshWallet, refreshWithdrawals } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
+
+  // Lazy fetch on mount with a per-page loading flag so the table/list shows
+  // a scoped loader rather than waiting on any global state.
+  const [pageLoading, setPageLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setPageLoading(true);
+    Promise.all([refreshWallet(), refreshWithdrawals()]).finally(() => {
+      if (!cancelled) setPageLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const [showTopUp, setShowTopUp] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
@@ -238,7 +250,7 @@ export const WalletDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {isInitialCatalogLoading && myRequests.length === 0 ? (
+                  {pageLoading && myRequests.length === 0 ? (
                     <tr><td colSpan={4} className="px-6 py-4"><SectionLoader message={t('form.loading')} /></td></tr>
                   ) : myRequests.length === 0 ? (
                     <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500 text-sm">{t('wallet.noReq')}</td></tr>
@@ -264,7 +276,7 @@ export const WalletDashboard: React.FC = () => {
             <h3 className="text-base sm:text-lg font-medium leading-6 text-gray-900">{t('wallet.history')}</h3>
           </div>
           <ul className="divide-y divide-gray-200">
-            {isInitialCatalogLoading && wallet.transactions.length === 0 ? (
+            {pageLoading && wallet.transactions.length === 0 ? (
               <li className="px-4 sm:px-6 py-6"><SectionLoader message={t('form.loading')} /></li>
             ) : wallet.transactions.length === 0 ? (
               <li className="px-4 sm:px-6 py-10 sm:py-12 text-center text-gray-500">

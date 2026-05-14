@@ -7,6 +7,7 @@ import { User, Mail, Phone, MapPin, Camera, Lock, Eye, EyeOff, Loader2 } from 'l
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { useFormik } from 'formik';
 import { z } from 'zod';
+import { RegisterPhoneOtpModal } from '../../components/RegisterPhoneOtpModal';
 
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
 const PASSWORD_RULE_MESSAGE = 'Password must be at least 4 characters with 1 letter, 1 number, and 1 special character.';
@@ -54,6 +55,12 @@ export const RegisterClient: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState('');
+  // Phone-verification gate — opens AFTER the form passes validation so we
+  // never spam SMS for incomplete forms. Holds the in-flight payload until
+  // the OTP token comes back, then submits the registration.
+  const [otpOpen, setOtpOpen] = useState(false);
+  const [pendingPhone, setPendingPhone] = useState('');
+  const [pendingEmail, setPendingEmail] = useState('');
 
   const avatarFileRef = useRef<File | null>(null);
 
@@ -108,14 +115,29 @@ export const RegisterClient: React.FC = () => {
       }
       return nextErrors;
     },
-    onSubmit: async (values) => {
+    // Form submit only OPENS the OTP modal. The actual register API call is
+    // gated behind `submitWithToken`, which is invoked by the OTP modal once
+    // the user proves they control the phone (and/or email).
+    onSubmit: (values) => {
       setError('');
-      const address = String(values.address ?? '').trim();
-      const addressParts = address.split(',').map((x) => x.trim()).filter(Boolean);
-      const inferredCity = String(values.city ?? '').trim() || addressParts[1] || addressParts[0] || 'Unknown';
-      const inferredRegion = String(values.region ?? '').trim() || addressParts[2] || addressParts[1] || 'Unknown';
+      const fullPhone = `${values.phoneCode}${values.phone}`.replace(/\s+/g, '');
+      setPendingPhone(fullPhone);
+      setPendingEmail(values.email.trim());
+      setOtpOpen(true);
+    },
+  });
 
-      setIsLoading(true);
+  const submitWithToken = async (registrationToken: string) => {
+    const values = formik.values;
+    const address = String(values.address ?? '').trim();
+    const addressParts = address.split(',').map((x) => x.trim()).filter(Boolean);
+    const inferredCity = String(values.city ?? '').trim() || addressParts[1] || addressParts[0] || 'Unknown';
+    const inferredRegion = String(values.region ?? '').trim() || addressParts[2] || addressParts[1] || 'Unknown';
+
+    setOtpOpen(false);
+    setIsLoading(true);
+    setError('');
+    try {
       const result = await registerClient({
         name: `${values.firstName} ${values.lastName}`,
         firstName: values.firstName,
@@ -124,26 +146,28 @@ export const RegisterClient: React.FC = () => {
         dateOfBirth: values.dateOfBirth,
         email: values.email,
         phone: `${values.phoneCode}${values.phone}`,
+        phoneVerificationToken: registrationToken,
         locations: [{
           lat: Number(values.lat) || 0,
           lng: Number(values.lng) || 0,
           address,
           region: inferredRegion,
-          city: inferredCity
+          city: inferredCity,
         }],
         favorites: [],
         searchHistory: [],
-        referrerCode: refCode || undefined
+        referrerCode: refCode || undefined,
       }, values.password, avatarFileRef.current);
-      setIsLoading(false);
 
       if (result.success) {
         navigate('/');
       } else {
         setError(result.message || 'Registration failed.');
       }
-    },
-  });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const fillLocationFromCoords = async (lat: number, lng: number) => {
     const rev = await nominatimReverseGeocode(lat, lng);
@@ -449,13 +473,21 @@ export const RegisterClient: React.FC = () => {
             <button type="button" onClick={() => navigate('/')} className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none">
               {t('form.cancel')}
             </button>
-            <button type="submit" disabled={isLoading} className="ml-3 inline-flex justify-center items-center gap-2 py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-60">
-              {isLoading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-              {isLoading ? 'Creating…' : t('form.create')}
+            <button type="submit" disabled={isLoading || otpOpen} className="ml-3 inline-flex justify-center items-center gap-2 py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-60">
+              {(isLoading || otpOpen) && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              {isLoading ? 'Creating…' : otpOpen ? 'Verifying…' : t('form.create')}
             </button>
           </div>
         </div>
       </form>
+
+      <RegisterPhoneOtpModal
+        open={otpOpen}
+        phone={pendingPhone}
+        email={pendingEmail}
+        onVerified={(token) => void submitWithToken(token)}
+        onCancel={() => setOtpOpen(false)}
+      />
     </div>
   );
 };

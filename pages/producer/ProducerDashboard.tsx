@@ -12,9 +12,28 @@ import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { orderHasService, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
 
 export const ProducerDashboard: React.FC = () => {
-   const { user, getProducerOffers, deleteOffer, producers, clients, orders, confirmOrder, rejectOrder, startDelivery, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating, pickupPoints, isInitialCatalogLoading } = useStore();
+   const { user, getProducerOffers, deleteOffer, producers, clients, orders, confirmOrder, rejectOrder, startDelivery, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating, pickupPoints, refreshOrders, refreshOffers, refreshProducers, refreshClients } = useStore();
    const { t } = useTranslation();
    const navigate = useNavigate();
+
+   // Dashboard is a single-screen view with multiple sections all visible at
+   // once, so it fetches everything it shows in one go. Per-section loaders
+   // read the local `pageLoading` flag so they all turn off together when the
+   // (deduplicated) requests resolve.
+   const [pageLoading, setPageLoading] = useState(true);
+   useEffect(() => {
+      let cancelled = false;
+      setPageLoading(true);
+      Promise.all([
+         refreshProducers(),
+         refreshClients(),
+         refreshOffers(),
+         refreshOrders(),
+      ]).finally(() => {
+         if (!cancelled) setPageLoading(false);
+      });
+      return () => { cancelled = true; };
+   }, []);
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
    const [profileLookupTimedOut, setProfileLookupTimedOut] = useState(false);
 
@@ -483,7 +502,7 @@ export const ProducerDashboard: React.FC = () => {
                <h3 className="text-lg leading-6 font-medium text-gray-900">{t('dash.incomingOrders')}</h3>
             </div>
             <ul className="divide-y divide-gray-200">
-               {isInitialCatalogLoading && pendingValidationOrders.length === 0 ? (
+               {pageLoading && pendingValidationOrders.length === 0 ? (
                   <li className="px-4 py-6"><SectionLoader message={t('form.loading')} /></li>
                ) : pendingValidationOrders.length === 0 ? (
                   <li className="px-4 py-8 text-center text-gray-500">No new orders waiting validation.</li>
@@ -570,7 +589,7 @@ export const ProducerDashboard: React.FC = () => {
                <p className="text-sm text-gray-500 mt-1">{t('dash.allOrdersDesc')}</p>
             </div>
             <ul className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
-               {isInitialCatalogLoading && allMyOrders.length === 0 ? (
+               {pageLoading && allMyOrders.length === 0 ? (
                   <li className="px-4 py-6"><SectionLoader message={t('form.loading')} /></li>
                ) : allMyOrders.length === 0 ? (
                   <li className="px-4 py-8 text-center text-gray-500">No orders yet.</li>
@@ -605,7 +624,7 @@ export const ProducerDashboard: React.FC = () => {
                </h3>
             </div>
             <ul className="divide-y divide-gray-200">
-               {isInitialCatalogLoading && pastOrders.length === 0 ? (
+               {pageLoading && pastOrders.length === 0 ? (
                   <li className="px-4 py-6"><ListSkeleton rows={2} /></li>
                ) : pastOrders.length === 0 ? (
                   <li className="px-4 py-8 text-center text-gray-500">No past order history.</li>

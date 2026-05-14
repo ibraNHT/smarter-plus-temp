@@ -8,6 +8,7 @@ import { ProducerType, Location } from '../../types';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { useFormik } from 'formik';
 import { z } from 'zod';
+import { RegisterPhoneOtpModal } from '../../components/RegisterPhoneOtpModal';
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
 const PASSWORD_RULE_MESSAGE = 'Password must be at least 4 characters with 1 letter, 1 number, and 1 special character.';
 
@@ -61,6 +62,13 @@ export const RegisterProducer: React.FC = () => {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  // Phone-verification gate — opens only after the form passes validation
+  // AND at least one location is present. Holds the registration payload
+  // until the SMS+email OTP is verified.
+  const [otpOpen, setOtpOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingPhone, setPendingPhone] = useState('');
+  const [pendingEmail, setPendingEmail] = useState('');
 
   const registerProducerSchema = z.object({
     type: z.enum(['BUSINESS', 'INDIVIDUAL']),
@@ -105,33 +113,48 @@ export const RegisterProducer: React.FC = () => {
       }
       return nextErrors;
     },
-    onSubmit: async (values) => {
+    onSubmit: (values) => {
       setError('');
       if (locations.length === 0) {
-        alert("Please add at least one location.");
+        setError('Please add at least one location before continuing.');
         return;
       }
+      const fullPhone = `${values.phoneCode}${values.phone}`.replace(/\s+/g, '');
+      setPendingPhone(fullPhone);
+      setPendingEmail(values.email.trim());
+      setOtpOpen(true);
+    },
+  });
 
+  const submitWithToken = async (registrationToken: string) => {
+    const values = formik.values;
+    setOtpOpen(false);
+    setIsSubmitting(true);
+    setError('');
+    try {
       const result = await registerProducer({
         type: values.type,
         name: values.name,
         email: values.email,
         phone: `${values.phoneCode}${values.phone}`,
+        phoneVerificationToken: registrationToken,
         description: values.description,
         locations: locations,
         certifications: [],
         productionTypes: values.productionTypes.length > 0 ? values.productionTypes : ['Agriculture'],
         referrerCode: refCode || undefined,
         taxIdentificationNumber: values.taxIdentificationNumber.trim() || undefined,
-      }, values.password);
+      } as any, values.password);
 
       if (result.success) {
         navigate('/');
       } else {
         setError(result.message);
       }
-    },
-  });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleUseMyLocationSignup = async () => {
     setGeoLoading(true);
@@ -630,13 +653,31 @@ export const RegisterProducer: React.FC = () => {
             <button type="button" onClick={() => navigate('/')} className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none">
               {t('form.cancel')}
             </button>
-            <button type="submit" disabled={formik.isSubmitting} className="ml-3 inline-flex justify-center items-center gap-2 py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed">
-              {formik.isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-              {formik.isSubmitting ? t('form.processing') : t('register.producer.btn')}
+            <button
+              type="submit"
+              disabled={formik.isSubmitting || isSubmitting || otpOpen}
+              className="ml-3 inline-flex justify-center items-center gap-2 py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {(formik.isSubmitting || isSubmitting || otpOpen) && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              {isSubmitting
+                ? 'Creating…'
+                : otpOpen
+                  ? 'Verifying…'
+                  : formik.isSubmitting
+                    ? t('form.processing')
+                    : t('register.producer.btn')}
             </button>
           </div>
         </div>
       </form>
+
+      <RegisterPhoneOtpModal
+        open={otpOpen}
+        phone={pendingPhone}
+        email={pendingEmail}
+        onVerified={(token) => void submitWithToken(token)}
+        onCancel={() => setOtpOpen(false)}
+      />
     </div>
   );
 };

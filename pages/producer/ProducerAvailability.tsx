@@ -10,7 +10,7 @@ import { SectionLoader } from '../../components/Loaders';
 const DAYS: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export const ProducerAvailability: React.FC = () => {
-  const { user, producers, updateProducerAvailability, isInitialCatalogLoading } = useStore();
+  const { user, producers, updateProducerAvailability, refreshProducers } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -22,6 +22,19 @@ export const ProducerAvailability: React.FC = () => {
   const [newExceptionDate, setNewExceptionDate] = useState('');
   const [newExceptionReason, setNewExceptionReason] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Page-mount refresh. `pageLoading` drives the in-tab loader without
+  // depending on any global state, so it falls correctly when the (cached)
+  // request resolves.
+  const [pageLoading, setPageLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setPageLoading(true);
+    refreshProducers().finally(() => {
+      if (!cancelled) setPageLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (currentProducer) {
@@ -36,8 +49,8 @@ export const ProducerAvailability: React.FC = () => {
     return <div className="p-8 text-center">Access Denied</div>;
   }
 
-  const isAvailabilityHydrating = !currentProducer && isInitialCatalogLoading;
-  const profileMissing = !currentProducer && !isInitialCatalogLoading;
+  const isAvailabilityHydrating = !currentProducer && pageLoading;
+  const profileMissing = !currentProducer && !pageLoading;
 
   const handleTimeChange = (day: string, type: 'start' | 'end', value: string) => {
     setSchedule(prev => {

@@ -6,7 +6,7 @@
  */
 
 // In dev, use same origin so Vite proxy forwards /api to the backend (avoids CORS).
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? '' : 'http://localhost:3000');
+export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? '' : 'http://localhost:3000');
 const TOKEN_KEY = 'authToken';
 const REFRESH_TOKEN_KEY = 'refreshToken';
 
@@ -17,10 +17,37 @@ export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token
 export const clearToken = () => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
+    // Also drop cached session user — anything reading `currentUser` will see
+    // the logged-out state immediately on next render.
+    try { localStorage.removeItem('currentUser'); } catch { /* noop */ }
 };
 
 export const getRefreshToken = (): string | null => localStorage.getItem(REFRESH_TOKEN_KEY);
 export const setRefreshToken = (token: string) => localStorage.setItem(REFRESH_TOKEN_KEY, token);
+
+/**
+ * Hard log-out used when the refresh token itself fails (the session is dead).
+ * Centralised so axios + fetch wrappers + WebSocket clients all behave the same way:
+ * drop client state and bounce to /login. We use replace() to wipe the back-history
+ * entry that triggered the 401 — pressing back must not silently re-issue the
+ * unauthorised request.
+ */
+export const forceLogoutRedirect = (): void => {
+    clearToken();
+    if (typeof window === 'undefined') return;
+    // Tell other tabs to clear their in-memory session immediately.
+    try { window.dispatchEvent(new Event('agm:session-expired')); } catch { /* noop */ }
+    const hash = window.location.hash || '';
+    if (hash === '#/login' || hash.startsWith('#/login?')) return;
+    // Preserve the page user was trying to reach so we can redirect post-login if desired.
+    try {
+        const intended = `${window.location.pathname}${window.location.hash}`;
+        if (intended && !intended.startsWith('/login')) {
+            sessionStorage.setItem('postLoginRedirect', intended);
+        }
+    } catch { /* noop */ }
+    window.location.hash = '#/login';
+};
 
 const buildHeaders = (extra?: Record<string, string>): Record<string, string> => {
     const headers: Record<string, string> = {
@@ -55,8 +82,13 @@ export const isRefreshOnCooldown = (): boolean =>
 /** Attempt to silently refresh the access token. Deduplicates concurrent calls and
  *  enforces a cooldown after failure to prevent 429 storms.
  *  When the refresh endpoint itself returns 401 the session is truly dead —
- *  clear tokens and redirect to login immediately. */
-const attemptTokenRefresh = async (): Promise<boolean> => {
+ *  clear tokens and redirect to login immediately.
+ *
+ *  Exported so the axios interceptor in `client-api/client.ts` shares the same
+ *  in-flight promise and cooldown state as the fetch-based `apiFetch` below.
+ *  Otherwise both pipelines would attempt refresh independently and could
+ *  burn the rotated refresh token before either retry runs. */
+export const attemptTokenRefresh = async (): Promise<boolean> => {
     if (refreshInFlight) return refreshInFlight;
     if (Date.now() - lastRefreshFailed < REFRESH_COOLDOWN_MS) return false;
 
@@ -73,12 +105,11 @@ const attemptTokenRefresh = async (): Promise<boolean> => {
             });
             if (!response.ok) {
                 lastRefreshFailed = Date.now();
-                if (response.status === 401) {
-                    clearToken();
-                    localStorage.removeItem('currentUser');
-                    if (window.location.hash !== '#/login') {
-                        window.location.hash = '#/login';
-                    }
+                // 401/403 from /auth/refresh means the refresh token is dead —
+                // sign the user out and route to login. For other 5xx errors
+                // we don't force-logout: the request may succeed later.
+                if (response.status === 401 || response.status === 403) {
+                    forceLogoutRedirect();
                 }
                 return false;
             }
@@ -90,6 +121,8 @@ const attemptTokenRefresh = async (): Promise<boolean> => {
                 return true;
             }
         } catch {
+            // Network failure — flag cooldown but don't force-logout. The user
+            // may be offline; we'll retry the refresh when they come back.
             lastRefreshFailed = Date.now();
         }
         return false;
@@ -151,12 +184,11 @@ export const apiFetch = async <T = unknown>(
                     return apiFetch<T>(path, { ...options, _isRetry: true });
                 }
             }
+            // Refresh either failed or is on cooldown — the session is no longer
+            // valid. Unless the caller opted in to silent-401 (background polls),
+            // force the user out so they can't keep interacting with a broken UI.
             if (!silent401) {
-                clearToken();
-                localStorage.removeItem('currentUser');
-                if (window.location.hash !== '#/login') {
-                    window.location.hash = '#/login';
-                }
+                forceLogoutRedirect();
             }
         }
 
@@ -187,10 +219,12 @@ export const apiFetch = async <T = unknown>(
 
 /**
  * Multipart upload — no JSON Content-Type header so browser sets the boundary.
+ * Retries once after a transparent token refresh on 401, mirroring apiFetch.
  */
 export const apiUpload = async <T = unknown>(
     path: string,
-    formData: FormData
+    formData: FormData,
+    options: { _isRetry?: boolean } = {},
 ): Promise<T> => {
     const token = getToken();
     const headers: Record<string, string> = {};
@@ -203,6 +237,14 @@ export const apiUpload = async <T = unknown>(
         body: formData,
     });
 
+    if (response.status === 401 && !options._isRetry) {
+        const refreshed = await attemptTokenRefresh();
+        if (refreshed) {
+            return apiUpload<T>(path, formData, { _isRetry: true });
+        }
+        forceLogoutRedirect();
+    }
+
     if (!response.ok) {
         let message = `Upload error ${response.status}`;
         try {
@@ -211,7 +253,9 @@ export const apiUpload = async <T = unknown>(
         } catch {
             // ignore
         }
-        throw new Error(message);
+        const err = new Error(message) as Error & { status?: number };
+        err.status = response.status;
+        throw err;
     }
 
     return response.json() as Promise<T>;

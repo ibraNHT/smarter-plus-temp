@@ -52,9 +52,24 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
     producers,
     clients,
     getProducerOffers,
-    isInitialCatalogLoading,
+    refreshProducers,
+    refreshClients,
+    refreshOffers,
   } = useStore();
   const { t } = useTranslation();
+
+  // Public profile needs the producers/clients/offers catalogs. `pageLoading`
+  // scopes the full-page skeleton to this page so it falls when (cached)
+  // requests resolve.
+  const [pageLoading, setPageLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setPageLoading(true);
+    Promise.all([refreshProducers(), refreshClients(), refreshOffers()]).finally(() => {
+      if (!cancelled) setPageLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const [profileData, setProfileData] = useState<any>(null);
   const [profileReviews, setProfileReviews] = useState<Review[]>([]);
@@ -183,7 +198,7 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
     return () => clearInterval(timer);
   }, [role, producerPortfolios]);
 
-  if (isInitialCatalogLoading && !profileData) {
+  if (pageLoading && !profileData) {
     return <PublicProfileSkeleton />;
   }
 

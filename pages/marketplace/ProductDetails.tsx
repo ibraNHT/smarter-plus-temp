@@ -22,9 +22,26 @@ function parseLocalYmd(ymd: string): Date {
 
 export const ProductDetails: React.FC = () => {
   const { offerId } = useParams<{ offerId: string }>();
-  const { getOfferById, producers, addToCart, clearCart, startNegotiation, user, getAverageRating, getProducerPortfolios, toggleFavorite, clients, reviews, compareList, addToCompare, removeFromCompare, isInitialCatalogLoading, orders, cart } = useStore();
+  const { getOfferById, producers, addToCart, clearCart, startNegotiation, user, getAverageRating, getProducerPortfolios, toggleFavorite, clients, reviews, compareList, addToCompare, removeFromCompare, orders, cart, refreshOffers, refreshProducers, refreshAllReviews, refreshMyPortfolios } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
+
+  // Page-mount fetch — offers + producers + reviews are all shown on this
+  // page. `pageLoading` keeps the skeleton scoped to this page.
+  const [pageLoading, setPageLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setPageLoading(true);
+    Promise.all([
+      refreshOffers(),
+      refreshProducers(),
+      refreshAllReviews(),
+      refreshMyPortfolios(),
+    ]).finally(() => {
+      if (!cancelled) setPageLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const offer = offerId ? getOfferById(offerId) : undefined;
   const producer = offer ? producers.find(p => p.id === offer.producerId) : undefined;
@@ -199,7 +216,7 @@ export const ProductDetails: React.FC = () => {
     }
   }, [offer, producer]);
 
-  if (isInitialCatalogLoading && !offer) {
+  if (pageLoading && !offer) {
     return <ProductDetailsSkeleton />;
   }
 

@@ -15,7 +15,7 @@ const marketplaceVisible = (user: { role?: UserRole } | null) =>
   !user || user.role === UserRole.CLIENT || user.role === UserRole.PRODUCER;
 
 export const Navbar: React.FC = () => {
-  const { user, producers, clients, logout, cart, notifications, markNotificationsAsRead, markNotificationAsRead, deleteNotification, clearNotifications, chats, isInitialCatalogLoading } = useStore();
+  const { user, producers, clients, logout, cart, notifications, markNotificationsAsRead, markNotificationAsRead, deleteNotification, clearNotifications, chats } = useStore();
   const token = typeof window !== 'undefined' ? getToken() : null;
   const staffWrongApp = isWebAppSessionBlocked(token, user);
   const { t, language, setLanguage } = useTranslation();
@@ -68,17 +68,10 @@ export const Navbar: React.FC = () => {
     return user.name;
   };
 
-  const isUserNameResolving = useMemo(() => {
-    if (!user) return false;
-    if (!isInitialCatalogLoading) return false;
-    if (user.role === UserRole.PRODUCER) {
-      return !producers.some(x => x.userId === user.id || x.id === user.producerId);
-    }
-    if (user.role === UserRole.CLIENT) {
-      return !clients.some(x => x.userId === user.id);
-    }
-    return false;
-  }, [clients, producers, user, isInitialCatalogLoading]);
+  // `getUserDisplayName()` already falls back to the cached `user.name` from
+  // the session, so we never need a loading state for the navbar name slot.
+  // We keep the flag so callers below don't change, but it's always `false`.
+  const isUserNameResolving = false;
 
   // Close notifications & profile menu when clicking outside
   useEffect(() => {

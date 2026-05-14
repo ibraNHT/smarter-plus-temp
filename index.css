@@ -183,3 +183,27 @@ img, video, canvas, svg, iframe {
   max-width: 100%;
 }
 
+/* One-shot "bubble in" animation used by chat messages. Applied via a className
+   that is tagged on a message only on its first render, then removed by the
+   parent component so future re-renders don't re-trigger the animation. */
+@keyframes agm-chat-bubble-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.agm-chat-bubble-in {
+  animation: agm-chat-bubble-in 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agm-chat-bubble-in {
+    animation: none;
+  }
+}
+
