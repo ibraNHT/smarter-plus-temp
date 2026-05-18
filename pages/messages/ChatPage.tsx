@@ -11,7 +11,7 @@ import { SectionLoader } from '../../components/Loaders';
 export const ChatPage: React.FC = () => {
    const { chatId } = useParams<{ chatId: string }>();
    const navigate = useNavigate();
-   const { user, chats, messages, realtimeConnected, sendMessage, retryMessage, respondToProposal, clients, producers, getOfferById, fetchChats, fetchMessages, refreshOffers, refreshProducers, refreshClients } = useStore();
+   const { user, chats, messages, typingByChatId, realtimeConnected, sendMessage, retryMessage, emitTyping, respondToProposal, clients, producers, getOfferById, fetchChats, fetchMessages, refreshOffers, refreshProducers, refreshClients } = useStore();
    const { t } = useTranslation();
 
    const [inputText, setInputText] = useState('');
@@ -51,6 +51,12 @@ export const ChatPage: React.FC = () => {
    // near the bottom; otherwise show a pill telling them new messages arrived.
    const [isNearBottom, setIsNearBottom] = useState(true);
    const [newIncomingCount, setNewIncomingCount] = useState(0);
+   // Typing-indicator transmit state. We throttle `typing=true` so we don't
+   // emit on every keystroke, and debounce `typing=false` to fire after a
+   // short idle window. Refs (not state) so updates don't re-render.
+   const lastTypingEmitRef = useRef<number>(0);
+   const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+   const isTypingActiveRef = useRef<boolean>(false);
 
    const TEXTAREA_MAX_PX = 160;
 
@@ -61,9 +67,90 @@ export const ChatPage: React.FC = () => {
       el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_PX)}px`;
    }, []);
 
+   // Resolve the typing recipient ids (= participants of the active chat minus
+   // the current user) up front. We keep them in a ref so notifyTyping /
+   // stopTypingNow can read the latest value without re-binding when `chats`
+   // updates — that was previously causing the cleanup effect to fire on
+   // every poll and silently send spurious "stopped typing" events.
+   const typingRecipientsRef = useRef<string[]>([]);
+   useEffect(() => {
+      if (!chatId || !user?.id) {
+         typingRecipientsRef.current = [];
+         return;
+      }
+      const chat = chats.find((c) => c.id === chatId);
+      const others = (chat?.participantIds || []).filter((id) => id && id !== user.id);
+      typingRecipientsRef.current = others;
+   }, [chatId, chats, user?.id]);
+
+   /**
+    * Notify the other party that we are typing. Emits a `chat:typing` event
+    * at most once every 2.5s while the user is actively typing, and a final
+    * `isTyping: false` event 2s after the user stops. Cheap to call on every
+    * keystroke — internal throttle/debounce do the right thing.
+    */
+   const notifyTyping = useCallback(() => {
+      if (!chatId) return;
+      const recipients = typingRecipientsRef.current;
+      if (recipients.length === 0) return;
+      const now = Date.now();
+      if (!isTypingActiveRef.current || now - lastTypingEmitRef.current > 2500) {
+         emitTyping(chatId, true, recipients);
+         lastTypingEmitRef.current = now;
+         isTypingActiveRef.current = true;
+      }
+      if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+      typingStopTimerRef.current = setTimeout(() => {
+         isTypingActiveRef.current = false;
+         emitTyping(chatId, false, typingRecipientsRef.current);
+      }, 2000);
+   }, [chatId, emitTyping]);
+
+   /**
+    * Stop the typing indicator immediately. Called when the user sends, when
+    * the chat changes, and when the component unmounts. Reads recipients via
+    * the ref so it's stable across `chats` updates.
+    */
+   const stopTypingNow = useCallback(() => {
+      if (typingStopTimerRef.current) {
+         clearTimeout(typingStopTimerRef.current);
+         typingStopTimerRef.current = null;
+      }
+      if (!isTypingActiveRef.current || !chatId) return;
+      isTypingActiveRef.current = false;
+      emitTyping(chatId, false, typingRecipientsRef.current);
+   }, [chatId, emitTyping]);
+
+   // Tell the other side we stopped typing ONLY when the chat actually changes
+   // (or the page unmounts) — not on every `chats` poll update. We achieve
+   // this by depending solely on `chatId`, since notifyTyping/stopTypingNow
+   // are stable now that emitTyping no longer depends on `chats`.
+   useEffect(() => {
+      return () => {
+         if (typingStopTimerRef.current) {
+            clearTimeout(typingStopTimerRef.current);
+            typingStopTimerRef.current = null;
+         }
+         if (isTypingActiveRef.current && chatId) {
+            emitTyping(chatId, false, typingRecipientsRef.current);
+            isTypingActiveRef.current = false;
+         }
+      };
+   }, [chatId, emitTyping]);
+
    // Get active chat early to determine message length
    const activeChat = chatId ? chats.find(c => c.id === chatId) : null;
    const activeMessages = activeChat ? messages.filter(m => m.chatId === chatId).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) : [];
+   // Other-party typing indicator for the active chat. `expiresAt` is enforced
+   // by a 1s interval in storeContext, so we just need a freshness check here.
+   const otherTyping = (() => {
+      if (!chatId) return null;
+      const entry = typingByChatId?.[chatId];
+      if (!entry) return null;
+      if (entry.expiresAt <= Date.now()) return null;
+      if (user && entry.userId === user.id) return null;
+      return entry.userId;
+   })();
    const activeOfferId = activeChat?.offerId || null;
    const hasExistingProposalInCurrentRound = (() => {
       if (!activeOfferId) return false;
@@ -360,6 +447,9 @@ export const ChatPage: React.FC = () => {
       e?.preventDefault();
       const trimmed = inputText.trim();
       if (!trimmed || !chatId) return;
+      // Tell the other side we stopped typing immediately — they'll see the
+      // bubble pop in instead of the "is typing…" indicator.
+      stopTypingNow();
       // Clear the composer immediately so the user can keep typing while the
       // POST is in flight — the optimistic bubble is the source of truth for
       // "did it go". `sendMessage` resolves later and updates that bubble's
@@ -753,6 +843,18 @@ export const ChatPage: React.FC = () => {
                            </React.Fragment>
                         );
                      })}
+                     {otherTyping ? (
+                        <div className="flex justify-start agm-chat-bubble-in" aria-live="polite">
+                           <div className="bg-white text-gray-500 border border-gray-200 rounded-lg rounded-bl-none px-3 py-2 shadow-sm inline-flex items-center gap-2">
+                              <span className="text-xs">{getOtherParticipantName(activeChat)} is typing</span>
+                              <span className="agm-typing-dots" aria-hidden="true">
+                                 <span className="agm-typing-dot" />
+                                 <span className="agm-typing-dot" />
+                                 <span className="agm-typing-dot" />
+                              </span>
+                           </div>
+                        </div>
+                     ) : null}
                      <div ref={messagesEndRef} />
                      {newIncomingCount > 0 && !isNearBottom ? (
                         <button
@@ -794,7 +896,13 @@ export const ChatPage: React.FC = () => {
                            ref={messageInputRef}
                            rows={1}
                            value={inputText}
-                           onChange={(e) => setInputText(e.target.value)}
+                           onChange={(e) => {
+                              const value = e.target.value;
+                              setInputText(value);
+                              if (value.length > 0) notifyTyping();
+                              else stopTypingNow();
+                           }}
+                           onBlur={() => stopTypingNow()}
                            onInput={adjustMessageInputHeight}
                            onKeyDown={(e) => {
                               if (e.key === 'Enter' && !e.shiftKey) {

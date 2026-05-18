@@ -1,5 +1,5 @@
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
@@ -9,6 +9,7 @@ import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/
 import { useFormik } from 'formik';
 import { z } from 'zod';
 import { RegisterPhoneOtpModal } from '../../components/RegisterPhoneOtpModal';
+import { buildRegisterPhone } from '../../utils/registerPhone';
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
 const PASSWORD_RULE_MESSAGE = 'Password must be at least 4 characters with 1 letter, 1 number, and 1 special character.';
 
@@ -67,8 +68,11 @@ export const RegisterProducer: React.FC = () => {
   // until the SMS+email OTP is verified.
   const [otpOpen, setOtpOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [pendingPhone, setPendingPhone] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
+  const [otpRegisterError, setOtpRegisterError] = useState('');
+  const registrationTokenRef = useRef<string | null>(null);
 
   const registerProducerSchema = z.object({
     type: z.enum(['BUSINESS', 'INDIVIDUAL']),
@@ -119,7 +123,8 @@ export const RegisterProducer: React.FC = () => {
         setError('Please add at least one location before continuing.');
         return;
       }
-      const fullPhone = `${values.phoneCode}${values.phone}`.replace(/\s+/g, '');
+      setOtpRegisterError('');
+      const fullPhone = buildRegisterPhone(values.phoneCode, values.phone);
       setPendingPhone(fullPhone);
       setPendingEmail(values.email.trim());
       setOtpOpen(true);
@@ -128,15 +133,17 @@ export const RegisterProducer: React.FC = () => {
 
   const submitWithToken = async (registrationToken: string) => {
     const values = formik.values;
-    setOtpOpen(false);
+    registrationTokenRef.current = registrationToken;
+    setIsCreatingAccount(true);
     setIsSubmitting(true);
     setError('');
+    setOtpRegisterError('');
     try {
       const result = await registerProducer({
         type: values.type,
         name: values.name,
         email: values.email,
-        phone: `${values.phoneCode}${values.phone}`,
+        phone: pendingPhone,
         phoneVerificationToken: registrationToken,
         description: values.description,
         locations: locations,
@@ -147,12 +154,16 @@ export const RegisterProducer: React.FC = () => {
       } as any, values.password);
 
       if (result.success) {
-        navigate('/');
+        setOtpOpen(false);
+        navigate('/producer/dashboard', { replace: true });
       } else {
-        setError(result.message);
+        const msg = result.message || 'Registration failed.';
+        setOtpRegisterError(msg);
+        setError(msg);
       }
     } finally {
       setIsSubmitting(false);
+      setIsCreatingAccount(false);
     }
   };
 
@@ -377,10 +388,6 @@ export const RegisterProducer: React.FC = () => {
               onBlur={formik.handleBlur}
             />
             {formik.touched.taxIdentificationNumber && formik.errors.taxIdentificationNumber ? <p className="text-xs text-red-600 mt-1">{formik.errors.taxIdentificationNumber}</p> : null}
-          </div>
-
-          <div className="sm:col-span-6">
-            <p className="text-xs text-gray-400 mt-1">You can upload supporting documents (NIU certificate, ID) from your profile after registration.</p>
           </div>
 
           <div className="sm:col-span-3">
@@ -658,14 +665,8 @@ export const RegisterProducer: React.FC = () => {
               disabled={formik.isSubmitting || isSubmitting || otpOpen}
               className="ml-3 inline-flex justify-center items-center gap-2 py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {(formik.isSubmitting || isSubmitting || otpOpen) && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-              {isSubmitting
-                ? 'Creating…'
-                : otpOpen
-                  ? 'Verifying…'
-                  : formik.isSubmitting
-                    ? t('form.processing')
-                    : t('register.producer.btn')}
+              {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              {isSubmitting ? 'Creating…' : formik.isSubmitting ? t('form.processing') : t('register.producer.btn')}
             </button>
           </div>
         </div>
@@ -675,8 +676,20 @@ export const RegisterProducer: React.FC = () => {
         open={otpOpen}
         phone={pendingPhone}
         email={pendingEmail}
+        isCreatingAccount={isCreatingAccount}
+        registerError={otpRegisterError}
+        onRetryRegister={() => {
+          if (registrationTokenRef.current) {
+            void submitWithToken(registrationTokenRef.current);
+          }
+        }}
         onVerified={(token) => void submitWithToken(token)}
-        onCancel={() => setOtpOpen(false)}
+        onCancel={() => {
+          if (isCreatingAccount) return;
+          setOtpOpen(false);
+          setOtpRegisterError('');
+          registrationTokenRef.current = null;
+        }}
       />
     </div>
   );

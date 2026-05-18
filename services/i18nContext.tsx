@@ -308,7 +308,10 @@ const translations: Record<string, Record<Language, string>> = {
   // Dashboard
   'dash.status': { en: 'Status', fr: 'Statut' },
   'dash.pending': { en: 'Pending Validation', fr: 'En attente de validation' },
-  'dash.pendingMsg': { en: 'Your account is currently Pending Validation. You can create offers, but they won\'t be visible to clients until approved.', fr: 'Votre compte est en attente de validation. Vous pouvez créer des offres, mais elles ne seront visibles qu\'après approbation.' },
+  'dash.pendingMsg': {
+    en: 'Your producer account is pending. You can still buy as a client. Enter your NIU / tax ID and upload your NIU certificate in your profile to complete verification.',
+    fr: 'Votre compte producteur est en attente. Vous pouvez toujours acheter. Saisissez votre NIU et téléversez votre certificat NIU dans votre profil pour finaliser la vérification.',
+  },
   'dash.activeOffers': { en: 'Total Active Offers', fr: 'Offres Actives' },
   'dash.myCatalog': { en: 'My Catalog', fr: 'Mon Catalogue' },
   'dash.incomingOrders': { en: 'Incoming Orders', fr: 'Commandes Reçues' },
@@ -426,6 +429,38 @@ const translations: Record<string, Record<Language, string>> = {
   'profile.payment.none': { en: 'No payment methods saved yet.', fr: 'Aucun moyen de paiement enregistré.' },
   'profile.upgrade': { en: 'Become a Producer', fr: 'Devenir Producteur' },
   'profile.upgradeDesc': { en: 'Upgrade your account to start selling your own products.', fr: 'Passez votre compte en mode producteur pour commencer à vendre.' },
+  'profile.producerApprovedTitle': { en: 'Approved Producer', fr: 'Producteur approuvé' },
+  'profile.producerApprovedMsg': { en: 'Your producer account is approved. You can publish offers normally.', fr: 'Votre compte producteur est approuvé. Vous pouvez publier des offres normalement.' },
+  'profile.producerPendingTitle': { en: 'Producer account pending', fr: 'Compte producteur en attente' },
+  'profile.producerPendingMsg': {
+    en: 'Your producer account is pending. You can still buy as a client. Enter your NIU / tax ID and upload your NIU certificate (and business registration if applicable) below to complete verification.',
+    fr: 'Votre compte producteur est en attente. Vous pouvez toujours acheter en tant que client. Saisissez votre NIU et téléversez votre certificat NIU (et l\'immatriculation le cas échéant) ci-dessous pour finaliser la vérification.',
+  },
+  'profile.complianceDocsTitle': { en: 'Tax & compliance documents', fr: 'Documents fiscaux et administratifs' },
+  'profile.complianceDocsIntro': {
+    en: 'Enter your NIU / tax ID above. Upload your NIU certificate (required). Business accounts may also upload business registration (optional).',
+    fr: 'Saisissez votre NIU ci-dessus. Téléversez votre certificat NIU (obligatoire). Les comptes entreprise peuvent aussi téléverser l\'immatriculation (facultatif).',
+  },
+  'profile.taxIdNumber': { en: 'NIU / Tax identification number', fr: 'NIU / Numéro d\'identification fiscale' },
+  'profile.taxIdNumberHint': {
+    en: 'The unique tax ID printed on your NIU registration (not the uploaded file).',
+    fr: 'Le numéro fiscal unique figurant sur votre enregistrement NIU (pas le fichier téléversé).',
+  },
+  'profile.taxClearanceDoc': { en: 'Tax clearance certificate (ACF)', fr: 'Attestation de non-redevance (ACF)' },
+  'profile.taxClearanceDocHint': {
+    en: 'Tax completion / clearance document from the tax authority.',
+    fr: 'Document attestant la régularité fiscale auprès de l\'administration.',
+  },
+  'profile.niuCertificate': { en: 'NIU certificate', fr: 'Certificat NIU' },
+  'profile.niuCertificateHint': {
+    en: 'Official NIU registration certificate for your business or activity.',
+    fr: 'Certificat officiel d\'enregistrement au NIU pour votre activité.',
+  },
+  'profile.businessRegistration': { en: 'Business registration', fr: 'Immatriculation / registre de commerce' },
+  'profile.businessRegistrationHint': {
+    en: 'RCCM or equivalent — optional but helps speed up approval.',
+    fr: 'RCCM ou équivalent — facultatif mais accélère la validation.',
+  },
   'profile.favorites.empty': { en: 'No favorite items yet.', fr: 'Pas encore de favoris.' },
   'profile.findSimilar': { en: 'Find Similar', fr: 'Trouver Similaire' },
   

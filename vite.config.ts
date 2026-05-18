@@ -14,7 +14,7 @@ export default defineConfig({
   server: {
     proxy: {
       "^/api/(?!.*\\.(?:ts|tsx|js|jsx|mjs|cjs|map|json)$)": {
-        target: "http://localhost:3000",
+        target: process.env.VITE_API_PROXY_TARGET ?? "http://localhost:4040",
         changeOrigin: true,
       },
     },
@@ -26,7 +26,12 @@ export default defineConfig({
           VitePWA({
             registerType: "autoUpdate",
             injectRegister: "auto",
-            includeAssets: ["favicon.ico", "apple-touch-icon.png"],
+            includeAssets: [
+              "favicon.ico",
+              "favicon-16x16.png",
+              "favicon-32x32.png",
+              "apple-touch-icon.png",
+            ],
             workbox: {
               maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
               cleanupOutdatedCaches: true,

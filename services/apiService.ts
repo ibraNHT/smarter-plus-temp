@@ -118,6 +118,7 @@ export const attemptTokenRefresh = async (): Promise<boolean> => {
                 setToken(data.accessToken);
                 if (data.refreshToken) setRefreshToken(data.refreshToken);
                 lastRefreshFailed = 0;
+                try { window.dispatchEvent(new Event('agm:token-refreshed')); } catch { /* noop */ }
                 return true;
             }
         } catch {

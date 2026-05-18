@@ -10,7 +10,8 @@ import {
   postGuestSupportMessage,
   postUserSupportMessage,
 } from './supportSessionsApi';
-import { apiFetch, apiUpload, setToken, clearToken, getToken, setRefreshToken, isRefreshOnCooldown } from './apiService';
+import { apiFetch, apiUpload, setToken, clearToken, getToken, getRefreshToken, setRefreshToken, isRefreshOnCooldown, attemptTokenRefresh } from './apiService';
+import { normalizeRegisterPhoneFull } from '../utils/registerPhone';
 import { logApiFailure } from './apiDebug';
 import { uploadAvatar } from './uploadService';
 // `clientProfileMatchesSession` lives in its own module so this file only
@@ -255,6 +256,18 @@ interface StoreContextType {
   chats: ChatSession[];
   messages: ChatMessage[];
   /**
+   * Real-time typing indicators keyed by chat session id. Value is the
+   * userId of the other participant currently typing; entries auto-expire
+   * after ~5s if no follow-up `chat:typing` event arrives.
+   */
+  typingByChatId: Record<string, { userId: string; expiresAt: number }>;
+  /**
+   * True while the underlying socket.io connection is established. UI can
+   * use this to fall back to a "Sending…" affordance or skip optimistic
+   * typing emits gracefully.
+   */
+  isSocketConnected: boolean;
+  /**
    * True while the /notifications WebSocket is connected. Pages can use this
    * to switch between an aggressive poll fallback (WS down) and a slow
    * safety-net poll (WS up). Chat pushes are delivered over WS as
@@ -267,6 +280,14 @@ interface StoreContextType {
   sendMessage: (chatId: string, text: string, proposal?: Proposal) => Promise<boolean>;
   /** Re-send a message currently in `FAILED` state. Identified by its local clientId. */
   retryMessage: (clientId: string) => Promise<boolean>;
+  /**
+   * Emit a `chat:typing` event for the active session. Caller is responsible
+   * for throttling `isTyping: true` and debouncing `isTyping: false`. The
+   * `recipientIds` array tells the server which other user rooms to fan out
+   * to — passing it from the caller avoids a stale-closure lookup against
+   * the global `chats` array.
+   */
+  emitTyping: (chatId: string, isTyping: boolean, recipientIds: string[]) => void;
   respondToProposal: (chatId: string, messageId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', counterPrice?: number, counterQty?: number) => Promise<boolean>;
 
   // Support Chat (Client Side)
@@ -465,6 +486,17 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // Chat State
   const [chats, setChats] = useState<ChatSession[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  /**
+   * Live typing indicators keyed by chat session id. Each entry is the
+   * other-party userId currently typing in that chat and an `expiresAt`
+   * timestamp so a missed "stopped typing" event can't leave the bubble
+   * stuck on screen. Auto-pruned by a 1s interval below.
+   */
+  const [typingByChatId, setTypingByChatId] = useState<Record<string, { userId: string; expiresAt: number }>>({});
+  /** True while the /notifications socket.io connection is up. */
+  const [isSocketConnected, setIsSocketConnected] = useState<boolean>(false);
+  /** Bumped after silent refresh so the socket reconnects with a new JWT. */
+  const [socketAuthEpoch, setSocketAuthEpoch] = useState(0);
 
   // Compare State
   const [compareList, setCompareList] = useState<string[]>([]);
@@ -484,10 +516,28 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     useSessionStore.getState().setUser(user);
     const savedGuestEmail = localStorage.getItem('guestEmail');
     if (savedGuestEmail) setGuestEmail(savedGuestEmail);
-    // Route-aware bootstrap: only fetch what the current page actually needs.
-    // Other slices load lazily when pages mount their own `refreshX()` calls.
-    // See `bootstrapForRoute` below.
-    void bootstrapForRoute();
+
+    let cancelled = false;
+    (async () => {
+      const hasStoredSession = Boolean(
+        getToken() || getRefreshToken() || localStorage.getItem('currentUser'),
+      );
+      if (hasStoredSession) {
+        await attemptTokenRefresh();
+      }
+      if (!cancelled) void bootstrapForRoute();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onTokenRefreshed = () => setSocketAuthEpoch((n) => n + 1);
+    window.addEventListener('agm:token-refreshed', onTokenRefreshed);
+    return () => window.removeEventListener('agm:token-refreshed', onTokenRefreshed);
   }, []);
 
   // Drop admin/staff sessions using JWT role (source of truth) even if localStorage user is stale.
@@ -609,16 +659,19 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         socketRef.current.disconnect();
         socketRef.current = null;
       }
+      setIsSocketConnected(false);
+      setRealtimeConnected(false);
       return;
     }
-    const apiBase = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:3000' : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'))).replace(/\/$/, '');
-    const socket = io(apiBase + '/notifications', {
+    const apiBase = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '' : (typeof window !== 'undefined' ? window.location.origin : ''))).replace(/\/$/, '');
+    const socket = io(`${apiBase}/notifications`, {
       path: '/socket.io',
       auth: { token },
       transports: ['polling', 'websocket'],
       withCredentials: true,
     });
     socketRef.current = socket;
+    let refreshOnConnectError = false;
 
     socket.on('connect', () => setRealtimeConnected(true));
     socket.on('disconnect', () => setRealtimeConnected(false));
@@ -720,18 +773,115 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       );
     });
 
+    // Real-time typing indicator. We treat any incoming `chat:typing` event as
+    // valid (the server only forwards it to the right recipient) and stamp it
+    // with an `expiresAt` 5s in the future so a dropped "stopped typing"
+    // event can't leave the indicator on screen forever. The window is wider
+    // than the sender's 2.5s emit throttle to absorb network jitter.
+    socket.on('chat:typing', (data: { sessionId?: string; userId?: string; isTyping?: boolean }) => {
+      const sessionId = typeof data?.sessionId === 'string' ? data.sessionId : '';
+      const fromUserId = typeof data?.userId === 'string' ? data.userId : '';
+      if (!sessionId || !fromUserId) return;
+      // Ignore echoes for our own user id (shouldn't happen — server filters —
+      // but defensive when sender has multiple tabs open as the same user).
+      if (userRef.current && fromUserId === userRef.current.id) return;
+      // eslint-disable-next-line no-console
+      console.debug('[chat:typing] received', { sessionId, fromUserId, isTyping: data.isTyping });
+      setTypingByChatId((prev) => {
+        const next = { ...prev };
+        if (data?.isTyping === false) {
+          if (next[sessionId]?.userId === fromUserId) delete next[sessionId];
+          return next;
+        }
+        next[sessionId] = { userId: fromUserId, expiresAt: Date.now() + 5000 };
+        return next;
+      });
+    });
+    socket.on('connect', () => {
+      setIsSocketConnected(true);
+    });
+    socket.on('disconnect', () => {
+      setIsSocketConnected(false);
+    });
     socket.on('connect_error', () => {
+      setIsSocketConnected(false);
       setRealtimeConnected(false);
-      // Fallback: storeContext's 60s global poll + ChatPage's safety-net poll
-      // (30s when WS is alive, 10s when WS is down) keep the UI fresh.
+      if (refreshOnConnectError) return;
+      refreshOnConnectError = true;
+      void (async () => {
+        const ok = await attemptTokenRefresh();
+        const nextToken = getToken();
+        if (ok && nextToken) {
+          socket.auth = { token: nextToken };
+          socket.connect();
+        }
+      })();
     });
     return () => {
       socket.disconnect();
       socketRef.current = null;
       setRealtimeConnected(false);
+      setIsSocketConnected(false);
       if (notificationFetchTimer.current) clearTimeout(notificationFetchTimer.current);
     };
-  }, [user?.id]);
+  }, [user?.id, socketAuthEpoch]);
+
+  // Garbage-collect stale typing indicators every second. Avoids a leaked
+  // "is typing" bubble when the other tab closes mid-keystroke.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setTypingByChatId((prev) => {
+        let dirty = false;
+        const next: typeof prev = {};
+        for (const key in prev) {
+          if (prev[key].expiresAt > now) {
+            next[key] = prev[key];
+          } else {
+            dirty = true;
+          }
+        }
+        return dirty ? next : prev;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  /**
+   * Emit a `chat:typing` event for the active chat.
+   *
+   * Caller passes the resolved `recipientIds` (already filtered to exclude
+   * self) so this function has zero dependencies on global state — meaning
+   * the React closure stays stable for the entire session lifetime and the
+   * ChatPage cleanup effect never fires spurious "stopped typing" events on
+   * every poll/state change.
+   *
+   * We deliberately don't gate on `socket.connected`: socket.io-client
+   * buffers `emit` calls while reconnecting (default behaviour with
+   * `volatile = false`), so a momentary disconnect doesn't silently drop
+   * the keystroke. A `console.debug` line makes the path visible in
+   * DevTools so this can be verified without instrumentation.
+   */
+  const emitTyping = useCallback(
+    (chatId: string, isTyping: boolean, recipientIds: string[]) => {
+      const socket = socketRef.current;
+      const u = userRef.current;
+      if (!socket || !u || !chatId) return;
+      const safeRecipients = Array.isArray(recipientIds)
+        ? recipientIds.filter((id) => typeof id === 'string' && id.length > 0 && id !== u.id)
+        : [];
+      if (safeRecipients.length === 0) return;
+      // eslint-disable-next-line no-console
+      console.debug('[chat:typing] emit', {
+        sessionId: chatId,
+        recipientIds: safeRecipients,
+        isTyping,
+        connected: socket.connected,
+      });
+      socket.emit('chat:typing', { sessionId: chatId, recipientIds: safeRecipients, isTyping });
+    },
+    [],
+  );
 
   // ─── GLOBAL POLLING (lightweight, visibility-gated) ─────────────────────────
   //
@@ -827,6 +977,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       locations: Array.isArray(p.locations) ? p.locations.map(normalizeLocationFromApi) : [],
       preferredHomeDelivery: normalizePreferredHomeFromApi((p as any).preferredHomeDelivery),
       certifications: p.certifications || [],
+      taxIdentificationNumber: p.taxIdentificationNumber ?? undefined,
+      taxClearanceCertificateUrl: p.taxClearanceCertificateUrl ?? undefined,
       paymentMethods: p.paymentMethods || [],
       referrals: p.referrals || [],
       favorites: p.favorites || [],
@@ -886,6 +1038,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const refreshProducers = async (opts?: { force?: boolean }) => {
+    const session = userRef.current;
     const data = await cached(
       QK.producers(),
       () => apiFetch<any[]>(API_ENDPOINTS.producers.list, { silent401: true } as any),
@@ -893,11 +1046,90 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       opts?.force,
     );
     if (!Array.isArray(data)) return;
-    setProducers(data.map(mapProducerRow));
+    const rows = data.map(mapProducerRow);
+    setProducers(rows);
+    if (
+      session?.role === UserRole.PRODUCER &&
+      session.producerId &&
+      !rows.some((p) => p.id === session.producerId)
+    ) {
+      upsertProducerInStore({
+        id: session.producerId,
+        userId: session.id,
+        name: session.name ?? session.displayName ?? 'Producer',
+        firstName: session.name ?? 'Producer',
+        lastName: '',
+        user: {
+          id: session.id,
+          email: session.email,
+          phone: session.phone,
+          displayName: session.displayName ?? session.name,
+        },
+      });
+    }
+  };
+
+  const upsertClientInStore = (raw: any) => {
+    if (!raw?.id) return;
+    const mapped = mapClientRow(raw);
+    const session = userRef.current;
+    setClients((prev) => {
+      const idx = prev.findIndex(
+        (c) =>
+          c.id === mapped.id ||
+          (session && clientProfileMatchesSession(c, session)),
+      );
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...mapped, userId: mapped.userId ?? (next[idx] as any).userId ?? session?.id };
+        return next;
+      }
+      return [...prev, { ...mapped, userId: mapped.userId ?? session?.id }];
+    });
+  };
+
+  const upsertProducerInStore = (raw: any) => {
+    if (!raw?.id) return;
+    const mapped = mapProducerRow(raw);
+    const session = userRef.current;
+    setProducers((prev) => {
+      const idx = prev.findIndex(
+        (p) =>
+          p.id === mapped.id ||
+          (session?.producerId && p.id === session.producerId) ||
+          (session && (p as any).userId === session.id),
+      );
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...mapped };
+        return next;
+      }
+      return [...prev, mapped];
+    });
   };
 
   const refreshClients = async (opts?: { force?: boolean }) => {
     if (!getToken()) return;
+    const session = userRef.current;
+    if (session?.role === UserRole.CLIENT) {
+      try {
+        const me = await cached(
+          [...QK.clients(), 'me', session.id] as const,
+          () =>
+            apiFetch<any>(API_ENDPOINTS.profiles.meClient, { silent401: true } as any).catch(
+              () => apiFetch<any>(API_ENDPOINTS.clients.me, { silent401: true } as any),
+            ),
+          STALE.catalog,
+          opts?.force,
+        );
+        if (me?.id) {
+          upsertClientInStore({ ...me, userId: (me as any).userId ?? session.id });
+          return;
+        }
+      } catch {
+        /* fall through to list */
+      }
+    }
     const data = await cached(
       QK.clients(),
       () => apiFetch<any[]>(API_ENDPOINTS.clients.list, { silent401: true } as any),
@@ -1472,20 +1704,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setMyReferrals(data);
   }, [user]);
 
-  /**
-   * Backend allows one optional leading + and digits. Pasting a full number in the local
-   * field while also using the country dropdown can yield "+237+2376..." — invalid and
-   * was never possible with the old single-field Google flow.
-   */
-  const normalizeRegisterPhone = (phone: string | undefined) => {
-    let s = String(phone ?? '').replace(/\s+/g, '').trim();
-    if (!s) return s;
-    const secondPlus = s.indexOf('+', 1);
-    if (secondPlus !== -1) {
-      s = s.slice(secondPlus);
-    }
-    return s;
-  };
+  const normalizeRegisterPhone = (phone: string | undefined) =>
+    normalizeRegisterPhoneFull(String(phone ?? ''));
 
   /** Avoid RangeError from Invalid Date (e.g. empty date string) breaking registration. */
   const toIsoDateOfBirthSafe = (dob: unknown): string => {
@@ -1538,9 +1758,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         producerRegisterBody.referralCode = String(refP).trim();
       }
       const otpP = data.phoneVerificationToken;
-      if (otpP != null && String(otpP).trim() !== '') {
-        producerRegisterBody.phoneVerificationToken = String(otpP).trim();
+      if (otpP == null || String(otpP).trim() === '') {
+        return {
+          success: false,
+          message: 'Phone verification is required. Complete the OTP step before creating your account.',
+        };
       }
+      producerRegisterBody.phoneVerificationToken = String(otpP).trim();
       const session = await apiFetch<AuthSessionPayload>(API_ENDPOINTS.auth.register, {
         method: 'POST',
         body: JSON.stringify(producerRegisterBody),
@@ -1576,11 +1800,25 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setUser(mergedUser);
         useSessionStore.getState().setUser(mergedUser);
         localStorage.setItem('currentUser', JSON.stringify(mergedUser));
+        upsertProducerInStore({
+          id: producerProfile.id,
+          userId: session.user.id,
+          name: data.name || 'Producer',
+          firstName: data.name || 'Farm',
+          lastName: 'Owner',
+          description: data.description,
+          locations: data.locations,
+          productionTypes: data.productionTypes,
+          type: data.type,
+          user: {
+            id: session.user.id,
+            email: session.user.email,
+            phone: session.user.phone,
+            displayName: session.user.displayName ?? data.name,
+          },
+        });
       }
 
-      // Defer full catalog sync so the UI can navigate and drop loading state immediately.
-      // Awaiting here blocked the whole registration flow for 1–2s (worse after logout→register
-      // in the same SPA session when the main thread is already busy).
       setTimeout(() => {
         void fetchData(mergedUser);
       }, 0);
@@ -1604,9 +1842,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         clientRegisterBody.referralCode = String(refC).trim();
       }
       const otpC = data.phoneVerificationToken;
-      if (otpC != null && String(otpC).trim() !== '') {
-        clientRegisterBody.phoneVerificationToken = String(otpC).trim();
+      if (otpC == null || String(otpC).trim() === '') {
+        return {
+          success: false,
+          message: 'Phone verification is required. Complete the OTP step before creating your account.',
+        };
       }
+      clientRegisterBody.phoneVerificationToken = String(otpC).trim();
       const session = await apiFetch<AuthSessionPayload>(API_ENDPOINTS.auth.register, {
         method: 'POST',
         body: JSON.stringify(clientRegisterBody),
@@ -1644,6 +1886,23 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setUser(mergedUser);
         useSessionStore.getState().setUser(mergedUser);
         localStorage.setItem('currentUser', JSON.stringify(mergedUser));
+        upsertClientInStore({
+          id: clientProfile.id,
+          userId: session.user.id,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          gender: data.gender,
+          dateOfBirth: data.dateOfBirth,
+          locations: data.locations,
+          favorites: data.favorites ?? [],
+          user: {
+            id: session.user.id,
+            email: session.user.email ?? data.email,
+            phone: session.user.phone ?? data.phone,
+            displayName: session.user.displayName ?? data.name,
+          },
+        });
+        void queryClient.invalidateQueries({ queryKey: [...QK.clients()] });
       }
 
       setTimeout(() => {
@@ -1898,9 +2157,28 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return { success: false, error: 'You must be signed in as a producer to publish an offer.' };
     }
     try {
+      const payload = {
+        title: offerData.title,
+        description: offerData.description,
+        category: offerData.category,
+        type: offerData.type,
+        marketType: offerData.marketType,
+        unit: offerData.unit,
+        quantity: offerData.quantity,
+        price: offerData.price,
+        imageUrl: offerData.imageUrl,
+        imageUrls: offerData.imageUrls ?? [],
+        isNegotiable: offerData.isNegotiable,
+        isDeliveryAvailable: offerData.isDeliveryAvailable,
+        offerLocation: offerData.offerLocation,
+        minQuantity: offerData.minQuantity,
+        maxQuantity: offerData.maxQuantity,
+        serviceDuration: offerData.serviceDuration ?? 0,
+        reservedClientId: offerData.reservedClientId,
+      };
       const newOffer = await apiFetch<Offer>(API_ENDPOINTS.offers.create, {
         method: 'POST',
-        body: JSON.stringify(offerData),
+        body: JSON.stringify(payload),
       });
       setOffers(prev => [...prev, newOffer]);
       bustCache(QK.offers());
@@ -1916,9 +2194,28 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const updateOffer = async (updatedOffer: Offer): Promise<{ success: boolean; error?: string }> => {
     try {
+      const payload = {
+        title: updatedOffer.title,
+        description: updatedOffer.description,
+        category: updatedOffer.category,
+        type: updatedOffer.type,
+        marketType: updatedOffer.marketType,
+        unit: updatedOffer.unit,
+        quantity: updatedOffer.quantity,
+        price: updatedOffer.price,
+        imageUrl: updatedOffer.imageUrl,
+        imageUrls: updatedOffer.imageUrls ?? [],
+        isNegotiable: updatedOffer.isNegotiable,
+        isDeliveryAvailable: updatedOffer.isDeliveryAvailable,
+        offerLocation: updatedOffer.offerLocation,
+        minQuantity: updatedOffer.minQuantity,
+        maxQuantity: updatedOffer.maxQuantity,
+        serviceDuration: updatedOffer.serviceDuration ?? 0,
+        reservedClientId: updatedOffer.reservedClientId,
+      };
       const saved = await apiFetch<Offer>(API_ENDPOINTS.offers.update(updatedOffer.id), {
         method: 'PUT',
-        body: JSON.stringify(updatedOffer),
+        body: JSON.stringify(payload),
       });
       setOffers(prev => prev.map(o => o.id === saved.id ? saved : o));
       bustCache(QK.offers());
@@ -3133,11 +3430,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     user, pendingRegistration, guestEmail, setGuestEmail, producers, clients, offers, cart, orders, wallets, notifications, withdrawalRequests, reviews, portfolios, coupons, pickupPoints,
     chats,
     messages,
+    typingByChatId,
+    isSocketConnected,
     realtimeConnected,
     fetchChats,
     fetchMessages,
     startNegotiation,
-    sendMessage, retryMessage, respondToProposal,
+    sendMessage, retryMessage, emitTyping, respondToProposal,
     login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, deleteOffer, getProducerOffers, getOfferById,
     addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, confirmReceipt, reportProblem, addDisputeEvidence, revealContactInfo,
     getWallet, fundWallet, requestWithdrawal, markNotificationsAsRead, markNotificationAsRead, deleteNotification, clearNotifications, getAvailableSlots, submitReview, getAverageRating,

@@ -524,9 +524,20 @@ export const ClientProfile: React.FC = () => {
     * avoids the jarring "loading the whole app" experience on refresh.
     */
    const isClientProfileHydrating =
-      !currentClient?.id && user.role === UserRole.CLIENT && (tabLoading || profileHydrating);
+      !currentClient?.id &&
+      user.role === UserRole.CLIENT &&
+      (tabLoading || profileHydrating || Boolean(user.clientId));
 
-   if (!currentClient?.id && user.role === UserRole.CLIENT && !isClientProfileHydrating) {
+   if (isClientProfileHydrating) {
+      return (
+         <div className="max-w-7xl mx-auto py-8 px-4">
+            <SEO title="Client Profile | AgriMarket" noindex={true} />
+            <SectionLoader message="Loading your profile…" />
+         </div>
+      );
+   }
+
+   if (!currentClient?.id && user.role === UserRole.CLIENT) {
       return (
          <div className="max-w-7xl mx-auto py-8 px-4">
             <SEO title="Client Profile | AgriMarket" noindex={true} />
@@ -732,12 +743,12 @@ export const ClientProfile: React.FC = () => {
          return <div className="text-center py-12 bg-white rounded-lg shadow-sm border border-gray-100"><Package className="h-12 w-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">{emptyMsg}</p></div>;
       }
       return (
-         <div className="space-y-4">
+         <div className="space-y-4 agm-dash-scroll-cards scrollbar-thin pr-0.5">
             {orderList.map((order) => (
                <div key={order.id} className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden hover:border-primary-200 transition-colors">
                   <div className="p-4 sm:p-6" onClick={() => setSelectedOrder(order)}>
                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
-                        <div className="cursor-pointer flex-1">
+                        <div className="cursor-pointer flex-1 min-w-0">
                            <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2 flex-wrap">
                               {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
                               #{order.id.substring(order.id.length - 6).toUpperCase()}
@@ -761,8 +772,8 @@ export const ClientProfile: React.FC = () => {
                            {getStatusBadge(order.status)}
                         </div>
                      </div>
-                     <div className="flex flex-col sm:flex-row justify-between items-end gap-4">
-                        <div className="flex -space-x-2 overflow-hidden">
+                     <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-end">
+                        <div className="flex -space-x-2 overflow-hidden flex-shrink-0">
                            {(order.items || []).slice(0, 3).map((item: any, idx: number) => (
                               <div key={idx} className="inline-block h-10 w-10 overflow-hidden rounded-md ring-2 ring-white bg-gray-100" title={item.title}>
                                  {getOrderItemImage(item) ? (
@@ -776,9 +787,9 @@ export const ClientProfile: React.FC = () => {
                               <div className="flex items-center justify-center h-10 w-10 rounded-md ring-2 ring-white bg-gray-100 text-xs font-bold text-gray-500">+{(order.items?.length ?? 0) - 3}</div>
                            )}
                         </div>
-                        <div className="text-right" onClick={e => e.stopPropagation()}>
+                        <div className="w-full sm:w-auto sm:text-right" onClick={e => e.stopPropagation()}>
                            <p className="text-sm font-bold text-gray-900 mb-2">{order.totalAmount?.toLocaleString?.() ?? order.totalAmount} XAF</p>
-                           <div className="flex gap-2 flex-wrap justify-end">
+                           <div className="flex gap-2 flex-wrap sm:justify-end">
                               {order.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT && (
                                  <button onClick={() => initiatePayment(order.id)} className="bg-primary-600 text-white px-4 py-1.5 rounded-md text-xs font-bold hover:bg-primary-700 shadow-sm flex items-center gap-1"><CreditCard className="w-3 h-3" /> {t('order.payNow')}</button>
                               )}
@@ -1108,7 +1119,7 @@ export const ClientProfile: React.FC = () => {
                            <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center"><Package className="w-5 h-5 mr-2 text-gray-500" /> {t('dash.allOrders')}</h3>
                            <p className="text-xs sm:text-sm text-gray-500 mt-1">{t('dash.allOrdersDesc')}</p>
                         </div>
-                        <ul className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
+                        <ul className="divide-y divide-gray-200 agm-dash-scroll-4 scrollbar-thin">
                            {(tabLoading || isClientProfileHydrating) && allMyOrders.length === 0 ? (
                               <li className="px-4 py-6"><SectionLoader message={t('form.loading')} /></li>
                            ) : allMyOrders.length === 0 ? (
@@ -1124,7 +1135,7 @@ export const ClientProfile: React.FC = () => {
                                              <span className="text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
                                           )}
                                        </p>
-                                       <p className="text-xs text-gray-500 truncate">{clientOrderMetaLine(order)} · {getProducerDisplayName(order)}</p>
+                                       <p className="text-xs text-gray-500 break-anywhere">{clientOrderMetaLine(order)} · {getProducerDisplayName(order)}</p>
                                     </div>
                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0 self-start sm:self-auto ${order.status === OrderStatus.CANCELLED || order.status === OrderStatus.DISPUTE ? 'bg-red-100 text-red-800' : order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                                        {order.status.replace(/_/g, ' ')}
@@ -1334,9 +1345,6 @@ export const ClientProfile: React.FC = () => {
                            <label className="block text-sm font-medium text-gray-700">NIU / Tax ID <span className="text-red-500">*</span></label>
                            <input type="text" name="taxIdentificationNumber" required placeholder="Enter your NIU" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.taxIdentificationNumber} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />
                            {upgradeFormik.touched.taxIdentificationNumber && upgradeFormik.errors.taxIdentificationNumber ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.taxIdentificationNumber as string}</p> : null}
-                        </div>
-                        <div>
-                           <p className="text-xs text-gray-400">You can upload supporting documents (NIU certificate, ID) from your producer profile after account creation.</p>
                         </div>
                         <div><label className="block text-sm font-medium text-gray-700">Description <span className="text-red-500">*</span></label><textarea name="description" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" rows={3} value={upgradeFormik.values.description} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.description && upgradeFormik.errors.description ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.description}</p> : null}</div>
                         <div><label className="block text-sm font-medium text-gray-700 mb-2">Categories (Click to select)</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded bg-white">{PRODUCTION_TYPES.map(cat => (<button key={cat} type="button" onClick={() => toggleUpgradeCategory(cat)} className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${upgradeFormik.values.productionTypes.includes(cat) ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}</button>))}</div></div>

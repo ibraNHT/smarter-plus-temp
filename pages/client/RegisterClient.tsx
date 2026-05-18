@@ -8,6 +8,7 @@ import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/
 import { useFormik } from 'formik';
 import { z } from 'zod';
 import { RegisterPhoneOtpModal } from '../../components/RegisterPhoneOtpModal';
+import { buildRegisterPhone } from '../../utils/registerPhone';
 
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
 const PASSWORD_RULE_MESSAGE = 'Password must be at least 4 characters with 1 letter, 1 number, and 1 special character.';
@@ -59,8 +60,11 @@ export const RegisterClient: React.FC = () => {
   // never spam SMS for incomplete forms. Holds the in-flight payload until
   // the OTP token comes back, then submits the registration.
   const [otpOpen, setOtpOpen] = useState(false);
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [pendingPhone, setPendingPhone] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
+  const [otpRegisterError, setOtpRegisterError] = useState('');
+  const registrationTokenRef = useRef<string | null>(null);
 
   const avatarFileRef = useRef<File | null>(null);
 
@@ -120,7 +124,8 @@ export const RegisterClient: React.FC = () => {
     // the user proves they control the phone (and/or email).
     onSubmit: (values) => {
       setError('');
-      const fullPhone = `${values.phoneCode}${values.phone}`.replace(/\s+/g, '');
+      setOtpRegisterError('');
+      const fullPhone = buildRegisterPhone(values.phoneCode, values.phone);
       setPendingPhone(fullPhone);
       setPendingEmail(values.email.trim());
       setOtpOpen(true);
@@ -134,9 +139,11 @@ export const RegisterClient: React.FC = () => {
     const inferredCity = String(values.city ?? '').trim() || addressParts[1] || addressParts[0] || 'Unknown';
     const inferredRegion = String(values.region ?? '').trim() || addressParts[2] || addressParts[1] || 'Unknown';
 
-    setOtpOpen(false);
+    registrationTokenRef.current = registrationToken;
+    setIsCreatingAccount(true);
     setIsLoading(true);
     setError('');
+    setOtpRegisterError('');
     try {
       const result = await registerClient({
         name: `${values.firstName} ${values.lastName}`,
@@ -145,7 +152,7 @@ export const RegisterClient: React.FC = () => {
         gender: values.gender as 'MALE' | 'FEMALE',
         dateOfBirth: values.dateOfBirth,
         email: values.email,
-        phone: `${values.phoneCode}${values.phone}`,
+        phone: pendingPhone,
         phoneVerificationToken: registrationToken,
         locations: [{
           lat: Number(values.lat) || 0,
@@ -160,12 +167,16 @@ export const RegisterClient: React.FC = () => {
       }, values.password, avatarFileRef.current);
 
       if (result.success) {
-        navigate('/');
+        setOtpOpen(false);
+        navigate('/client/profile?tab=orders', { replace: true });
       } else {
-        setError(result.message || 'Registration failed.');
+        const msg = result.message || 'Registration failed.';
+        setOtpRegisterError(msg);
+        setError(msg);
       }
     } finally {
       setIsLoading(false);
+      setIsCreatingAccount(false);
     }
   };
 
@@ -473,9 +484,9 @@ export const RegisterClient: React.FC = () => {
             <button type="button" onClick={() => navigate('/')} className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none">
               {t('form.cancel')}
             </button>
-            <button type="submit" disabled={isLoading || otpOpen} className="ml-3 inline-flex justify-center items-center gap-2 py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-60">
-              {(isLoading || otpOpen) && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-              {isLoading ? 'Creating…' : otpOpen ? 'Verifying…' : t('form.create')}
+            <button type="submit" disabled={isLoading || otpOpen} className="ml-3 inline-flex justify-center items-center gap-2 py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-60">
+              {isLoading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              {isLoading ? 'Creating…' : t('form.create')}
             </button>
           </div>
         </div>
@@ -485,8 +496,20 @@ export const RegisterClient: React.FC = () => {
         open={otpOpen}
         phone={pendingPhone}
         email={pendingEmail}
+        isCreatingAccount={isCreatingAccount}
+        registerError={otpRegisterError}
+        onRetryRegister={() => {
+          if (registrationTokenRef.current) {
+            void submitWithToken(registrationTokenRef.current);
+          }
+        }}
         onVerified={(token) => void submitWithToken(token)}
-        onCancel={() => setOtpOpen(false)}
+        onCancel={() => {
+          if (isCreatingAccount) return;
+          setOtpOpen(false);
+          setOtpRegisterError('');
+          registrationTokenRef.current = null;
+        }}
       />
     </div>
   );

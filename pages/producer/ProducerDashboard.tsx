@@ -59,7 +59,7 @@ export const ProducerDashboard: React.FC = () => {
       user?.role === UserRole.PRODUCER &&
       Boolean(user?.producerId) &&
       !currentProducer &&
-      !profileLookupTimedOut;
+      (pageLoading || !profileLookupTimedOut);
 
    useEffect(() => {
       if (!isProducerProfileLoading) {
@@ -438,7 +438,7 @@ export const ProducerDashboard: React.FC = () => {
                </h3>
                <span className="bg-primary-100 text-primary-800 text-xs font-bold px-2 py-1 rounded-full">Action Required</span>
             </div>
-            <ul className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
+            <ul className="divide-y divide-gray-200 agm-dash-scroll-4 agm-dash-row-tall scrollbar-thin">
                {ordersToShip.length === 0 ? (
                   <li className="px-4 py-8 text-center text-gray-500">No orders ready for shipping.</li>
                ) : (
@@ -466,9 +466,9 @@ export const ProducerDashboard: React.FC = () => {
                               )}
                            </div>
 
-                           <div className="flex flex-wrap gap-2">
+                           <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto">
                               {/* Contact & Location Buttons */}
-                              <div className="text-xs text-gray-600 bg-gray-100 p-1.5 rounded border flex flex-col">
+                              <div className="text-xs text-gray-600 bg-gray-100 p-1.5 rounded border flex flex-col w-full sm:w-auto min-w-0">
                                  <span className="font-bold">Client Contact:</span>
                                  <span className="flex items-center"><Phone className="w-3 h-3 mr-1" /> {getClientPhone(order.clientId)}</span>
                                  <span className="flex items-center"><Mail className="w-3 h-3 mr-1" /> {getClientEmail(order.clientId)}</span>
@@ -476,14 +476,14 @@ export const ProducerDashboard: React.FC = () => {
 
                               <button
                                  onClick={(e) => { e.stopPropagation(); openOrderDeliveryInMaps(order); }}
-                                 className="inline-flex items-center px-3 py-2 border border-purple-200 text-sm font-medium rounded-md text-purple-700 bg-purple-50 hover:bg-purple-100"
+                                 className="inline-flex items-center justify-center px-3 py-2 border border-purple-200 text-sm font-medium rounded-md text-purple-700 bg-purple-50 hover:bg-purple-100 w-full sm:w-auto"
                               >
                                  <Navigation className="h-4 w-4 mr-2" /> {t('order.shareLocation')}
                               </button>
 
                               <button
                                  onClick={(e) => { e.stopPropagation(); startDelivery(order.id); }}
-                                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 shadow-sm"
+                                 className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 shadow-sm w-full sm:w-auto"
                               >
                                  <Truck className="h-4 w-4 mr-2" />{' '}
                                  {orderIsServiceOnly(order) ? t('dash.startServiceVisit') : t('dash.startDelivery')}
@@ -501,16 +501,16 @@ export const ProducerDashboard: React.FC = () => {
             <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
                <h3 className="text-lg leading-6 font-medium text-gray-900">{t('dash.incomingOrders')}</h3>
             </div>
-            <ul className="divide-y divide-gray-200">
+            <ul className="divide-y divide-gray-200 agm-dash-scroll-4 agm-dash-row-tall scrollbar-thin">
                {pageLoading && pendingValidationOrders.length === 0 ? (
                   <li className="px-4 py-6"><SectionLoader message={t('form.loading')} /></li>
                ) : pendingValidationOrders.length === 0 ? (
                   <li className="px-4 py-8 text-center text-gray-500">No new orders waiting validation.</li>
                ) : (
                   pendingValidationOrders.map(order => (
-                     <li key={order.id} className="px-4 py-4 hover:bg-gray-50">
-                        <div className="flex justify-between items-center">
-                           <div onClick={() => setSelectedOrder(order)} className="cursor-pointer flex-1">
+                     <li key={order.id} className="px-4 py-4 hover:bg-gray-50 agm-dash-order-actions--stack">
+                        <div className="agm-dash-order-row">
+                           <div onClick={() => setSelectedOrder(order)} className="cursor-pointer flex-1 min-w-0">
                               <p className="font-medium text-primary-600 flex items-center gap-2 flex-wrap">
                                  {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
                                  #{order.id.substring(6)}
@@ -525,7 +525,7 @@ export const ProducerDashboard: React.FC = () => {
                               <p className="text-xs text-gray-400 mt-1">{t('dash.status')}: {order.status.replace(/_/g, ' ')}</p>
                            </div>
 
-                           <div className="flex space-x-2">
+                           <div className="agm-dash-order-actions">
                               <button
                                  type="button"
                                  disabled={!!orderActionBusy}
@@ -561,7 +561,7 @@ export const ProducerDashboard: React.FC = () => {
                <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
                   <h3 className="text-lg leading-6 font-medium text-gray-900">{t('dash.awaitingPayment')}</h3>
                </div>
-               <ul className="divide-y divide-gray-200">
+               <ul className="divide-y divide-gray-200 agm-dash-scroll-4 scrollbar-thin">
                   {awaitingPaymentOrders.map(order => (
                      <li key={order.id} className="px-4 py-4 hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedOrder(order)}>
                         <p className="font-medium text-gray-700 flex items-center gap-2 flex-wrap">
@@ -588,27 +588,29 @@ export const ProducerDashboard: React.FC = () => {
                </h3>
                <p className="text-sm text-gray-500 mt-1">{t('dash.allOrdersDesc')}</p>
             </div>
-            <ul className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
+            <ul className="divide-y divide-gray-200 agm-dash-scroll-4 scrollbar-thin">
                {pageLoading && allMyOrders.length === 0 ? (
                   <li className="px-4 py-6"><SectionLoader message={t('form.loading')} /></li>
                ) : allMyOrders.length === 0 ? (
                   <li className="px-4 py-8 text-center text-gray-500">No orders yet.</li>
                ) : (
                   allMyOrders.map(order => (
-                     <li key={order.id} className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex justify-between items-center" onClick={() => setSelectedOrder(order)}>
-                        <div>
-                           <p className="font-medium text-gray-900 flex items-center gap-2 flex-wrap">
-                              {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
-                              #{order.id.substring(order.id.length - 6)}
-                              {orderIsServiceOnly(order) && (
-                                 <span className="text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
-                              )}
-                           </p>
-                           <p className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleDateString()} · {formatProducerOrderSubtitle(order)}</p>
+                     <li key={order.id} className="px-4 py-3 hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedOrder(order)}>
+                        <div className="agm-dash-order-row">
+                           <div className="min-w-0 flex-1">
+                              <p className="font-medium text-gray-900 flex items-center gap-2 flex-wrap">
+                                 {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
+                                 #{order.id.substring(order.id.length - 6)}
+                                 {orderIsServiceOnly(order) && (
+                                    <span className="text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
+                                 )}
+                              </p>
+                              <p className="text-xs text-gray-500 break-anywhere">{new Date(order.createdAt).toLocaleDateString()} · {formatProducerOrderSubtitle(order)}</p>
+                           </div>
+                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0 self-start sm:self-center ${order.status === OrderStatus.CANCELLED || order.status === OrderStatus.DISPUTE ? 'bg-red-100 text-red-800' : order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                              {order.status.replace(/_/g, ' ')}
+                           </span>
                         </div>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${order.status === OrderStatus.CANCELLED || order.status === OrderStatus.DISPUTE ? 'bg-red-100 text-red-800' : order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                           {order.status.replace(/_/g, ' ')}
-                        </span>
                      </li>
                   ))
                )}
@@ -623,7 +625,7 @@ export const ProducerDashboard: React.FC = () => {
                   {t('dash.orderHistory')}
                </h3>
             </div>
-            <ul className="divide-y divide-gray-200">
+            <ul className="divide-y divide-gray-200 agm-dash-scroll-4 agm-dash-row-tall scrollbar-thin">
                {pageLoading && pastOrders.length === 0 ? (
                   <li className="px-4 py-6"><ListSkeleton rows={2} /></li>
                ) : pastOrders.length === 0 ? (
@@ -631,8 +633,8 @@ export const ProducerDashboard: React.FC = () => {
                ) : (
                   pastOrders.map(order => (
                      <li key={order.id} className="px-4 py-4 hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedOrder(order)}>
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-                           <div>
+                        <div className="agm-dash-order-row items-start sm:items-center">
+                           <div className="min-w-0 flex-1">
                               <p className="font-medium text-gray-700 flex items-center gap-2 flex-wrap">
                                  {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
                                  #{order.id.substring(6)}
@@ -643,7 +645,7 @@ export const ProducerDashboard: React.FC = () => {
                               <p className="text-sm text-gray-500">{new Date(order.createdAt).toLocaleDateString()} · {formatProducerOrderSubtitle(order)}</p>
                            </div>
 
-                           <div className="flex items-center space-x-2">
+                           <div className="agm-dash-order-actions flex-wrap">
                               {/* Show share buttons for In Transit orders too */}
                               {order.status === OrderStatus.IN_TRANSIT && (
                                  <>
@@ -704,7 +706,7 @@ export const ProducerDashboard: React.FC = () => {
                   {t('nav.newOffer')}
                </Link>
             </div>
-            <ul className="divide-y divide-gray-200">
+            <ul className="divide-y divide-gray-200 agm-dash-scroll-4 agm-dash-row-tall scrollbar-thin">
                {myOffers.length === 0 ? (
                   <li className="px-4 py-12 text-center">
                      <Package className="mx-auto h-12 w-12 text-gray-400" />
@@ -773,7 +775,7 @@ export const ProducerDashboard: React.FC = () => {
             {myReviews.length === 0 ? (
                <div className="px-4 py-8 text-center text-gray-500 italic">{t('review.noReviews')}</div>
             ) : (
-               <ul className="divide-y divide-gray-200">
+               <ul className="divide-y divide-gray-200 agm-dash-scroll-4 scrollbar-thin">
                   {myReviews.map(review => {
                      const author = getReviewerDisplayForReview(review);
                      const initial = (author.name || '?').charAt(0).toUpperCase();

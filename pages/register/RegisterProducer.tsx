@@ -219,10 +219,6 @@ export const RegisterProducer: React.FC = () => {
             />
           </div>
 
-          <div className="sm:col-span-6">
-            <p className="text-xs text-gray-400">You can upload supporting documents (NIU certificate, ID) from your profile after registration.</p>
-          </div>
-
           <div className="sm:col-span-3">
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">{t('form.email')}</label>
             <div className="mt-1">

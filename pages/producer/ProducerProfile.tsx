@@ -2,9 +2,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
-import { UserRole, ProducerProfile as ProducerProfileType, Location, Portfolio } from '../../types';
+import { UserRole, ProducerStatus, ProducerProfile as ProducerProfileType, Location, Portfolio } from '../../types';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { User, Wallet, Shield, Tractor, CreditCard, Trash2, Plus, Camera, Upload, MapPin, FileText, X, LogOut, Image as ImageIcon, Video, Eye, Edit, CheckCircle, Heart, ArrowLeft, Search, Users, Copy, Loader2 } from 'lucide-react';
+import { User, Wallet, Shield, Tractor, CreditCard, Trash2, Plus, Camera, MapPin, X, LogOut, Image as ImageIcon, Video, Eye, Edit, CheckCircle, Heart, ArrowLeft, Search, Users, Copy, Loader2 } from 'lucide-react';
 import { useUpdateProducerProfileMutation } from '../../client-api/hooks/useUpdateProducerProfileMutation';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
@@ -17,8 +17,47 @@ import { uploadAvatar, uploadDocument, uploadPortfolioImage, uploadPortfolioVide
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 import { offerImageHero, offerImageInBox } from '../../utils/offerImageDisplay';
+import { ProducerComplianceDocuments } from '../../components/ProducerComplianceDocuments';
+import { mergeProducerDocuments, splitProducerDocuments } from '../../utils/producerDocuments';
 import { useFormik } from 'formik';
 import { z } from 'zod';
+
+type ProducerFormData = ProducerProfileType & {
+  niuCertificateUrl?: string;
+  businessRegistrationUrl?: string;
+};
+
+function hydrateProducerFormData(source: any, user?: { email?: string; phone?: string } | null): ProducerFormData {
+  const { niuCertificateUrl, businessRegistrationUrl, legacy } = splitProducerDocuments(source?.certifications);
+  const producerUser = source?.user;
+  const sessionEmail = user?.email ?? '';
+  const sessionPhone = user?.phone ?? '';
+  return {
+    ...source,
+    email: (producerUser?.email ?? source?.email ?? sessionEmail).toString(),
+    phone: (producerUser?.phone ?? source?.phone ?? sessionPhone).toString(),
+    name: (
+      producerUser?.displayName ??
+      source?.name ??
+      (source?.type === 'INDIVIDUAL'
+        ? `${source?.firstName ?? ''} ${source?.lastName ?? ''}`.trim()
+        : source?.name) ??
+      ''
+    ).toString(),
+    firstName: (source?.firstName ?? '').toString(),
+    lastName: (source?.lastName ?? '').toString(),
+    description: (source?.description ?? '').toString(),
+    profileImageUrl: (producerUser?.profileImageUrl ?? source?.profileImageUrl ?? '').toString() || undefined,
+    locations: Array.isArray(source?.locations) ? source.locations : [],
+    productionTypes: Array.isArray(source?.productionTypes) ? source.productionTypes : [],
+    certifications: legacy,
+    favorites: Array.isArray(source?.favorites) ? source.favorites : [],
+    taxIdentificationNumber: source?.taxIdentificationNumber ?? '',
+    taxClearanceCertificateUrl: source?.taxClearanceCertificateUrl ?? '',
+    niuCertificateUrl,
+    businessRegistrationUrl,
+  };
+}
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
@@ -125,7 +164,7 @@ export const ProducerProfile: React.FC = () => {
   });
 
   // Personal Info Form State
-  const [formData, setFormData] = useState<ProducerProfileType | null>(null);
+  const [formData, setFormData] = useState<ProducerFormData | null>(null);
 
   // Temp Location State for adding new ones
   const [newLoc, setNewLoc] = useState<Partial<Location>>({ region: '', city: '', address: '', lat: 0, lng: 0 });
@@ -154,7 +193,7 @@ export const ProducerProfile: React.FC = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   // OTP for profile name/phone change
   const [showOtpModal, setShowOtpModal] = useState(false);
-  const [pendingProfileUpdate, setPendingProfileUpdate] = useState<ProducerProfileType | null>(null);
+  const [pendingProfileUpdate, setPendingProfileUpdate] = useState<ProducerFormData | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [certUploading, setCertUploading] = useState(false);
   const [profileHydrating, setProfileHydrating] = useState(false);
@@ -183,24 +222,7 @@ export const ProducerProfile: React.FC = () => {
   }, [activeTab, refreshMyReferrals]);
   useEffect(() => {
     if (!currentProducer) return;
-    const producerUser = (currentProducer as any).user;
-    const sessionEmail = (user as any)?.email ?? '';
-    const sessionPhone = (user as any)?.phone ?? '';
-    const normalized: ProducerProfileType = {
-      ...currentProducer,
-      email: (producerUser?.email ?? (currentProducer as any).email ?? sessionEmail).toString(),
-      phone: (producerUser?.phone ?? (currentProducer as any).phone ?? sessionPhone).toString(),
-      name: (producerUser?.displayName ?? (currentProducer as any).name ?? ((currentProducer.type === 'INDIVIDUAL' ? `${currentProducer.firstName ?? ''} ${currentProducer.lastName ?? ''}`.trim() : currentProducer.name) || '')).toString(),
-      firstName: (currentProducer.firstName ?? '').toString(),
-      lastName: (currentProducer.lastName ?? '').toString(),
-      description: (currentProducer.description ?? '').toString(),
-      profileImageUrl: (producerUser?.profileImageUrl ?? (currentProducer as any).profileImageUrl ?? '').toString() || undefined,
-      locations: Array.isArray(currentProducer.locations) ? currentProducer.locations : [],
-      productionTypes: Array.isArray(currentProducer.productionTypes) ? currentProducer.productionTypes : [],
-      certifications: Array.isArray(currentProducer.certifications) ? currentProducer.certifications : [],
-      favorites: Array.isArray(currentProducer.favorites) ? currentProducer.favorites : [],
-      taxIdentificationNumber: (currentProducer as any).taxIdentificationNumber ?? '',
-    };
+    const normalized = hydrateProducerFormData(currentProducer, user);
     setFormData((prev) => {
       if (!prev) return normalized;
       if (prev.id !== normalized.id) return normalized;
@@ -217,24 +239,7 @@ export const ProducerProfile: React.FC = () => {
         if (cancelled || !Array.isArray(rows)) return;
         const mine = rows.find((p: any) => p?.id === user.producerId || p?.userId === user.id);
         if (!mine) return;
-        const producerUser = (mine as any).user;
-        const sessionEmail = (user as any)?.email ?? '';
-        const sessionPhone = (user as any)?.phone ?? '';
-        const normalized: ProducerProfileType = {
-          ...mine,
-          email: (producerUser?.email ?? (mine as any).email ?? sessionEmail).toString(),
-          phone: (producerUser?.phone ?? (mine as any).phone ?? sessionPhone).toString(),
-          name: (producerUser?.displayName ?? (mine as any).name ?? ((mine.type === 'INDIVIDUAL' ? `${mine.firstName ?? ''} ${mine.lastName ?? ''}`.trim() : mine.name) || '')).toString(),
-          firstName: (mine.firstName ?? '').toString(),
-          lastName: (mine.lastName ?? '').toString(),
-          description: (mine.description ?? '').toString(),
-          profileImageUrl: (producerUser?.profileImageUrl ?? (mine as any).profileImageUrl ?? '').toString() || undefined,
-          locations: Array.isArray(mine.locations) ? mine.locations : [],
-          productionTypes: Array.isArray(mine.productionTypes) ? mine.productionTypes : [],
-          certifications: Array.isArray(mine.certifications) ? mine.certifications : [],
-          favorites: Array.isArray(mine.favorites) ? mine.favorites : [],
-          taxIdentificationNumber: (mine as any).taxIdentificationNumber ?? '',
-        } as ProducerProfileType;
+        const normalized = hydrateProducerFormData(mine, user);
         setFormData((prev) => (prev?.id === normalized.id ? prev : normalized));
       } finally {
         if (!cancelled) setProfileHydrating(false);
@@ -381,9 +386,26 @@ export const ProducerProfile: React.FC = () => {
       alert(parsed.error.issues[0]?.message || 'Please fix profile form errors.');
       return;
     }
+    if (!String(formData.taxIdentificationNumber ?? '').trim()) {
+      alert('NIU / Tax identification number is required.');
+      return;
+    }
+    if (!String(formData.niuCertificateUrl ?? '').trim()) {
+      alert('NIU certificate upload is required.');
+      return;
+    }
     let displayName = formData.name;
     if (formData.type === 'INDIVIDUAL' && formData.firstName && formData.lastName) displayName = `${formData.firstName} ${formData.lastName}`;
-    const payload = { ...formData, name: displayName };
+    const { niuCertificateUrl, businessRegistrationUrl, ...rest } = formData;
+    const payload: ProducerFormData = {
+      ...rest,
+      name: displayName,
+      certifications: mergeProducerDocuments(
+        niuCertificateUrl,
+        formData.type === 'BUSINESS' ? businessRegistrationUrl : undefined,
+        formData.certifications,
+      ),
+    };
     if (import.meta.env.PROD) {
       setPendingProfileUpdate(payload);
       setShowOtpModal(true);
@@ -718,21 +740,58 @@ export const ProducerProfile: React.FC = () => {
             <form onSubmit={savePersonalInfo} className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
               {/* ... [Existing Info Form Code] ... */}
               <div className="flex justify-between items-center border-b border-gray-200 pb-4 mb-4"><h3 className="text-lg font-medium text-gray-900">{t('profile.tabs.info')}</h3></div>
-              <div className={`mb-4 rounded-md border p-3 ${formData.status === 'VALIDATED' ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'}`}>
-                <p className={`text-sm font-bold ${formData.status === 'VALIDATED' ? 'text-green-800' : 'text-yellow-800'}`}>
-                  Producer status: {formData.status === 'VALIDATED' ? 'Approved Producer' : 'Pending Approval'}
+              <div className={`mb-4 rounded-md border p-3 ${formData.status === ProducerStatus.VALIDATED ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'}`}>
+                <p className={`text-sm font-bold ${formData.status === ProducerStatus.VALIDATED ? 'text-green-800' : 'text-yellow-800'}`}>
+                  {formData.status === ProducerStatus.VALIDATED ? t('profile.producerApprovedTitle') : t('profile.producerPendingTitle')}
                 </p>
-                <p className={`text-xs mt-1 ${formData.status === 'VALIDATED' ? 'text-green-700' : 'text-yellow-700'}`}>
-                  {formData.status === 'VALIDATED'
-                    ? 'Your producer account is approved. You can publish offers normally.'
-                    : 'Your producer account is pending admin approval. Once approved, your status will change to Approved Producer.'}
+                <p className={`text-xs mt-1 ${formData.status === ProducerStatus.VALIDATED ? 'text-green-700' : 'text-yellow-700'}`}>
+                  {formData.status === ProducerStatus.VALIDATED ? t('profile.producerApprovedMsg') : t('profile.producerPendingMsg')}
                 </p>
               </div>
               {/* Simplified view for brevity, functionality preserved */}
               <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6"><div className="relative flex-shrink-0"><div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">{formData.profileImageUrl ? (<img src={formData.profileImageUrl} alt="Profile" className="h-full w-full object-cover" />) : (<User className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400" />)}</div><label className={`absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white shadow-sm ${avatarUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-primary-700'}`}><Camera className="h-4 w-4" /><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={avatarUploading} onChange={(e) => void handleFileUpload(e, 'profileImageUrl')} /></label></div><div className="min-w-0"><p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p><p className="text-xs text-gray-500">{avatarUploading ? 'Uploading…' : 'JPG, PNG, or WebP. Max 2 MB.'}</p></div></div>
               <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
                 <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-2">{t('profile.type')}</label><div className="flex space-x-4"><span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-primary-100 text-primary-800">{formData.type === 'BUSINESS' ? t('profile.business') : t('profile.individual')}</span><span className="text-xs text-gray-400 self-center ml-2">Cannot be changed after registration</span></div></div>
-                {formData.type === 'BUSINESS' ? (<><div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">{t('form.farmName')}</label><input type="text" name="name" value={formData.name ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">Tax ID (TIN / NIU) <span className="text-red-500">*</span></label><input type="text" name="taxIdentificationNumber" value={formData.taxIdentificationNumber ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-1">Certifications</label>{Array.isArray(formData.certifications) && formData.certifications.length > 0 && (<div className="flex flex-wrap gap-2 mb-2">{formData.certifications.map((url, i) => (<a key={i} href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-xs text-primary-700 bg-primary-50 px-2 py-1 rounded hover:underline">Document {i + 1}</a>))}</div>)}<label className={`inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 ${certUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-gray-50'}`}>{certUploading ? 'Uploading…' : 'Upload certificate (PDF, JPG, PNG)'}<input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" disabled={certUploading} onChange={(e) => void handleFileUpload(e, 'certifications')} /></label><p className="text-xs text-gray-500 mt-1">NIU certificate, business registration, or other compliance documents</p></div></>) : (<><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.firstName')}</label><input type="text" name="firstName" value={formData.firstName || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.lastName')}</label><input type="text" name="lastName" value={formData.lastName || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.gender')}</label><select name="gender" value={formData.gender || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900"><option value="">Select Gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></div><div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('profile.dob')}</label><input type="date" name="dateOfBirth" value={formData.dateOfBirth || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">Tax ID (TIN / NIU) <span className="text-red-500">*</span></label><input type="text" name="taxIdentificationNumber" value={formData.taxIdentificationNumber ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div><div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-1">Certifications</label>{Array.isArray(formData.certifications) && formData.certifications.length > 0 && (<div className="flex flex-wrap gap-2 mb-2">{formData.certifications.map((url, i) => (<a key={i} href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-xs text-primary-700 bg-primary-50 px-2 py-1 rounded hover:underline">Document {i + 1}</a>))}</div>)}<label className={`inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 ${certUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-gray-50'}`}>{certUploading ? 'Uploading…' : 'Upload certificate (PDF, JPG, PNG)'}<input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" disabled={certUploading} onChange={(e) => void handleFileUpload(e, 'certifications')} /></label><p className="text-xs text-gray-500 mt-1">NIU certificate, ID, or other compliance documents</p></div></>)}
+                {formData.type === 'BUSINESS' ? (
+                  <div className="sm:col-span-6">
+                    <label className="block text-sm font-medium text-gray-700">{t('form.farmName')}</label>
+                    <input type="text" name="name" value={formData.name ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="sm:col-span-3">
+                      <label className="block text-sm font-medium text-gray-700">{t('profile.firstName')}</label>
+                      <input type="text" name="firstName" value={formData.firstName || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className="block text-sm font-medium text-gray-700">{t('profile.lastName')}</label>
+                      <input type="text" name="lastName" value={formData.lastName || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className="block text-sm font-medium text-gray-700">{t('profile.gender')}</label>
+                      <select name="gender" value={formData.gender || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900">
+                        <option value="">Select Gender</option>
+                        <option value="MALE">Male</option>
+                        <option value="FEMALE">Female</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className="block text-sm font-medium text-gray-700">{t('profile.dob')}</label>
+                      <input type="date" name="dateOfBirth" value={formData.dateOfBirth || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" />
+                    </div>
+                  </>
+                )}
+                <ProducerComplianceDocuments
+                  producerType={formData.type}
+                  values={{
+                    taxIdentificationNumber: formData.taxIdentificationNumber,
+                    niuCertificateUrl: formData.niuCertificateUrl,
+                    businessRegistrationUrl: formData.businessRegistrationUrl,
+                  }}
+                  certUploading={certUploading}
+                  onCertUploadingChange={setCertUploading}
+                  onChange={(patch) => setFormData((prev) => (prev ? { ...prev, ...patch } : prev))}
+                />
                 <div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('form.phone')}</label><input type="tel" name="phone" value={formData.phone ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
                 <div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('form.email')}</label><input type="email" name="email" value={formData.email ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
                 <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-2">{t('form.category')} (Multi-select)</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded-md bg-white">{PRODUCTION_TYPES.map(cat => { const isSelected = formData.productionTypes.includes(cat); return (<button key={cat} type="button" onClick={() => toggleCategory(cat)} className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${isSelected ? 'bg-primary-100 text-primary-800 ring-2 ring-primary-500 ring-offset-1' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}{isSelected && <X className="ml-1.5 h-3 w-3" />}</button>) })}</div></div>
@@ -902,8 +961,7 @@ export const ProducerProfile: React.FC = () => {
                   </div>
                 </div>
                 <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700">{t('form.desc')}</label><textarea name="description" rows={3} value={formData.description} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
-                <div className="sm:col-span-6 border-t border-gray-100 pt-4"><h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center"><FileText className="h-4 w-4 mr-1 text-primary-600" /> Documents</h4><label className="block text-sm font-medium text-gray-700">{t('profile.uploadDocs')}</label><div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:bg-gray-50 transition-colors bg-white"><div className="space-y-1 text-center"><Upload className="mx-auto h-12 w-12 text-gray-400" /><div className="flex text-sm text-gray-600"><label className="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500"><span>Upload a file</span><input type="file" className="sr-only" accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf" onChange={(e) => handleFileUpload(e, 'certifications')} /></label><p className="pl-1">or drag and drop</p></div><p className="text-xs text-gray-500">PNG, JPG, PDF up to 10MB</p></div></div>{formData.certifications.length > 0 && (<ul className="mt-3 border border-gray-200 rounded-md divide-y divide-gray-200 bg-white">{formData.certifications.map((cert, idx) => (<li key={idx} className="pl-3 pr-4 py-3 flex items-center justify-between text-sm"><div className="w-0 flex-1 flex items-center"><FileText className="flex-shrink-0 h-5 w-5 text-gray-400" /><span className="ml-2 flex-1 w-0 truncate text-gray-900">{cert}</span></div></li>))}</ul>)}</div>
-                <div className="sm:col-span-6 pt-4 flex justify-end">
+                                <div className="sm:col-span-6 pt-4 flex justify-end">
                   <button
                     type="submit"
                     disabled={updateProducerMutation.isPending}

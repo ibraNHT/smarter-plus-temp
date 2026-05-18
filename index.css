@@ -183,6 +183,71 @@ img, video, canvas, svg, iframe {
   max-width: 100%;
 }
 
+/* ---------------------------------------------------------------
+   Dashboard order / catalog lists — show 4 rows, scroll for more
+--------------------------------------------------------------- */
+
+.agm-dash-scroll-4 {
+  --agm-dash-row-h: 4.25rem;
+  max-height: calc(4 * var(--agm-dash-row-h));
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.agm-dash-scroll-4.agm-dash-row-tall {
+  --agm-dash-row-h: 6.25rem;
+}
+
+.agm-dash-scroll-cards {
+  max-height: calc(4 * 9.5rem + 3 * 1rem);
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+@media (min-width: 640px) {
+  .agm-dash-scroll-cards {
+    max-height: calc(4 * 8.25rem + 3 * 1rem);
+  }
+}
+
+.agm-dash-order-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .agm-dash-order-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+}
+
+.agm-dash-order-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 639px) {
+  .agm-dash-order-actions--stack .agm-dash-order-actions {
+    width: 100%;
+  }
+  .agm-dash-order-actions--stack .agm-dash-order-actions > button {
+    flex: 1 1 calc(50% - 0.25rem);
+    justify-content: center;
+    min-width: 0;
+  }
+}
+
 /* One-shot "bubble in" animation used by chat messages. Applied via a className
    that is tagged on a message only on its first render, then removed by the
    parent component so future re-renders don't re-trigger the animation. */
@@ -204,6 +269,48 @@ img, video, canvas, svg, iframe {
 @media (prefers-reduced-motion: reduce) {
   .agm-chat-bubble-in {
     animation: none;
+  }
+}
+
+/* "X is typing…" indicator — three soft dots that bounce in sequence. */
+.agm-typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.agm-typing-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: currentColor;
+  opacity: 0.55;
+  animation: agm-typing-bounce 1.2s infinite ease-in-out both;
+}
+
+.agm-typing-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.agm-typing-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes agm-typing-bounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  40% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agm-typing-dot {
+    animation: none;
+    opacity: 0.7;
   }
 }
 

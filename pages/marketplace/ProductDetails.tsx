@@ -4,7 +4,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { ArrowLeft, ShoppingCart, MessageCircle, MapPin, ShieldCheck, Package, Plus, Minus, User, Lock, Truck, AlertCircle, Calendar, Clock, Star, Image as ImageIcon, PlayCircle, X, Heart, Layers } from 'lucide-react';
-import { MarketType, OfferType, OrderStatus, UserRole } from '../../types';
+import { MarketType, OfferType, OrderStatus, UserRole, Review } from '../../types';
 import { SEO } from '../../components/SEO';
 import { ProductDetailsSkeleton } from '../../components/skeletons/ProductDetailsSkeleton';
 import { Spinner } from '../../components/Spinner';
@@ -22,7 +22,7 @@ function parseLocalYmd(ymd: string): Date {
 
 export const ProductDetails: React.FC = () => {
   const { offerId } = useParams<{ offerId: string }>();
-  const { getOfferById, producers, addToCart, clearCart, startNegotiation, user, getAverageRating, getProducerPortfolios, toggleFavorite, clients, reviews, compareList, addToCompare, removeFromCompare, orders, cart, refreshOffers, refreshProducers, refreshAllReviews, refreshMyPortfolios } = useStore();
+  const { getOfferById, producers, addToCart, clearCart, startNegotiation, user, getAverageRating, getProducerPortfolios, toggleFavorite, clients, reviews, compareList, addToCompare, removeFromCompare, orders, cart, refreshOffers, refreshProducers, refreshAllReviews, refreshMyPortfolios, refreshClients } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -35,6 +35,7 @@ export const ProductDetails: React.FC = () => {
     Promise.all([
       refreshOffers(),
       refreshProducers(),
+      refreshClients(),
       refreshAllReviews(),
       refreshMyPortfolios(),
     ]).finally(() => {
@@ -93,26 +94,61 @@ export const ProductDetails: React.FC = () => {
     }).catch(() => {});
   }, [producer?.userId]);
 
-  const allProducerReviews = React.useMemo(() => {
-    const localReviews = producer ? reviews.filter(r => r.targetId === producer.id || r.targetId === producer.userId) : [];
-    const remoteReviews = fetchedProducerReviews.map((r: any) => ({
+  const mapReviewRow = (r: any): Review => {
+    const pic = r.reviewerProfileImageUrl;
+    const picStr = typeof pic === 'string' && pic.trim() ? pic.trim() : undefined;
+    return {
       id: String(r.id),
       orderId: String(r.orderId),
       reviewerId: String(r.reviewerId),
       targetId: String(r.targetId),
       rating: Number(r.rating) || 0,
       comment: typeof r.comment === 'string' ? r.comment : '',
-      createdAt: r.createdAt ?? new Date().toISOString(),
-      reviewerName: r.reviewerDisplayName ?? r.reviewerName,
-      reviewerProfileImageUrl: r.reviewerProfileImageUrl,
-    }));
-    // Merge, de-duplicate by id
-    const byId = new Map<string, any>();
-    [...localReviews, ...remoteReviews].forEach(r => byId.set(r.id, r));
+      createdAt:
+        typeof r.createdAt === 'string' ? r.createdAt : new Date(r.createdAt ?? 0).toISOString(),
+      reviewerDisplayName:
+        typeof r.reviewerDisplayName === 'string' ? r.reviewerDisplayName : undefined,
+      reviewerProfileImageUrl: picStr,
+    };
+  };
+
+  const allProducerReviews = React.useMemo(() => {
+    const localReviews = producer ? reviews.filter(r => r.targetId === producer.id || r.targetId === producer.userId) : [];
+    const remoteReviews = fetchedProducerReviews.map(mapReviewRow);
+    const byId = new Map<string, Review>();
+    [...localReviews, ...remoteReviews].forEach((r) => byId.set(r.id, r));
     return Array.from(byId.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [producer, reviews, fetchedProducerReviews]);
 
   const producerReviews = allProducerReviews;
+
+  const getClientByUserOrProfileId = (id: string) =>
+    clients.find((c) => c.id === id || c.userId === id);
+
+  /** Client name for reviews on this producer (API snapshot, then client catalog). */
+  const getReviewerDisplay = (review: Review) => {
+    const row = getClientByUserOrProfileId(review.reviewerId) as {
+      name?: string;
+      firstName?: string;
+      lastName?: string;
+      profileImageUrl?: string;
+      user?: { displayName?: string; profileImageUrl?: string };
+    } | undefined;
+    const catalogName = row
+      ? (row.name || row.user?.displayName || `${(row.firstName ?? '').trim()} ${(row.lastName ?? '').trim()}`.trim()).trim()
+      : '';
+    const catalogAvatar =
+      (row?.profileImageUrl || row?.user?.profileImageUrl || '').trim() || undefined;
+    const apiName = (review.reviewerDisplayName ?? '').trim();
+    const apiAvatar =
+      typeof review.reviewerProfileImageUrl === 'string' && review.reviewerProfileImageUrl.trim()
+        ? review.reviewerProfileImageUrl.trim()
+        : undefined;
+    return {
+      name: apiName || catalogName || t('review.reviewerFallback'),
+      avatarUrl: apiAvatar ?? catalogAvatar,
+    };
+  };
 
   useEffect(() => {
     let alive = true;
@@ -582,7 +618,7 @@ export const ProductDetails: React.FC = () => {
                     <h3 className="text-xs font-bold text-blue-800 uppercase tracking-wide mb-3">{t('product.soldBy')}</h3>
                     <div className="flex items-start space-x-3">
                       <div className="flex-shrink-0 h-12 w-12 rounded-full bg-white border border-blue-200 flex items-center justify-center text-blue-700 font-bold text-lg shadow-sm">
-                        <img src="/apple-touch-icon.png" alt="ATI Logo" className="h-10 w-10 object-contain rounded-full" />
+                        <img src="/apple-touch-icon.png" alt="ATI Logo" className="h-10 w-10 object-contain rounded-xl" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
@@ -697,31 +733,37 @@ export const ProductDetails: React.FC = () => {
                 <p className="text-gray-500 italic text-center py-8">No reviews yet. Be the first to review this producer after a purchase!</p>
               ) : (
                 <div className="space-y-6">
-                  {producerReviews.map((review) => (
+                  {producerReviews.map((review) => {
+                    const reviewer = getReviewerDisplay(review);
+                    const initial = reviewer.name.charAt(0).toUpperCase();
+                    return (
                     <div key={review.id} className="flex items-start space-x-4 pb-6 border-b border-gray-50 last:border-0 last:pb-0">
                       <div className="flex-shrink-0">
-                        <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold">
-                          {/* We don't have reviewer name easily accessible here without looking up all clients, 
-                                       so we use a generic icon or look up if needed. Keeping it simple for UI speed. */}
-                          <User className="h-5 w-5" />
-                        </div>
+                        {reviewer.avatarUrl ? (
+                          <img src={reviewer.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-sm">
+                            {initial || <User className="h-5 w-5" />}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center">
-                            <span className="font-bold text-gray-900 mr-2">Verified Client</span>
-                            <div className="flex">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                          <div className="flex items-center min-w-0">
+                            <span className="font-bold text-gray-900 mr-2 truncate">{reviewer.name}</span>
+                            <div className="flex shrink-0">
                               {[...Array(5)].map((_, i) => (
                                 <Star key={i} className={`w-3 h-3 ${i < review.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} />
                               ))}
                             </div>
                           </div>
-                          <span className="text-xs text-gray-400">{new Date(review.createdAt).toLocaleDateString()}</span>
+                          <span className="text-xs text-gray-400 shrink-0">{new Date(review.createdAt).toLocaleDateString()}</span>
                         </div>
                         <p className="text-sm text-gray-700">{review.comment}</p>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
