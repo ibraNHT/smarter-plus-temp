@@ -14,7 +14,7 @@ export const ComparePage: React.FC = () => {
   const { compareList, offers, producers, getAverageRating, removeFromCompare, addToCart, clearCart, clearCompare, refreshOffers, refreshProducers } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
-
+//upadted
   const [pageLoading, setPageLoading] = useState(true);
   useEffect(() => {
     let cancelled = false;
