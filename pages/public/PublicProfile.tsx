@@ -20,6 +20,7 @@ import { apiFetch } from "../../services/apiService";
 import { API_ENDPOINTS } from "../../client-api/endpoints";
 import { PublicProfileSkeleton } from "../../components/skeletons/PublicProfileSkeleton";
 import { offerImageHero, offerImageInBox } from "../../utils/offerImageDisplay";
+import { displayNameTruncateClass } from "../../utils/displayName";
 
 function mapReviewRow(r: any): Review {
   const pic = r.reviewerProfileImageUrl;
@@ -247,19 +248,25 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
                 )}
               </div>
               <div className="ml-4 min-w-0">
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2 flex-wrap">
-                  {displayName}
+                <div className="min-w-0">
+                  <h1
+                    className={`text-2xl sm:text-3xl font-bold text-gray-900 ${displayNameTruncateClass} sm:line-clamp-2 sm:whitespace-normal`}
+                    title={displayName}
+                  >
+                    {displayName}
+                  </h1>
                   {isVerified && (
                     <span
-                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                      className="inline-flex items-center mt-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
                       title="Verified Producer"
                     >
                       <ShieldCheck className="w-4 h-4 mr-1" /> Verified
                     </span>
                   )}
-                </h1>
-                <div className="flex items-center text-gray-600 text-sm mt-1">
-                  <MapPin className="w-4 h-4 mr-1" /> {location}
+                </div>
+                <div className="flex items-center text-gray-600 text-sm mt-1 min-w-0">
+                  <MapPin className="w-4 h-4 mr-1 shrink-0" />
+                  <span className={displayNameTruncateClass} title={location}>{location}</span>
                 </div>
               </div>
             </div>

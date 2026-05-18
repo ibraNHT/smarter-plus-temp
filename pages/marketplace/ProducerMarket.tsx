@@ -8,6 +8,7 @@ import { Tractor, Search, MapPin, ArrowLeft, MessageCircle, Truck, Heart, Star, 
 import { SEO } from '../../components/SEO';
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
+import { displayNameTruncateClass, resolveProducerDisplayName } from '../../utils/displayName';
 
 export const ProducerMarket: React.FC = () => {
   const { offers, producers, user, clients, trackUserSearch, toggleFavorite, getRecommendedOffers, getAverageRating, reviews, compareList, addToCompare, removeFromCompare, refreshOffers, refreshProducers, refreshAllReviews } = useStore();
@@ -80,8 +81,7 @@ export const ProducerMarket: React.FC = () => {
 
   const getProducerName = (producer: ReturnType<typeof getProducer>) => {
     if (!producer) return 'Unknown Producer';
-    if (producer.type === 'BUSINESS') return producer.name;
-    return `${producer.firstName || ''} ${producer.lastName || ''}`.trim() || producer.name;
+    return resolveProducerDisplayName(producer);
   };
 
   // Handle Search Input (Track on debounce or submit - simplified to effect here)
@@ -277,8 +277,10 @@ export const ProducerMarket: React.FC = () => {
 
           <div className="p-4 flex flex-col flex-1">
             <div className="mb-2">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 flex items-center justify-between">
-                {getProducerName(producer)}
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 flex items-center justify-between gap-2 min-w-0">
+                <span className={`${displayNameTruncateClass} flex-1`} title={producer ? getProducerName(producer) : ''}>
+                  {producer ? getProducerName(producer) : 'Unknown Producer'}
+                </span>
                 {rating > 0 && (
                   <span className="flex items-center text-yellow-600 font-bold text-xs">
                     <Star className="w-3 h-3 fill-current mr-0.5" /> {rating} <span className="text-gray-400 font-normal ml-1">({reviewCount})</span>

@@ -350,7 +350,10 @@ export const Navbar: React.FC = () => {
                     {profileMenuOpen && (
                       <div className="absolute right-0 mt-2 w-[min(14rem,calc(100vw-1.5rem))] bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
                         <div className="px-4 py-2 border-b border-gray-100 sm:hidden">
-                          <p className="text-sm font-medium text-gray-900 truncate">
+                          <p
+                            className="text-sm font-medium text-gray-900 truncate min-w-0"
+                            title={isUserNameResolving ? undefined : getUserDisplayName()}
+                          >
                             {isUserNameResolving ? '…' : getUserDisplayName()}
                           </p>
                           <span className="text-xs text-gray-500">{user.role}</span>
@@ -380,8 +383,11 @@ export const Navbar: React.FC = () => {
                   </div>
                 )}
 
-                <div className="hidden lg:flex flex-col items-end">
-                  <span className="text-sm font-medium text-gray-900 truncate max-w-[10rem]">
+                <div className="hidden lg:flex flex-col items-end min-w-0 max-w-[12rem] xl:max-w-[16rem]">
+                  <span
+                    className="text-sm font-medium text-gray-900 truncate min-w-0 max-w-full"
+                    title={isUserNameResolving ? undefined : getUserDisplayName()}
+                  >
                     {isUserNameResolving ? (
                       <span className="inline-block h-4 w-28 animate-pulse rounded bg-gray-200 align-middle" />
                     ) : (

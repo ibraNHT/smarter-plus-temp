@@ -686,9 +686,18 @@ export const ChatPage: React.FC = () => {
                         <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold mr-3">
                            {getOtherParticipantName(activeChat).charAt(0)}
                         </div>
-                        <div>
-                           <h3 className="font-bold text-gray-900">{getOtherParticipantName(activeChat)}</h3>
-                           {activeChat.offerId && <span className="text-xs text-gray-500">{getOfferContextLabel(activeChat.offerId)}</span>}
+                        <div className="min-w-0 max-w-[min(100%,14rem)] sm:max-w-xs md:max-w-sm">
+                           <h3
+                              className="font-bold text-gray-900 truncate"
+                              title={getOtherParticipantName(activeChat)}
+                           >
+                              {getOtherParticipantName(activeChat)}
+                           </h3>
+                           {activeChat.offerId && (
+                              <span className="text-xs text-gray-500 truncate block" title={getOfferContextLabel(activeChat.offerId)}>
+                                 {getOfferContextLabel(activeChat.offerId)}
+                              </span>
+                           )}
                         </div>
                      </div>
                      <button onClick={() => navigate(-1)} className="text-sm text-gray-500 hover:text-primary-600 hidden md:block">

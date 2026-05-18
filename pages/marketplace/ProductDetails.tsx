@@ -10,6 +10,7 @@ import { ProductDetailsSkeleton } from '../../components/skeletons/ProductDetail
 import { Spinner } from '../../components/Spinner';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { offerImageHero, offerImageInBox } from '../../utils/offerImageDisplay';
+import { displayNameTruncateClass, resolveProducerDisplayName } from '../../utils/displayName';
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 
@@ -332,12 +333,9 @@ export const ProductDetails: React.FC = () => {
     else addToCompare(offer.id);
   };
 
-  const getProducerDisplayName = () => {
-    if (!isProducerMarket) return 'ATI Retail Store';
-    if (!producer) return 'Unknown';
-    if (producer.type === 'BUSINESS') return producer.name || `${producer.firstName || ''} ${producer.lastName || ''}`.trim() || 'Business';
-    return `${producer.firstName || ''} ${producer.lastName || ''}`.trim() || producer.name || 'Unknown';
-  };
+  const producerDisplayName = !isProducerMarket
+    ? 'ATI Retail Store'
+    : resolveProducerDisplayName(producer);
 
   const productSchema = offer ? {
     "@context": "https://schema.org/",
@@ -357,7 +355,7 @@ export const ProductDetails: React.FC = () => {
       "availability": offer.quantity > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
       "seller": {
         "@type": "Organization",
-        "name": getProducerDisplayName()
+        "name": producerDisplayName
       }
     }
   } : undefined;
@@ -409,7 +407,7 @@ export const ProductDetails: React.FC = () => {
             </div>
 
             {/* Details Section */}
-            <div className="md:w-1/2 p-5 sm:p-6 md:p-8 flex flex-col">
+            <div className="md:w-1/2 p-5 sm:p-6 md:p-8 flex flex-col min-w-0">
               <div className="flex-1">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <p className="text-xs sm:text-sm font-medium text-primary-600 uppercase tracking-wide">{offer.category}</p>
@@ -584,26 +582,35 @@ export const ProductDetails: React.FC = () => {
 
                 {/* Info Card */}
                 {isProducerMarket && producer ? (
-                  <div className="bg-primary-50 p-4 rounded-lg mb-6 border border-primary-100">
+                  <div className="bg-primary-50 p-4 rounded-lg mb-6 border border-primary-100 min-w-0 overflow-hidden">
                     <h3 className="text-xs font-bold text-primary-800 uppercase tracking-wide mb-3">{t('product.soldBy')}</h3>
-                    <div className="flex items-start space-x-3">
+                    <div className="flex items-start space-x-3 min-w-0">
                       <div className="flex-shrink-0 h-12 w-12 rounded-full bg-white border border-primary-200 flex items-center justify-center text-primary-700 font-bold text-lg shadow-sm">
-                        {(getProducerDisplayName() || 'U').charAt(0)}
+                        {(producerDisplayName || 'U').charAt(0)}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <Link to={`/profile/producer/${producer.id}`} className="text-base font-bold text-gray-900 hover:text-primary-600 hover:underline">
-                            {getProducerDisplayName()}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Link
+                            to={`/profile/producer/${producer.id}`}
+                            className={`text-base font-bold text-gray-900 hover:text-primary-600 hover:underline ${displayNameTruncateClass}`}
+                            title={producerDisplayName}
+                          >
+                            {producerDisplayName}
                           </Link>
                           {producerRating > 0 && (
-                            <span className="flex items-center text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">
+                            <span className="flex shrink-0 items-center text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">
                               <Star className="h-3 w-3 mr-0.5 fill-current" /> {producerRating}
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center text-xs text-gray-600 mt-1">
-                          <MapPin className="h-3 w-3 mr-1" />
-                          {offer.offerLocation || producer.locations?.[0]?.address || 'Location not set'}
+                        <div className="flex items-center text-xs text-gray-600 mt-1 min-w-0">
+                          <MapPin className="h-3 w-3 mr-1 shrink-0" />
+                          <span
+                            className={displayNameTruncateClass}
+                            title={offer.offerLocation || producer.locations?.[0]?.address || 'Location not set'}
+                          >
+                            {offer.offerLocation || producer.locations?.[0]?.address || 'Location not set'}
+                          </span>
                         </div>
                         {producer.status === 'VALIDATED' && (
                           <div className="flex items-center text-xs text-green-700 mt-1 font-medium">
