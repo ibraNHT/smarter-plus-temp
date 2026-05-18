@@ -19,6 +19,7 @@ import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { orderHasService, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
+import { ORDER_STATUS_LABEL_KEY, ORDER_STATUS_PILL_CLASS } from '../../utils/orderStatusDisplay';
 import { useFormik } from 'formik';
 import { z } from 'zod';
 
@@ -736,7 +737,14 @@ export const ClientProfile: React.FC = () => {
    };
   const openDisputeModal = (orderId: string) => { setDisputeOrderId(orderId); disputeFormik.setFieldValue('disputeReason', ''); setDisputeFiles([]); setShowDisputeModal(true); };
    const handleDisputeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) { setDisputeFiles(Array.from(e.target.files)); } };
-   const getStatusBadge = (status: OrderStatus) => { const styles = { [OrderStatus.PENDING_VALIDATION]: 'bg-yellow-100 text-yellow-800', [OrderStatus.CONFIRMED_AWAITING_PAYMENT]: 'bg-blue-100 text-blue-800', [OrderStatus.PAID_IN_PREPARATION]: 'bg-purple-100 text-purple-800', [OrderStatus.IN_TRANSIT]: 'bg-indigo-100 text-indigo-800', [OrderStatus.DELIVERED]: 'bg-green-100 text-green-800', [OrderStatus.COMPLETED]: 'bg-gray-100 text-gray-800', [OrderStatus.CANCELLED]: 'bg-red-100 text-red-800', [OrderStatus.DISPUTE]: 'bg-red-100 text-red-800', }; return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-100'}`}>{status.replace(/_/g, ' ')}</span>; };
+   const getStatusBadge = (status: OrderStatus) => (
+      <span
+         className={`agm-order-status-pill ${ORDER_STATUS_PILL_CLASS[status] || 'bg-gray-100 text-gray-800 ring-1 ring-gray-200/80'}`}
+         title={t(ORDER_STATUS_LABEL_KEY[status] || 'order.status')}
+      >
+         {t(ORDER_STATUS_LABEL_KEY[status] || 'order.status')}
+      </span>
+   );
 
    const renderOrderList = (orderList: any[], emptyMsg: string) => {
       if (orderList.length === 0) {
@@ -747,17 +755,18 @@ export const ClientProfile: React.FC = () => {
             {orderList.map((order) => (
                <div key={order.id} className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden hover:border-primary-200 transition-colors">
                   <div className="p-4 sm:p-6" onClick={() => setSelectedOrder(order)}>
-                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+                     <div className="flex items-start justify-between gap-2 mb-3 min-w-0">
                         <div className="cursor-pointer flex-1 min-w-0">
-                           <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2 flex-wrap">
-                              {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
-                              #{order.id.substring(order.id.length - 6).toUpperCase()}
+                           <h4 className="text-sm font-bold text-gray-900 flex items-center gap-1.5 flex-wrap">
+                              <span className="truncate">
+                                 {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
+                                 #{order.id.substring(order.id.length - 6).toUpperCase()}
+                              </span>
                               {orderIsServiceOnly(order) && (
-                                 <span className="text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
+                                 <span className="text-[10px] sm:text-xs font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded-full shrink-0">{t('service.badge')}</span>
                               )}
-                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200 flex items-center font-normal"><Eye className="h-3 w-3 mr-1" /> {t('dash.viewDetails')}</span>
                            </h4>
-                           <p className="text-xs text-gray-500">{clientOrderMetaLine(order)}</p>
+                           <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{clientOrderMetaLine(order)}</p>
                            {order.deliveryMethod === 'HOME' && order.shippingAddress && typeof order.shippingAddress === 'object' && (
                               <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
                                  <MapPin className="h-3 w-3 shrink-0" />
@@ -768,9 +777,7 @@ export const ClientProfile: React.FC = () => {
                               <p className="text-xs text-gray-500 mt-0.5">📦 Pickup delivery</p>
                            )}
                         </div>
-                        <div className="flex items-center gap-2">
-                           {getStatusBadge(order.status)}
-                        </div>
+                        <div className="shrink-0">{getStatusBadge(order.status)}</div>
                      </div>
                      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-end">
                         <div className="flex -space-x-2 overflow-hidden flex-shrink-0">
@@ -1119,27 +1126,44 @@ export const ClientProfile: React.FC = () => {
                            <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center"><Package className="w-5 h-5 mr-2 text-gray-500" /> {t('dash.allOrders')}</h3>
                            <p className="text-xs sm:text-sm text-gray-500 mt-1">{t('dash.allOrdersDesc')}</p>
                         </div>
-                        <ul className="divide-y divide-gray-200 agm-dash-scroll-4 scrollbar-thin">
+                        <ul className="divide-y divide-gray-200 agm-dash-scroll-4 agm-dash-all-orders scrollbar-thin">
                            {(tabLoading || isClientProfileHydrating) && allMyOrders.length === 0 ? (
                               <li className="px-4 py-6"><SectionLoader message={t('form.loading')} /></li>
                            ) : allMyOrders.length === 0 ? (
                               <li className="px-4 py-8 text-center text-gray-500">No orders yet.</li>
                            ) : (
                               allMyOrders.map(order => (
-                                 <li key={order.id} className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2" onClick={() => setSelectedOrder(order)}>
-                                    <div className="min-w-0">
-                                       <p className="font-medium text-gray-900 flex items-center gap-2 flex-wrap">
-                                          {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
-                                          #{order.id.substring(order.id.length - 6).toUpperCase()}
+                                 <li
+                                    key={order.id}
+                                    className="agm-dash-all-order-item cursor-pointer"
+                                    onClick={() => setSelectedOrder(order)}
+                                 >
+                                    <div className="agm-dash-all-order-item__head">
+                                       <p className="agm-dash-all-order-item__title flex items-center gap-1.5 min-w-0 flex-1 flex-wrap">
+                                          <span className="truncate">
+                                             {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
+                                             #{order.id.substring(order.id.length - 6).toUpperCase()}
+                                          </span>
                                           {orderIsServiceOnly(order) && (
-                                             <span className="text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
+                                             <span className="text-[10px] sm:text-xs font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded-full shrink-0">
+                                                {t('service.badge')}
+                                             </span>
                                           )}
                                        </p>
-                                       <p className="text-xs text-gray-500 break-anywhere">{clientOrderMetaLine(order)} · {getProducerDisplayName(order)}</p>
+                                       {getStatusBadge(order.status)}
                                     </div>
-                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0 self-start sm:self-auto ${order.status === OrderStatus.CANCELLED || order.status === OrderStatus.DISPUTE ? 'bg-red-100 text-red-800' : order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                                       {order.status.replace(/_/g, ' ')}
-                                    </span>
+                                    <p className="agm-dash-all-order-item__meta">
+                                       {clientOrderMetaLine(order)} · {getProducerDisplayName(order)}
+                                    </p>
+                                    <div className="agm-dash-all-order-item__foot">
+                                       <span className="text-sm font-bold text-gray-900 tabular-nums">
+                                          {(order.totalAmount ?? 0).toLocaleString()} XAF
+                                       </span>
+                                       <span className="text-xs font-medium text-primary-600 flex items-center gap-0.5 shrink-0">
+                                          <Eye className="h-3.5 w-3.5" />
+                                          <span className="sm:inline">{t('dash.viewDetails')}</span>
+                                       </span>
+                                    </div>
                                  </li>
                               ))
                            )}
