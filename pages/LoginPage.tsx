@@ -49,7 +49,8 @@ function buildFullPhone(countryCode: string, local: string): string {
   return `${cc}${compactLocal}`;
 }
 
-type ForgotStep = 'phone' | 'otp' | 'password';
+type ForgotStep = 'contact' | 'otp' | 'password';
+type ForgotChannel = 'phone' | 'email';
 type LoginFormValues = {
   email: string;
   phoneCode: string;
@@ -69,7 +70,8 @@ export const LoginPage: React.FC = () => {
   const [error, setError] = useState('');
   const [passwordResetBanner, setPasswordResetBanner] = useState('');
 
-  const [forgotStep, setForgotStep] = useState<ForgotStep>('phone');
+  const [forgotStep, setForgotStep] = useState<ForgotStep>('contact');
+  const [forgotChannel, setForgotChannel] = useState<ForgotChannel>('phone');
   const [showForgotNewPassword, setShowForgotNewPassword] = useState(false);
   const [showForgotConfirmPassword, setShowForgotConfirmPassword] = useState(false);
   const forgotPhoneFormik = useFormik({
@@ -102,6 +104,33 @@ export const LoginPage: React.FC = () => {
           body: JSON.stringify({ phone: full }),
           silent401: true,
         });
+        setForgotChannel('phone');
+        setForgotStep('otp');
+      } catch (e) {
+        setForgotError(e instanceof Error ? e.message : 'Request failed.');
+      } finally {
+        setForgotLoading(false);
+      }
+    },
+  });
+
+  const forgotEmailFormik = useFormik({
+    initialValues: { forgotEmail: '' },
+    validate: (values) => {
+      const parsed = z.object({ forgotEmail: z.string().trim().email('Please enter a valid email.') }).safeParse(values);
+      if (parsed.success) return {};
+      return { forgotEmail: parsed.error.issues[0]?.message || 'Invalid email' };
+    },
+    onSubmit: async (values) => {
+      setForgotError('');
+      setForgotLoading(true);
+      try {
+        await apiFetch<void>(API_ENDPOINTS.auth.forgotPassword, {
+          method: 'POST',
+          body: JSON.stringify({ email: values.forgotEmail.trim().toLowerCase() }),
+          silent401: true,
+        });
+        setForgotChannel('email');
         setForgotStep('otp');
       } catch (e) {
         setForgotError(e instanceof Error ? e.message : 'Request failed.');
@@ -114,7 +143,7 @@ export const LoginPage: React.FC = () => {
   const forgotOtpFormik = useFormik({
     initialValues: { forgotOtp: '' },
     validate: (values) => {
-      const parsed = z.object({ forgotOtp: z.string().trim().min(4, t('verify.invalid')) }).safeParse(values);
+      const parsed = z.object({ forgotOtp: z.string().trim().regex(/^\d{6}$/, t('verify.invalid')) }).safeParse(values);
       if (parsed.success) return {};
       return { forgotOtp: parsed.error.issues[0]?.message || t('verify.invalid') };
     },
@@ -126,7 +155,11 @@ export const LoginPage: React.FC = () => {
           API_ENDPOINTS.auth.forgotPasswordVerifyOtp,
           {
             method: 'POST',
-            body: JSON.stringify({ phone: forgotFullPhone(), code: values.forgotOtp.trim() }),
+            body: JSON.stringify(
+              forgotChannel === 'email'
+                ? { email: forgotEmailFormik.values.forgotEmail.trim().toLowerCase(), code: values.forgotOtp.trim() }
+                : { phone: forgotFullPhone(), code: values.forgotOtp.trim() },
+            ),
             silent401: true,
           },
         );
@@ -255,8 +288,10 @@ export const LoginPage: React.FC = () => {
   });
 
   const resetForgotModalState = () => {
-    setForgotStep('phone');
+    setForgotStep('contact');
+    setForgotChannel('phone');
     forgotPhoneFormik.resetForm({ values: { forgotPhoneCode: '+237', forgotPhoneLocal: '' } });
+    forgotEmailFormik.resetForm();
     forgotOtpFormik.resetForm();
     forgotPasswordFormik.resetForm();
     setForgotResetToken(null);
@@ -267,7 +302,11 @@ export const LoginPage: React.FC = () => {
   const openForgotModal = () => {
     resetForgotModalState();
     if (loginMethod === 'phone') {
+      setForgotChannel('phone');
       forgotPhoneFormik.setValues({ forgotPhoneCode: loginFormik.values.phoneCode, forgotPhoneLocal: loginFormik.values.phone });
+    } else {
+      setForgotChannel('email');
+      forgotEmailFormik.setValues({ forgotEmail: loginFormik.values.email });
     }
     setIsForgotPasswordOpen(true);
   };
@@ -455,12 +494,17 @@ export const LoginPage: React.FC = () => {
             </button>
             <h3 className="text-lg font-bold text-gray-900 mb-2">{t('login.resetTitle')}</h3>
 
-            {forgotStep === 'phone' && (
+            {forgotStep === 'contact' && (
               <>
                 <p className="text-sm text-gray-500 mb-4">{t('login.resetDesc')}</p>
+                <div className="flex rounded-md border border-gray-200 p-0.5 mb-4 text-sm">
+                  <button type="button" onClick={() => setForgotChannel('phone')} className={`flex-1 py-2 rounded ${forgotChannel === 'phone' ? 'bg-primary-600 text-white' : 'text-gray-600'}`}>Phone</button>
+                  <button type="button" onClick={() => setForgotChannel('email')} className={`flex-1 py-2 rounded ${forgotChannel === 'email' ? 'bg-primary-600 text-white' : 'text-gray-600'}`}>Email</button>
+                </div>
                 {forgotError && (
                   <div className="text-red-600 text-sm mb-3 bg-red-50 p-2 rounded">{forgotError}</div>
                 )}
+                {forgotChannel === 'phone' ? (
                 <form className="space-y-4" onSubmit={forgotPhoneFormik.handleSubmit}>
                   <div className="flex rounded-md border border-gray-300 overflow-hidden">
                     <select
@@ -499,13 +543,46 @@ export const LoginPage: React.FC = () => {
                     {forgotLoading ? '…' : t('login.sendReset')}
                   </button>
                 </form>
+                ) : (
+                <form className="space-y-4" onSubmit={forgotEmailFormik.handleSubmit}>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Mail className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="email"
+                      name="forgotEmail"
+                      required
+                      className="w-full py-2.5 pl-9 pr-2 border border-gray-300 rounded-md text-sm text-gray-900"
+                      placeholder="you@example.com"
+                      value={forgotEmailFormik.values.forgotEmail}
+                      onChange={forgotEmailFormik.handleChange}
+                      onBlur={forgotEmailFormik.handleBlur}
+                    />
+                  </div>
+                  {forgotEmailFormik.touched.forgotEmail && forgotEmailFormik.errors.forgotEmail ? (
+                    <p className="text-xs text-red-600">{forgotEmailFormik.errors.forgotEmail}</p>
+                  ) : null}
+                  <button
+                    type="submit"
+                    disabled={forgotLoading}
+                    className="w-full bg-primary-600 text-white py-2 rounded-md font-medium hover:bg-primary-700 disabled:opacity-60"
+                  >
+                    {forgotLoading ? '…' : t('login.sendReset')}
+                  </button>
+                </form>
+                )}
               </>
             )}
 
             {forgotStep === 'otp' && (
               <form onSubmit={forgotOtpFormik.handleSubmit} className="space-y-4">
                 <p className="text-sm text-gray-500 mb-2">{t('login.forgotAfterSend')}</p>
-                <p className="text-xs text-gray-400 mb-3 break-all">{forgotFullPhone()}</p>
+                <p className="text-xs text-gray-400 mb-3 break-all">
+                  {forgotChannel === 'email'
+                    ? forgotEmailFormik.values.forgotEmail
+                    : forgotFullPhone()}
+                </p>
                 {forgotError && (
                   <div className="text-red-600 text-sm bg-red-50 p-2 rounded">{forgotError}</div>
                 )}
@@ -518,7 +595,7 @@ export const LoginPage: React.FC = () => {
                     autoComplete="one-time-code"
                     className="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500 tracking-widest"
                     value={forgotOtpFormik.values.forgotOtp}
-                    onChange={(e) => forgotOtpFormik.setFieldValue('forgotOtp', e.target.value.replace(/\D/g, '').slice(0, 8))}
+                    onChange={(e) => forgotOtpFormik.setFieldValue('forgotOtp', e.target.value.replace(/\D/g, '').slice(0, 6))}
                     onBlur={forgotOtpFormik.handleBlur}
                     placeholder="123456"
                   />
@@ -536,7 +613,11 @@ export const LoginPage: React.FC = () => {
                     type="button"
                     className="text-primary-600 hover:underline text-left"
                     disabled={forgotLoading}
-                    onClick={() => void forgotPhoneFormik.submitForm()}
+                    onClick={() =>
+                      void (forgotChannel === 'email'
+                        ? forgotEmailFormik.submitForm()
+                        : forgotPhoneFormik.submitForm())
+                    }
                   >
                     {t('otp.sendCode')}
                   </button>
@@ -544,7 +625,7 @@ export const LoginPage: React.FC = () => {
                     type="button"
                     className="text-gray-600 hover:underline text-left"
                     onClick={() => {
-                      setForgotStep('phone');
+                      setForgotStep('contact');
                       forgotOtpFormik.resetForm();
                       setForgotError('');
                     }}
@@ -560,50 +641,54 @@ export const LoginPage: React.FC = () => {
                 {forgotError && (
                   <div className="text-red-600 text-sm bg-red-50 p-2 rounded">{forgotError}</div>
                 )}
-                <div className="relative">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">{t('login.newPasswordLabel')}</label>
-                  <input
-                    name="forgotNewPassword"
-                    type={showForgotNewPassword ? 'text' : 'password'}
-                    autoComplete="new-password"
-                    required
-                    minLength={4}
-                    className="w-full border border-gray-300 rounded-md p-2 pr-10 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
-                    value={forgotPasswordFormik.values.forgotNewPassword}
-                    onChange={forgotPasswordFormik.handleChange}
-                    onBlur={forgotPasswordFormik.handleBlur}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowForgotNewPassword((prev) => !prev)}
-                    className="absolute inset-y-0 right-2 my-auto inline-flex h-8 w-8 items-center justify-center rounded text-gray-500 hover:text-gray-700 z-30 focus:outline-none"
-                    aria-label={showForgotNewPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showForgotNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
+                  <div className="relative">
+                    <input
+                      name="forgotNewPassword"
+                      type={showForgotNewPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      required
+                      minLength={4}
+                      className="w-full border border-gray-300 rounded-md py-2.5 pl-3 pr-11 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
+                      value={forgotPasswordFormik.values.forgotNewPassword}
+                      onChange={forgotPasswordFormik.handleChange}
+                      onBlur={forgotPasswordFormik.handleBlur}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotNewPassword((prev) => !prev)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none"
+                      aria-label={showForgotNewPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showForgotNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
                 </div>
                 {forgotPasswordFormik.touched.forgotNewPassword && forgotPasswordFormik.errors.forgotNewPassword ? <p className="text-xs text-red-600">{forgotPasswordFormik.errors.forgotNewPassword}</p> : null}
-                <div className="relative">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">{t('login.confirmNewPasswordLabel')}</label>
-                  <input
-                    name="forgotConfirmPassword"
-                    type={showForgotConfirmPassword ? 'text' : 'password'}
-                    autoComplete="new-password"
-                    required
-                    minLength={4}
-                    className="w-full border border-gray-300 rounded-md p-2 pr-10 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
-                    value={forgotPasswordFormik.values.forgotConfirmPassword}
-                    onChange={forgotPasswordFormik.handleChange}
-                    onBlur={forgotPasswordFormik.handleBlur}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowForgotConfirmPassword((prev) => !prev)}
-                    className="absolute inset-y-0 right-2 my-auto inline-flex h-8 w-8 items-center justify-center rounded text-gray-500 hover:text-gray-700 z-30 focus:outline-none"
-                    aria-label={showForgotConfirmPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showForgotConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
+                  <div className="relative">
+                    <input
+                      name="forgotConfirmPassword"
+                      type={showForgotConfirmPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      required
+                      minLength={4}
+                      className="w-full border border-gray-300 rounded-md py-2.5 pl-3 pr-11 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
+                      value={forgotPasswordFormik.values.forgotConfirmPassword}
+                      onChange={forgotPasswordFormik.handleChange}
+                      onBlur={forgotPasswordFormik.handleBlur}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotConfirmPassword((prev) => !prev)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none"
+                      aria-label={showForgotConfirmPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showForgotConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
                 </div>
                 {forgotPasswordFormik.touched.forgotConfirmPassword && forgotPasswordFormik.errors.forgotConfirmPassword ? <p className="text-xs text-red-600">{forgotPasswordFormik.errors.forgotConfirmPassword}</p> : null}
                 <button

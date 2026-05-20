@@ -209,7 +209,7 @@ export const ProducerMarket: React.FC = () => {
   // Get all unique categories from the ENTIRE dataset for the filter dropdown
   const allAvailableCategories = Array.from(new Set(producerOffers.map(o => o.category))).sort();
 
-  const renderOfferCard = (offer: any) => {
+  const renderOfferCard = (offer: any, inCarousel = false) => {
     const producer = getProducer(offer.producerId);
     const isLocal = clientRegion && producer?.locations.some(l => l.region === clientRegion);
     const isFav = favorites.includes(offer.id);
@@ -226,7 +226,10 @@ export const ProducerMarket: React.FC = () => {
     };
 
     return (
-      <div key={offer.id} className={`group relative ${expandedCategory ? 'w-full' : 'min-w-[280px] w-[300px] flex-shrink-0'} bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 border ${isLocal ? 'border-green-300 ring-2 ring-green-50' : 'border-gray-100'} h-full flex flex-col`}>
+      <div
+        key={offer.id}
+        className={`group relative w-full min-w-0 bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 border ${isLocal ? 'border-green-300 ring-2 ring-green-50' : 'border-gray-100'} h-full flex flex-col ${inCarousel ? 'md:min-w-[280px] md:w-[300px] md:flex-shrink-0' : ''}`}
+      >
         {/* Action Buttons Overlay */}
         <div className="absolute top-2 right-2 z-10 flex flex-col gap-2">
           {/* Favorite Button (Visible for Client AND Producer) */}
@@ -251,7 +254,7 @@ export const ProducerMarket: React.FC = () => {
         </div>
 
         <Link to={`/offer/${offer.id}`} className="block h-full flex flex-col">
-          <div className="relative h-44 bg-gray-100">
+          <div className="relative bg-gray-100 h-40 sm:h-44 md:h-44">
             <img src={offer.imageUrl} alt={offer.title} className={offerImageInBox} />
 
             {/* Badges Overlay */}
@@ -275,9 +278,9 @@ export const ProducerMarket: React.FC = () => {
             )}
           </div>
 
-          <div className="p-4 flex flex-col flex-1">
-            <div className="mb-2">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 flex items-center justify-between gap-2 min-w-0">
+          <div className="flex flex-col flex-1 p-3 md:p-4">
+            <div className="mb-1.5 md:mb-2">
+              <p className="text-[10px] md:text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5 md:mb-1 flex items-center justify-between gap-1 min-w-0">
                 <span className={`${displayNameTruncateClass} flex-1`} title={producer ? getProducerName(producer) : ''}>
                   {producer ? getProducerName(producer) : 'Unknown Producer'}
                 </span>
@@ -287,10 +290,10 @@ export const ProducerMarket: React.FC = () => {
                   </span>
                 )}
               </p>
-              <h3 className="text-lg font-bold text-gray-900 line-clamp-1 group-hover:text-primary-600 transition-colors">{offer.title}</h3>
+              <h3 className="text-sm md:text-lg font-bold text-gray-900 line-clamp-2 md:line-clamp-1 group-hover:text-primary-600 transition-colors leading-snug">{offer.title}</h3>
             </div>
 
-            <p className="text-gray-600 text-sm line-clamp-2 flex-1 mb-3">{offer.description}</p>
+            <p className="text-gray-600 text-xs md:text-sm line-clamp-2 flex-1 mb-2 md:mb-3 hidden sm:block">{offer.description}</p>
 
             {/* Delivery Status */}
             {offer.isDeliveryAvailable ? (
@@ -303,14 +306,14 @@ export const ProducerMarket: React.FC = () => {
               </div>
             )}
 
-            <div className="mt-auto flex items-end justify-between pt-3 border-t border-gray-100">
-              <div>
-                <p className="text-xs text-gray-400">{t('market.per')} {t(`unit.${offer.unit}`)}</p>
-                <p className="text-lg font-bold text-primary-700">{offer.price.toLocaleString()} XAF</p>
+            <div className="mt-auto flex items-end justify-between pt-2 md:pt-3 border-t border-gray-100 gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] md:text-xs text-gray-400">{t('market.per')} {t(`unit.${offer.unit}`)}</p>
+                <p className="text-base md:text-lg font-bold text-primary-700 leading-tight">{offer.price.toLocaleString()} XAF</p>
               </div>
-              <div className="text-right">
-                <p className="text-xs text-gray-400">{t('market.available')}</p>
-                <p className="text-sm font-semibold text-gray-900">{offer.quantity} {t(`unit.${offer.unit}`)}</p>
+              <div className="text-right shrink-0">
+                <p className="text-[10px] md:text-xs text-gray-400">{t('market.available')}</p>
+                <p className="text-xs md:text-sm font-semibold text-gray-900">{offer.quantity} {t(`unit.${offer.unit}`)}</p>
               </div>
             </div>
           </div>
@@ -436,8 +439,8 @@ export const ProducerMarket: React.FC = () => {
                   <Star className="h-6 w-6 text-yellow-500 mr-2 fill-current" />
                   {t('market.recommended')}
                 </h2>
-                <div className="flex overflow-x-auto pb-8 pt-2 space-x-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent px-1">
-                  {recommendedOffers.map(offer => renderOfferCard(offer))}
+                <div className="flex overflow-x-auto pb-8 pt-2 space-x-4 md:space-x-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent px-1 md:px-1">
+                  {recommendedOffers.map((offer) => renderOfferCard(offer, true))}
                 </div>
               </div>
             )}
@@ -497,15 +500,28 @@ export const ProducerMarket: React.FC = () => {
                       </div>
 
                       {isExpanded ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pt-2">
+                        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pt-2">
                           {sortedCategoryOffers.map((offer) => (
-                            <div key={offer.id} className="w-full">{renderOfferCard(offer)}</div>
+                            <div key={offer.id} className="w-full min-w-0">
+                              {renderOfferCard(offer)}
+                            </div>
                           ))}
                         </div>
                       ) : (
-                        <div className="flex overflow-x-auto pb-8 pt-2 space-x-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent px-1">
-                          {sortedCategoryOffers.map((offer) => renderOfferCard(offer))}
-                        </div>
+                        <>
+                          {/* Mobile: 2 offers per row */}
+                          <div className="grid grid-cols-2 gap-3 pt-2 px-1 md:hidden">
+                            {sortedCategoryOffers.map((offer) => (
+                              <div key={offer.id} className="w-full min-w-0">
+                                {renderOfferCard(offer)}
+                              </div>
+                            ))}
+                          </div>
+                          {/* Desktop: horizontal scroll (original layout) */}
+                          <div className="hidden md:flex overflow-x-auto pb-8 pt-2 space-x-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent px-1">
+                            {sortedCategoryOffers.map((offer) => renderOfferCard(offer, true))}
+                          </div>
+                        </>
                       )}
                     </div>
                   );

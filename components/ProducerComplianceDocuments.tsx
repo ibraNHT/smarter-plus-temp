@@ -109,8 +109,13 @@ const DocSlot: React.FC<DocSlotProps> = ({
 };
 
 export type ProducerComplianceDocValues = {
+  /** TIN/NIU number (text, mandatory). */
   taxIdentificationNumber?: string;
+  /** NIU registration certificate file (mandatory, separate from ACF). */
   niuCertificateUrl?: string;
+  /** Tax compliance / clearance certificate — ACF (mandatory). */
+  taxClearanceCertificateUrl?: string;
+  /** Business registration — RCCM (optional, all producer types). */
   businessRegistrationUrl?: string;
 };
 
@@ -123,7 +128,7 @@ type Props = {
 };
 
 export const ProducerComplianceDocuments: React.FC<Props> = ({
-  producerType,
+  producerType: _producerType,
   values,
   onChange,
   certUploading,
@@ -164,17 +169,26 @@ export const ProducerComplianceDocuments: React.FC<Props> = ({
         onClear={() => onChange({ niuCertificateUrl: '' })}
       />
 
-      {producerType === 'BUSINESS' ? (
-        <DocSlot
-          label={t('profile.businessRegistration')}
-          hint={t('profile.businessRegistrationHint')}
-          url={values.businessRegistrationUrl}
-          uploading={certUploading}
-          onUploadingChange={onCertUploadingChange}
-          onUpload={(url) => onChange({ businessRegistrationUrl: url })}
-          onClear={() => onChange({ businessRegistrationUrl: '' })}
-        />
-      ) : null}
+      <DocSlot
+        label={t('profile.taxClearanceDoc')}
+        hint={t('profile.taxClearanceDocHint')}
+        required
+        url={values.taxClearanceCertificateUrl}
+        uploading={certUploading}
+        onUploadingChange={onCertUploadingChange}
+        onUpload={(url) => onChange({ taxClearanceCertificateUrl: url })}
+        onClear={() => onChange({ taxClearanceCertificateUrl: '' })}
+      />
+
+      <DocSlot
+        label={t('profile.businessRegistration')}
+        hint={t('profile.businessRegistrationHint')}
+        url={values.businessRegistrationUrl}
+        uploading={certUploading}
+        onUploadingChange={onCertUploadingChange}
+        onUpload={(url) => onChange({ businessRegistrationUrl: url })}
+        onClear={() => onChange({ businessRegistrationUrl: '' })}
+      />
     </div>
   );
 };

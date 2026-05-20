@@ -40,12 +40,16 @@ apiClient.interceptors.request.use((config) => {
  *   3) If the retry also 401s, or refresh fails (e.g. refresh token expired/revoked),
  *      force-logout and bounce the user to /login.
  *
- * The retry is gated by `_isRetry` and skipped entirely for callers that pass
- * `x-silent-401: true` (background polls that should fail quietly).
+ * The retry is gated by `_isRetry` and skipped entirely for callers that set
+ * `_silent401: true` on the axios config (background polls / guest support chat).
+ * Must NOT be sent as an HTTP header — browsers block undeclared custom headers via CORS.
  */
-type RetryableConfig = InternalAxiosRequestConfig & {
+export type AgmAxiosConfig = InternalAxiosRequestConfig & {
   _isRetry?: boolean;
+  _silent401?: boolean;
 };
+
+type RetryableConfig = AgmAxiosConfig;
 
 apiClient.interceptors.response.use(
   (response) => response,
@@ -72,13 +76,8 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Caller opted into silent failure (background pollers).
-    const headers = (original.headers ?? {}) as Record<string, unknown>;
-    const silent401 =
-      headers['x-silent-401'] === true ||
-      headers['x-silent-401'] === 'true' ||
-      headers['X-Silent-401'] === true ||
-      headers['X-Silent-401'] === 'true';
+    // Caller opted into silent failure (background pollers, guest AI chat).
+    const silent401 = Boolean(original._silent401);
 
     if (original._isRetry) {
       // Already retried once — give up and (unless silent) log out.

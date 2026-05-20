@@ -394,6 +394,10 @@ export const ProducerProfile: React.FC = () => {
       alert('NIU certificate upload is required.');
       return;
     }
+    if (!String(formData.taxClearanceCertificateUrl ?? '').trim()) {
+      alert('Tax compliance certificate (ACF) is required.');
+      return;
+    }
     let displayName = formData.name;
     if (formData.type === 'INDIVIDUAL' && formData.firstName && formData.lastName) displayName = `${formData.firstName} ${formData.lastName}`;
     const { niuCertificateUrl, businessRegistrationUrl, ...rest } = formData;
@@ -402,7 +406,7 @@ export const ProducerProfile: React.FC = () => {
       name: displayName,
       certifications: mergeProducerDocuments(
         niuCertificateUrl,
-        formData.type === 'BUSINESS' ? businessRegistrationUrl : undefined,
+        businessRegistrationUrl,
         formData.certifications,
       ),
     };
@@ -786,6 +790,7 @@ export const ProducerProfile: React.FC = () => {
                   values={{
                     taxIdentificationNumber: formData.taxIdentificationNumber,
                     niuCertificateUrl: formData.niuCertificateUrl,
+                    taxClearanceCertificateUrl: formData.taxClearanceCertificateUrl,
                     businessRegistrationUrl: formData.businessRegistrationUrl,
                   }}
                   certUploading={certUploading}

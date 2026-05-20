@@ -1,12 +1,9 @@
-import { AxiosRequestConfig } from 'axios';
-import { apiClient } from './client';
+import { apiClient, type AgmAxiosConfig } from './client';
 import { ApiRequestOptions } from './types';
 
-const buildConfig = (options?: ApiRequestOptions): AxiosRequestConfig => ({
-  headers: {
-    ...(options?.headers ?? {}),
-    ...(options?.silent401 ? { 'x-silent-401': true } : {}),
-  },
+const buildConfig = (options?: ApiRequestOptions): AgmAxiosConfig => ({
+  headers: options?.headers ?? {},
+  ...(options?.silent401 ? { _silent401: true } : {}),
 });
 
 export async function apiGet<T>(url: string, options?: ApiRequestOptions): Promise<T> {

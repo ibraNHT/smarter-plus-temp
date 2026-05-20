@@ -293,8 +293,13 @@ interface StoreContextType {
   // Support Chat (Client Side)
   supportMessages: SupportMessage[];
   isSupportChatOpen: boolean;
+  /** True while waiting for an AI reply (shows typing indicator). */
+  supportAiTyping: boolean;
+  /** True while a support message is being sent (disables composer). */
+  supportChatSending: boolean;
   toggleSupportChat: () => void;
   sendSupportMessage: (text: string) => Promise<void>;
+  retrySupportMessage: (messageId: string) => Promise<void>;
   showGuestForm: boolean;
   setShowGuestForm: (show: boolean) => void;
   guestEmailInput: string;
@@ -311,8 +316,8 @@ interface StoreContextType {
   logout: () => Promise<void>;
   registerProducer: (data: Omit<ProducerProfile, 'id' | 'status' | 'joinedDate' | 'paymentMethods' | 'favorites' | 'searchHistory' | 'referrals' | 'referralCode'> & { referrerCode?: string; phoneVerificationToken?: string }, password: string) => Promise<{ success: boolean; message: string }>;
   updateProducerProfile: (producer: ProducerProfile, otpToken?: string) => Promise<boolean>;
-  requestOtp: (action: 'PROFILE_UPDATE' | 'WITHDRAWAL') => Promise<{ success: boolean; message: string }>;
-  verifyOtp: (action: 'PROFILE_UPDATE' | 'WITHDRAWAL', code: string) => Promise<{ success: boolean; token?: string; message: string }>;
+  requestOtp: (action: 'PROFILE_UPDATE' | 'WITHDRAWAL' | 'PASSWORD_CHANGE') => Promise<{ success: boolean; message: string }>;
+  verifyOtp: (action: 'PROFILE_UPDATE' | 'WITHDRAWAL' | 'PASSWORD_CHANGE', code: string) => Promise<{ success: boolean; token?: string; message: string }>;
   updateProducerAvailability: (producerId: string, schedule: WeeklySchedule, exceptions: AvailabilityException[]) => Promise<void>;
   registerClient: (data: Omit<ClientProfile, 'id' | 'joinedDate' | 'referrals' | 'referralCode'> & { referrerCode?: string; phoneVerificationToken?: string }, password: string, avatarFile?: File | null) => Promise<{ success: boolean; message: string }>;
   verifyEmail: (code: string) => Promise<boolean>;
@@ -511,6 +516,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [guestEmailInput, setGuestEmailInput] = useState('');
   const [guestNameInput, setGuestNameInput] = useState('');
   const [supportSessionId, setSupportSessionId] = useState<string | null>(null);
+  const [supportAiTyping, setSupportAiTyping] = useState(false);
+  const [supportChatSending, setSupportChatSending] = useState(false);
 
   useEffect(() => {
     useSessionStore.getState().setUser(user);
@@ -1784,12 +1791,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           certifications: data.certifications || [],
           productionTypes: data.productionTypes || [],
           locations: sanitizeProfileLocationsForApi(data.locations),
-          ...(data.type === 'BUSINESS' || !data.type
-            ? {
-                taxIdentificationNumber: data.taxIdentificationNumber || undefined,
-                taxClearanceCertificateUrl: data.taxClearanceCertificateUrl || undefined,
-              }
-            : {}),
+          taxIdentificationNumber: data.taxIdentificationNumber || undefined,
+          taxClearanceCertificateUrl: data.taxClearanceCertificateUrl || undefined,
         }),
       });
 
@@ -1932,12 +1935,23 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const changePassword = async (currentPass: string, newPass: string): Promise<{ success: boolean; message: string }> => {
+  const changePassword = async (
+    currentPass: string,
+    newPass: string,
+    otpToken?: string,
+  ): Promise<{ success: boolean; message: string }> => {
     if (!user) return { success: false, message: 'User not logged in.' };
+    if (!otpToken) {
+      return {
+        success: false,
+        message: 'Verification required. Request an OTP and try again.',
+      };
+    }
     try {
       await apiFetch(API_ENDPOINTS.auth.changePassword, {
         method: 'POST',
-        body: JSON.stringify({ userId: user.id, role: user.role, currentPassword: currentPass, newPassword: newPass }),
+        body: JSON.stringify({ currentPassword: currentPass, newPassword: newPass }),
+        headers: { 'X-OTP-Verification': otpToken },
       });
       return { success: true, message: 'Password updated successfully!' };
     } catch (err: any) {
@@ -1999,7 +2013,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const requestOtp = async (action: 'PROFILE_UPDATE' | 'WITHDRAWAL') => {
+  const requestOtp = async (action: 'PROFILE_UPDATE' | 'WITHDRAWAL' | 'PASSWORD_CHANGE') => {
     const res = await apiFetch<{ success: boolean; message: string }>(API_ENDPOINTS.otp.request, {
       method: 'POST',
       body: JSON.stringify({ action }),
@@ -2007,7 +2021,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return res;
   };
 
-  const verifyOtp = async (action: 'PROFILE_UPDATE' | 'WITHDRAWAL', code: string) => {
+  const verifyOtp = async (action: 'PROFILE_UPDATE' | 'WITHDRAWAL' | 'PASSWORD_CHANGE', code: string) => {
     const res = await apiFetch<{ success: boolean; token?: string; message: string }>(API_ENDPOINTS.otp.verify, {
       method: 'POST',
       body: JSON.stringify({ action, code }),
@@ -2881,80 +2895,136 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setGuestNameInput('');
   };
 
+  const markSupportUserMessage = (
+    tempId: string,
+    patch: Partial<SupportMessage> | 'remove',
+  ) => {
+    setSupportMessages((prev) => {
+      if (patch === 'remove') return prev.filter((m) => m.id !== tempId);
+      return prev.map((m) => (m.id === tempId ? { ...m, ...patch } : m));
+    });
+  };
+
   const sendSupportMessage = async (text: string) => {
-    // If guest and no email, show form first
+    if (supportChatSending) return;
+
     if (!user && !guestEmail) {
       setShowGuestForm(true);
       return;
     }
 
     const tempId = `u-${Date.now()}`;
+    setSupportChatSending(true);
     setSupportMessages((prev) => [
       ...prev,
-      { id: tempId, sender: 'USER', text, timestamp: new Date().toISOString() },
+      {
+        id: tempId,
+        sender: 'USER',
+        text,
+        timestamp: new Date().toISOString(),
+        status: 'SENDING',
+      },
     ]);
 
-    if (isHandedOver) {
-      if (!supportSessionId) {
-        setSupportMessages((prev) => prev.filter((m) => m.id !== tempId));
+    try {
+      if (isHandedOver) {
+        if (!supportSessionId) {
+          markSupportUserMessage(tempId, 'remove');
+          return;
+        }
+        try {
+          if (user) {
+            const res = await postUserSupportMessage(supportSessionId, text);
+            if (res.message) {
+              const mapped = mapDtoToSupportMessage(res.message);
+              setSupportMessages((prev) =>
+                prev.map((m) => (m.id === tempId ? { ...mapped, status: 'SENT' } : m)),
+              );
+            } else {
+              markSupportUserMessage(tempId, { status: 'SENT' });
+            }
+          } else if (guestEmail) {
+            const res = await postGuestSupportMessage(supportSessionId, text, guestEmail);
+            if (res.message) {
+              const mapped = mapDtoToSupportMessage(res.message);
+              setSupportMessages((prev) =>
+                prev.map((m) => (m.id === tempId ? { ...mapped, status: 'SENT' } : m)),
+              );
+            } else {
+              markSupportUserMessage(tempId, { status: 'SENT' });
+            }
+          } else {
+            markSupportUserMessage(tempId, 'remove');
+          }
+        } catch (e) {
+          logApiFailure('Failed to send support message', e);
+          markSupportUserMessage(tempId, { status: 'FAILED' });
+          if (user) addNotification(user.id, 'Could not send message. Please try again.', 'ERROR');
+        }
         return;
       }
-      try {
-        if (user) {
-          const res = await postUserSupportMessage(supportSessionId, text);
-          if (res.message) {
-            const mapped = mapDtoToSupportMessage(res.message);
-            setSupportMessages((prev) => prev.map((m) => (m.id === tempId ? mapped : m)));
-          }
-        } else if (guestEmail) {
-          const res = await postGuestSupportMessage(supportSessionId, text, guestEmail);
-          if (res.message) {
-            const mapped = mapDtoToSupportMessage(res.message);
-            setSupportMessages((prev) => prev.map((m) => (m.id === tempId ? mapped : m)));
-          }
-        } else {
-          setSupportMessages((prev) => prev.filter((m) => m.id !== tempId));
-        }
-      } catch (e) {
-        logApiFailure('Failed to send support message', e);
-        setSupportMessages((prev) => prev.filter((m) => m.id !== tempId));
-        if (user) addNotification(user.id, 'Could not send message. Please try again.', 'ERROR');
-      }
-      return;
-    }
 
-    // AI phase — guest email and name if not authenticated
-    const res = await generateSupportResponse(
-      text,
-      supportSessionId ?? undefined,
-      !user ? (guestEmail ?? undefined) : undefined,
-      !user ? (guestName ?? undefined) : undefined
-    );
+      // Message is queued locally; AI wait is separate from "send" (see SupportChatWidget).
+      markSupportUserMessage(tempId, { status: 'SENT' });
+      setSupportChatSending(false);
+      setSupportAiTyping(true);
 
-    if (res.sessionId && !supportSessionId) {
-      setSupportSessionId(res.sessionId);
-    }
-
-    setSupportMessages((prev) => [
-      ...prev,
-      { id: `a-${Date.now()}`, sender: 'AI', text: res.text, timestamp: new Date().toISOString() },
-    ]);
-    if (res.handover) {
-      setIsHandedOver(true);
-      setTimeout(
-        () =>
-          setSupportMessages((prev) => [
-            ...prev,
-            {
-              id: `s-${Date.now()}`,
-              sender: 'AGENT',
-              text: 'Connecting agent...',
-              timestamp: new Date().toISOString(),
-            },
-          ]),
-        1000
+      const res = await generateSupportResponse(
+        text,
+        supportSessionId ?? undefined,
+        !user ? (guestEmail ?? undefined) : undefined,
+        !user ? (guestName ?? undefined) : undefined,
       );
+
+      if (res.sessionId && !supportSessionId) {
+        setSupportSessionId(res.sessionId);
+      }
+
+      setSupportMessages((prev) => [
+        ...prev,
+        { id: `a-${Date.now()}`, sender: 'AI', text: res.text, timestamp: new Date().toISOString() },
+      ]);
+      if (res.handover) {
+        setIsHandedOver(true);
+        setTimeout(
+          () =>
+            setSupportMessages((prev) => [
+              ...prev,
+              {
+                id: `s-${Date.now()}`,
+                sender: 'AGENT',
+                text: 'Connecting you with a support agent…',
+                timestamp: new Date().toISOString(),
+              },
+            ]),
+          1000,
+        );
+      }
+    } catch (e) {
+      logApiFailure('Support AI chat failed', e);
+      markSupportUserMessage(tempId, { status: 'FAILED' });
+      setSupportMessages((prev) => [
+        ...prev,
+        {
+          id: `a-err-${Date.now()}`,
+          sender: 'AI',
+          text: 'Something went wrong. Please try again or ask for a human agent.',
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    } finally {
+      setSupportAiTyping(false);
+      setSupportChatSending(false);
     }
+  };
+
+  const retrySupportMessage = async (messageId: string) => {
+    const failed = supportMessages.find(
+      (m) => m.id === messageId && m.sender === 'USER' && m.status === 'FAILED',
+    );
+    if (!failed?.text.trim()) return;
+    setSupportMessages((prev) => prev.filter((m) => m.id !== messageId));
+    await sendSupportMessage(failed.text);
   };
 
   // Polling for guest support messages when handed over to agent
@@ -3443,7 +3513,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,
     trackUserSearch, toggleFavorite, moveToFavorites, getRecommendedOffers,
     compareList, addToCompare, removeFromCompare, clearCompare,
-    supportMessages, isSupportChatOpen, toggleSupportChat, sendSupportMessage, showGuestForm, setShowGuestForm, guestEmailInput, setGuestEmailInput, guestNameInput, setGuestNameInput, guestName, setGuestName, submitGuestForm, supportSessionId, setSupportSessionId,
+    supportMessages, isSupportChatOpen, supportAiTyping, supportChatSending, toggleSupportChat, sendSupportMessage, retrySupportMessage, showGuestForm, setShowGuestForm, guestEmailInput, setGuestEmailInput, guestNameInput, setGuestNameInput, guestName, setGuestName, submitGuestForm, supportSessionId, setSupportSessionId,
     validateCoupon,
     addPickupPoint, deletePickupPoint,
     changePassword,

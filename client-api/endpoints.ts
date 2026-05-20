@@ -122,7 +122,7 @@ export const API_ENDPOINTS = {
       `/api/support/sessions/${sessionId}/guest/messages?guestEmail=${encodeURIComponent(guestEmail)}`,
   },
   ai: {
-    supportChat: "/api/ai/support/chat",
+    supportChat: "/api/ai/support-chat",
     generateDescription: "/api/ai/generate-description",
   },
 } as const;

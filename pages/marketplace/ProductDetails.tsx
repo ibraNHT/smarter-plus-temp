@@ -10,6 +10,7 @@ import { ProductDetailsSkeleton } from '../../components/skeletons/ProductDetail
 import { Spinner } from '../../components/Spinner';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { offerImageHero, offerImageInBox } from '../../utils/offerImageDisplay';
+import { getOfferImageUrls } from '../../utils/offerImages';
 import { displayNameTruncateClass, resolveProducerDisplayName } from '../../utils/displayName';
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
@@ -67,6 +68,11 @@ export const ProductDetails: React.FC = () => {
   const [negotiateLoading, setNegotiateLoading] = useState(false);
   const [showClearCartConfirm, setShowClearCartConfirm] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [selectedOfferImageIndex, setSelectedOfferImageIndex] = useState(0);
+
+  useEffect(() => {
+    setSelectedOfferImageIndex(0);
+  }, [offerId]);
 
   // Get Favorites (session id is auth-user id; profiles use separate ids)
   let favorites: string[] = [];
@@ -379,10 +385,11 @@ export const ProductDetails: React.FC = () => {
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           <div className="md:flex">
 
-            {/* Image Section — show full photo without cropping (letterbox in frame). */}
-            <div className="md:w-1/2 h-72 sm:h-80 md:h-96 md:min-h-96 flex items-center justify-center relative bg-gray-100 p-3 sm:p-4">
+            {/* Image Section — primary + additional photos */}
+            <div className="md:w-1/2 flex flex-col bg-gray-100 p-3 sm:p-4">
+              <div className="h-72 sm:h-80 md:h-96 md:min-h-96 flex items-center justify-center relative">
               <img
-                src={offer.imageUrl}
+                src={getOfferImageUrls(offer)[selectedOfferImageIndex] ?? offer.imageUrl}
                 alt={offer.title}
                 className={offerImageHero}
               />
@@ -404,6 +411,23 @@ export const ProductDetails: React.FC = () => {
                   </span>
                 )}
               </div>
+              </div>
+              {getOfferImageUrls(offer).length > 1 ? (
+                <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+                  {getOfferImageUrls(offer).map((url, idx) => (
+                    <button
+                      key={`${url}-${idx}`}
+                      type="button"
+                      onClick={() => setSelectedOfferImageIndex(idx)}
+                      className={`shrink-0 w-16 h-16 rounded-md border-2 overflow-hidden bg-white ${
+                        selectedOfferImageIndex === idx ? 'border-primary-600' : 'border-gray-200'
+                      }`}
+                    >
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
 
             {/* Details Section */}

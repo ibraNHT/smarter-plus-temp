@@ -443,11 +443,15 @@ export interface UserSession {
 }
 
 // Support Chat Types
+export type SupportMessageStatus = 'SENDING' | 'SENT' | 'FAILED';
+
 export interface SupportMessage {
   id: string;
   sender: 'USER' | 'AI' | 'AGENT';
   text: string;
   timestamp: string;
+  /** Delivery state for the user's own messages (optimistic UI). */
+  status?: SupportMessageStatus;
   /** Present only in admin context; omitted for customers from API. */
   internal?: boolean;
 }

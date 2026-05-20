@@ -198,10 +198,10 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
               </div>
 
               <p className="text-sm text-gray-600 mb-4">
-                For security, we sent a 6-digit code to your phone
-                {email ? ' and a backup copy to your email' : ''}. Some rural areas
-                have weak SMS reception — if the SMS doesn&apos;t arrive, check email
-                or tap Resend.
+                For security, we sent a 6-digit code to your email
+                {email ? ` (${email})` : ''}. SMS is temporarily unavailable until our
+                messaging number is active — check your inbox (and spam folder), then enter
+                the code below.
               </p>
 
               <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 mb-4 text-sm text-gray-700 space-y-1">

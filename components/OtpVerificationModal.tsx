@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useFormik } from 'formik';
 import { z } from 'zod';
 
-type OtpAction = 'PROFILE_UPDATE' | 'WITHDRAWAL';
+type OtpAction = 'PROFILE_UPDATE' | 'WITHDRAWAL' | 'PASSWORD_CHANGE';
 
 interface OtpVerificationModalProps {
   open: boolean;
@@ -27,7 +27,7 @@ export const OtpVerificationModal: React.FC<OtpVerificationModalProps> = ({
   title = 'Verify with OTP',
   sendCodeLabel = 'Send code to my phone',
   verifyLabel = 'Verify',
-  codeSentMessage = 'Enter the 6-digit code sent to your registered phone number.',
+  codeSentMessage = 'Enter the 6-digit code sent to your registered phone and email.',
 }) => {
   const [step, setStep] = useState<'request' | 'verify'>('request');
   const [loading, setLoading] = useState(false);
@@ -97,7 +97,7 @@ export const OtpVerificationModal: React.FC<OtpVerificationModalProps> = ({
           {step === 'request' && (
             <>
               <p className="text-sm text-gray-600 mb-4">
-                A 6-digit code will be sent to your registered phone number to confirm this action.
+                A 6-digit code will be sent to your registered phone and email to confirm this action.
               </p>
               {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
               <div className="flex gap-2">
