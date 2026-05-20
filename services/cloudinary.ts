@@ -17,7 +17,7 @@ const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefi
 const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined;
 
 export type CloudinaryResource = "image" | "video" | "raw" | "auto";
-
+//sadasdasdasdasdas
 export interface CloudinaryUploadResult {
   /** Permanent HTTPS URL — store this on the resource. */
   url: string;
