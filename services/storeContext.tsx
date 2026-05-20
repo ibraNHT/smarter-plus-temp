@@ -355,7 +355,11 @@ interface StoreContextType {
   revealContactInfo: (orderId: string) => void;
   submitReview: (review: Omit<Review, 'id' | 'createdAt'>) => Promise<void>;
   getAverageRating: (targetId: string) => number;
-  changePassword: (currentPass: string, newPass: string) => Promise<{ success: boolean; message: string }>;
+  changePassword: (
+    currentPass: string,
+    newPass: string,
+    otpToken?: string,
+  ) => Promise<{ success: boolean; message: string }>;
 
   /** Validates against POST /api/coupons/validate (admin-configured coupons). */
   validateCoupon: (

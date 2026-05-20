@@ -1,10 +1,11 @@
 import { apiClient, type AgmAxiosConfig } from './client';
 import { ApiRequestOptions } from './types';
 
-const buildConfig = (options?: ApiRequestOptions): AgmAxiosConfig => ({
-  headers: options?.headers ?? {},
-  ...(options?.silent401 ? { _silent401: true } : {}),
-});
+const buildConfig = (options?: ApiRequestOptions): AgmAxiosConfig =>
+  ({
+    ...(options?.headers ? { headers: options.headers } : {}),
+    ...(options?.silent401 ? { _silent401: true } : {}),
+  }) as AgmAxiosConfig;
 
 export async function apiGet<T>(url: string, options?: ApiRequestOptions): Promise<T> {
   const { data } = await apiClient.get<T>(url, buildConfig(options));
