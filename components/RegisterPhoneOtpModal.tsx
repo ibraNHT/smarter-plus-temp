@@ -92,6 +92,8 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
       setError(message);
     } finally {
       setIsRequesting(false);
+      // Mark this phone as attempted so the open-effect does not loop on API failure.
+      lastSentForRef.current = phone;
     }
   };
 
@@ -106,8 +108,10 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
       return;
     }
     if (isCreatingAccount) return;
+    if (!phone) return;
     if (hasRequestedRef.current && lastSentForRef.current === phone) return;
     hasRequestedRef.current = true;
+    lastSentForRef.current = phone;
     void requestCode('initial');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, phone, isCreatingAccount]);

@@ -319,7 +319,7 @@ export const LoginPage: React.FC = () => {
   const forgotFullPhone = () => buildFullPhone(forgotPhoneFormik.values.forgotPhoneCode, forgotPhoneFormik.values.forgotPhoneLocal);
 
   return (
-    <div className="app-screen flex flex-col md:flex-row bg-gray-50">
+    <div className="min-h-[100dvh] flex flex-col md:flex-row bg-gray-50">
 
       {/* Left Side - Image/Branding */}
       <div className="hidden md:flex md:w-1/2 bg-primary-900 items-center justify-center p-8 lg:p-12 relative overflow-hidden">
@@ -334,8 +334,15 @@ export const LoginPage: React.FC = () => {
       {/* Right Side - Login Form */}
       <div className="flex-1 flex items-center justify-center px-4 py-8 sm:px-6 sm:py-12 md:p-12">
         <div className="max-w-md w-full space-y-8">
+          {/* Mobile: compact brand (navbar is hidden on /login) */}
+          <div className="md:hidden flex flex-col items-center text-center pt-2 pb-2">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary-100 text-primary-700 mb-3">
+              <Sprout className="h-7 w-7" aria-hidden />
+            </div>
+            <p className="text-sm font-semibold text-primary-800">AgriMarket Connect</p>
+          </div>
           <div>
-            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            <h2 className="mt-2 md:mt-6 text-center text-3xl font-extrabold text-gray-900">
               {t('login.title')}
             </h2>
             <p className="mt-2 text-center text-sm text-gray-600">

@@ -75,22 +75,27 @@ const GuardedRoute: React.FC<{ children: React.ReactNode; allowedRoles: UserRole
 };
 
 /**
- * Pages where the global Footer would push content below the fold (e.g. full-height chat).
- * Listed here as exact prefixes so deep routes still match.
+ * Routes that use a full-screen auth layout (no global navbar/footer).
  */
-const FOOTER_HIDDEN_PREFIXES = ['/messages'];
+const AUTH_FULLSCREEN_PREFIXES = ['/login'];
+
+/**
+ * Pages where the global Footer would push content below the fold (e.g. full-height chat).
+ */
+const FOOTER_HIDDEN_PREFIXES = ['/messages', ...AUTH_FULLSCREEN_PREFIXES];
 
 const AppShell: React.FC = () => {
   const location = useLocation();
   const hideFooter = FOOTER_HIDDEN_PREFIXES.some((p) => location.pathname.startsWith(p));
+  const authFullscreen = AUTH_FULLSCREEN_PREFIXES.some((p) => location.pathname.startsWith(p));
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans flex flex-col overflow-x-hidden">
-      <Navbar />
-      <InstallAppBanner />
+      {!authFullscreen && <Navbar />}
+      {!authFullscreen && <InstallAppBanner />}
       <ToastContainer />
-      <SupportChatWidget />
-      <CompareWidget />
+      {!authFullscreen && <SupportChatWidget />}
+      {!authFullscreen && <CompareWidget />}
       <RoleScopeBoundary>
         <main className="flex-grow w-full min-w-0">
           <Routes>

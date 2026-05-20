@@ -122,13 +122,17 @@ export const RegisterClient: React.FC = () => {
     // Form submit only OPENS the OTP modal. The actual register API call is
     // gated behind `submitWithToken`, which is invoked by the OTP modal once
     // the user proves they control the phone (and/or email).
-    onSubmit: (values) => {
+    onSubmit: async (values, { setSubmitting }) => {
       setError('');
       setOtpRegisterError('');
-      const fullPhone = buildRegisterPhone(values.phoneCode, values.phone);
-      setPendingPhone(fullPhone);
-      setPendingEmail(values.email.trim());
-      setOtpOpen(true);
+      try {
+        const fullPhone = buildRegisterPhone(values.phoneCode, values.phone);
+        setPendingPhone(fullPhone);
+        setPendingEmail(values.email.trim());
+        setOtpOpen(true);
+      } finally {
+        setSubmitting(false);
+      }
     },
   });
 

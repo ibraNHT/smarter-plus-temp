@@ -72,6 +72,7 @@ export const RegisterProducer: React.FC = () => {
   const [pendingPhone, setPendingPhone] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
   const [otpRegisterError, setOtpRegisterError] = useState('');
+  const [locationsTouched, setLocationsTouched] = useState(false);
   const registrationTokenRef = useRef<string | null>(null);
 
   const registerProducerSchema = z.object({
@@ -109,25 +110,35 @@ export const RegisterProducer: React.FC = () => {
     },
     validate: (values) => {
       const parsed = registerProducerSchema.safeParse(values);
-      if (parsed.success) return {};
       const nextErrors: Record<string, string> = {};
-      for (const issue of parsed.error.issues) {
-        const key = String(issue.path[0] ?? '');
-        if (key && !nextErrors[key]) nextErrors[key] = issue.message;
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          const key = String(issue.path[0] ?? '');
+          if (key && !nextErrors[key]) nextErrors[key] = issue.message;
+        }
+      }
+      if (locations.length === 0) {
+        nextErrors.locations = 'Please add at least one location before continuing.';
       }
       return nextErrors;
     },
-    onSubmit: (values) => {
+    onSubmit: async (values, { setSubmitting }) => {
       setError('');
-      if (locations.length === 0) {
-        setError('Please add at least one location before continuing.');
-        return;
+      setLocationsTouched(true);
+      try {
+        if (locations.length === 0) {
+          setError('Please add at least one location before continuing.');
+          return;
+        }
+        setOtpRegisterError('');
+        const fullPhone = buildRegisterPhone(values.phoneCode, values.phone);
+        setPendingPhone(fullPhone);
+        setPendingEmail(values.email.trim());
+        setOtpOpen(true);
+      } finally {
+        // Formik 2.4+ does not reset isSubmitting for sync onSubmit — must clear explicitly.
+        setSubmitting(false);
       }
-      setOtpRegisterError('');
-      const fullPhone = buildRegisterPhone(values.phoneCode, values.phone);
-      setPendingPhone(fullPhone);
-      setPendingEmail(values.email.trim());
-      setOtpOpen(true);
     },
   });
 
@@ -294,7 +305,11 @@ export const RegisterProducer: React.FC = () => {
     const region = String(currentLoc.region ?? '').trim() || addressParts[2] || addressParts[1] || 'Unknown';
     setLocations([...locations, { ...currentLoc, address, city, region }]);
     setCurrentLoc({ region: '', city: '', address: '', lat: 0, lng: 0 });
+    setLocationsTouched(false);
   };
+
+  const showLocationsError =
+    locations.length === 0 && (locationsTouched || formik.submitCount > 0);
 
   const removeLocation = (index: number) => {
     setLocations(locations.filter((_, i) => i !== index));
@@ -653,6 +668,11 @@ export const RegisterProducer: React.FC = () => {
           ) : (
             <p className="text-sm text-red-500 italic">At least one location is required.</p>
           )}
+          {showLocationsError ? (
+            <p className="text-sm text-red-600 mt-2 font-medium">
+              Please add at least one location before continuing.
+            </p>
+          ) : null}
         </div>
 
         <div className="pt-5">
