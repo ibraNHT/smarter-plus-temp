@@ -6,6 +6,8 @@ import { useTranslation } from '../services/i18nContext';
 import { apiFetch } from '../services/apiService';
 import { API_ENDPOINTS } from '../client-api/endpoints';
 import { Sprout, Lock, Mail, X, Phone, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { AuthMobileBrand } from '../components/AuthMobileBrand';
+import { FieldError, inputErrorClasses, showFieldError } from '../components/FieldError';
 import { useFormik } from 'formik';
 import { z } from 'zod';
 
@@ -233,9 +235,9 @@ export const LoginPage: React.FC = () => {
       phoneCode: z.string().min(1),
       phone:
         method === 'phone'
-          ? z.string().trim().min(6, 'Phone number is required.')
+          ? z.string().trim().min(1, 'Enter your phone number.').min(6, 'Enter a valid phone number (at least 6 digits).')
           : z.string(),
-      password: z.string().trim().min(1, 'Password is required.'),
+      password: z.string().trim().min(1, 'Enter your password.'),
     });
   const loginFormik = useFormik<LoginFormValues>({
     initialValues: {
@@ -318,6 +320,13 @@ export const LoginPage: React.FC = () => {
 
   const forgotFullPhone = () => buildFullPhone(forgotPhoneFormik.values.forgotPhoneCode, forgotPhoneFormik.values.forgotPhoneLocal);
 
+  const handleLoginMethodChange = (method: 'email' | 'phone') => {
+    if (method === loginMethod) return;
+    setLoginMethod(method);
+    loginFormik.setErrors({});
+    setError('');
+  };
+
   return (
     <div className="min-h-[100dvh] flex flex-col md:flex-row bg-gray-50">
 
@@ -334,15 +343,9 @@ export const LoginPage: React.FC = () => {
       {/* Right Side - Login Form */}
       <div className="flex-1 flex items-center justify-center px-4 py-8 sm:px-6 sm:py-12 md:p-12">
         <div className="max-w-md w-full space-y-8">
-          {/* Mobile: compact brand (navbar is hidden on /login) */}
-          <div className="md:hidden flex flex-col items-center text-center pt-2 pb-2">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary-100 text-primary-700 mb-3">
-              <Sprout className="h-7 w-7" aria-hidden />
-            </div>
-            <p className="text-sm font-semibold text-primary-800">AgriMarket Connect</p>
-          </div>
+          <AuthMobileBrand />
           <div>
-            <h2 className="mt-2 md:mt-6 text-center text-3xl font-extrabold text-gray-900">
+            <h2 className="mt-2 md:mt-6 text-center text-2xl sm:text-3xl font-extrabold text-gray-900">
               {t('login.title')}
             </h2>
             <p className="mt-2 text-center text-sm text-gray-600">
@@ -355,100 +358,114 @@ export const LoginPage: React.FC = () => {
             <div className="flex rounded-md shadow-sm border border-gray-300 p-1 bg-gray-50 mb-4">
               <button
                 type="button"
-                onClick={() => setLoginMethod('phone')}
+                onClick={() => handleLoginMethodChange('phone')}
                 className={`flex-1 py-2 text-sm font-medium rounded-md flex justify-center items-center transition-colors ${loginMethod === 'phone' ? 'bg-white shadow text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
               >
-                <Phone className="w-4 h-4 mr-2" /> Phone Num
+                <Phone className="w-4 h-4 mr-2 shrink-0" /> Phone
               </button>
               <button
                 type="button"
-                onClick={() => setLoginMethod('email')}
+                onClick={() => handleLoginMethodChange('email')}
                 className={`flex-1 py-2 text-sm font-medium rounded-md flex justify-center items-center transition-colors ${loginMethod === 'email' ? 'bg-white shadow text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
               >
                 <Mail className="w-4 h-4 mr-2" /> Email
               </button>
             </div>
 
-            <div className="rounded-md shadow-sm -space-y-px">
+            <div className="space-y-3">
               {loginMethod === 'email' ? (
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-20">
-                    <Mail className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="email"
-                    required={loginMethod === 'email'}
-                    className="appearance-none rounded-none relative block w-full px-3 py-3 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm bg-white"
-                    placeholder={t('login.emailPlaceholder')}
-                    value={loginFormik.values.email}
-                    onChange={loginFormik.handleChange}
-                    onBlur={loginFormik.handleBlur}
-                    name="email"
-                  />
-                </div>
-              ) : (
-                <div className="relative flex">
-                  <select
-                    className="w-24 sm:w-32 appearance-none rounded-none relative block px-2 py-3 border border-r-0 border-gray-300 text-gray-600 rounded-tl-md focus:outline-none focus:ring-primary-500 sm:text-sm bg-gray-50 overflow-hidden"
-                    value={loginFormik.values.phoneCode}
-                    onChange={loginFormik.handleChange}
-                    onBlur={loginFormik.handleBlur}
-                    name="phoneCode"
-                  >
-                    {AFRICA_COUNTRY_CODES.map(c => (
-                      <option key={c.code} value={c.code}>{c.code}</option>
-                    ))}
-                  </select>
-                  <div className="relative flex-1">
+                <div>
+                  <div className="relative rounded-md shadow-sm">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Phone className="h-4 w-4 text-gray-400" />
+                      <Mail className="h-5 w-5 text-gray-400" />
                     </div>
                     <input
-                      type="tel"
-                      required={loginMethod === 'phone'}
-                      className="appearance-none rounded-none relative block w-full px-3 py-3 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-tr-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm bg-white"
-                      placeholder="612 345 678"
-                      value={loginFormik.values.phone}
+                      id="login-email"
+                      type="email"
+                      autoComplete="email"
+                      className={inputErrorClasses(
+                        showFieldError(loginFormik, 'email'),
+                        'block w-full rounded-md border border-gray-300 py-3 pl-10 pr-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-primary-500 sm:text-sm bg-white',
+                      )}
+                      placeholder={t('login.emailPlaceholder')}
+                      value={loginFormik.values.email}
                       onChange={loginFormik.handleChange}
                       onBlur={loginFormik.handleBlur}
-                      name="phone"
+                      name="email"
                     />
                   </div>
+                  <FieldError formik={loginFormik} name="email" />
+                </div>
+              ) : (
+                <div>
+                  <div className="flex rounded-md shadow-sm">
+                    <select
+                      className="w-24 sm:w-32 shrink-0 rounded-l-md border border-r-0 border-gray-300 px-2 py-3 text-gray-600 sm:text-sm bg-gray-50"
+                      value={loginFormik.values.phoneCode}
+                      onChange={loginFormik.handleChange}
+                      onBlur={loginFormik.handleBlur}
+                      name="phoneCode"
+                      aria-label="Country code"
+                    >
+                      {AFRICA_COUNTRY_CODES.map(c => (
+                        <option key={c.code} value={c.code}>{c.code}</option>
+                      ))}
+                    </select>
+                    <div className="relative flex-1 min-w-0">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Phone className="h-4 w-4 text-gray-400" />
+                      </div>
+                      <input
+                        id="login-phone"
+                        type="tel"
+                        autoComplete="tel"
+                        className={inputErrorClasses(
+                          showFieldError(loginFormik, 'phone'),
+                          'block w-full rounded-r-md border border-gray-300 py-3 pl-10 pr-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-primary-500 sm:text-sm bg-white',
+                        )}
+                        placeholder="612 345 678"
+                        value={loginFormik.values.phone}
+                        onChange={loginFormik.handleChange}
+                        onBlur={loginFormik.handleBlur}
+                        name="phone"
+                      />
+                    </div>
+                  </div>
+                  <FieldError formik={loginFormik} name="phone" />
                 </div>
               )}
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-20">
-                  <Lock className="h-5 w-5 text-gray-400" />
+
+              <div>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    className={inputErrorClasses(
+                      showFieldError(loginFormik, 'password'),
+                      'block w-full rounded-md border border-gray-300 py-3 pl-10 pr-10 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-primary-500 sm:text-sm bg-white',
+                    )}
+                    placeholder={t('login.passwordPlaceholder')}
+                    value={loginFormik.values.password}
+                    onChange={loginFormik.handleChange}
+                    onBlur={loginFormik.handleBlur}
+                    name="password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute inset-y-0 right-2 my-auto inline-flex h-8 w-8 items-center justify-center rounded text-gray-500 hover:text-gray-700 focus:outline-none"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
                 </div>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  className="appearance-none rounded-none relative block w-full px-3 py-3 pl-10 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm bg-white"
-                  placeholder={t('login.passwordPlaceholder')}
-                  value={loginFormik.values.password}
-                  onChange={loginFormik.handleChange}
-                  onBlur={loginFormik.handleBlur}
-                  name="password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute inset-y-0 right-2 my-auto inline-flex h-8 w-8 items-center justify-center rounded text-gray-500 hover:text-gray-700 z-30 focus:outline-none"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
+                <FieldError formik={loginFormik} name="password" />
               </div>
             </div>
-            {loginMethod === 'email' && loginFormik.touched.email && loginFormik.errors.email && (
-              <div className="text-xs text-red-600">{loginFormik.errors.email}</div>
-            )}
-            {loginMethod === 'phone' && loginFormik.touched.phone && loginFormik.errors.phone && (
-              <div className="text-xs text-red-600">{loginFormik.errors.phone}</div>
-            )}
-            {loginFormik.touched.password && loginFormik.errors.password && (
-              <div className="text-xs text-red-600">{loginFormik.errors.password}</div>
-            )}
 
             {passwordResetBanner && (
               <div className="text-green-700 text-sm text-center font-medium bg-green-50 p-2 rounded border border-green-100">

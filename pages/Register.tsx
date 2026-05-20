@@ -27,7 +27,7 @@ export const Register: React.FC = () => {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-2xl">
         <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2">
           {/* Producer Card */}
-          <Link to={producerLink} className="group relative rounded-lg bg-white p-6 shadow-md hover:shadow-lg transition-shadow cursor-pointer border border-gray-200 hover:border-primary-500 flex flex-col items-center text-center">
+          <Link to={producerLink} className="group relative rounded-lg bg-white p-6 shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer border border-gray-200 hover:border-primary-500 flex flex-col items-center text-center agm-card-lift">
             <div className="h-16 w-16 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center mb-4 group-hover:bg-primary-600 group-hover:text-white transition-colors">
               <Tractor className="h-8 w-8" />
             </div>
@@ -41,7 +41,7 @@ export const Register: React.FC = () => {
           </Link>
 
           {/* Client Card */}
-          <Link to={clientLink} className="group relative rounded-lg bg-white p-6 shadow-md hover:shadow-lg transition-shadow cursor-pointer border border-gray-200 hover:border-blue-500 flex flex-col items-center text-center">
+          <Link to={clientLink} className="group relative rounded-lg bg-white p-6 shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer border border-gray-200 hover:border-blue-500 flex flex-col items-center text-center agm-card-lift">
              <div className="h-16 w-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors">
               <ShoppingBag className="h-8 w-8" />
             </div>

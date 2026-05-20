@@ -360,6 +360,7 @@ interface StoreContextType {
     newPass: string,
     otpToken?: string,
   ) => Promise<{ success: boolean; message: string }>;
+  verifyCurrentPassword: (currentPass: string) => Promise<{ success: boolean; message: string }>;
 
   /** Validates against POST /api/coupons/validate (admin-configured coupons). */
   validateCoupon: (
@@ -1939,6 +1940,23 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
+  const verifyCurrentPassword = async (
+    currentPass: string,
+  ): Promise<{ success: boolean; message: string }> => {
+    if (!user) return { success: false, message: 'User not logged in.' };
+    try {
+      await apiFetch<{ success: true }>(API_ENDPOINTS.auth.verifyCurrentPassword, {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword: currentPass }),
+      });
+      return { success: true, message: '' };
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Current password is incorrect.';
+      return { success: false, message };
+    }
+  };
+
   const changePassword = async (
     currentPass: string,
     newPass: string,
@@ -1958,8 +1976,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         headers: { 'X-OTP-Verification': otpToken },
       });
       return { success: true, message: 'Password updated successfully!' };
-    } catch (err: any) {
-      return { success: false, message: err.message || 'Failed to change password.' };
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to change password.';
+      return { success: false, message };
     }
   };
 
@@ -3521,6 +3541,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     validateCoupon,
     addPickupPoint, deletePickupPoint,
     changePassword,
+    verifyCurrentPassword,
     myReferrals,
     refreshMyReferrals,
     isInitialCatalogLoading,

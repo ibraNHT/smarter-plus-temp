@@ -228,7 +228,7 @@ export const ProducerMarket: React.FC = () => {
     return (
       <div
         key={offer.id}
-        className={`group relative w-full min-w-0 bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 border ${isLocal ? 'border-green-300 ring-2 ring-green-50' : 'border-gray-100'} h-full flex flex-col ${inCarousel ? 'md:min-w-[280px] md:w-[300px] md:flex-shrink-0' : ''}`}
+        className={`group relative w-full min-w-0 bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 border agm-card-lift ${isLocal ? 'border-green-300 ring-2 ring-green-50' : 'border-gray-100'} h-full flex flex-col ${inCarousel ? 'md:min-w-[280px] md:w-[300px] md:flex-shrink-0' : ''}`}
       >
         {/* Action Buttons Overlay */}
         <div className="absolute top-2 right-2 z-10 flex flex-col gap-2">

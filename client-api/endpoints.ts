@@ -9,6 +9,7 @@ export const API_ENDPOINTS = {
     registerVerifyPhoneOtp: "/api/auth/register/verify-phone-otp",
     verifyEmail: "/api/auth/verify-email",
     changePassword: "/api/auth/change-password",
+    verifyCurrentPassword: "/api/auth/verify-current-password",
     forgotPassword: "/api/auth/forgot-password",
     forgotPasswordVerifyOtp: "/api/auth/forgot-password/verify-otp",
     resetPassword: "/api/auth/reset-password",

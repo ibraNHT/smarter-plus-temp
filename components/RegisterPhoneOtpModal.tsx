@@ -165,11 +165,11 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
     >
       <div className="flex min-h-screen items-end sm:items-center justify-center p-2 sm:p-4">
         <div
-          className="fixed inset-0 bg-black/50"
+          className="fixed inset-0 bg-black/50 agm-modal-backdrop-in"
           onClick={modalLocked ? undefined : onCancel}
           aria-hidden="true"
         />
-        <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md p-5 sm:p-7 max-h-[95vh] overflow-y-auto">
+        <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md p-5 sm:p-7 max-h-[95vh] overflow-y-auto agm-modal-panel-in">
           {!isCreatingAccount && (
             <button
               type="button"

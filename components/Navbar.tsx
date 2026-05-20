@@ -179,7 +179,7 @@ export const Navbar: React.FC = () => {
         <div className="flex justify-between items-center h-16 gap-2">
           <div className="flex items-center min-w-0">
             <Link to={getHomeLink()} className="flex-shrink-0 flex items-center cursor-pointer min-w-0">
-              <Sprout className="h-7 w-7 sm:h-8 sm:w-8 text-primary-600 flex-shrink-0" />
+              <Sprout className="h-7 w-7 sm:h-8 sm:w-8 text-primary-600 flex-shrink-0 agm-logo-hover" />
               <span className="ml-2 text-base sm:text-lg lg:text-xl font-bold text-gray-900 truncate">
                 <span className="sm:hidden">AgriMarket</span>
                 <span className="hidden sm:inline">AgriMarket Connect</span>
@@ -215,7 +215,7 @@ export const Navbar: React.FC = () => {
 
             {/* Shopping Cart Icon - Visible to Clients/Producers (Hide for Guests until they add something, or keep visible to prompt login) */}
             {(marketplaceVisible(user)) && (
-              <Link to="/cart" className="relative p-2 text-gray-400 hover:text-primary-600 transition-colors" aria-label="Shopping cart">
+              <Link to="/cart" className="relative p-2 text-gray-400 hover:text-primary-600 transition-colors agm-nav-icon" aria-label="Shopping cart">
                 <ShoppingCart className="h-6 w-6" />
                 {cartItemCount > 0 && (
                   <span className="absolute top-0 right-0 inline-flex items-center justify-center min-h-[1.125rem] min-w-[1.125rem] px-1.5 text-[10px] font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-600 rounded-full">
@@ -230,7 +230,7 @@ export const Navbar: React.FC = () => {
                 {/* Messages Link */}
                 <Link
                   to="/messages"
-                  className="relative p-2 text-gray-600 hover:text-primary-600 focus:outline-none"
+                  className="relative p-2 text-gray-600 hover:text-primary-600 focus:outline-none agm-nav-icon"
                   title={unreadChatTotal > 0 ? `${t('nav.messages')} (${unreadChatTotal})` : t('nav.messages')}
                   aria-label={
                     unreadChatTotal > 0
@@ -250,7 +250,7 @@ export const Navbar: React.FC = () => {
                 <div className="relative" ref={notifRef}>
                   <button
                     onClick={toggleNotifications}
-                    className="relative p-2 text-gray-600 hover:text-primary-600 focus:outline-none"
+                    className="relative p-2 text-gray-600 hover:text-primary-600 focus:outline-none agm-nav-icon"
                   >
                     <Bell className="h-6 w-6" />
                     {unreadCount > 0 && (
@@ -261,7 +261,7 @@ export const Navbar: React.FC = () => {
                   </button>
 
                   {showNotifications && (
-                    <div className="absolute right-0 mt-2 w-[min(20rem,calc(100vw-1.5rem))] bg-white rounded-md shadow-lg overflow-hidden z-50 border border-gray-200">
+                    <div className="absolute right-0 mt-2 w-[min(20rem,calc(100vw-1.5rem))] bg-white rounded-md shadow-lg overflow-hidden z-50 border border-gray-200 agm-dropdown-in">
                       <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                         <h3 className="text-sm font-semibold text-gray-700">{t('nav.notifications')}</h3>
                         <div className="flex items-center gap-2">
@@ -339,16 +339,16 @@ export const Navbar: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setProfileMenuOpen((o) => !o)}
-                      className="flex items-center text-gray-600 hover:text-primary-600 p-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      className="flex items-center text-gray-600 hover:text-primary-600 p-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 agm-nav-icon"
                       aria-expanded={profileMenuOpen}
                       aria-haspopup="true"
                       title={t('nav.profile')}
                     >
                       <User className="h-6 w-6" />
-                      <ChevronDown className="h-4 w-4 ml-0.5 hidden sm:inline opacity-70" />
+                      <ChevronDown className={`h-4 w-4 ml-0.5 hidden sm:inline opacity-70 agm-chevron${profileMenuOpen ? ' agm-chevron--open' : ''}`} />
                     </button>
                     {profileMenuOpen && (
-                      <div className="absolute right-0 mt-2 w-[min(14rem,calc(100vw-1.5rem))] bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
+                      <div className="absolute right-0 mt-2 w-[min(14rem,calc(100vw-1.5rem))] bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50 agm-dropdown-in">
                         <div className="px-4 py-2 border-b border-gray-100 sm:hidden">
                           <p
                             className="text-sm font-medium text-gray-900 truncate min-w-0"
@@ -401,7 +401,7 @@ export const Navbar: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setLogoutConfirmOpen(true)}
-                  className="hidden sm:inline-flex p-2 text-gray-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50"
+                  className="hidden sm:inline-flex p-2 text-gray-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50 agm-nav-icon"
                   title={t('nav.logout')}
                   aria-label={t('nav.logout')}
                 >
@@ -413,7 +413,7 @@ export const Navbar: React.FC = () => {
                 <Link to="/login" className="text-gray-600 hover:text-gray-900 px-2 sm:px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap">
                   {t('nav.login')}
                 </Link>
-                <Link to="/register" className="bg-primary-600 text-white hover:bg-primary-700 px-3 sm:px-4 py-2 rounded-md text-sm font-medium shadow-sm whitespace-nowrap">
+                <Link to="/register" className="bg-primary-600 text-white hover:bg-primary-700 px-3 sm:px-4 py-2 rounded-md text-sm font-medium shadow-sm whitespace-nowrap agm-btn-primary">
                   {t('nav.signup')}
                 </Link>
               </div>
@@ -434,7 +434,7 @@ export const Navbar: React.FC = () => {
 
         {/* Mobile menu drawer (collapses below header) */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 pt-2 pb-3 max-h-[calc(100dvh-4rem)] overflow-y-auto">
+          <div className="md:hidden border-t border-gray-200 pt-2 pb-3 max-h-[calc(100dvh-4rem)] overflow-y-auto agm-mobile-menu-in">
             <div className="flex flex-col space-y-1">
               {marketplaceVisible(user) && (
                 <>

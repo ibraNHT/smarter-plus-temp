@@ -16,9 +16,18 @@ interface ChangePasswordModalProps {
 
 type Step = 'password' | 'otp';
 
+const passwordFields = {
+  currentPassword: true,
+  newPassword: true,
+  confirmPassword: true,
+} as const;
+
+const inputErrorClass = (hasError: boolean) =>
+  hasError ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300';
+
 export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen, onClose }) => {
   const { t } = useTranslation();
-  const { changePassword, requestOtp, verifyOtp } = useStore();
+  const { changePassword, verifyCurrentPassword, requestOtp, verifyOtp } = useStore();
 
   const [step, setStep] = useState<Step>('password');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -60,6 +69,8 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
       newPassword: '',
       confirmPassword: '',
     },
+    validateOnChange: true,
+    validateOnBlur: true,
     validate: (values) => {
       const parsed = schema.safeParse(values);
       if (parsed.success) return {};
@@ -75,6 +86,14 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
       setSuccess('');
       setLoading(true);
       try {
+        const verifyRes = await verifyCurrentPassword(values.currentPassword);
+        if (!verifyRes.success) {
+          const msg = verifyRes.message || 'Current password is incorrect.';
+          formik.setFieldError('currentPassword', msg);
+          setError(msg);
+          return;
+        }
+
         const otpRes = await requestOtp('PASSWORD_CHANGE');
         if (!otpRes.success) {
           setError(otpRes.message || 'Could not send verification code.');
@@ -83,12 +102,27 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
         setPendingPasswords({ current: values.currentPassword, next: values.newPassword });
         setStep('otp');
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : 'Could not send verification code.');
+        setError(e instanceof Error ? e.message : 'Could not continue. Please try again.');
       } finally {
         setLoading(false);
       }
     },
   });
+
+  const handlePasswordStepSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    void formik.setTouched(passwordFields, true);
+    void formik.validateForm().then((errors) => {
+      if (Object.keys(errors).length > 0) {
+        setError('Please fix the errors below before continuing.');
+        return;
+      }
+      void formik.submitForm();
+    });
+  };
+
+  const isWrongCurrentPasswordMessage = (message: string) =>
+    /current password/i.test(message) || /incorrect/i.test(message);
 
   const handleVerifyAndChange = async () => {
     if (!pendingPasswords) return;
@@ -118,6 +152,13 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
         }, 2000);
       } else {
         setError(result.message);
+        if (isWrongCurrentPasswordMessage(result.message)) {
+          setStep('password');
+          setOtpCode('');
+          setPendingPasswords(null);
+          void formik.setFieldError('currentPassword', result.message);
+          void formik.setTouched({ currentPassword: true }, false);
+        }
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Verification failed.');
@@ -136,9 +177,9 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
       <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={handleClose} />
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity agm-modal-backdrop-in" onClick={handleClose} />
 
-        <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-md sm:p-6 max-h-[90vh] overflow-y-auto">
+        <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-md sm:p-6 max-h-[90vh] overflow-y-auto agm-modal-panel-in">
           <div className="hidden sm:block absolute top-0 right-0 pt-4 pr-4">
             <button type="button" className="bg-white rounded-md text-gray-400 hover:text-gray-500" onClick={handleClose}>
               <span className="sr-only">Close</span>
@@ -165,16 +206,19 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
               )}
 
               {step === 'password' ? (
-                <form onSubmit={formik.handleSubmit} className="mt-4 space-y-4">
+                <form onSubmit={handlePasswordStepSubmit} className="mt-4 space-y-4" noValidate>
                   <p className="text-sm text-gray-500">
-                    A verification code will be sent to your phone and email before your password is updated.
+                    We will verify your current password first, then send a code to your phone and email.
                   </p>
                   <div className="relative">
                     <label className="block text-xs font-bold text-gray-700 mb-1">Current Password</label>
                     <input
                       name="currentPassword"
                       type={showCurrentPassword ? 'text' : 'password'}
-                      className="w-full border border-gray-300 rounded-md p-2 pr-10 text-sm"
+                      autoComplete="current-password"
+                      className={`w-full border rounded-md p-2 pr-10 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${inputErrorClass(
+                        Boolean(formik.touched.currentPassword && formik.errors.currentPassword),
+                      )}`}
                       value={formik.values.currentPassword}
                       onChange={formik.handleChange}
                       onBlur={formik.handleBlur}
@@ -191,7 +235,10 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                     <input
                       name="newPassword"
                       type={showNewPassword ? 'text' : 'password'}
-                      className="w-full border border-gray-300 rounded-md p-2 pr-10 text-sm"
+                      autoComplete="new-password"
+                      className={`w-full border rounded-md p-2 pr-10 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${inputErrorClass(
+                        Boolean(formik.touched.newPassword && formik.errors.newPassword),
+                      )}`}
                       value={formik.values.newPassword}
                       onChange={formik.handleChange}
                       onBlur={formik.handleBlur}
@@ -208,7 +255,10 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                     <input
                       name="confirmPassword"
                       type={showConfirmPassword ? 'text' : 'password'}
-                      className="w-full border border-gray-300 rounded-md p-2 pr-10 text-sm"
+                      autoComplete="new-password"
+                      className={`w-full border rounded-md p-2 pr-10 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${inputErrorClass(
+                        Boolean(formik.touched.confirmPassword && formik.errors.confirmPassword),
+                      )}`}
                       value={formik.values.confirmPassword}
                       onChange={formik.handleChange}
                       onBlur={formik.handleBlur}
@@ -224,8 +274,8 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                     <button type="button" onClick={handleClose} className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-md text-sm">
                       {t('form.cancel')}
                     </button>
-                    <button type="submit" disabled={loading} className="w-full sm:w-auto px-4 py-2 bg-primary-600 text-white rounded-md text-sm disabled:opacity-50">
-                      {loading ? 'Sending code…' : 'Continue'}
+                    <button type="submit" disabled={loading} className="w-full sm:w-auto px-4 py-2 bg-primary-600 text-white rounded-md text-sm disabled:opacity-50 agm-btn-primary">
+                      {loading ? 'Checking…' : 'Continue'}
                     </button>
                   </div>
                 </form>
@@ -251,6 +301,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                         setStep('password');
                         setOtpCode('');
                         setError('');
+                        setPendingPasswords(null);
                       }}
                       className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-md text-sm"
                     >
@@ -260,7 +311,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                       type="button"
                       disabled={loading || otpCode.length !== 6}
                       onClick={() => void handleVerifyAndChange()}
-                      className="w-full sm:w-auto px-4 py-2 bg-primary-600 text-white rounded-md text-sm disabled:opacity-50"
+                      className="w-full sm:w-auto px-4 py-2 bg-primary-600 text-white rounded-md text-sm disabled:opacity-50 agm-btn-primary"
                     >
                       {loading ? 'Updating…' : 'Change Password'}
                     </button>

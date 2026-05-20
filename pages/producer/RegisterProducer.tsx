@@ -9,6 +9,13 @@ import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/
 import { useFormik } from 'formik';
 import { z } from 'zod';
 import { RegisterPhoneOtpModal } from '../../components/RegisterPhoneOtpModal';
+import {
+  AuthOnboardingLayout,
+  AuthFormActions,
+  authActionButtonPrimary,
+  authActionButtonSecondary,
+} from '../../components/AuthOnboardingLayout';
+import { FieldError, inputErrorClasses, showFieldError } from '../../components/FieldError';
 import { buildRegisterPhone } from '../../utils/registerPhone';
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
 const PASSWORD_RULE_MESSAGE = 'Password must be at least 4 characters with 1 letter, 1 number, and 1 special character.';
@@ -79,10 +86,10 @@ export const RegisterProducer: React.FC = () => {
     type: z.enum(['BUSINESS', 'INDIVIDUAL']),
     name: z.string().trim().min(2, 'Farm/producer name is required.'),
     email: z.string().trim().email('Valid email is required.'),
-    password: z.string().regex(PASSWORD_RULE, PASSWORD_RULE_MESSAGE),
+    password: z.string().min(1, 'Enter your password.').regex(PASSWORD_RULE, PASSWORD_RULE_MESSAGE),
     confirmPassword: z.string().min(1, 'Confirm your password.'),
     phoneCode: z.string().min(1),
-    phone: z.string().trim().min(6, 'Phone number is required.'),
+    phone: z.string().trim().min(1, 'Enter your phone number.').min(6, 'Enter a valid phone number (at least 6 digits).'),
     description: z.string().trim().min(10, 'Description should be at least 10 characters.'),
     productionTypes: z.array(z.string()),
     taxIdentificationNumber: z.string(),
@@ -126,10 +133,8 @@ export const RegisterProducer: React.FC = () => {
       setError('');
       setLocationsTouched(true);
       try {
-        if (locations.length === 0) {
-          setError('Please add at least one location before continuing.');
-          return;
-        }
+        // validate() already blocks submit when locations is empty; keep as safety net.
+        if (locations.length === 0) return;
         setOtpRegisterError('');
         const fullPhone = buildRegisterPhone(values.phoneCode, values.phone);
         setPendingPhone(fullPhone);
@@ -324,26 +329,21 @@ export const RegisterProducer: React.FC = () => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto py-6 sm:py-12 px-4 sm:px-6 lg:px-8">
-      <div className="md:flex md:items-center md:justify-between mb-8">
-        <div className="flex-1 min-w-0">
-          <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
-            {t('register.producer.title')}
-          </h2>
-          <p className="mt-1 text-sm text-gray-500">
-            {t('register.producer.desc')}
-          </p>
-        </div>
-      </div>
-
-      <form onSubmit={formik.handleSubmit} className="space-y-6 sm:space-y-8 bg-white p-4 sm:p-6 md:p-8 shadow sm:rounded-lg">
+    <AuthOnboardingLayout
+      maxWidth="3xl"
+      reserveStickyActions
+      backTo={{ href: refCode ? `/register?ref=${refCode}` : '/register', label: t('register.backToChoice') }}
+      title={t('register.producer.title')}
+      subtitle={t('register.producer.desc')}
+    >
+      <form onSubmit={formik.handleSubmit} className="space-y-6 sm:space-y-8 bg-white p-4 sm:p-6 md:p-8 shadow sm:rounded-xl border border-gray-100">
 
         {/* Basic Info */}
         <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
 
           <div className="sm:col-span-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">{t('profile.type')}</label>
-            <div className="flex space-x-4">
+            <div className="flex  gap-3 flex-row sm:gap-6">
               <label className="flex items-center cursor-pointer">
                 <input
                   type="radio"
@@ -378,7 +378,7 @@ export const RegisterProducer: React.FC = () => {
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
               />
-              {formik.touched.name && formik.errors.name ? <p className="text-xs text-red-600 mt-1">{formik.errors.name}</p> : null}
+              <FieldError formik={formik} name="name" />
             </div>
           </div>
 
@@ -402,7 +402,7 @@ export const RegisterProducer: React.FC = () => {
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}
             />
-            {formik.touched.taxIdentificationNumber && formik.errors.taxIdentificationNumber ? <p className="text-xs text-red-600 mt-1">{formik.errors.taxIdentificationNumber}</p> : null}
+            <FieldError formik={formik} name="taxIdentificationNumber" />
           </div>
 
           <div className="sm:col-span-3">
@@ -415,7 +415,7 @@ export const RegisterProducer: React.FC = () => {
                 onBlur={formik.handleBlur}
               />
             </div>
-            {formik.touched.email && formik.errors.email ? <p className="text-xs text-red-600 mt-1">{formik.errors.email}</p> : null}
+            <FieldError formik={formik} name="email" />
           </div>
 
           <div className="sm:col-span-3">
@@ -437,7 +437,10 @@ export const RegisterProducer: React.FC = () => {
                   <Phone className="h-4 w-4 text-gray-400" />
                 </div>
                 <input type="tel" name="phone" required
-                  className="focus:ring-primary-500 focus:border-primary-500 flex-1 block w-full pl-10 rounded-none rounded-r-md sm:text-sm border-gray-300 p-2 border bg-white text-gray-900"
+                  className={inputErrorClasses(
+                    showFieldError(formik, 'phone'),
+                    'focus:ring-primary-500 focus:border-primary-500 flex-1 block w-full pl-10 rounded-none rounded-r-md sm:text-sm border-gray-300 p-2 border bg-white text-gray-900',
+                  )}
                   value={formik.values.phone}
                   onChange={formik.handleChange}
                   onBlur={formik.handleBlur}
@@ -445,7 +448,7 @@ export const RegisterProducer: React.FC = () => {
                 />
               </div>
             </div>
-            {formik.touched.phone && formik.errors.phone ? <p className="text-xs text-red-600 mt-1">{formik.errors.phone}</p> : null}
+            <FieldError formik={formik} name="phone" />
           </div>
 
           {/* Password Section */}
@@ -461,7 +464,10 @@ export const RegisterProducer: React.FC = () => {
                     type={showPassword ? 'text' : 'password'}
                     required
                     minLength={4}
-                    className="block w-full border border-gray-300 rounded-md shadow-sm p-2 pr-10 focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white text-gray-900"
+                    className={inputErrorClasses(
+                      showFieldError(formik, 'password'),
+                      'block w-full border border-gray-300 rounded-md shadow-sm p-2 pr-10 focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white text-gray-900',
+                    )}
                     name="password"
                     value={formik.values.password}
                     onChange={formik.handleChange}
@@ -477,7 +483,7 @@ export const RegisterProducer: React.FC = () => {
                   </button>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">Min 4 chars: 1 letter, 1 number, 1 special</p>
-                {formik.touched.password && formik.errors.password ? <p className="text-xs text-red-600 mt-1">{formik.errors.password}</p> : null}
+                <FieldError formik={formik} name="password" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Confirm Password</label>
@@ -500,10 +506,9 @@ export const RegisterProducer: React.FC = () => {
                     {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                {formik.touched.confirmPassword && formik.errors.confirmPassword ? <p className="text-xs text-red-600 mt-1">{formik.errors.confirmPassword}</p> : null}
+                <FieldError formik={formik} name="confirmPassword" />
               </div>
             </div>
-            {error && <p className="text-sm text-red-600 mt-2 font-medium">{error}</p>}
           </div>
 
           <div className="sm:col-span-6 border-t border-gray-200 pt-4">
@@ -516,7 +521,7 @@ export const RegisterProducer: React.FC = () => {
                 onBlur={formik.handleBlur}
               />
             </div>
-            {formik.touched.description && formik.errors.description ? <p className="text-xs text-red-600 mt-1">{formik.errors.description}</p> : null}
+            <FieldError formik={formik} name="description" />
           </div>
         </div>
 
@@ -572,11 +577,11 @@ export const RegisterProducer: React.FC = () => {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="sm:col-span-3">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
                 <input
                   type="text"
                   placeholder="Street, area, or full address"
-                  className="flex-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 sm:text-sm bg-white text-gray-900"
+                  className="flex-1 min-w-0 block w-full border border-gray-300 rounded-md shadow-sm p-2.5 sm:text-sm bg-white text-gray-900"
                   value={currentLoc.address}
                   onChange={e => {
                     setCurrentLoc({ ...currentLoc, address: e.target.value });
@@ -591,11 +596,12 @@ export const RegisterProducer: React.FC = () => {
                   type="button"
                   onClick={addLocation}
                   disabled={!String(currentLoc.address ?? '').trim()}
-                  className="inline-flex items-center p-2 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50 min-h-[44px] sm:shrink-0"
                 >
                   <Plus className="h-5 w-5" />
+                  <span className="sm:hidden text-sm font-medium">Add location</span>
                 </button>
-              </div>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
@@ -654,9 +660,9 @@ export const RegisterProducer: React.FC = () => {
           {locations.length > 0 ? (
             <ul className="divide-y divide-gray-200 border border-gray-200 rounded-md bg-white">
               {locations.map((loc, idx) => (
-                <li key={idx} className="px-4 py-3 flex justify-between items-center">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{loc.address}</p>
+                <li key={idx} className="px-4 py-3 flex justify-between items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-900 break-words">{loc.address}</p>
                     <p className="text-xs text-gray-500">{loc.city}, {loc.region}</p>
                   </div>
                   <button type="button" onClick={() => removeLocation(idx)} className="text-gray-400 hover:text-red-500">
@@ -675,21 +681,25 @@ export const RegisterProducer: React.FC = () => {
           ) : null}
         </div>
 
-        <div className="pt-5">
-          <div className="flex justify-end">
-            <button type="button" onClick={() => navigate('/')} className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none">
-              {t('form.cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={formik.isSubmitting || isSubmitting || otpOpen}
-              className="ml-3 inline-flex justify-center items-center gap-2 py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-              {isSubmitting ? 'Creating…' : formik.isSubmitting ? t('form.processing') : t('register.producer.btn')}
-            </button>
-          </div>
-        </div>
+        {error ? (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2" role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        <AuthFormActions>
+          <button type="button" onClick={() => navigate('/')} className={authActionButtonSecondary}>
+            {t('form.cancel')}
+          </button>
+          <button
+            type="submit"
+            disabled={formik.isSubmitting || isSubmitting || otpOpen}
+            className={authActionButtonPrimary}
+          >
+            {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+            {isSubmitting ? 'Creating…' : formik.isSubmitting ? t('form.processing') : t('register.producer.btn')}
+          </button>
+        </AuthFormActions>
       </form>
 
       <RegisterPhoneOtpModal
@@ -711,6 +721,6 @@ export const RegisterProducer: React.FC = () => {
           registrationTokenRef.current = null;
         }}
       />
-    </div>
+    </AuthOnboardingLayout>
   );
 };

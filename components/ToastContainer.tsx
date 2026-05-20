@@ -153,8 +153,7 @@ export const ToastContainer: React.FC = () => {
         return (
           <div
             key={toast.id}
-            className={`pointer-events-auto transform transition-all duration-300 ease-in-out translate-y-0 opacity-100
-                        flex items-start p-4 rounded-lg shadow-lg border ${bgColor} ${borderColor}`}
+            className={`pointer-events-auto agm-toast-in flex items-start p-4 rounded-lg shadow-lg border ${bgColor} ${borderColor}`}
           >
             <div className="flex-shrink-0">
               {icon}

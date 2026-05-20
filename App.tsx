@@ -77,7 +77,7 @@ const GuardedRoute: React.FC<{ children: React.ReactNode; allowedRoles: UserRole
 /**
  * Routes that use a full-screen auth layout (no global navbar/footer).
  */
-const AUTH_FULLSCREEN_PREFIXES = ['/login'];
+const AUTH_FULLSCREEN_PREFIXES = ['/login', '/register', '/verify-email'];
 
 /**
  * Pages where the global Footer would push content below the fold (e.g. full-height chat).
@@ -98,6 +98,7 @@ const AppShell: React.FC = () => {
       {!authFullscreen && <CompareWidget />}
       <RoleScopeBoundary>
         <main className="flex-grow w-full min-w-0">
+          <div key={location.key} className="agm-page-in">
           <Routes>
             <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
             <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
@@ -143,6 +144,7 @@ const AppShell: React.FC = () => {
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </div>
         </main>
       </RoleScopeBoundary>
       {!hideFooter && <Footer />}

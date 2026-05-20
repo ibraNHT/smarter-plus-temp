@@ -215,7 +215,7 @@ export const AtiStore: React.FC = () => {
                                     <Layers className="h-4 w-4" />
                                   </button>
                                 </div>
-                                <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-200 rounded-lg flex flex-col overflow-hidden hover:shadow-lg transition-all h-full">
+                                <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-200 rounded-lg flex flex-col overflow-hidden hover:shadow-lg transition-all h-full agm-card-lift">
                                   <div className="bg-gray-100 h-40 relative">
                                     <img src={offer.imageUrl} alt={offer.title} className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`} />
                                     <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">ATI Choice</div>
@@ -271,7 +271,7 @@ export const AtiStore: React.FC = () => {
                                   </button>
                                 </div>
 
-                                <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-200 rounded-lg flex flex-col overflow-hidden hover:shadow-lg transition-all h-full">
+                                <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-200 rounded-lg flex flex-col overflow-hidden hover:shadow-lg transition-all h-full agm-card-lift">
                                   <div className="aspect-w-1 aspect-h-1 bg-gray-100 h-36 relative">
                                     <img
                                       src={offer.imageUrl}

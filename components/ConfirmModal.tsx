@@ -95,11 +95,11 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
         <button
           type="button"
           aria-label="Close"
-          className="fixed inset-0 bg-gray-900/50 transition-opacity"
+          className="fixed inset-0 bg-gray-900/50 transition-opacity agm-modal-backdrop-in"
           disabled={isBusy}
           onClick={() => !isBusy && onClose()}
         />
-        <div className="relative z-10 w-full sm:max-w-md bg-white rounded-t-lg sm:rounded-lg shadow-xl transform transition-all sm:my-8 max-h-[90vh] overflow-y-auto">
+        <div className="relative z-10 w-full sm:max-w-md bg-white rounded-t-lg sm:rounded-lg shadow-xl transform transition-all sm:my-8 max-h-[90vh] overflow-y-auto agm-modal-panel-in">
           <div className="p-5 sm:p-6">
             <div className="flex items-start gap-4">
               <div className={`flex-shrink-0 flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-full ${styles.iconWrap}`}>

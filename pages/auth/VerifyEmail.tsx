@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { Mail, Lock } from 'lucide-react';
+import { AuthOnboardingLayout } from '../../components/AuthOnboardingLayout';
 
 export const VerifyEmail: React.FC = () => {
   const { pendingRegistration, verifyEmail } = useStore();
@@ -15,7 +16,6 @@ export const VerifyEmail: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   if (!pendingRegistration) {
-    // Redirect if no pending registration found
     setTimeout(() => navigate('/register'), 100);
     return null;
   }
@@ -37,24 +37,24 @@ export const VerifyEmail: React.FC = () => {
   };
 
   return (
-    <div className="app-screen flex items-center justify-center bg-gray-50 py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-6 sm:space-y-8 bg-white p-5 sm:p-8 rounded-lg shadow-lg">
+    <AuthOnboardingLayout centerContent maxWidth="md">
+      <div className="w-full space-y-6 sm:space-y-8 bg-white p-5 sm:p-8 rounded-xl shadow-lg border border-gray-100">
         <div className="text-center">
           <div className="mx-auto h-14 w-14 sm:h-16 sm:w-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
             <Mail className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600" />
           </div>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
+          <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900">
             {t('verify.title')}
           </h2>
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="mt-2 text-sm text-gray-600 leading-relaxed">
             {t('verify.desc')}
           </p>
-          <p className="mt-2 text-xs font-mono bg-gray-100 p-2 rounded inline-block text-gray-500 break-all max-w-full">
+          <p className="mt-3 text-xs font-mono bg-gray-100 px-3 py-2 rounded-lg inline-block text-gray-500 break-all max-w-full">
             Sent to: {pendingRegistration.email}
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="space-y-6" onSubmit={handleSubmit}>
           <div>
             <label htmlFor="code" className="block text-sm font-medium text-gray-700 text-center mb-2">
               {t('verify.label')}
@@ -68,33 +68,31 @@ export const VerifyEmail: React.FC = () => {
                 name="code"
                 id="code"
                 required
-                className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-lg border-gray-300 rounded-md p-3 text-center tracking-widest bg-white text-gray-900"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 text-lg border-gray-300 rounded-md p-3 text-center tracking-[0.35em] bg-white text-gray-900"
                 placeholder="123456"
                 maxLength={6}
                 value={code}
-                onChange={(e) => { setCode(e.target.value); setError(''); }}
+                onChange={(e) => { setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }}
               />
             </div>
             {error && <p className="mt-2 text-sm text-red-600 text-center">{error}</p>}
           </div>
 
-          <div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 shadow-md transition-colors disabled:opacity-60"
-            >
-              {isLoading ? 'Verifying…' : t('verify.submit')}
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={isLoading || code.length < 6}
+            className="w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 shadow-md transition-colors disabled:opacity-60 min-h-[44px]"
+          >
+            {isLoading ? 'Verifying…' : t('verify.submit')}
+          </button>
         </form>
 
-        <div className="text-center mt-4">
-          <p className="text-xs text-gray-500">
-            Check your email for the verification code.
-          </p>
-        </div>
+        <p className="text-center text-xs text-gray-500 leading-relaxed">
+          Check your email for the verification code.
+        </p>
       </div>
-    </div>
+    </AuthOnboardingLayout>
   );
 };

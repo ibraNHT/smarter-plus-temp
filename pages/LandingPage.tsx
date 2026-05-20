@@ -42,7 +42,7 @@ export const LandingPage: React.FC = () => {
               </div>
               <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">{t('landing.producerMarket.title')}</h3>
               <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">{t('landing.producerMarket.desc')}</p>
-              <Link to="/market/producers" className="inline-flex items-center text-green-600 font-semibold hover:text-green-800">
+              <Link to="/market/producers" className="inline-flex items-center text-green-600 font-semibold hover:text-green-800 agm-link-underline">
                 {t('landing.cta.browse')} <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </div>
@@ -57,7 +57,7 @@ export const LandingPage: React.FC = () => {
               </div>
               <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">{t('landing.atiStore.title')}</h3>
               <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">{t('landing.atiStore.desc')}</p>
-              <Link to="/market/ati" className="inline-flex items-center text-blue-600 font-semibold hover:text-blue-800">
+              <Link to="/market/ati" className="inline-flex items-center text-blue-600 font-semibold hover:text-blue-800 agm-link-underline">
                 {t('landing.cta.shop')} <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </div>
@@ -66,7 +66,7 @@ export const LandingPage: React.FC = () => {
           <div className="mt-8 sm:mt-12">
             <p className="text-primary-200 text-xs sm:text-sm uppercase tracking-wider mb-3 sm:mb-4">{t('landing.new')}</p>
             <div className="flex justify-center gap-4">
-              <Link to="/register" className="bg-white text-primary-900 px-5 sm:px-6 py-3 rounded-md font-bold hover:bg-primary-50 transition text-sm sm:text-base">
+              <Link to="/register" className="bg-white text-primary-900 px-5 sm:px-6 py-3 rounded-md font-bold hover:bg-primary-50 transition text-sm sm:text-base agm-btn-secondary">
                 {t('landing.createAccount')}
               </Link>
             </div>
@@ -104,7 +104,7 @@ export const LandingPage: React.FC = () => {
                 icon: BarChart3,
               },
             ].map((item) => (
-              <div key={item.name}>
+              <div key={item.name} className="agm-card-lift p-6 rounded-xl bg-white shadow-sm border border-gray-100">
                 <div className="flex items-center justify-center h-12 w-12 rounded-md bg-primary-500 text-white">
                   <item.icon className="h-6 w-6" aria-hidden="true" />
                 </div>

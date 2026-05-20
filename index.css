@@ -101,6 +101,49 @@ body {
   min-height: calc(100dvh - 4rem);
 }
 
+/* Auth / onboarding — sticky form actions on mobile */
+.auth-onboarding-reserve-actions {
+  padding-bottom: max(5.5rem, calc(env(safe-area-inset-bottom) + 4.5rem));
+}
+
+@media (min-width: 640px) {
+  .auth-onboarding-reserve-actions {
+    padding-bottom: 2rem;
+  }
+}
+
+.auth-sticky-form-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  margin-left: -1rem;
+  margin-right: -1rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  padding-top: 0.75rem;
+  background: linear-gradient(
+    to top,
+    rgb(249 250 251) 70%,
+    rgb(249 250 251 / 0.92) 85%,
+    transparent
+  );
+  border-top: 1px solid rgb(229 231 235);
+}
+
+@media (min-width: 640px) {
+  .auth-sticky-form-actions {
+    position: static;
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+    padding-bottom: 0;
+    background: transparent;
+    border-top: none;
+  }
+}
+
 /* Body-level padding to keep page content above the floating
    bottom widgets (Install banner, Compare bar, support chat) on small screens.
    Pages can override on a per-route basis. */
@@ -391,6 +434,239 @@ img, video, canvas, svg, iframe {
   .agm-typing-dot {
     animation: none;
     opacity: 0.7;
+  }
+}
+
+/* ---------------------------------------------------------------
+   Page transition — fade + gentle slide-up on every route change
+--------------------------------------------------------------- */
+@keyframes agm-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.agm-page-in {
+  animation: agm-page-in 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agm-page-in {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------
+   Dropdown menus — scale + fade entrance (notifications, profile menu)
+--------------------------------------------------------------- */
+@keyframes agm-dropdown-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.agm-dropdown-in {
+  animation: agm-dropdown-in 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: top right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agm-dropdown-in {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------
+   Mobile menu — slide down entrance
+--------------------------------------------------------------- */
+@keyframes agm-mobile-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.agm-mobile-menu-in {
+  animation: agm-mobile-menu-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agm-mobile-menu-in {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------
+   Modal — backdrop fade + panel scale-up entrance
+--------------------------------------------------------------- */
+@keyframes agm-modal-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes agm-modal-panel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.agm-modal-backdrop-in {
+  animation: agm-modal-backdrop-in 0.18s ease-out both;
+}
+
+.agm-modal-panel-in {
+  animation: agm-modal-panel-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agm-modal-backdrop-in,
+  .agm-modal-panel-in {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------
+   Navbar icon buttons — scale on hover/press
+--------------------------------------------------------------- */
+.agm-nav-icon {
+  transition: color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+
+.agm-nav-icon:hover {
+  transform: scale(1.1);
+}
+
+.agm-nav-icon:active {
+  transform: scale(0.93);
+}
+
+/* ChevronDown rotation for profile dropdown toggle */
+.agm-chevron {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.agm-chevron--open {
+  transform: rotate(180deg);
+}
+
+/* ---------------------------------------------------------------
+   Button interactions — lift on hover, depress on click
+--------------------------------------------------------------- */
+.agm-btn-primary {
+  transition: transform 0.12s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.agm-btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(22, 163, 74, 0.35);
+}
+
+.agm-btn-primary:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+  box-shadow: none;
+}
+
+.agm-btn-secondary {
+  transition: transform 0.12s ease, box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.agm-btn-secondary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.agm-btn-secondary:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+  box-shadow: none;
+}
+
+/* ---------------------------------------------------------------
+   Card hover lift — apply to offer/product cards
+--------------------------------------------------------------- */
+.agm-card-lift {
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+.agm-card-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.11);
+}
+
+/* ---------------------------------------------------------------
+   Logo bounce — subtle pulse on hover for the brand mark
+--------------------------------------------------------------- */
+.agm-logo-hover {
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.agm-logo-hover:hover {
+  transform: scale(1.12) rotate(-4deg);
+}
+
+/* ---------------------------------------------------------------
+   Link underline slide — smooth animated underline for text CTAs
+--------------------------------------------------------------- */
+.agm-link-underline {
+  position: relative;
+  text-decoration: none;
+}
+
+.agm-link-underline::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background-color: currentColor;
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 1px;
+}
+
+.agm-link-underline:hover::after {
+  width: 100%;
+}
+
+/* ---------------------------------------------------------------
+   Toast notifications — slide in from right
+--------------------------------------------------------------- */
+@keyframes agm-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.agm-toast-in {
+  animation: agm-toast-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agm-toast-in {
+    animation: none;
   }
 }
 

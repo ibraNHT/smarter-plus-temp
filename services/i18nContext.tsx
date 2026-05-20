@@ -116,6 +116,8 @@ const translations: Record<string, Record<Language, string>> = {
   'register.client.btn': { en: 'Register as Client', fr: 'S\'inscrire comme Client' },
   'register.loginLink': { en: 'Already have an account?', fr: 'Vous avez déjà un compte ?' },
   'register.loginHere': { en: 'Log in here', fr: 'Connectez-vous ici' },
+  'register.backToLogin': { en: 'Back to log in', fr: 'Retour à la connexion' },
+  'register.backToChoice': { en: 'Back to account type', fr: 'Retour au type de compte' },
 
   // Generic Form
   'form.name': { en: 'Full Name', fr: 'Nom Complet' },

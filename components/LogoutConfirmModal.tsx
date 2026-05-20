@@ -27,7 +27,7 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({ open, on
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <button
         type="button"
-        className="fixed inset-0 bg-gray-900/50 transition-opacity"
+        className="fixed inset-0 bg-gray-900/50 transition-opacity agm-modal-backdrop-in"
         aria-label={t('pwa.dismiss')}
         disabled={busy}
         onClick={() => !busy && onClose()}
@@ -36,7 +36,7 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({ open, on
         role="dialog"
         aria-modal="true"
         aria-labelledby="logout-confirm-title"
-        className="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl"
+        className="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl agm-modal-panel-in"
       >
         <h2 id="logout-confirm-title" className="text-lg font-semibold text-gray-900">
           {t('nav.logoutConfirmTitle')}
