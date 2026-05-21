@@ -1,5 +1,5 @@
-
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from '../services/i18nContext';
 import { X, Lock, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useStore } from '../services/storeContext';
@@ -172,20 +172,46 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
     resetModal();
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !loading) handleClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [isOpen, loading]);
+
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-      <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity agm-modal-backdrop-in" onClick={handleClose} />
+  const modal = (
+    <div
+      className="fixed inset-0 z-[100] overflow-y-auto"
+      aria-labelledby="modal-title"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="flex min-h-[100dvh] items-center justify-center p-4 sm:p-6">
+        <button
+          type="button"
+          aria-label="Close"
+          className="fixed inset-0 bg-gray-900/50 transition-opacity agm-modal-backdrop-in"
+          onClick={handleClose}
+        />
 
-        <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-md sm:p-6 max-h-[90vh] overflow-y-auto agm-modal-panel-in">
-          <div className="hidden sm:block absolute top-0 right-0 pt-4 pr-4">
-            <button type="button" className="bg-white rounded-md text-gray-400 hover:text-gray-500" onClick={handleClose}>
-              <span className="sr-only">Close</span>
-              <X className="h-6 w-6" />
-            </button>
-          </div>
+        <div className="relative z-10 bg-white rounded-lg px-4 pt-5 pb-4 text-left shadow-xl w-full max-w-md sm:p-6 max-h-[min(90dvh,calc(100dvh-2rem))] overflow-y-auto agm-modal-panel-in mx-auto">
+          <button
+            type="button"
+            className="absolute top-3 right-3 rounded-md p-1 text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+            onClick={handleClose}
+          >
+            <span className="sr-only">Close</span>
+            <X className="h-5 w-5 sm:h-6 sm:w-6" />
+          </button>
 
           <div className="sm:flex sm:items-start">
             <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 sm:mx-0 sm:h-10 sm:w-10">
@@ -324,4 +350,6 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
       </div>
     </div>
   );
+
+  return createPortal(modal, document.body);
 };

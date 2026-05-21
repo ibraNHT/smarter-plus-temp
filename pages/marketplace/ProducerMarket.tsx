@@ -228,7 +228,7 @@ export const ProducerMarket: React.FC = () => {
     return (
       <div
         key={offer.id}
-        className={`group relative w-full min-w-0 bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 border agm-card-lift ${isLocal ? 'border-green-300 ring-2 ring-green-50' : 'border-gray-100'} h-full flex flex-col ${inCarousel ? 'md:min-w-[280px] md:w-[300px] md:flex-shrink-0' : ''}`}
+        className={`group relative w-full min-w-0 bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 border agm-card-lift ${isLocal ? 'border-green-300 ring-2 ring-green-50' : 'border-gray-100'} h-full flex flex-col ${inCarousel ? 'min-w-[240px] w-[260px] flex-shrink-0 md:min-w-[280px] md:w-[300px]' : ''}`}
       >
         {/* Action Buttons Overlay */}
         <div className="absolute top-2 right-2 z-10 flex flex-col gap-2">
@@ -508,20 +508,10 @@ export const ProducerMarket: React.FC = () => {
                           ))}
                         </div>
                       ) : (
-                        <>
-                          {/* Mobile: 2 offers per row */}
-                          <div className="grid grid-cols-2 gap-3 pt-2 px-1 md:hidden">
-                            {sortedCategoryOffers.map((offer) => (
-                              <div key={offer.id} className="w-full min-w-0">
-                                {renderOfferCard(offer)}
-                              </div>
-                            ))}
-                          </div>
-                          {/* Desktop: horizontal scroll (original layout) */}
-                          <div className="hidden md:flex overflow-x-auto pb-8 pt-2 space-x-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent px-1">
-                            {sortedCategoryOffers.map((offer) => renderOfferCard(offer, true))}
-                          </div>
-                        </>
+                        /* Category preview: horizontal swipe row on all viewports; "See All" opens full grid */
+                        <div className="flex overflow-x-auto pb-8 pt-2 space-x-4 md:space-x-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent px-1 -mx-1">
+                          {sortedCategoryOffers.map((offer) => renderOfferCard(offer, true))}
+                        </div>
                       )}
                     </div>
                   );
