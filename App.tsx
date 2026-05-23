@@ -1,6 +1,6 @@
 
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { ToastContainer } from './components/ToastContainer';
@@ -84,6 +84,22 @@ const AUTH_FULLSCREEN_PREFIXES = ['/login', '/register', '/verify-email'];
  */
 const FOOTER_HIDDEN_PREFIXES = ['/messages', ...AUTH_FULLSCREEN_PREFIXES];
 
+/** Opens AgriBot when the user lands with ?openSupport=1 (e.g. from admin email/notification). */
+const SupportDeepLinkHandler: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user, openSupportChat } = useStore();
+
+  useEffect(() => {
+    if (searchParams.get('openSupport') !== '1') return;
+    if (user) openSupportChat();
+    const next = new URLSearchParams(searchParams);
+    next.delete('openSupport');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, user, openSupportChat]);
+
+  return null;
+};
+
 const AppShell: React.FC = () => {
   const location = useLocation();
   const hideFooter = FOOTER_HIDDEN_PREFIXES.some((p) => location.pathname.startsWith(p));
@@ -96,6 +112,7 @@ const AppShell: React.FC = () => {
       <ToastContainer />
       {!authFullscreen && <SupportChatWidget />}
       {!authFullscreen && <CompareWidget />}
+      <SupportDeepLinkHandler />
       <RoleScopeBoundary>
         <main className="flex-grow w-full min-w-0">
           <div key={location.key} className="agm-page-in">

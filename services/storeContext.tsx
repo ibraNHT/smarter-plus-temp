@@ -1,6 +1,6 @@
 
 import React, { useState, ReactNode, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerStatus, OfferType, CartItem, Order, OrderStatus, Wallet, Notification, WithdrawalRequest, WithdrawalStatus, PaymentMethod, ChatSession, ChatMessage, Proposal, ProposalStatus, WeeklySchedule, AvailabilityException, Review, SupportMessage, Portfolio, DisputeEvidence, Coupon, PickupPoint, MyReferralsData, Location, PreferredHomeDeliverySnapshot } from '../types';
+import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerStatus, OfferType, MarketType, CartItem, Order, OrderStatus, Wallet, Notification, WithdrawalRequest, WithdrawalStatus, PaymentMethod, ChatSession, ChatMessage, Proposal, ProposalStatus, WeeklySchedule, AvailabilityException, Review, SupportMessage, Portfolio, DisputeEvidence, Coupon, PickupPoint, MyReferralsData, Location, PreferredHomeDeliverySnapshot } from '../types';
 import { generateSupportResponse } from './geminiService';
 import {
   getSupportMessages,
@@ -9,9 +9,12 @@ import {
   mergeIncomingSupportMessages,
   postGuestSupportMessage,
   postUserSupportMessage,
+  listUserSupportSessions,
+  type SupportMessageDto,
 } from './supportSessionsApi';
 import { apiFetch, apiUpload, setToken, clearToken, getToken, getRefreshToken, setRefreshToken, isRefreshOnCooldown, attemptTokenRefresh } from './apiService';
 import { normalizeRegisterPhoneFull } from '../utils/registerPhone';
+import { resolveOfferImageSrc } from '../utils/offerImageDisplay';
 import { logApiFailure } from './apiDebug';
 import { uploadAvatar } from './uploadService';
 // `clientProfileMatchesSession` lives in its own module so this file only
@@ -298,6 +301,9 @@ interface StoreContextType {
   /** True while a support message is being sent (disables composer). */
   supportChatSending: boolean;
   toggleSupportChat: () => void;
+  /** Open the support widget and sync agent messages when available. */
+  openSupportChat: () => void;
+  syncSupportInbox: () => Promise<void>;
   sendSupportMessage: (text: string) => Promise<void>;
   retrySupportMessage: (messageId: string) => Promise<void>;
   showGuestForm: boolean;
@@ -615,6 +621,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const socketRef = useRef<Socket | null>(null);
   const userRef = useRef<typeof user>(user);
   userRef.current = user;
+  const supportSessionIdRef = useRef<string | null>(supportSessionId);
+  supportSessionIdRef.current = supportSessionId;
   // True while the /notifications socket is connected. The chat page reads
   // this via `useStore()` to decide whether to fall back to polling.
   const [realtimeConnected, setRealtimeConnected] = useState<boolean>(false);
@@ -790,6 +798,45 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     // with an `expiresAt` 5s in the future so a dropped "stopped typing"
     // event can't leave the indicator on screen forever. The window is wider
     // than the sender's 2.5s emit throttle to absorb network jitter.
+    const applySupportPush = (sessionId: string, message: SupportMessageDto) => {
+      if (!sessionId || !message?.id) return;
+      const current = supportSessionIdRef.current;
+      if (current && current !== sessionId) return;
+      if (message.sender === 'AGENT') setIsHandedOver(true);
+      if (!current) setSupportSessionId(sessionId);
+      const mapped = mapDtoToSupportMessage(message);
+      setSupportMessages((prev) => mergeIncomingSupportMessages(prev, [mapped]));
+    };
+
+    socket.on(
+      'support:message',
+      (payload: { sessionId?: string; message?: SupportMessageDto }) => {
+        if (!payload?.sessionId || !payload?.message) return;
+        applySupportPush(payload.sessionId, payload.message);
+      },
+    );
+
+    socket.on(
+      'support:session-update',
+      (payload: { sessionId?: string; status?: string }) => {
+        if (!payload?.sessionId) return;
+        if (
+          payload.status === 'AGENT_ACTIVE' ||
+          payload.status === 'WAITING_FOR_AGENT'
+        ) {
+          setSupportSessionId((prev) => prev ?? payload.sessionId ?? null);
+          setIsHandedOver(true);
+          const sid = supportSessionIdRef.current ?? payload.sessionId;
+          if (sid) {
+            void getSupportMessages(sid).then((data) => {
+              if (!Array.isArray(data)) return;
+              setSupportMessages(data.map((msg) => mapDtoToSupportMessage(msg)));
+            });
+          }
+        }
+      },
+    );
+
     socket.on('chat:typing', (data: { sessionId?: string; userId?: string; isTyping?: boolean }) => {
       const sessionId = typeof data?.sessionId === 'string' ? data.sessionId : '';
       const fromUserId = typeof data?.userId === 'string' ? data.userId : '';
@@ -1038,15 +1085,59 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const refreshOffers = async (opts?: { force?: boolean }) => {
-    const data = await cached(
-      QK.offers(),
-      () => apiFetch<Offer[] | { data: Offer[] }>(API_ENDPOINTS.offers.list, { silent401: true } as any),
-      STALE.catalog,
-      opts?.force,
+    const [marketplace, retail] = await Promise.all([
+      cached(
+        QK.offers(),
+        () =>
+          apiFetch<Offer[] | { data: Offer[] }>(
+            `${API_ENDPOINTS.offers.list}?limit=100&page=1`,
+            { silent401: true } as any,
+          ),
+        STALE.catalog,
+        opts?.force,
+      ),
+      cached(
+        [...QK.offers(), 'retail'] as any,
+        () =>
+          apiFetch<Offer[]>(API_ENDPOINTS.offers.retailList, { silent401: true } as any),
+        STALE.catalog,
+        opts?.force,
+      ),
+    ]);
+    const withDisplayImage = (row: any) => ({
+      ...row,
+      imageUrl: resolveOfferImageSrc(row.imageUrl),
+      imageUrls: Array.isArray(row.imageUrls)
+        ? row.imageUrls.map((u: string) => resolveOfferImageSrc(u))
+        : row.imageUrls,
+    });
+    const marketplaceList = (marketplace
+      ? Array.isArray(marketplace)
+        ? marketplace
+        : ((marketplace as any).data ?? [])
+      : []
+    ).map(withDisplayImage);
+    const retailRaw = retail ?? [];
+    const retailList = (Array.isArray(retailRaw) ? retailRaw : []).map((row: any) =>
+      withDisplayImage({
+        ...row,
+        marketType: row.marketType ?? MarketType.ATI,
+        quantity: Number(row.quantity ?? 0),
+        price: Number(row.price ?? 0),
+        isNegotiable: row.isNegotiable ?? false,
+        isDeliveryAvailable: row.isDeliveryAvailable ?? true,
+        minQuantity: Number(row.minQuantity ?? 1),
+        createdAt: row.createdAt ?? new Date().toISOString(),
+      }),
     );
-    if (!data) return;
-    const list = Array.isArray(data) ? data : ((data as any).data ?? []);
-    setOffers(list);
+    const byId = new Map<string, Offer>();
+    for (const o of marketplaceList) {
+      if (o?.id) byId.set(o.id, o);
+    }
+    for (const o of retailList) {
+      if (o?.id) byId.set(o.id, o);
+    }
+    setOffers(Array.from(byId.values()));
   };
 
   const refreshProducers = async (opts?: { force?: boolean }) => {
@@ -2903,13 +2994,56 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── SUPPORT CHAT ─────────────────────────────────────────────────────────────
 
+  const syncSupportInbox = useCallback(async () => {
+    if (!userRef.current || !getToken()) return;
+    try {
+      const sessions = await listUserSupportSessions();
+      if (!sessions.length) return;
+      const open = sessions
+        .filter((s) => s.status !== 'CLOSED')
+        .sort(
+          (a, b) => new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime(),
+        );
+      const active = open[0];
+      if (!active?.sessionId) return;
+      const agentReady =
+        active.status === 'AGENT_ACTIVE' || active.status === 'WAITING_FOR_AGENT';
+      if (!agentReady) return;
+
+      setSupportSessionId(active.sessionId);
+      setIsHandedOver(true);
+
+      const data = await getSupportMessages(active.sessionId);
+      if (!Array.isArray(data) || data.length === 0) return;
+      const backendMessages = data.map((msg) => mapDtoToSupportMessage(msg));
+      setSupportMessages(backendMessages);
+    } catch (e) {
+      logApiFailure('Support inbox sync failed', e);
+    }
+  }, []);
+
+  const openSupportChat = () => {
+    setIsSupportChatOpen(true);
+    if (!user && !guestEmail) {
+      setShowGuestForm(true);
+    }
+    void syncSupportInbox();
+  };
+
   const toggleSupportChat = () => {
-    setIsSupportChatOpen(prev => !prev);
-    // Show guest form on first open if guest
+    setIsSupportChatOpen((prev) => {
+      const next = !prev;
+      if (next) void syncSupportInbox();
+      return next;
+    });
     if (!isSupportChatOpen && !user && !guestEmail) {
       setShowGuestForm(true);
     }
   };
+
+  useEffect(() => {
+    if (user?.id) void syncSupportInbox();
+  }, [user?.id, syncSupportInbox]);
 
   const submitGuestForm = (email: string, name: string) => {
     setGuestEmail(email);
@@ -3537,7 +3671,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,
     trackUserSearch, toggleFavorite, moveToFavorites, getRecommendedOffers,
     compareList, addToCompare, removeFromCompare, clearCompare,
-    supportMessages, isSupportChatOpen, supportAiTyping, supportChatSending, toggleSupportChat, sendSupportMessage, retrySupportMessage, showGuestForm, setShowGuestForm, guestEmailInput, setGuestEmailInput, guestNameInput, setGuestNameInput, guestName, setGuestName, submitGuestForm, supportSessionId, setSupportSessionId,
+    supportMessages, isSupportChatOpen, supportAiTyping, supportChatSending, toggleSupportChat, openSupportChat, syncSupportInbox, sendSupportMessage, retrySupportMessage, showGuestForm, setShowGuestForm, guestEmailInput, setGuestEmailInput, guestNameInput, setGuestNameInput, guestName, setGuestName, submitGuestForm, supportSessionId, setSupportSessionId,
     validateCoupon,
     addPickupPoint, deletePickupPoint,
     changePassword,

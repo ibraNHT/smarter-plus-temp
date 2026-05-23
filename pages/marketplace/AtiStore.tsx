@@ -7,7 +7,7 @@ import { MarketType, UserRole } from '../../types';
 import { ShoppingBasket, Search, Star, Filter, Heart, Layers, ArrowLeft } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
-import { offerImageInBox } from '../../utils/offerImageDisplay';
+import { offerImageInBox, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
 
 export const AtiStore: React.FC = () => {
   const { offers, toggleFavorite, user, clients, producers, compareList, addToCompare, removeFromCompare, getAverageRating, reviews, refreshOffers, refreshProducers, refreshAllReviews } = useStore();
@@ -114,8 +114,8 @@ export const AtiStore: React.FC = () => {
             </div>
           </div>
 
-          {/* Main Content */}
-          <div className="flex-1">
+          {/* Main Content — min-w-0 prevents horizontal carousels from overflowing the flex row */}
+          <div className="flex-1 min-w-0">
             {/* Search Bar */}
             <div className="mb-8 relative">
               <input
@@ -130,14 +130,14 @@ export const AtiStore: React.FC = () => {
 
             {/* Horizontal Categories */}
             {pageLoading ? (
-              <div className="space-y-10">
-                <div>
-                  <div className="h-7 bg-gray-200 rounded w-48 mb-4 animate-pulse" />
-                  <OfferRowSkeleton count={5} variant="ati" />
+              <div className="space-y-10 w-full min-w-0">
+                <div className="w-full min-w-0">
+                  <div className="h-7 bg-gray-200 rounded w-48 max-w-full mb-4 animate-pulse" />
+                  <OfferRowSkeleton count={4} variant="ati" />
                 </div>
-                <div>
-                  <div className="h-7 bg-gray-200 rounded w-40 mb-4 animate-pulse" />
-                  <OfferRowSkeleton count={5} variant="ati" />
+                <div className="w-full min-w-0">
+                  <div className="h-7 bg-gray-200 rounded w-40 max-w-full mb-4 animate-pulse" />
+                  <OfferRowSkeleton count={4} variant="ati" />
                 </div>
               </div>
             ) : filteredOffers.length === 0 ? (
@@ -217,7 +217,7 @@ export const AtiStore: React.FC = () => {
                                 </div>
                                 <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-200 rounded-lg flex flex-col overflow-hidden hover:shadow-lg transition-all h-full agm-card-lift">
                                   <div className="bg-gray-100 h-40 relative">
-                                    <img src={offer.imageUrl} alt={offer.title} className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`} />
+                                    <img src={resolveOfferImageSrc(offer.imageUrl)} alt={offer.title} className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`} />
                                     <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">ATI Choice</div>
                                   </div>
                                   <div className="flex-1 p-3 space-y-2 flex flex-col">
@@ -240,7 +240,8 @@ export const AtiStore: React.FC = () => {
                           })}
                         </div>
                       ) : (
-                        <div className="flex overflow-x-auto pb-4 space-x-5 scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-gray-50 px-1">
+                        <div className="w-full min-w-0 overflow-hidden">
+                        <div className="flex w-full min-w-0 overflow-x-auto pb-4 gap-5 scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-gray-50 px-1">
                           {categoryOffers.map((offer) => {
                             const isFav = favorites.includes(offer.id);
                             const isComparing = compareList.includes(offer.id);
@@ -274,7 +275,7 @@ export const AtiStore: React.FC = () => {
                                 <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-200 rounded-lg flex flex-col overflow-hidden hover:shadow-lg transition-all h-full agm-card-lift">
                                   <div className="aspect-w-1 aspect-h-1 bg-gray-100 h-36 relative">
                                     <img
-                                      src={offer.imageUrl}
+                                      src={resolveOfferImageSrc(offer.imageUrl)}
                                       alt={offer.title}
                                       className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`}
                                     />
@@ -302,6 +303,7 @@ export const AtiStore: React.FC = () => {
                               </div>
                             );
                           })}
+                        </div>
                         </div>
                       )}
                     </div>

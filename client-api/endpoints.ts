@@ -45,6 +45,8 @@ export const API_ENDPOINTS = {
   },
   offers: {
     list: "/api/offers",
+    /** Official ATI retail catalog (all ATI marketType offers). */
+    retailList: "/api/retail/offers",
     create: "/api/offers",
     update: (id: string) => `/api/offers/${id}`,
     remove: (id: string) => `/api/offers/${id}`,

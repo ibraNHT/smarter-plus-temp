@@ -28,6 +28,28 @@ export type PostSupportMessageResponse = {
   message: SupportMessageDto | null;
 };
 
+export type UserSupportSessionSummary = {
+  sessionId: string;
+  userId: string;
+  userName?: string;
+  status: string;
+  lastMessage?: string;
+  lastActive: string;
+};
+
+/** List open support sessions for the logged-in platform user. */
+export async function listUserSupportSessions(): Promise<UserSupportSessionSummary[]> {
+  const token = getToken();
+  if (!token) return [];
+  try {
+    return await apiGet<UserSupportSessionSummary[]>(API_ENDPOINTS.support.sessions, {
+      silent401: true,
+    });
+  } catch {
+    return [];
+  }
+}
+
 export async function createOrGetSupportSession(): Promise<CreateSupportSessionResponse> {
   return apiFetch<CreateSupportSessionResponse>(API_ENDPOINTS.support.sessions, {
     method: 'POST',

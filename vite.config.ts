@@ -17,6 +17,11 @@ export default defineConfig({
         target: process.env.VITE_API_PROXY_TARGET ?? "http://localhost:4040",
         changeOrigin: true,
       },
+      // Local disk uploads from API (when Cloudinary server keys are unset)
+      "/uploads": {
+        target: process.env.VITE_API_PROXY_TARGET ?? "http://localhost:4040",
+        changeOrigin: true,
+      },
     },
   },
   plugins: [
