@@ -36,9 +36,13 @@ import { I18nProvider } from './services/i18nContext';
 import { PublicRoute } from './components/PublicRoute';
 import { PwaInstallProvider } from './contexts/PwaInstallContext';
 import { InstallAppBanner } from './components/InstallAppBanner';
+import { ProducerPendingBanner } from './components/ProducerPendingBanner';
 import { getToken } from './services/apiService';
 import { isWebAppSessionBlocked } from './services/authRoles';
+import { isProducerDashboardUser } from './services/producerSession';
 import { UserRole } from './types';
+
+const PRODUCER_ROUTE_ROLES = [UserRole.PRODUCER, UserRole.MANAGER];
 
 const RoleScopeBoundary: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const store = useStoreOptional();
@@ -48,8 +52,8 @@ const RoleScopeBoundary: React.FC<{ children: React.ReactNode }> = ({ children }
       <main className="max-w-3xl mx-auto py-16 px-4 text-center">
         <h1 className="text-2xl font-bold text-gray-900">Use the Admin Panel for this account</h1>
         <p className="mt-3 text-gray-600">
-          This app is for guests, clients, and producers. Retail/admin/manager staff accounts should sign in to
-          the admin applications instead.
+          This app is for guests, clients, producers, and account managers with an assigned producer.
+          Platform administrators should sign in to the admin console instead.
         </p>
       </main>
     );
@@ -57,8 +61,10 @@ const RoleScopeBoundary: React.FC<{ children: React.ReactNode }> = ({ children }
   return <>{children}</>;
 };
 
-const roleHome = (role: UserRole): string => {
-  if (role === UserRole.PRODUCER) return '/producer/dashboard';
+const roleHome = (role: UserRole, user?: { producerId?: string } | null): string => {
+  if (role === UserRole.PRODUCER || (role === UserRole.MANAGER && user?.producerId)) {
+    return '/producer/dashboard';
+  }
   if (role === UserRole.CLIENT) return '/client/profile';
   return '/market/producers';
 };
@@ -70,7 +76,12 @@ const GuardedRoute: React.FC<{ children: React.ReactNode; allowedRoles: UserRole
   const { user } = useStore();
 
   if (!user) return <Navigate to="/login" replace />;
-  if (!allowedRoles.includes(user.role)) return <Navigate to={roleHome(user.role)} replace />;
+
+  const allowed =
+    allowedRoles.includes(user.role) ||
+    (allowedRoles.includes(UserRole.PRODUCER) && isProducerDashboardUser(user));
+
+  if (!allowed) return <Navigate to={roleHome(user.role, user)} replace />;
   return <>{children}</>;
 };
 
@@ -108,6 +119,7 @@ const AppShell: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 font-sans flex flex-col overflow-x-hidden">
       {!authFullscreen && <Navbar />}
+      {!authFullscreen && <ProducerPendingBanner />}
       {!authFullscreen && <InstallAppBanner />}
       <ToastContainer />
       {!authFullscreen && <SupportChatWidget />}
@@ -138,17 +150,17 @@ const AppShell: React.FC = () => {
             <Route path="/profile/client/:id" element={<PublicProfile role="CLIENT" />} />
 
             {/* User Feature Routes */}
-            <Route path="/wallet" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER]}><WalletDashboard /></GuardedRoute>} />
-            <Route path="/messages" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER]}><ChatPage /></GuardedRoute>} />
-            <Route path="/messages/:chatId" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER]}><ChatPage /></GuardedRoute>} />
+            <Route path="/wallet" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER, UserRole.MANAGER]}><WalletDashboard /></GuardedRoute>} />
+            <Route path="/messages" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER, UserRole.MANAGER]}><ChatPage /></GuardedRoute>} />
+            <Route path="/messages/:chatId" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER, UserRole.MANAGER]}><ChatPage /></GuardedRoute>} />
             <Route path="/client/profile" element={<GuardedRoute allowedRoles={[UserRole.CLIENT]}><ClientProfile /></GuardedRoute>} />
 
             {/* Producer Routes */}
-            <Route path="/producer/dashboard" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><ProducerDashboard /></GuardedRoute>} />
-            <Route path="/producer/profile/:tab?" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><ProducerProfile /></GuardedRoute>} />
-            <Route path="/producer/availability" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><ProducerAvailability /></GuardedRoute>} />
-            <Route path="/producer/offers/new" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><CreateOffer /></GuardedRoute>} />
-            <Route path="/producer/offers/edit/:offerId" element={<GuardedRoute allowedRoles={[UserRole.PRODUCER]}><CreateOffer /></GuardedRoute>} />
+            <Route path="/producer/dashboard" element={<GuardedRoute allowedRoles={PRODUCER_ROUTE_ROLES}><ProducerDashboard /></GuardedRoute>} />
+            <Route path="/producer/profile/:tab?" element={<GuardedRoute allowedRoles={PRODUCER_ROUTE_ROLES}><ProducerProfile /></GuardedRoute>} />
+            <Route path="/producer/availability" element={<GuardedRoute allowedRoles={PRODUCER_ROUTE_ROLES}><ProducerAvailability /></GuardedRoute>} />
+            <Route path="/producer/offers/new" element={<GuardedRoute allowedRoles={PRODUCER_ROUTE_ROLES}><CreateOffer /></GuardedRoute>} />
+            <Route path="/producer/offers/edit/:offerId" element={<GuardedRoute allowedRoles={PRODUCER_ROUTE_ROLES}><CreateOffer /></GuardedRoute>} />
 
             {/* Footer Routes */}
             <Route path="/blog" element={<Blog />} />

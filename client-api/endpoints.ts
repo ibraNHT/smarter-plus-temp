@@ -1,6 +1,7 @@
 export const API_ENDPOINTS = {
   auth: {
     login: "/api/auth/login",
+    me: "/api/auth/me",
     logout: "/api/auth/logout",
     register: "/api/auth/register",
     /** Phone-OTP step 1 — send the SMS+email verification code before registration. */

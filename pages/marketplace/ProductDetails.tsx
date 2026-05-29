@@ -12,6 +12,7 @@ import { ConfirmModal } from '../../components/ConfirmModal';
 import { offerImageHero, offerImageInBox } from '../../utils/offerImageDisplay';
 import { getOfferImageUrls } from '../../utils/offerImages';
 import { displayNameTruncateClass, resolveProducerDisplayName } from '../../utils/displayName';
+import { isProducerDashboardUser } from '../../services/producerSession';
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 
@@ -84,7 +85,7 @@ export const ProductDetails: React.FC = () => {
           (!!client.userId && client.userId === user.id),
       );
       favorites = c?.favorites || [];
-    } else if (user.role === UserRole.PRODUCER) {
+    } else if (isProducerDashboardUser(user)) {
       const p = producers.find(prod => prod.id === user.producerId);
       favorites = p?.favorites || [];
     }
@@ -437,7 +438,7 @@ export const ProductDetails: React.FC = () => {
                   <p className="text-xs sm:text-sm font-medium text-primary-600 uppercase tracking-wide">{offer.category}</p>
                   <div className="flex gap-1.5 sm:gap-2 items-center flex-wrap">
                     {/* Fav Button */}
-                    {(user?.role === UserRole.CLIENT || user?.role === UserRole.PRODUCER) && (
+                    {(user?.role === UserRole.CLIENT || isProducerDashboardUser(user)) && (
                       <button
                         onClick={() => toggleFavorite(offer.id)}
                         className="p-1.5 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"

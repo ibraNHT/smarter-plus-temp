@@ -2,6 +2,8 @@
 export enum UserRole {
   GUEST = 'GUEST',
   PRODUCER = 'PRODUCER',
+  /** Operates a producer account assigned via admin console (account manager). */
+  MANAGER = 'MANAGER',
   ADMIN = 'ADMIN',
   CLIENT = 'CLIENT'
 }
@@ -438,8 +440,9 @@ export interface UserSession {
   email?: string;
   phone?: string;
   profileImageUrl?: string;
-  producerId?: string; // If role is PRODUCER
+  producerId?: string; // PRODUCER owner or MANAGER acting for assigned producer
   clientId?: string;   // If role is CLIENT
+  managedProducerUserId?: string;
 }
 
 // Support Chat Types

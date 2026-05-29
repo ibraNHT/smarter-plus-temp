@@ -9,6 +9,8 @@ import { SEO } from '../../components/SEO';
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { displayNameTruncateClass, resolveProducerDisplayName } from '../../utils/displayName';
+import { isProducerDashboardUser } from '../../services/producerSession';
+import { findProducerForUser } from '../../utils/producerAccountStatus';
 
 export const ProducerMarket: React.FC = () => {
   const { offers, producers, user, clients, trackUserSearch, toggleFavorite, getRecommendedOffers, getAverageRating, reviews, compareList, addToCompare, removeFromCompare, refreshOffers, refreshProducers, refreshAllReviews } = useStore();
@@ -62,8 +64,8 @@ export const ProducerMarket: React.FC = () => {
         clientRegion = c.locations.length > 0 ? c.locations[0].region : '';
         favorites = c.favorites || [];
       }
-    } else if (user.role === UserRole.PRODUCER) {
-      const p = producers.find(prod => prod.id === user.producerId);
+    } else if (isProducerDashboardUser(user)) {
+      const p = findProducerForUser(producers, user);
       if (p) {
         clientRegion = p.locations.length > 0 ? p.locations[0].region : '';
         favorites = p.favorites || [];
@@ -233,7 +235,7 @@ export const ProducerMarket: React.FC = () => {
         {/* Action Buttons Overlay */}
         <div className="absolute top-2 right-2 z-10 flex flex-col gap-2">
           {/* Favorite Button (Visible for Client AND Producer) */}
-          {(user?.role === UserRole.CLIENT || user?.role === UserRole.PRODUCER) && (
+          {(user?.role === UserRole.CLIENT || isProducerDashboardUser(user)) && (
             <button
               onClick={(e) => { e.preventDefault(); toggleFavorite(offer.id); }}
               className="p-1.5 rounded-full bg-white/80 hover:bg-white shadow-sm transition-colors"

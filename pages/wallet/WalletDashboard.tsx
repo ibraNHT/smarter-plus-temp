@@ -3,7 +3,8 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { Wallet as WalletIcon, ArrowUpRight, ArrowDownLeft, Plus, CreditCard, Smartphone, Building, MinusCircle, Clock, CheckCircle, XCircle, ArrowLeft, TrendingUp } from 'lucide-react';
 import { SEO } from '../../components/SEO';
-import { TransactionType, UserRole, WithdrawalStatus, PaymentMethod } from '../../types';
+import { TransactionType, WithdrawalStatus, PaymentMethod } from '../../types';
+import { isProducerDashboardUser, producerAccountUserId } from '../../services/producerSession';
 import { Link, useNavigate } from 'react-router-dom';
 import { OtpVerificationModal } from '../../components/OtpVerificationModal';
 import { SectionLoader } from '../../components/Loaders';
@@ -37,12 +38,13 @@ export const WalletDashboard: React.FC = () => {
 
   if (!user) return <div className="p-8 text-center">Please login</div>;
 
-  const wallet = getWallet(user.id);
-  const isProducer = user.role === UserRole.PRODUCER;
+  const walletOwnerId = producerAccountUserId(user);
+  const wallet = getWallet(walletOwnerId);
+  const isProducer = isProducerDashboardUser(user);
   const currentProducer = isProducer ? producers.find(p => p.id === user.producerId) : null;
 
   // Calculate pending withdrawals
-  const myRequests = withdrawalRequests.filter(r => r.userId === user.id).sort((a, b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime());
+  const myRequests = withdrawalRequests.filter(r => r.userId === walletOwnerId).sort((a, b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime());
   const pendingAmount = myRequests.filter(r => r.status === WithdrawalStatus.PENDING).reduce((acc, curr) => acc + curr.amount, 0);
   const availableBalance = wallet.balance - pendingAmount;
 

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
-import { UserRole, ProducerStatus, ProducerProfile as ProducerProfileType, Location, Portfolio } from '../../types';
+import { ProducerStatus, ProducerProfile as ProducerProfileType, Location, Portfolio } from '../../types';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { User, Wallet, Shield, Tractor, CreditCard, Trash2, Plus, Camera, MapPin, X, LogOut, Image as ImageIcon, Video, Eye, Edit, CheckCircle, Heart, ArrowLeft, Search, Users, Copy, Loader2 } from 'lucide-react';
 import { useUpdateProducerProfileMutation } from '../../client-api/hooks/useUpdateProducerProfileMutation';
@@ -13,12 +13,14 @@ import { ConfirmModal } from '../../components/ConfirmModal';
 import { SectionLoader } from '../../components/Loaders';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { LocationMapPicker } from '../../components/LocationMapPicker';
-import { uploadAvatar, uploadDocument, uploadPortfolioImage, uploadPortfolioVideo } from '../../services/uploadService';
+import { uploadAvatar, uploadPortfolioImage, uploadPortfolioVideo } from '../../services/uploadService';
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 import { offerImageHero, offerImageInBox } from '../../utils/offerImageDisplay';
 import { ProducerComplianceDocuments } from '../../components/ProducerComplianceDocuments';
 import { mergeProducerDocuments, splitProducerDocuments } from '../../utils/producerDocuments';
+import { isProducerDashboardUser, isManagerSession } from '../../services/producerSession';
+import { findProducerForUser } from '../../utils/producerAccountStatus';
 import { useFormik } from 'formik';
 import { z } from 'zod';
 
@@ -76,6 +78,9 @@ function isHostedHttpUrl(url: string | undefined): boolean {
 
 export const ProducerProfile: React.FC = () => {
   const { user, producers, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, logout, getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio, offers, toggleFavorite, myReferrals, refreshMyReferrals, refreshProducers, refreshOffers, refreshMyPortfolios } = useStore();
+  const managingAsAccountManager = isManagerSession(user);
+  const managedProducer = findProducerForUser(producers, user);
+  const personalFieldsLocked = managingAsAccountManager;
   const updateProducerMutation = useUpdateProducerProfileMutation();
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -195,7 +200,6 @@ export const ProducerProfile: React.FC = () => {
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [pendingProfileUpdate, setPendingProfileUpdate] = useState<ProducerFormData | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
-  const [certUploading, setCertUploading] = useState(false);
   const [profileHydrating, setProfileHydrating] = useState(false);
   const lastSeededLocationFormForProfileId = useRef<string | null>(null);
 
@@ -230,16 +234,17 @@ export const ProducerProfile: React.FC = () => {
     });
   }, [currentProducer, user]);
   useEffect(() => {
-    if (!user || user.role !== UserRole.PRODUCER) return;
+    if (!user || !isProducerDashboardUser(user)) return;
+    const dashboardUser = user;
     let cancelled = false;
     const hydrateMyProducerProfile = async () => {
       setProfileHydrating(true);
       try {
         const rows = await apiFetch<any[]>(API_ENDPOINTS.producers.list, { silent401: true } as any).catch(() => []);
         if (cancelled || !Array.isArray(rows)) return;
-        const mine = rows.find((p: any) => p?.id === user.producerId || p?.userId === user.id);
+        const mine = rows.find((p: any) => p?.id === dashboardUser.producerId || p?.userId === dashboardUser.id);
         if (!mine) return;
-        const normalized = hydrateProducerFormData(mine, user);
+        const normalized = hydrateProducerFormData(mine, dashboardUser);
         setFormData((prev) => (prev?.id === normalized.id ? prev : normalized));
       } finally {
         if (!cancelled) setProfileHydrating(false);
@@ -324,48 +329,27 @@ export const ProducerProfile: React.FC = () => {
       setEditingLocationIndex(editingLocationIndex - 1);
     }
   };
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'profileImageUrl' | 'certifications') => {
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!formData || !e.target.files?.length) return;
     const file = e.target.files[0];
-    if (field === 'profileImageUrl') {
-      const maxBytes = 2 * 1024 * 1024;
-      if (file.size > maxBytes) {
-        alert('Image must be 2 MB or less.');
-        return;
-      }
-      const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
-      if (!allowedTypes.includes(file.type)) {
-        alert('Only PNG, JPG, and WebP are allowed for profile photos.');
-        return;
-      }
-      setAvatarUploading(true);
-      try {
-        const url = await uploadAvatar(file);
-        setFormData({ ...formData, profileImageUrl: url });
-      } catch (err: unknown) {
-        alert(err instanceof Error ? err.message : 'Upload failed.');
-      } finally {
-        setAvatarUploading(false);
-      }
+    const maxBytes = 2 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      alert('Image must be 2 MB or less.');
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size exceeds 10MB limit.');
-      return;
-    }
-    const allowedTypes = ['image/png', 'image/jpeg', 'application/pdf'];
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
-      alert('Only PNG, JPG, and PDF formats are allowed.');
+      alert('Only PNG, JPG, and WebP are allowed for profile photos.');
       return;
     }
-    setCertUploading(true);
+    setAvatarUploading(true);
     try {
-      const url = await uploadDocument(file);
-      setFormData({ ...formData, certifications: [...formData.certifications, url] });
+      const url = await uploadAvatar(file);
+      setFormData({ ...formData, profileImageUrl: url });
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Upload failed.');
     } finally {
-      setCertUploading(false);
+      setAvatarUploading(false);
     }
   };
   const savePersonalInfo = (e: React.FormEvent) => {
@@ -401,7 +385,7 @@ export const ProducerProfile: React.FC = () => {
     let displayName = formData.name;
     if (formData.type === 'INDIVIDUAL' && formData.firstName && formData.lastName) displayName = `${formData.firstName} ${formData.lastName}`;
     const { niuCertificateUrl, businessRegistrationUrl, ...rest } = formData;
-    const payload: ProducerFormData = {
+    let payload: ProducerFormData = {
       ...rest,
       name: displayName,
       certifications: mergeProducerDocuments(
@@ -410,6 +394,12 @@ export const ProducerProfile: React.FC = () => {
         formData.certifications,
       ),
     };
+    if (managingAsAccountManager) {
+      const { phone: _p, email: _e, firstName: _fn, lastName: _ln, gender: _g, dateOfBirth: _dob, ...businessOnly } = payload;
+      payload = businessOnly as ProducerFormData;
+      updateProducerMutation.mutate({ producer: payload });
+      return;
+    }
     if (import.meta.env.PROD) {
       setPendingProfileUpdate(payload);
       setShowOtpModal(true);
@@ -671,7 +661,7 @@ export const ProducerProfile: React.FC = () => {
     }
   };
 
-  if (!user || user.role !== UserRole.PRODUCER) {
+  if (!isProducerDashboardUser(user)) {
     return <div className="p-8 text-center">Access Denied</div>;
   }
   /**
@@ -689,9 +679,21 @@ export const ProducerProfile: React.FC = () => {
     );
   }
 
+  const managedProducerLabel =
+    managedProducer?.name ||
+    [managedProducer?.firstName, managedProducer?.lastName].filter(Boolean).join(' ') ||
+    'this producer';
+
   return (
     <div className="max-w-7xl mx-auto py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
-      {/* ... [Navigation Sidebar Logic] ... */}
+      {managingAsAccountManager && (
+        <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          <p className="font-semibold">Account manager mode</p>
+          <p className="mt-1 text-sky-800">
+            You are assisting <span className="font-medium">{managedProducerLabel}</span>. You can manage offers, orders, locations, documents, and wallet activity. Phone, email, and other personal identity fields cannot be changed.
+          </p>
+        </div>
+      )}
       <div className="mb-4 sm:mb-6">
         <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 hover:text-primary-600 transition-colors font-medium text-sm sm:text-base">
           <ArrowLeft className="h-5 w-5 mr-2" /> Back
@@ -753,7 +755,7 @@ export const ProducerProfile: React.FC = () => {
                 </p>
               </div>
               {/* Simplified view for brevity, functionality preserved */}
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6"><div className="relative flex-shrink-0"><div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">{formData.profileImageUrl ? (<img src={formData.profileImageUrl} alt="Profile" className="h-full w-full object-cover" />) : (<User className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400" />)}</div><label className={`absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white shadow-sm ${avatarUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-primary-700'}`}><Camera className="h-4 w-4" /><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={avatarUploading} onChange={(e) => void handleFileUpload(e, 'profileImageUrl')} /></label></div><div className="min-w-0"><p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p><p className="text-xs text-gray-500">{avatarUploading ? 'Uploading…' : 'JPG, PNG, or WebP. Max 2 MB.'}</p></div></div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6"><div className="relative flex-shrink-0"><div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">{formData.profileImageUrl ? (<img src={formData.profileImageUrl} alt="Profile" className="h-full w-full object-cover" />) : (<User className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400" />)}</div><label className={`absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white shadow-sm ${avatarUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-primary-700'}`}><Camera className="h-4 w-4" /><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={avatarUploading} onChange={(e) => void handleAvatarUpload(e)} /></label></div><div className="min-w-0"><p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p><p className="text-xs text-gray-500">{avatarUploading ? 'Uploading…' : 'JPG, PNG, or WebP. Max 2 MB.'}</p></div></div>
               <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
                 <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-2">{t('profile.type')}</label><div className="flex space-x-4"><span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-primary-100 text-primary-800">{formData.type === 'BUSINESS' ? t('profile.business') : t('profile.individual')}</span><span className="text-xs text-gray-400 self-center ml-2">Cannot be changed after registration</span></div></div>
                 {formData.type === 'BUSINESS' ? (
@@ -765,15 +767,15 @@ export const ProducerProfile: React.FC = () => {
                   <>
                     <div className="sm:col-span-3">
                       <label className="block text-sm font-medium text-gray-700">{t('profile.firstName')}</label>
-                      <input type="text" name="firstName" value={formData.firstName || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" />
+                      <input type="text" name="firstName" value={formData.firstName || ''} onChange={handleInfoChange} readOnly={personalFieldsLocked} disabled={personalFieldsLocked} className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 text-gray-900 ${personalFieldsLocked ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`} />
                     </div>
                     <div className="sm:col-span-3">
                       <label className="block text-sm font-medium text-gray-700">{t('profile.lastName')}</label>
-                      <input type="text" name="lastName" value={formData.lastName || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" />
+                      <input type="text" name="lastName" value={formData.lastName || ''} onChange={handleInfoChange} readOnly={personalFieldsLocked} disabled={personalFieldsLocked} className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 text-gray-900 ${personalFieldsLocked ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`} />
                     </div>
                     <div className="sm:col-span-3">
                       <label className="block text-sm font-medium text-gray-700">{t('profile.gender')}</label>
-                      <select name="gender" value={formData.gender || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900">
+                      <select name="gender" value={formData.gender || ''} onChange={handleInfoChange} disabled={personalFieldsLocked} className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 text-gray-900 ${personalFieldsLocked ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}>
                         <option value="">Select Gender</option>
                         <option value="MALE">Male</option>
                         <option value="FEMALE">Female</option>
@@ -781,7 +783,7 @@ export const ProducerProfile: React.FC = () => {
                     </div>
                     <div className="sm:col-span-3">
                       <label className="block text-sm font-medium text-gray-700">{t('profile.dob')}</label>
-                      <input type="date" name="dateOfBirth" value={formData.dateOfBirth || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" />
+                      <input type="date" name="dateOfBirth" value={formData.dateOfBirth || ''} onChange={handleInfoChange} readOnly={personalFieldsLocked} disabled={personalFieldsLocked} className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 text-gray-900 ${personalFieldsLocked ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`} />
                     </div>
                   </>
                 )}
@@ -793,12 +795,10 @@ export const ProducerProfile: React.FC = () => {
                     taxClearanceCertificateUrl: formData.taxClearanceCertificateUrl,
                     businessRegistrationUrl: formData.businessRegistrationUrl,
                   }}
-                  certUploading={certUploading}
-                  onCertUploadingChange={setCertUploading}
                   onChange={(patch) => setFormData((prev) => (prev ? { ...prev, ...patch } : prev))}
                 />
-                <div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('form.phone')}</label><input type="tel" name="phone" value={formData.phone ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
-                <div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('form.email')}</label><input type="email" name="email" value={formData.email ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" /></div>
+                <div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('form.phone')}</label><input type="tel" name="phone" value={formData.phone ?? ''} onChange={handleInfoChange} readOnly={personalFieldsLocked} disabled={personalFieldsLocked} className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 text-gray-900 ${personalFieldsLocked ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`} /></div>
+                <div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('form.email')}</label><input type="email" name="email" value={formData.email ?? ''} onChange={handleInfoChange} readOnly={personalFieldsLocked} disabled={personalFieldsLocked} className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 text-gray-900 ${personalFieldsLocked ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`} /></div>
                 <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-2">{t('form.category')} (Multi-select)</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded-md bg-white">{PRODUCTION_TYPES.map(cat => { const isSelected = formData.productionTypes.includes(cat); return (<button key={cat} type="button" onClick={() => toggleCategory(cat)} className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${isSelected ? 'bg-primary-100 text-primary-800 ring-2 ring-primary-500 ring-offset-1' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}{isSelected && <X className="ml-1.5 h-3 w-3" />}</button>) })}</div></div>
                 <div className="sm:col-span-6 border-t border-gray-100 pt-4 mt-2">
                   <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center">

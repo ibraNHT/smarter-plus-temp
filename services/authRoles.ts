@@ -2,7 +2,8 @@
  * WebApp allows only marketplace roles. JWT `role` claim is the source of truth when a token exists.
  */
 
-const WEBAPP_ROLES = new Set(['CLIENT', 'PRODUCER']);
+/** Marketplace app: clients, producers, and managers operating an assigned producer account. */
+const WEBAPP_ROLES = new Set(['CLIENT', 'PRODUCER', 'MANAGER']);
 
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
   const parts = token.split('.');

@@ -314,6 +314,58 @@ const translations: Record<string, Record<Language, string>> = {
     en: 'Your producer account is pending. You can still buy as a client. Enter your NIU / tax ID and upload your NIU certificate in your profile to complete verification.',
     fr: 'Votre compte producteur est en attente. Vous pouvez toujours acheter. Saisissez votre NIU et téléversez votre certificat NIU dans votre profil pour finaliser la vérification.',
   },
+  'producerStatus.pendingTitle': {
+    en: 'Your producer account is pending approval',
+    fr: 'Votre compte producteur est en attente d\'approbation',
+  },
+  'producerStatus.pendingMsg': {
+    en: 'You registered as a producer, but you cannot publish offers or sell until our team validates your account. Complete your tax documents in your profile to speed up review.',
+    fr: 'Vous êtes inscrit comme producteur, mais vous ne pouvez pas publier d\'offres ni vendre tant que notre équipe n\'a pas validé votre compte. Complétez vos documents fiscaux dans votre profil pour accélérer la vérification.',
+  },
+  'producerStatus.pendingHint': {
+    en: 'You can still browse the marketplace and buy as a client while you wait.',
+    fr: 'Vous pouvez toujours parcourir la place de marché et acheter en tant que client en attendant.',
+  },
+  'producerStatus.rejectedTitle': {
+    en: 'Producer application not approved',
+    fr: 'Demande producteur non approuvée',
+  },
+  'producerStatus.rejectedMsg': {
+    en: 'Your producer account was not approved. Open your profile to review your documents or contact support for help.',
+    fr: 'Votre compte producteur n\'a pas été approuvé. Ouvrez votre profil pour vérifier vos documents ou contactez le support.',
+  },
+  'producerStatus.completeVerification': {
+    en: 'Complete verification',
+    fr: 'Finaliser la vérification',
+  },
+  'producerStatus.viewProfile': {
+    en: 'View profile',
+    fr: 'Voir le profil',
+  },
+  'producerStatus.goToDashboard': {
+    en: 'Producer dashboard',
+    fr: 'Tableau de bord producteur',
+  },
+  'producerStatus.roleBadgePending': {
+    en: 'Producer · Pending approval',
+    fr: 'Producteur · En attente',
+  },
+  'producerStatus.roleBadgeRejected': {
+    en: 'Producer · Not approved',
+    fr: 'Producteur · Non approuvé',
+  },
+  'producerStatus.roleBadgeApproved': {
+    en: 'Approved producer',
+    fr: 'Producteur approuvé',
+  },
+  'producerStatus.welcomePending': {
+    en: 'Registration received! Your producer account is now pending admin approval. Complete your documents below while you wait.',
+    fr: 'Inscription reçue ! Votre compte producteur est en attente d\'approbation par l\'administration. Complétez vos documents ci-dessous en attendant.',
+  },
+  'producerStatus.cannotPublishYet': {
+    en: 'Your producer account is pending approval. Complete verification in your profile before publishing offers.',
+    fr: 'Votre compte producteur est en attente. Finalisez la vérification dans votre profil avant de publier des offres.',
+  },
   'dash.activeOffers': { en: 'Total Active Offers', fr: 'Offres Actives' },
   'dash.myCatalog': { en: 'My Catalog', fr: 'Mon Catalogue' },
   'dash.incomingOrders': { en: 'Incoming Orders', fr: 'Commandes Reçues' },

@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
-import { UserRole, WeeklySchedule, AvailabilityException, DayOfWeek } from '../../types';
+import { WeeklySchedule, AvailabilityException, DayOfWeek } from '../../types';
+import { isProducerDashboardUser } from '../../services/producerSession';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, Plus, Trash2, CheckCircle, Loader2 } from 'lucide-react';
 import { SectionLoader } from '../../components/Loaders';
@@ -45,7 +46,7 @@ export const ProducerAvailability: React.FC = () => {
 
   // Access guard runs against the session itself, NOT against `currentProducer`
   // (which is null while the producer catalog hydrates on hard refresh).
-  if (!user || user.role !== UserRole.PRODUCER) {
+  if (!user || !isProducerDashboardUser(user)) {
     return <div className="p-8 text-center">Access Denied</div>;
   }
 

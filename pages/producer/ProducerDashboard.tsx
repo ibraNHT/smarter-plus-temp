@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
-import { UserRole, ProducerStatus, OrderStatus, Order, OfferType, Review } from '../../types';
-import { Link, useNavigate } from 'react-router-dom';
+import { ProducerStatus, OrderStatus, Order, OfferType, Review } from '../../types';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2 } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
@@ -10,11 +10,19 @@ import { ConfirmModal } from '../../components/ConfirmModal';
 import { SectionLoader, ListSkeleton } from '../../components/Loaders';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { orderHasService, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
+import {
+  findProducerForUser,
+  isProducerPendingApproval,
+  resolveManagedProducerProfileId,
+} from '../../utils/producerAccountStatus';
+import { isProducerDashboardUser, isManagerSession, producerAccountUserId } from '../../services/producerSession';
 
 export const ProducerDashboard: React.FC = () => {
    const { user, getProducerOffers, deleteOffer, producers, clients, orders, confirmOrder, rejectOrder, startDelivery, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating, pickupPoints, refreshOrders, refreshOffers, refreshProducers, refreshClients } = useStore();
    const { t } = useTranslation();
    const navigate = useNavigate();
+   const [searchParams, setSearchParams] = useSearchParams();
+   const showWelcomePending = searchParams.get('welcome') === 'pending';
 
    // Dashboard is a single-screen view with multiple sections all visible at
    // once, so it fetches everything it shows in one go. Per-section loaders
@@ -24,12 +32,12 @@ export const ProducerDashboard: React.FC = () => {
    useEffect(() => {
       let cancelled = false;
       setPageLoading(true);
-      Promise.all([
-         refreshProducers(),
-         refreshClients(),
-         refreshOffers(),
-         refreshOrders(),
-      ]).finally(() => {
+      const load = async () => {
+         await refreshProducers();
+         if (cancelled) return;
+         await Promise.all([refreshClients(), refreshOffers(), refreshOrders({ force: true })]);
+      };
+      void load().finally(() => {
          if (!cancelled) setPageLoading(false);
       });
       return () => { cancelled = true; };
@@ -53,10 +61,18 @@ export const ProducerDashboard: React.FC = () => {
    const [offerDeleteTarget, setOfferDeleteTarget] = useState<{ id: string; title: string } | null>(null);
    const [isDeletingOffer, setIsDeletingOffer] = useState(false);
 
-   const currentProducer = producers.find(p => p.id === user?.producerId);
+   const currentProducer = findProducerForUser(producers, user);
+   const isPendingApproval = isProducerPendingApproval(user, currentProducer);
    const myOffers = user?.producerId ? getProducerOffers(user.producerId) : [];
+
+   useEffect(() => {
+      if (!showWelcomePending) return;
+      const next = new URLSearchParams(searchParams);
+      next.delete('welcome');
+      setSearchParams(next, { replace: true });
+   }, [showWelcomePending, searchParams, setSearchParams]);
    const isProducerProfileLoading =
-      user?.role === UserRole.PRODUCER &&
+      isProducerDashboardUser(user) &&
       Boolean(user?.producerId) &&
       !currentProducer &&
       (pageLoading || !profileLookupTimedOut);
@@ -70,9 +86,17 @@ export const ProducerDashboard: React.FC = () => {
       return () => clearTimeout(timer);
    }, [isProducerProfileLoading]);
 
+   const managedProducerProfileId = resolveManagedProducerProfileId(producers, user);
+
+   useEffect(() => {
+      if (!user || !isProducerDashboardUser(user)) return;
+      if (!managedProducerProfileId && !user.managedProducerUserId) return;
+      void refreshOrders({ force: true });
+   }, [user?.id, user?.producerId, user?.managedProducerUserId, managedProducerProfileId]);
+
    // Seller-side orders (producer can manage/confirm/reject these)
    const producerOwnedOrders = orders.filter((o) =>
-      o.producerId === currentProducer?.id || o.producerId === user?.producerId,
+      managedProducerProfileId ? o.producerId === managedProducerProfileId : false,
    );
    // Buyer-side orders (producer may have placed orders as a client account)
    const producerPurchaseOrders = orders.filter(
@@ -98,12 +122,13 @@ export const ProducerDashboard: React.FC = () => {
 
    // My Reviews
    /** Backend stores `targetId` as the rated party's auth user id, not producer profile id. */
-   const myReviews = user?.id
-     ? reviews.filter((r) => r.targetId === user.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+   const producerUserId = user ? producerAccountUserId(user) : '';
+   const myReviews = producerUserId
+     ? reviews.filter((r) => r.targetId === producerUserId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
      : [];
-   const myAverageRating = user?.id ? getAverageRating(user.id) : 0;
+   const myAverageRating = producerUserId ? getAverageRating(producerUserId) : 0;
 
-   if (!user || user.role !== UserRole.PRODUCER) {
+   if (!isProducerDashboardUser(user)) {
       return <div className="p-8 text-center">Access Denied</div>;
    }
 
@@ -363,20 +388,44 @@ export const ProducerDashboard: React.FC = () => {
       return `${order.items.length} ${t('dash.itemsProduct')} · ${order.totalAmount.toLocaleString()} XAF`;
    };
 
+   const managingAsAccountManager = isManagerSession(user);
+   const managedProducer = findProducerForUser(producers, user);
+   const managedProducerLabel =
+      managedProducer?.name ||
+      [managedProducer?.firstName, managedProducer?.lastName].filter(Boolean).join(' ') ||
+      'this producer';
+
    return (
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 px-4">
          <SEO title="Producer Dashboard | AgriMarket" noindex={true} />
+         {managingAsAccountManager && (
+            <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+               <p className="font-semibold">Account manager mode</p>
+               <p className="mt-1 text-sky-800">
+                  Managing <span className="font-medium">{managedProducerLabel}</span> — full producer tools except changing their phone, email, or identity fields.
+               </p>
+            </div>
+         )}
          {/* Status Banner */}
-         {currentProducer.status === ProducerStatus.PENDING && (
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
-               <div className="flex">
-                  <div className="flex-shrink-0">
-                     <AlertTriangle className="h-5 w-5 text-yellow-400" aria-hidden="true" />
-                  </div>
-                  <div className="ml-3">
-                     <p className="text-sm text-yellow-700">
-                        {t('dash.pendingMsg')}
-                     </p>
+         {showWelcomePending && isPendingApproval && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+               <p className="text-sm font-semibold text-green-900">{t('producerStatus.welcomePending')}</p>
+            </div>
+         )}
+
+         {isPendingApproval && (
+            <div className="bg-amber-50 border-l-4 border-amber-500 p-4 sm:p-5 mb-6 rounded-r-lg shadow-sm">
+               <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                  <AlertTriangle className="h-6 w-6 text-amber-500 flex-shrink-0" aria-hidden />
+                  <div className="flex-1 min-w-0">
+                     <p className="text-base font-bold text-amber-900">{t('producerStatus.pendingTitle')}</p>
+                     <p className="text-sm text-amber-800 mt-1">{t('dash.pendingMsg')}</p>
+                     <Link
+                        to="/producer/profile/info"
+                        className="inline-flex mt-3 items-center text-sm font-semibold text-amber-900 underline hover:text-amber-950"
+                     >
+                        {t('producerStatus.completeVerification')} →
+                     </Link>
                   </div>
                </div>
             </div>
@@ -394,8 +443,12 @@ export const ProducerDashboard: React.FC = () => {
                </div>
                <div className="mt-1 flex flex-col sm:flex-row sm:flex-wrap sm:mt-0 sm:space-x-6 sm:ml-12">
                   <div className="mt-2 flex items-center text-sm text-gray-500">
-                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${currentProducer.status === ProducerStatus.VALIDATED ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                        {t('dash.status')}: {currentProducer.status}
+                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${currentProducer.status === ProducerStatus.VALIDATED ? 'bg-green-100 text-green-800' : currentProducer.status === ProducerStatus.REJECTED ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-900'}`}>
+                        {currentProducer.status === ProducerStatus.VALIDATED
+                           ? t('producerStatus.roleBadgeApproved')
+                           : currentProducer.status === ProducerStatus.REJECTED
+                             ? t('producerStatus.roleBadgeRejected')
+                             : t('producerStatus.roleBadgePending')}
                      </span>
                   </div>
                   <div className="mt-2 flex items-center text-sm text-gray-500">
@@ -701,10 +754,20 @@ export const ProducerDashboard: React.FC = () => {
          <div className="bg-white shadow overflow-hidden sm:rounded-md mb-8">
             <div className="px-4 py-5 border-b border-gray-200 sm:px-6 flex justify-between items-center">
                <h3 className="text-lg leading-6 font-medium text-gray-900">{t('dash.myCatalog')}</h3>
-               <Link to="/producer/offers/new" className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                  <Plus className="-ml-1 mr-1 h-4 w-4" aria-hidden="true" />
-                  {t('nav.newOffer')}
-               </Link>
+               {isPendingApproval ? (
+                  <span
+                     className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium text-amber-900 bg-amber-100 border border-amber-300 cursor-not-allowed"
+                     title={t('producerStatus.cannotPublishYet')}
+                  >
+                     <Plus className="-ml-1 mr-1 h-4 w-4" aria-hidden="true" />
+                     {t('nav.newOffer')} — {t('dash.pending')}
+                  </span>
+               ) : (
+                  <Link to="/producer/offers/new" className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                     <Plus className="-ml-1 mr-1 h-4 w-4" aria-hidden="true" />
+                     {t('nav.newOffer')}
+                  </Link>
+               )}
             </div>
             <ul className="divide-y divide-gray-200 agm-dash-scroll-4 agm-dash-row-tall scrollbar-thin">
                {myOffers.length === 0 ? (
@@ -899,7 +962,7 @@ export const ProducerDashboard: React.FC = () => {
                                  <ul className="list-disc ml-4">
                                     {selectedOrder.disputeEvidence.map(ev => (
                                        <li key={ev.id} className="text-xs text-red-600">
-                                          {ev.fileName} ({ev.uploaderId === user.id ? 'You' : 'Client'})
+                                          {ev.fileName} ({ev.uploaderId === user?.id ? 'You' : 'Client'})
                                        </li>
                                     ))}
                                  </ul>

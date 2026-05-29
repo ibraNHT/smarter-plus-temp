@@ -8,6 +8,8 @@ import { ShoppingBasket, Search, Star, Filter, Heart, Layers, ArrowLeft } from '
 import { SEO } from '../../components/SEO';
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { offerImageInBox, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
+import { isProducerDashboardUser } from '../../services/producerSession';
+import { findProducerForUser } from '../../utils/producerAccountStatus';
 
 export const AtiStore: React.FC = () => {
   const { offers, toggleFavorite, user, clients, producers, compareList, addToCompare, removeFromCompare, getAverageRating, reviews, refreshOffers, refreshProducers, refreshAllReviews } = useStore();
@@ -37,8 +39,8 @@ export const AtiStore: React.FC = () => {
     if (user.role === UserRole.CLIENT) {
       const c = clients.find(client => client.id === user.id);
       favorites = c?.favorites || [];
-    } else if (user.role === UserRole.PRODUCER) {
-      const p = producers.find(prod => prod.id === user.producerId);
+    } else if (isProducerDashboardUser(user)) {
+      const p = findProducerForUser(producers, user);
       favorites = p?.favorites || [];
     }
   }
@@ -200,7 +202,7 @@ export const AtiStore: React.FC = () => {
                             return (
                               <div key={offer.id} className="relative">
                                 <div className="absolute top-2 right-2 z-10 flex gap-1">
-                                  {(user?.role === UserRole.CLIENT || user?.role === UserRole.PRODUCER) && (
+                                  {(user?.role === UserRole.CLIENT || isProducerDashboardUser(user)) && (
                                     <button
                                       onClick={(e) => { e.preventDefault(); toggleFavorite(offer.id); }}
                                       className="p-1.5 rounded-full bg-white/80 hover:bg-white shadow-sm transition-colors"
@@ -252,7 +254,7 @@ export const AtiStore: React.FC = () => {
                             return (
                               <div key={offer.id} className="relative min-w-[220px] w-[240px] flex-shrink-0">
                                 <div className="absolute top-2 right-2 z-10 flex gap-1">
-                                  {(user?.role === UserRole.CLIENT || user?.role === UserRole.PRODUCER) && (
+                                  {(user?.role === UserRole.CLIENT || isProducerDashboardUser(user)) && (
                                     <button
                                       onClick={(e) => { e.preventDefault(); toggleFavorite(offer.id); }}
                                       className="p-1.5 rounded-full bg-white/80 hover:bg-white shadow-sm transition-colors"

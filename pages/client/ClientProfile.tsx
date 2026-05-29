@@ -212,7 +212,7 @@ export const ClientProfile: React.FC = () => {
             return;
          }
          setShowUpgradeModal(false);
-         navigate('/producer/dashboard');
+         navigate('/producer/dashboard?welcome=pending');
       },
    });
 

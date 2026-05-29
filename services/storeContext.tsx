@@ -185,6 +185,8 @@ import { fetchMyReferrals } from './referralsApi';
 import { validateCouponRemote, type CouponValidationChannel } from './couponsApi';
 import { io, Socket } from 'socket.io-client';
 import { isWebAppAllowedRole, isWebAppSessionBlocked } from './authRoles';
+import { isProducerDashboardUser, isManagerSession, producerAccountUserId } from './producerSession';
+import { findProducerForUser } from '../utils/producerAccountStatus';
 import { useSessionStore } from '../stores/sessionStore';
 import { API_ENDPOINTS } from '../client-api/endpoints';
 import { queryClient } from '../client-api/queryClient';
@@ -439,7 +441,7 @@ const StoreContext = createContext<StoreContextType | undefined>(undefined);
 const getOrdersEndpointsForUser = (activeUser?: UserSession | null): string[] => {
   if (!activeUser) return [];
   if (activeUser.role === UserRole.CLIENT) return [API_ENDPOINTS.orders.my];
-  if (activeUser.role === UserRole.PRODUCER) {
+  if (isProducerDashboardUser(activeUser)) {
     // `GET /orders/my-orders` uses GetClientOrders and returns 403 without a client profile.
     // Only add it when the session has a client profile (producer–buyer or linked clientId).
     const out: string[] = [API_ENDPOINTS.orders.producer];
@@ -542,6 +544,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       );
       if (hasStoredSession) {
         await attemptTokenRefresh();
+        if (!cancelled) await hydrateMarketplaceSession();
       }
       if (!cancelled) void bootstrapForRoute();
     })();
@@ -1029,8 +1032,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const displayName =
       (p as any).user?.displayName ??
       `${String((p as any).firstName ?? '').trim()} ${String((p as any).lastName ?? '').trim()}`.trim();
+    const userId = String((p as any).userId ?? (p as any).user?.id ?? '');
     return {
       ...p,
+      userId: userId || (p as any).userId,
       name: displayName || 'Unknown',
       profileImageUrl: (p as any).user?.profileImageUrl ?? (p as any).profileImageUrl,
       locations: Array.isArray(p.locations) ? p.locations.map(normalizeLocationFromApi) : [],
@@ -1140,6 +1145,38 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setOffers(Array.from(byId.values()));
   };
 
+  const syncProducerDashboardSession = (rows: ProducerProfile[]): boolean => {
+    const session = userRef.current;
+    if (!session) return false;
+    let next: UserSession | null = null;
+    if (isManagerSession(session) && session.managedProducerUserId) {
+      const managed = rows.find((p) => {
+        const profileUserId = p.userId ?? (p as { user?: { id?: string } }).user?.id;
+        return profileUserId === session.managedProducerUserId;
+      });
+      if (managed && session.producerId !== managed.id) {
+        next = {
+          ...session,
+          producerId: managed.id,
+          managedProducerUserId: session.managedProducerUserId,
+        };
+      }
+    } else if (session.role === UserRole.PRODUCER && !session.producerId) {
+      const own = rows.find((p) => {
+        const profileUserId = p.userId ?? (p as { user?: { id?: string } }).user?.id;
+        return profileUserId === session.id;
+      });
+      if (own) next = { ...session, producerId: own.id };
+    }
+    if (!next) return false;
+    userRef.current = next;
+    setUser(next);
+    useSessionStore.getState().setUser(next);
+    localStorage.setItem('currentUser', JSON.stringify(next));
+    bustCache(QK.orders(producerAccountUserId(next), next.role, next.clientId));
+    return true;
+  };
+
   const refreshProducers = async (opts?: { force?: boolean }) => {
     const session = userRef.current;
     const data = await cached(
@@ -1151,22 +1188,38 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!Array.isArray(data)) return;
     const rows = data.map(mapProducerRow);
     setProducers(rows);
+    const priorProducerId = session?.producerId;
+    const sessionSynced = syncProducerDashboardSession(rows);
+    const activeSession = userRef.current;
     if (
-      session?.role === UserRole.PRODUCER &&
-      session.producerId &&
-      !rows.some((p) => p.id === session.producerId)
+      sessionSynced ||
+      (activeSession?.producerId && activeSession.producerId !== priorProducerId)
     ) {
+      bustCache(QK.orders(producerAccountUserId(activeSession!), activeSession!.role, activeSession!.clientId));
+      if (getToken()) {
+        await refreshOrders({ force: true });
+      }
+    }
+    if (
+      activeSession &&
+      isProducerDashboardUser(activeSession) &&
+      activeSession.producerId &&
+      !rows.some((p) => p.id === activeSession.producerId)
+    ) {
+      const ownerUserId = isManagerSession(activeSession)
+        ? activeSession.managedProducerUserId ?? activeSession.id
+        : activeSession.id;
       upsertProducerInStore({
-        id: session.producerId,
-        userId: session.id,
-        name: session.name ?? session.displayName ?? 'Producer',
-        firstName: session.name ?? 'Producer',
+        id: activeSession.producerId,
+        userId: ownerUserId,
+        name: activeSession.name ?? activeSession.displayName ?? 'Producer',
+        firstName: activeSession.name ?? 'Producer',
         lastName: '',
         user: {
-          id: session.id,
-          email: session.email,
-          phone: session.phone,
-          displayName: session.displayName ?? session.name,
+          id: ownerUserId,
+          email: activeSession.email,
+          phone: activeSession.phone,
+          displayName: activeSession.displayName ?? activeSession.name,
         },
       });
     }
@@ -1274,8 +1327,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!u || !getToken()) return;
     const endpoints = getOrdersEndpointsForUser(u);
     if (endpoints.length === 0) return;
+    const ordersCacheOwner = producerAccountUserId(u) || u.id;
     const data = await cached(
-      QK.orders(u.id, u.role, u.clientId),
+      QK.orders(ordersCacheOwner, u.role, u.clientId),
       async () => {
         const rows = await Promise.all(
           endpoints.map((ep) =>
@@ -1293,29 +1347,33 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const refreshWallet = async (opts?: { force?: boolean }) => {
     const u = userRef.current;
     if (!u || !getToken()) return;
+    const walletKey = producerAccountUserId(u);
     const data = await cached(
-      QK.wallet(u.id),
+      QK.wallet(walletKey),
       () => apiFetch<any>(API_ENDPOINTS.wallet.me, { silent401: true } as any),
       STALE.wallet,
       opts?.force,
     );
     if (!data || !data.userId) return;
+    const walletRow = {
+      userId: data.userId,
+      balance: Number(data.balance) || 0,
+      pendingBalance: Number(data.pendingBalance) || 0,
+      transactions: Array.isArray(data.transactions) ? data.transactions : [],
+    };
     setWallets((prev) => ({
       ...prev,
-      [u.id]: {
-        userId: data.userId,
-        balance: Number(data.balance) || 0,
-        pendingBalance: Number(data.pendingBalance) || 0,
-        transactions: Array.isArray(data.transactions) ? data.transactions : [],
-      },
+      [walletKey]: walletRow,
+      [u.id]: walletRow,
     }));
   };
 
   const refreshWithdrawals = async (opts?: { force?: boolean }) => {
     const u = userRef.current;
     if (!u || !getToken()) return;
+    const walletKey = producerAccountUserId(u);
     const data = await cached(
-      QK.withdrawals(u.id),
+      QK.withdrawals(walletKey),
       () => apiFetch<any[]>(API_ENDPOINTS.wallet.myWithdrawals, { silent401: true } as any),
       STALE.withdrawals,
       opts?.force,
@@ -1326,7 +1384,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const refreshMyPortfolios = async (opts?: { force?: boolean }) => {
     const u = userRef.current;
     if (!u || !getToken()) return;
-    if (u.role !== UserRole.PRODUCER || !u.producerId) return;
+    if (!isProducerDashboardUser(u) || !u.producerId) return;
     const data = await cached(
       QK.myPortfolios(u.id),
       () => apiFetch<Portfolio[]>(API_ENDPOINTS.portfolios.list, { silent401: true } as any),
@@ -1450,7 +1508,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const fetchData = async (currentUser?: typeof user) => {
     const activeUser = currentUser ?? user;
     const isClientSession = activeUser?.role === UserRole.CLIENT;
-    const isProducerSession = activeUser?.role === UserRole.PRODUCER;
+    const isProducerSession = isProducerDashboardUser(activeUser);
     // BrowserRouter uses pathname; hash is often empty (only used if present).
     const path =
       typeof window !== 'undefined'
@@ -1525,14 +1583,17 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             : []
         })) : []);
         if (resWallet && resWallet.userId) {
-          setWallets(prev => ({
+          const walletKey = producerAccountUserId(activeUser);
+          const walletRow = {
+            userId: resWallet.userId,
+            balance: Number(resWallet.balance) || 0,
+            pendingBalance: Number(resWallet.pendingBalance) || 0,
+            transactions: Array.isArray(resWallet.transactions) ? resWallet.transactions : [],
+          };
+          setWallets((prev) => ({
             ...prev,
-            [activeUser.id]: {
-              userId: resWallet.userId,
-              balance: Number(resWallet.balance) || 0,
-              pendingBalance: Number(resWallet.pendingBalance) || 0,
-              transactions: Array.isArray(resWallet.transactions) ? resWallet.transactions : [],
-            },
+            [walletKey]: walletRow,
+            [activeUser.id]: walletRow,
           }));
         }
         setPortfolios(Array.isArray(resMyPortfolios) ? resMyPortfolios : []);
@@ -1714,6 +1775,35 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     user: UserSession;
   };
 
+  const hydrateMarketplaceSession = async (): Promise<UserSession | null> => {
+    if (!getToken()) return userRef.current;
+    try {
+      const me = await apiFetch<UserSession>(API_ENDPOINTS.auth.me, { silent401: true } as any);
+      if (!me?.id || !isWebAppAllowedRole(me.role)) return userRef.current;
+      const current = userRef.current;
+      const merged: UserSession = {
+        ...(current ?? ({} as UserSession)),
+        ...me,
+        id: me.id,
+        role: me.role,
+        email: me.email ?? current?.email ?? '',
+        displayName: me.displayName ?? current?.displayName,
+        name: me.name ?? current?.name ?? me.displayName,
+        producerId: me.producerId ?? current?.producerId,
+        clientId: me.clientId ?? current?.clientId,
+        managedProducerUserId:
+          me.managedProducerUserId ?? current?.managedProducerUserId,
+      };
+      userRef.current = merged;
+      setUser(merged);
+      useSessionStore.getState().setUser(merged);
+      localStorage.setItem('currentUser', JSON.stringify(merged));
+      return merged;
+    } catch {
+      return userRef.current;
+    }
+  };
+
   const establishSession = async (
     data: AuthSessionPayload,
     options?: { skipCatalogFetch?: boolean },
@@ -1733,6 +1823,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setUser(data.user);
     useSessionStore.getState().setUser(data.user);
     localStorage.setItem('currentUser', JSON.stringify(data.user));
+    userRef.current = data.user;
+    await hydrateMarketplaceSession();
 
     const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
     if (localCart.length > 0) {
@@ -1747,7 +1839,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     // profile is created and overwrite `clients` / `producers` with stale data. Registration
     // flows call `fetchData(mergedUser)` once at the end instead.
     if (!options?.skipCatalogFetch) {
-      void fetchData(data.user);
+      void fetchData(userRef.current ?? data.user);
     }
   };
 
@@ -2282,8 +2374,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // ─── OFFERS ──────────────────────────────────────────────────────────────────
 
   const createOffer = async (offerData: any): Promise<{ success: boolean; error?: string }> => {
-    if (!user || !user.producerId) {
+    if (!user || !isProducerDashboardUser(user) || !user.producerId) {
       return { success: false, error: 'You must be signed in as a producer to publish an offer.' };
+    }
+    const myProducer = findProducerForUser(producers, user);
+    if (myProducer?.status === 'PENDING') {
+      return {
+        success: false,
+        error:
+          'Your producer account is pending approval. Complete verification in your profile before publishing offers.',
+      };
     }
     try {
       const payload = {
@@ -2395,7 +2495,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // ─── CART ────────────────────────────────────────────────────────────────────
 
   const addToCart = (offer: Offer, quantity: number, bookingDate?: string): { success: boolean; error?: 'PRODUCER_CONFLICT' | 'OWN_OFFER' | 'DUPLICATE_SERVICE_SLOT' } => {
-    if (user?.role === UserRole.PRODUCER && user.producerId && offer.producerId === user.producerId) {
+    if (user && isProducerDashboardUser(user) && user.producerId && offer.producerId === user.producerId) {
       return { success: false, error: 'OWN_OFFER' };
     }
     if (cart.length > 0 && cart[0].producerId !== offer.producerId) return { success: false, error: 'PRODUCER_CONFLICT' };
@@ -2498,7 +2598,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       bustCache(['offers']);
       if (user?.id) bustCache(QK.cart(user.id));
       if (user) addNotification(user.id, `Order #${saved.id.substring(saved.id.length - 6).toUpperCase()} placed!`, 'SUCCESS');
-      if (user?.role === UserRole.PRODUCER && saved?.clientId) {
+      if (isProducerDashboardUser(user) && saved?.clientId) {
         setUser(prev => {
           if (!prev) return prev;
           const next = { ...prev, clientId: saved.clientId };
@@ -2520,7 +2620,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const confirmOrder = async (orderId: string) => {
     const targetOrder = orders.find((o) => o.id === orderId);
     if (!targetOrder || !user) return;
-    if (user.role !== UserRole.PRODUCER || targetOrder.producerId !== user.producerId) {
+    if (!isProducerDashboardUser(user) || targetOrder.producerId !== user.producerId) {
       addNotification(user.id, 'You can only confirm orders assigned to your producer profile.', 'ERROR');
       return;
     }
@@ -2698,8 +2798,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         method: 'POST',
         body: JSON.stringify({ amount, provider, referenceId: refId }),
       });
-      if (result.wallet) setWallets(prev => ({ ...prev, [user.id]: result.wallet }));
-      bustCache(QK.wallet(user.id));
+      const walletKey = producerAccountUserId(user);
+      if (result.wallet) {
+        setWallets((prev) => ({ ...prev, [walletKey]: result.wallet, [user.id]: result.wallet }));
+      }
+      bustCache(QK.wallet(walletKey));
       return { success: result.success, message: result.message };
     } catch (error: any) {
       logApiFailure('Failed to fund wallet', error);
@@ -2881,7 +2984,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!user) return;
     if (user.role === UserRole.CLIENT) {
       setClients(prev => prev.map(c => clientProfileMatchesSession(c, user) ? { ...c, searchHistory: [term, ...(c.searchHistory || [])].slice(0, 20) } : c));
-    } else if (user.role === UserRole.PRODUCER && user.producerId) {
+    } else if (isProducerDashboardUser(user) && user.producerId) {
       setProducers(prev => prev.map(p => p.id === user.producerId ? { ...p, searchHistory: [term, ...(p.searchHistory || [])].slice(0, 20) } : p));
     }
   };
@@ -2892,7 +2995,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (user.role === UserRole.CLIENT) {
       const client = clients.find(c => clientProfileMatchesSession(c, user));
       history = client?.searchHistory || [];
-    } else if (user.role === UserRole.PRODUCER && user.producerId) {
+    } else if (isProducerDashboardUser(user) && user.producerId) {
       const producer = producers.find(p => p.id === user.producerId);
       history = producer?.searchHistory || [];
     }
@@ -2933,7 +3036,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return;
     }
 
-    if (user.role === UserRole.PRODUCER && user.producerId) {
+    if (isProducerDashboardUser(user) && user.producerId) {
       const producer = producers.find(p => p.id === user.producerId);
       if (!producer) return;
       const previousFavorites = [...(producer.favorites || [])];
@@ -2969,7 +3072,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
         return c;
       }));
-    } else if (user.role === UserRole.PRODUCER && user.producerId) {
+    } else if (isProducerDashboardUser(user) && user.producerId) {
       setProducers(prev => prev.map(p => {
         if (p.id === user.producerId && !p.favorites?.includes(offerId)) {
           return { ...p, favorites: [...(p.favorites || []), offerId] };

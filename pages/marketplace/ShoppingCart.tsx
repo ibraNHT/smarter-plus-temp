@@ -7,7 +7,8 @@ import { Trash2, ArrowLeft, ShoppingBag, CheckCircle, Calendar, X, MapPin, Heart
 import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
 import { ConfirmModal } from '../../components/ConfirmModal';
-import { OfferType, MarketType, UserRole, Location, PreferredHomeDeliverySnapshot } from '../../types';
+import { OfferType, MarketType, Location, PreferredHomeDeliverySnapshot } from '../../types';
+import { isProducerDashboardUser } from '../../services/producerSession';
 
 function pickDefaultHomeLocationIndex(
   locs: Location[],
@@ -141,7 +142,7 @@ export const ShoppingCart: React.FC = () => {
   const homeLocations =
     currentClient?.locations?.length
       ? currentClient.locations
-      : (user?.role === UserRole.PRODUCER ? (currentProducer?.locations ?? []) : []);
+      : (isProducerDashboardUser(user) ? (currentProducer?.locations ?? []) : []);
   const selectedHomeLocation = homeLocations[selectedHomeLocationIndex] ?? homeLocations[0];
 
   const preferredHomeDelivery =
@@ -593,7 +594,7 @@ export const ShoppingCart: React.FC = () => {
                     <p className="text-red-500">
                       No address in profile.{" "}
                       <Link
-                        to={user?.role === UserRole.PRODUCER ? '/producer/profile' : '/client/profile'}
+                        to={isProducerDashboardUser(user) ? '/producer/profile' : '/client/profile'}
                         className="underline font-medium text-red-600 hover:text-red-700"
                       >
                         Set address now

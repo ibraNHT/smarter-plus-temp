@@ -4,7 +4,9 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../services/storeContext';
 import { useTranslation } from '../services/i18nContext';
 import { usePwaInstall } from '../contexts/PwaInstallContext';
-import { UserRole } from '../types';
+import { ProducerStatus, UserRole } from '../types';
+import { findProducerForUser } from '../utils/producerAccountStatus';
+import { isProducerDashboardUser } from '../services/producerSession';
 import { getToken } from '../services/apiService';
 import { isWebAppSessionBlocked } from '../services/authRoles';
 import { LogoutConfirmModal } from './LogoutConfirmModal';
@@ -12,7 +14,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { LogOut, Sprout, ShoppingBasket, Tractor, ShoppingCart, Globe, Bell, X, User, MessageCircle, ChevronDown, Download, CheckCheck, Trash2, Menu, Wallet } from 'lucide-react';
 
 const marketplaceVisible = (user: { role?: UserRole } | null) =>
-  !user || user.role === UserRole.CLIENT || user.role === UserRole.PRODUCER;
+  !user || user.role === UserRole.CLIENT || isProducerDashboardUser(user);
 
 export const Navbar: React.FC = () => {
   const { user, producers, clients, logout, cart, notifications, markNotificationsAsRead, markNotificationAsRead, deleteNotification, clearNotifications, chats } = useStore();
@@ -49,10 +51,25 @@ export const Navbar: React.FC = () => {
     setLanguage(language === 'en' ? 'fr' : 'en');
   };
 
+  const currentProducerProfile = findProducerForUser(producers, user);
+
+  const getProducerRoleLabel = (): string => {
+    if (user?.role === UserRole.MANAGER) return 'Account manager';
+    if (!isProducerDashboardUser(user) || user?.role !== UserRole.PRODUCER) return user?.role ?? '';
+    const status = currentProducerProfile?.status;
+    if (status === ProducerStatus.PENDING) return t('producerStatus.roleBadgePending');
+    if (status === ProducerStatus.REJECTED) return t('producerStatus.roleBadgeRejected');
+    if (status === ProducerStatus.VALIDATED) return t('producerStatus.roleBadgeApproved');
+    return t('producerStatus.roleBadgePending');
+  };
+
   const getUserDisplayName = () => {
     if (!user) return '';
-    if (user.role === UserRole.PRODUCER) {
-      const p = producers.find(x => x.userId === user.id || x.id === user.producerId);
+    if (user.role === UserRole.MANAGER) {
+      return user.displayName || user.name || user.email || '';
+    }
+    if (isProducerDashboardUser(user)) {
+      const p = findProducerForUser(producers, user);
       if (p) {
         if (p.name) return p.name;
         if (p.firstName) return `${p.firstName} ${p.lastName || ''}`.trim();
@@ -99,14 +116,14 @@ export const Navbar: React.FC = () => {
           : notif.link;
       // Backend may send generic links that don't exist in WebApp routes.
       if (normalized === '/reviews') {
-        return user?.role === UserRole.PRODUCER ? '/producer/dashboard' : '/client/profile?tab=reputation';
+        return isProducerDashboardUser(user) ? '/producer/dashboard' : '/client/profile?tab=reputation';
       }
       return normalized;
     }
     const msg = (notif.message || '').toLowerCase();
     if (msg.includes('chat') || msg.includes('proposal') || msg.includes('message')) return '/messages';
-    if (msg.includes('review')) return user?.role === UserRole.PRODUCER ? '/producer/dashboard' : '/client/profile?tab=reputation';
-    if (msg.includes('order')) return user?.role === UserRole.PRODUCER ? '/producer/dashboard' : '/client/profile';
+    if (msg.includes('review')) return isProducerDashboardUser(user) ? '/producer/dashboard' : '/client/profile?tab=reputation';
+    if (msg.includes('order')) return isProducerDashboardUser(user) ? '/producer/dashboard' : '/client/profile';
     return '';
   };
 
@@ -140,7 +157,7 @@ export const Navbar: React.FC = () => {
   const getHomeLink = () => {
     if (staffWrongApp) return '/';
     if (!user) return '/';
-    if (user.role === UserRole.PRODUCER) return '/producer/dashboard';
+    if (isProducerDashboardUser(user)) return '/producer/dashboard';
     return '/market/producers';
   };
 
@@ -334,7 +351,7 @@ export const Navbar: React.FC = () => {
                 </div>
 
                 {/* Profile menu: profile link + Install app (after banner dismiss) */}
-                {(user.role === UserRole.CLIENT || user.role === UserRole.PRODUCER) && (
+                {(user.role === UserRole.CLIENT || isProducerDashboardUser(user)) && (
                   <div className="relative" ref={profileMenuRef}>
                     <button
                       type="button"
@@ -356,10 +373,23 @@ export const Navbar: React.FC = () => {
                           >
                             {isUserNameResolving ? '…' : getUserDisplayName()}
                           </p>
-                          <span className="text-xs text-gray-500">{user.role}</span>
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full max-w-full truncate inline-block ${
+                              currentProducerProfile?.status === ProducerStatus.PENDING
+                                ? 'bg-amber-100 text-amber-900'
+                                : currentProducerProfile?.status === ProducerStatus.REJECTED
+                                  ? 'bg-red-100 text-red-800'
+                                  : currentProducerProfile?.status === ProducerStatus.VALIDATED
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-gray-100 text-gray-500'
+                            }`}
+                            title={getProducerRoleLabel()}
+                          >
+                            {getProducerRoleLabel()}
+                          </span>
                         </div>
                         <Link
-                          to={user.role === UserRole.CLIENT ? '/client/profile' : '/producer/profile'}
+                          to={user.role === UserRole.CLIENT ? '/client/profile' : '/producer/profile/info'}
                           className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                           onClick={() => setProfileMenuOpen(false)}
                         >
@@ -394,8 +424,22 @@ export const Navbar: React.FC = () => {
                       getUserDisplayName()
                     )}
                   </span>
-                  <span className="text-xs text-gray-500 px-2 py-0.5 rounded-full bg-gray-100">
-                    {user.role}
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full max-w-full truncate ${
+                      isProducerDashboardUser(user) &&
+                      currentProducerProfile?.status === ProducerStatus.PENDING
+                        ? 'bg-amber-100 text-amber-900'
+                        : isProducerDashboardUser(user) &&
+                            currentProducerProfile?.status === ProducerStatus.REJECTED
+                          ? 'bg-red-100 text-red-800'
+                          : isProducerDashboardUser(user) &&
+                              currentProducerProfile?.status === ProducerStatus.VALIDATED
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-500'
+                    }`}
+                    title={isProducerDashboardUser(user) ? getProducerRoleLabel() : user.role}
+                  >
+                    {isProducerDashboardUser(user) ? getProducerRoleLabel() : user.role}
                   </span>
                 </div>
                 <button
@@ -456,13 +500,13 @@ export const Navbar: React.FC = () => {
                       </span>
                     )}
                   </Link>
-                  {(user.role === UserRole.CLIENT || user.role === UserRole.PRODUCER) && (
+                  {(user.role === UserRole.CLIENT || isProducerDashboardUser(user)) && (
                     <Link to="/wallet" className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">
                       <Wallet className="h-5 w-5" /> {t('nav.wallet')}
                     </Link>
                   )}
                   <Link
-                    to={user.role === UserRole.CLIENT ? '/client/profile' : '/producer/profile'}
+                    to={user.role === UserRole.CLIENT ? '/client/profile' : '/producer/profile/info'}
                     className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
                   >
                     <User className="h-5 w-5" /> {t('nav.profile')}

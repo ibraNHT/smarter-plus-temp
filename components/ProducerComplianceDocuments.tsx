@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { FileText, Upload, X, Loader2 } from 'lucide-react';
 import { useTranslation } from '../services/i18nContext';
 import { uploadDocument } from '../services/uploadService';
@@ -12,10 +12,8 @@ type DocSlotProps = {
   hint: string;
   required?: boolean;
   url?: string;
-  uploading: boolean;
   onUpload: (url: string) => void;
   onClear: () => void;
-  onUploadingChange: (busy: boolean) => void;
 };
 
 const DocSlot: React.FC<DocSlotProps> = ({
@@ -23,12 +21,11 @@ const DocSlot: React.FC<DocSlotProps> = ({
   hint,
   required,
   url,
-  uploading,
   onUpload,
   onClear,
-  onUploadingChange,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
 
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -43,14 +40,14 @@ const DocSlot: React.FC<DocSlotProps> = ({
       alert('Only PNG, JPG, and PDF formats are allowed.');
       return;
     }
-    onUploadingChange(true);
+    setUploading(true);
     try {
       const uploaded = await uploadDocument(file);
       onUpload(uploaded);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Upload failed.');
     } finally {
-      onUploadingChange(false);
+      setUploading(false);
     }
   };
 
@@ -123,16 +120,12 @@ type Props = {
   producerType: 'BUSINESS' | 'INDIVIDUAL';
   values: ProducerComplianceDocValues;
   onChange: (patch: Partial<ProducerComplianceDocValues>) => void;
-  certUploading: boolean;
-  onCertUploadingChange: (busy: boolean) => void;
 };
 
 export const ProducerComplianceDocuments: React.FC<Props> = ({
   producerType: _producerType,
   values,
   onChange,
-  certUploading,
-  onCertUploadingChange,
 }) => {
   const { t } = useTranslation();
 
@@ -163,8 +156,6 @@ export const ProducerComplianceDocuments: React.FC<Props> = ({
         hint={t('profile.niuCertificateHint')}
         required
         url={values.niuCertificateUrl}
-        uploading={certUploading}
-        onUploadingChange={onCertUploadingChange}
         onUpload={(url) => onChange({ niuCertificateUrl: url })}
         onClear={() => onChange({ niuCertificateUrl: '' })}
       />
@@ -174,8 +165,6 @@ export const ProducerComplianceDocuments: React.FC<Props> = ({
         hint={t('profile.taxClearanceDocHint')}
         required
         url={values.taxClearanceCertificateUrl}
-        uploading={certUploading}
-        onUploadingChange={onCertUploadingChange}
         onUpload={(url) => onChange({ taxClearanceCertificateUrl: url })}
         onClear={() => onChange({ taxClearanceCertificateUrl: '' })}
       />
@@ -184,8 +173,6 @@ export const ProducerComplianceDocuments: React.FC<Props> = ({
         label={t('profile.businessRegistration')}
         hint={t('profile.businessRegistrationHint')}
         url={values.businessRegistrationUrl}
-        uploading={certUploading}
-        onUploadingChange={onCertUploadingChange}
         onUpload={(url) => onChange({ businessRegistrationUrl: url })}
         onClear={() => onChange({ businessRegistrationUrl: '' })}
       />

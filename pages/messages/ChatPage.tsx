@@ -5,6 +5,7 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { Send, MessageCircle, ChevronLeft, Gavel, ArrowLeft, Check, AlertCircle, ChevronDown, Clock } from 'lucide-react';
 import { ProposalStatus, type ChatMessage } from '../../types';
+import { isProducerDashboardUser } from '../../services/producerSession';
 import { Spinner } from '../../components/Spinner';
 import { SectionLoader } from '../../components/Loaders';
 
@@ -173,7 +174,7 @@ export const ChatPage: React.FC = () => {
          return latestResolvedTimestamp == null || ts > latestResolvedTimestamp;
       });
    })();
-   const canInitiateFirstProposal = user?.role === 'PRODUCER' || hasExistingProposalInCurrentRound;
+   const canInitiateFirstProposal = isProducerDashboardUser(user) || hasExistingProposalInCurrentRound;
 
    const getUserSide = useCallback((senderId: string): 'CLIENT' | 'PRODUCER' | 'UNKNOWN' => {
       const isClient = clients.some((c) => c.id === senderId || c.userId === senderId);
@@ -222,7 +223,7 @@ export const ChatPage: React.FC = () => {
       return { client, producer };
    })();
 
-   const mySide = user?.role === 'PRODUCER' ? 'PRODUCER' : 'CLIENT';
+   const mySide = isProducerDashboardUser(user) ? 'PRODUCER' : 'CLIENT';
    const mySideProposalCount = mySide === 'PRODUCER' ? proposalCountersThisMonth.producer : proposalCountersThisMonth.client;
    const canSendMoreCounters = mySideProposalCount < 3;
 

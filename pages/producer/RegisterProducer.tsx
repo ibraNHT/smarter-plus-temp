@@ -171,7 +171,7 @@ export const RegisterProducer: React.FC = () => {
 
       if (result.success) {
         setOtpOpen(false);
-        navigate('/producer/dashboard', { replace: true });
+        navigate('/producer/dashboard?welcome=pending', { replace: true });
       } else {
         const msg = result.message || 'Registration failed.';
         setOtpRegisterError(msg);

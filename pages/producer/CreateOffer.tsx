@@ -7,7 +7,8 @@ import { OfferType, UnitOfMeasure, MarketType, Offer } from '../../types';
 import { generateProductDescription } from '../../services/geminiService';
 import { uploadOfferImage } from '../../services/uploadService';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
-import { Sparkles, Loader2, Camera, MapPin, Clock, X } from 'lucide-react';
+import { Sparkles, Loader2, Camera, MapPin, Clock, X, AlertTriangle } from 'lucide-react';
+import { isProducerPendingApproval } from '../../utils/producerAccountStatus';
 import { z } from 'zod';
 
 const SERVICE_ONLY_CATEGORIES = new Set(['Service']);
@@ -344,6 +345,35 @@ export const CreateOffer: React.FC = () => {
   };
 
   const isEditMode = !!existingOffer;
+  const isPendingApproval = isProducerPendingApproval(user, currentProducer);
+
+  if (isPendingApproval && !isEditMode) {
+    return (
+      <div className="max-w-3xl mx-auto py-6 sm:py-10 px-4 sm:px-6 lg:px-8">
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-6 sm:p-8 text-center shadow-sm">
+          <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto mb-3" aria-hidden />
+          <h1 className="text-xl font-bold text-amber-900">{t('producerStatus.pendingTitle')}</h1>
+          <p className="text-sm text-amber-800 mt-2 max-w-lg mx-auto">{t('producerStatus.cannotPublishYet')}</p>
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              type="button"
+              onClick={() => navigate('/producer/profile/info')}
+              className="inline-flex justify-center rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+            >
+              {t('producerStatus.completeVerification')}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/producer/dashboard')}
+              className="inline-flex justify-center rounded-md border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-50"
+            >
+              {t('producerStatus.goToDashboard')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto py-6 sm:py-10 px-4 sm:px-6 lg:px-8">
