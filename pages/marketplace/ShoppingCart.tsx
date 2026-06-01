@@ -7,7 +7,9 @@ import { Trash2, ArrowLeft, ShoppingBag, CheckCircle, Calendar, X, MapPin, Heart
 import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { Modal } from '../../components/Modal';
 import { OfferType, MarketType, Location, PreferredHomeDeliverySnapshot } from '../../types';
+import { LegalAcceptanceCheckbox } from '../../components/LegalAcceptanceCheckbox';
 import { isProducerDashboardUser } from '../../services/producerSession';
 
 function pickDefaultHomeLocationIndex(
@@ -110,6 +112,7 @@ export const ShoppingCart: React.FC = () => {
   const [couponError, setCouponError] = useState('');
   const [couponApplying, setCouponApplying] = useState(false);
   const [orderPlacing, setOrderPlacing] = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(false);
 
   // Delivery Date State (ATI Only)
   const [deliveryDate, setDeliveryDate] = useState('');
@@ -353,6 +356,11 @@ export const ShoppingCart: React.FC = () => {
     if (!user) {
       alert("For security reasons, please log in or create an account to finalize your purchase.");
       navigate('/login');
+      return;
+    }
+
+    if (!legalAccepted) {
+      alert(t('legal.mustAccept'));
       return;
     }
 
@@ -831,11 +839,19 @@ export const ShoppingCart: React.FC = () => {
                 </dl>
               </div>
 
+              <LegalAcceptanceCheckbox
+                id="checkout-legal"
+                checked={legalAccepted}
+                onChange={setLegalAccepted}
+                variant="prominent"
+                className="mt-4"
+              />
+
               <div className="mt-6">
                 <button
                   type="button"
                   onClick={() => void handleInitialPlaceOrder()}
-                  disabled={!canPlaceOrder}
+                  disabled={!canPlaceOrder || !legalAccepted}
                   className="w-full bg-primary-600 border border-transparent rounded-md shadow-sm py-3 px-4 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <CheckCircle className="h-5 w-5 mr-2" />
@@ -854,11 +870,7 @@ export const ShoppingCart: React.FC = () => {
       </div>
 
       {/* Recap Modal */}
-      {showRecap && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowRecap(false)}></div>
-            <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
+      <Modal open={showRecap} onClose={() => setShowRecap(false)} maxWidth="lg" zIndex={50} panelClassName="p-4 sm:p-6">
               <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
                 <h3 className="text-lg font-bold text-gray-900">{t('cart.recap')}</h3>
                 <button onClick={() => setShowRecap(false)}><X className="h-5 w-5 text-gray-400" /></button>
@@ -969,17 +981,10 @@ export const ShoppingCart: React.FC = () => {
                   {orderPlacing ? t('wallet.processing') : t('cart.validate')}
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Guest Email Modal */}
-      {showGuestEmailModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowGuestEmailModal(false)}></div>
-            <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-md sm:p-6 max-h-[90vh] overflow-y-auto">
+      <Modal open={showGuestEmailModal} onClose={() => setShowGuestEmailModal(false)} maxWidth="md" zIndex={50} panelClassName="p-4 sm:p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-bold text-gray-900">Checkout as Guest</h3>
                 <button onClick={() => setShowGuestEmailModal(false)}>
@@ -1011,10 +1016,7 @@ export const ShoppingCart: React.FC = () => {
                   <p className="text-sm text-gray-500">Already have an account? <Link to="/login" className="text-primary-600 font-medium hover:underline">Log in</Link></p>
                 </div>
               </form>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       <ConfirmModal
         open={itemToRemove !== null}

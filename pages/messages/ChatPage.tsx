@@ -8,6 +8,7 @@ import { ProposalStatus, type ChatMessage } from '../../types';
 import { isProducerDashboardUser } from '../../services/producerSession';
 import { Spinner } from '../../components/Spinner';
 import { SectionLoader } from '../../components/Loaders';
+import { Modal } from '../../components/Modal';
 
 export const ChatPage: React.FC = () => {
    const { chatId } = useParams<{ chatId: string }>();
@@ -948,9 +949,19 @@ export const ChatPage: React.FC = () => {
          </div>
 
          {/* Proposal Modal */}
-         {showProposalModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4">
-               <div className="bg-white rounded-t-lg sm:rounded-lg max-w-sm w-full p-5 sm:p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+         <Modal
+            open={showProposalModal}
+            onClose={() => {
+               setShowProposalModal(false);
+               setProposalModalError('');
+               setProposalPriceError('');
+               setProposalQtyError('');
+            }}
+            maxWidth="sm"
+            zIndex={50}
+            backdropClassName="bg-black/50"
+            panelClassName="p-5 sm:p-6"
+         >
                   <h3 className="text-lg font-bold text-gray-900 mb-1">{t('chat.makeProposal')}</h3>
                   {maxPricePerUnit != null && (
                      <p className="text-xs text-gray-500 mb-3">
@@ -1036,14 +1047,22 @@ export const ChatPage: React.FC = () => {
                         {proposalSending ? 'Sending…' : t('chat.proposed')}
                      </button>
                   </div>
-               </div>
-            </div>
-         )}
+         </Modal>
 
          {/* Counter-Offer Modal */}
-         {showCounterModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4">
-               <div className="bg-white rounded-t-lg sm:rounded-lg max-w-sm w-full p-5 sm:p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+         <Modal
+            open={showCounterModal}
+            onClose={() => {
+               setShowCounterModal(false);
+               setCounterTargetMsgId(null);
+               setCounterPriceError('');
+               setCounterQtyError('');
+            }}
+            maxWidth="sm"
+            zIndex={50}
+            backdropClassName="bg-black/50"
+            panelClassName="p-5 sm:p-6"
+         >
                   <h3 className="text-lg font-bold text-gray-900 mb-1">Send a Counter-Offer</h3>
                   <p className="text-sm text-gray-500 mb-4">
                      Propose your own price and quantity. The other party will receive it as a new proposal.
@@ -1116,9 +1135,7 @@ export const ChatPage: React.FC = () => {
                         {counterSending ? 'Sending…' : 'Send Counter-Offer'}
                      </button>
                   </div>
-               </div>
-            </div>
-         )}
+         </Modal>
       </div>
    );
 };

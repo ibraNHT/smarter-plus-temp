@@ -11,6 +11,7 @@ import { SEO } from '../../components/SEO';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { Modal } from '../../components/Modal';
 import { SectionLoader, ListSkeleton } from '../../components/Loaders';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { LocationMapPicker } from '../../components/LocationMapPicker';
@@ -1350,11 +1351,7 @@ export const ClientProfile: React.FC = () => {
 
          <ChangePasswordModal isOpen={showPasswordModal} onClose={() => setShowPasswordModal(false)} />
 
-         {showUpgradeModal && (
-            <div className="fixed inset-0 z-50 overflow-y-auto">
-               <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
-                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowUpgradeModal(false)}></div>
-                  <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
+         <Modal open={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} maxWidth="lg" zIndex={50} panelClassName="p-4 sm:p-6">
                      <h3 className="text-lg font-medium text-gray-900 mb-4">{t('profile.upgrade')}</h3>
                      <form onSubmit={upgradeFormik.handleSubmit} className="space-y-4">
                         <div>
@@ -1374,10 +1371,7 @@ export const ClientProfile: React.FC = () => {
                         <div><label className="block text-sm font-medium text-gray-700 mb-2">Categories (Click to select)</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded bg-white">{PRODUCTION_TYPES.map(cat => (<button key={cat} type="button" onClick={() => toggleUpgradeCategory(cat)} className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${upgradeFormik.values.productionTypes.includes(cat) ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}</button>))}</div></div>
                         <div className="mt-5 sm:mt-6 flex justify-end gap-3"><button type="button" onClick={() => setShowUpgradeModal(false)} className="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:text-sm">Cancel</button><button type="submit" className="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 sm:text-sm">Upgrade Account</button></div>
                      </form>
-                  </div>
-               </div>
-            </div>
-         )}
+         </Modal>
 
          {showPaymentRecap && paymentOrderId && (() => {
             const payOrder = orders.find(o => o.id === paymentOrderId);
@@ -1388,10 +1382,7 @@ export const ClientProfile: React.FC = () => {
             const hasSufficientFunds = newBalance >= 0;
 
             return (
-               <div className="fixed inset-0 z-50 overflow-y-auto">
-                  <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
-                     <div className="fixed inset-0 bg-gray-900 bg-opacity-60 transition-opacity" onClick={() => setShowPaymentRecap(false)} />
-                     <div className="relative bg-white rounded-t-xl sm:rounded-xl px-4 pt-5 pb-4 text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
+               <Modal open={showPaymentRecap} onClose={() => setShowPaymentRecap(false)} maxWidth="lg" zIndex={50} backdropClassName="bg-gray-900/60" panelClassName="p-4 sm:p-6">
 
                         {/* Header */}
                         <div className="flex justify-between items-center mb-5 pb-3 border-b border-gray-100">
@@ -1510,18 +1501,20 @@ export const ClientProfile: React.FC = () => {
                               {t('form.cancel')}
                            </button>
                         </div>
-                     </div>
-                  </div>
-               </div>
+               </Modal>
             );
          })()}
 
          {/* Order Details Modal (booking → receiving, including completed/cancelled) */}
-         {selectedOrder && (
-            <div className="fixed inset-0 z-50 overflow-y-auto" aria-modal="true" role="dialog">
-               <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
-                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setSelectedOrder(null)} />
-                  <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
+         <Modal
+            open={!!selectedOrder}
+            onClose={() => setSelectedOrder(null)}
+            maxWidth="lg"
+            zIndex={50}
+            panelClassName="p-4 sm:p-6"
+         >
+            {selectedOrder && (
+               <>
                      <div className="flex justify-between items-start mb-4 gap-2">
                         <div>
                            <h3 className="text-lg leading-6 font-bold text-gray-900">
@@ -1703,16 +1696,11 @@ export const ClientProfile: React.FC = () => {
                            {t('dash.close')}
                         </button>
                      </div>
-                  </div>
-               </div>
-            </div>
-         )}
+               </>
+            )}
+         </Modal>
 
-         {showReviewModal && reviewOrderId && (
-            <div className="fixed inset-0 z-50 overflow-y-auto">
-               <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
-                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowReviewModal(false)}></div>
-                  <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-sm sm:p-6 max-h-[90vh] overflow-y-auto">
+         <Modal open={showReviewModal && !!reviewOrderId} onClose={() => setShowReviewModal(false)} maxWidth="sm" zIndex={50} panelClassName="p-4 sm:p-6">
                      <h3 className="text-lg font-medium text-gray-900 mb-4 text-center">{t('review.rate')}</h3>
                      <form onSubmit={reviewFormik.handleSubmit}>
                         <div className="flex justify-center space-x-2 mb-6">
@@ -1727,26 +1715,16 @@ export const ClientProfile: React.FC = () => {
                         </div>
                         <button type="submit" className="w-full bg-primary-600 text-white rounded-md py-2 text-sm font-bold hover:bg-primary-700">{t('review.submit')}</button>
                      </form>
-                  </div>
-               </div>
-            </div>
-         )}
+         </Modal>
 
-         {showDisputeModal && disputeOrderId && (
-            <div className="fixed inset-0 z-50 overflow-y-auto">
-               <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
-                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowDisputeModal(false)}></div>
-                  <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
+         <Modal open={showDisputeModal && !!disputeOrderId} onClose={() => setShowDisputeModal(false)} maxWidth="lg" zIndex={50} panelClassName="p-4 sm:p-6">
                      <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2"><h3 className="text-lg font-bold text-gray-900">{t('order.reportProblem')}</h3><button onClick={() => setShowDisputeModal(false)}><X className="h-5 w-5 text-gray-400" /></button></div>
                      <form onSubmit={disputeFormik.handleSubmit} className="space-y-4">
                         <div><label className="block text-sm font-medium text-gray-700 mb-1">{t('order.reason')}</label><textarea name="disputeReason" required rows={3} className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" value={disputeFormik.values.disputeReason} onChange={disputeFormik.handleChange} onBlur={disputeFormik.handleBlur} placeholder="What's the issue?" />{disputeFormik.touched.disputeReason && disputeFormik.errors.disputeReason ? <p className="text-xs text-red-600 mt-1">{disputeFormik.errors.disputeReason}</p> : null}</div>
                         <div><label className="block text-sm font-medium text-gray-700 mb-1">{t('order.uploadFiles')}</label><input type="file" multiple accept="image/*,application/pdf" className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100" onChange={handleDisputeFileChange} /></div>
                         <div className="flex justify-end gap-3 pt-4"><button type="button" onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">{t('form.cancel')}</button><button type="submit" className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700">{t('order.submitReport')}</button></div>
                      </form>
-                  </div>
-               </div>
-            </div>
-         )}
+         </Modal>
 
          <LogoutConfirmModal
             open={logoutConfirmOpen}

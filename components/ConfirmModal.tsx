@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, Trash2, Info } from 'lucide-react';
 import { Spinner } from './Loaders';
+import { Modal } from './Modal';
 import { useTranslation } from '../services/i18nContext';
 
 export type ConfirmTone = 'danger' | 'warning' | 'info';
@@ -48,8 +49,7 @@ const toneStyles: Record<ConfirmTone, { btn: string; iconWrap: string; iconColor
 
 /**
  * Reusable confirmation modal. Used for destructive or otherwise consequential
- * actions (delete, cancel order, logout). Renders as a bottom-sheet on mobile
- * and a centered dialog on `sm+` to match the rest of the app's modal pattern.
+ * actions (delete, cancel order, logout).
  */
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   open,
@@ -77,8 +77,6 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
     return () => window.removeEventListener('keydown', handler);
   }, [open, isBusy, onClose]);
 
-  if (!open) return null;
-
   const handleConfirm = async () => {
     if (isBusy) return;
     try {
@@ -90,55 +88,50 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] overflow-y-auto" aria-labelledby="confirm-modal-title" role="dialog" aria-modal="true">
-      <div className="flex min-h-screen items-end sm:items-center justify-center p-2 sm:p-4">
-        <button
-          type="button"
-          aria-label="Close"
-          className="fixed inset-0 bg-gray-900/50 transition-opacity agm-modal-backdrop-in"
-          disabled={isBusy}
-          onClick={() => !isBusy && onClose()}
-        />
-        <div className="relative z-10 w-full sm:max-w-md bg-white rounded-t-lg sm:rounded-lg shadow-xl transform transition-all sm:my-8 max-h-[90vh] overflow-y-auto agm-modal-panel-in">
-          <div className="p-5 sm:p-6">
-            <div className="flex items-start gap-4">
-              <div className={`flex-shrink-0 flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-full ${styles.iconWrap}`}>
-                <styles.Icon className={`h-5 w-5 sm:h-6 sm:w-6 ${styles.iconColor}`} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 id="confirm-modal-title" className="text-base sm:text-lg font-semibold text-gray-900 break-words">
-                  {title}
-                </h3>
-                {description && (
-                  <div className="mt-1.5 text-sm text-gray-600 break-words">{description}</div>
-                )}
-              </div>
-            </div>
-
-            {children && <div className="mt-4">{children}</div>}
-
-            <div className="mt-5 sm:mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isBusy}
-                className="inline-flex justify-center items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400"
-              >
-                {cancelLabel ?? t('form.cancel')}
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleConfirm()}
-                disabled={isBusy}
-                className={`inline-flex justify-center items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${styles.btn}`}
-              >
-                {isBusy && <Spinner size={14} className="text-white" />}
-                <span>{confirmLabel ?? t('form.confirm') ?? 'Confirm'}</span>
-              </button>
-            </div>
-          </div>
+    <Modal
+      open={open}
+      onClose={isBusy ? undefined : onClose}
+      closeOnBackdrop={!isBusy}
+      maxWidth="md"
+      zIndex={100}
+      ariaLabelledBy="confirm-modal-title"
+      panelClassName="p-5 sm:p-6"
+    >
+      <div className="flex items-start gap-4">
+        <div className={`flex-shrink-0 flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-full ${styles.iconWrap}`}>
+          <styles.Icon className={`h-5 w-5 sm:h-6 sm:w-6 ${styles.iconColor}`} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 id="confirm-modal-title" className="text-base sm:text-lg font-semibold text-gray-900 break-words">
+            {title}
+          </h3>
+          {description && (
+            <div className="mt-1.5 text-sm text-gray-600 break-words">{description}</div>
+          )}
         </div>
       </div>
-    </div>
+
+      {children && <div className="mt-4">{children}</div>}
+
+      <div className="mt-5 sm:mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={isBusy}
+          className="inline-flex justify-center items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400"
+        >
+          {cancelLabel ?? t('form.cancel')}
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleConfirm()}
+          disabled={isBusy}
+          className={`inline-flex justify-center items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${styles.btn}`}
+        >
+          {isBusy && <Spinner size={14} className="text-white" />}
+          <span>{confirmLabel ?? t('form.confirm') ?? 'Confirm'}</span>
+        </button>
+      </div>
+    </Modal>
   );
 };

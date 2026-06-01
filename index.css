@@ -537,6 +537,35 @@ img, video, canvas, svg, iframe {
   animation: agm-modal-panel-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Viewport-centered modal shell (portal); panel scrolls internally only */
+.agm-modal-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(0.75rem, env(safe-area-inset-top, 0px))
+    max(0.75rem, env(safe-area-inset-right, 0px))
+    max(0.75rem, env(safe-area-inset-bottom, 0px))
+    max(0.75rem, env(safe-area-inset-left, 0px));
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.agm-modal-panel {
+  position: relative;
+  z-index: 10;
+  max-height: min(90dvh, calc(100dvh - 1.5rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+body.agm-modal-open {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .agm-modal-backdrop-in,
   .agm-modal-panel-in {

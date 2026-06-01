@@ -7,6 +7,7 @@ import { TransactionType, WithdrawalStatus, PaymentMethod } from '../../types';
 import { isProducerDashboardUser, producerAccountUserId } from '../../services/producerSession';
 import { Link, useNavigate } from 'react-router-dom';
 import { OtpVerificationModal } from '../../components/OtpVerificationModal';
+import { Modal } from '../../components/Modal';
 import { SectionLoader } from '../../components/Loaders';
 import { useFormik } from 'formik';
 import { z } from 'zod';
@@ -313,12 +314,7 @@ export const WalletDashboard: React.FC = () => {
         </div>
 
         {/* Top Up Modal */}
-        {showTopUp && (
-          <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-            <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
-              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowTopUp(false)}></div>
-              <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-              <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
+        <Modal open={showTopUp} onClose={() => setShowTopUp(false)} maxWidth="lg" zIndex={50} panelClassName="p-4 sm:p-6">
                 <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">{t('wallet.topup')}</h3>
                 <form onSubmit={topUpFormik.handleSubmit} className="space-y-4">
                   <div>
@@ -335,17 +331,10 @@ export const WalletDashboard: React.FC = () => {
                   {topUpFormik.touched.txnId && topUpFormik.errors.txnId ? <p className="text-xs text-red-600">{topUpFormik.errors.txnId}</p> : null}
                   <button type="submit" disabled={loading} className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700">{loading ? 'Processing...' : 'Fund Wallet'}</button>
                 </form>
-              </div>
-            </div>
-          </div>
-        )}
+        </Modal>
 
         {/* Withdrawal Modal */}
-        {showWithdraw && (
-          <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-            <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
-              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowWithdraw(false)}></div>
-              <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
+        <Modal open={showWithdraw} onClose={() => setShowWithdraw(false)} maxWidth="lg" zIndex={50} panelClassName="p-4 sm:p-6">
                 <div className="w-full">
                   <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">{t('wallet.requestWithdraw')}</h3>
                   <p className="text-sm text-gray-500 mt-2 mb-4">{t('wallet.withdrawDesc')}</p>
@@ -414,10 +403,7 @@ export const WalletDashboard: React.FC = () => {
                     </form>
                   )}
                 </div>
-              </div>
-            </div>
-          </div>
-        )}
+        </Modal>
 
         <OtpVerificationModal
           open={showOtpModal}

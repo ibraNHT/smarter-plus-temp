@@ -12,7 +12,19 @@ import { isProducerDashboardUser } from '../../services/producerSession';
 import { findProducerForUser } from '../../utils/producerAccountStatus';
 
 export const AtiStore: React.FC = () => {
-  const { offers, toggleFavorite, user, clients, producers, compareList, addToCompare, removeFromCompare, getAverageRating, reviews, refreshOffers, refreshProducers, refreshAllReviews } = useStore();
+  const { offers, toggleFavorite, user, clients, producers, compareList, addToCompare, removeFromCompare, getAverageRating, reviews, orders, refreshOffers, refreshProducers, refreshAllReviews } = useStore();
+
+  const getOfferRating = (offerId: string) => {
+    const orderIds = new Set(
+      orders
+        .filter((o) => (o.items || []).some((item) => (item.id || (item as { offerId?: string }).offerId) === offerId))
+        .map((o) => o.id),
+    );
+    const related = reviews.filter((r) => orderIds.has(r.orderId));
+    return related.length
+      ? parseFloat((related.reduce((a, b) => a + b.rating, 0) / related.length).toFixed(1))
+      : 0;
+  };
   const { t } = useTranslation();
 
   const [pageLoading, setPageLoading] = useState(true);
@@ -29,6 +41,20 @@ export const AtiStore: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [storeCategories, setStoreCategories] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${import.meta.env.VITE_API_URL || '/api'}/retail/categories`)
+      .then((r) => (r.ok ? r.json() : { categories: [] }))
+      .then((data) => {
+        if (!cancelled && Array.isArray(data.categories) && data.categories.length) {
+          setStoreCategories(data.categories);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // Base data
   const atiOffers = offers.filter(offer => offer.marketType === MarketType.ATI);
@@ -63,7 +89,7 @@ export const AtiStore: React.FC = () => {
 
   const sortedCategories = Object.keys(groupedOffers).sort();
 
-  const categories = ['All', 'Cereals', 'Oils', 'Canned Goods', 'Spices', 'Processed foods', 'Vegetables', 'Fish Farming'];
+  const categories = ['All', ...(storeCategories.length ? storeCategories : sortedCategories)];
 
   return (
     <div className="min-h-screen bg-white">
@@ -196,9 +222,11 @@ export const AtiStore: React.FC = () => {
                           {categoryOffers.map((offer) => {
                             const isFav = favorites.includes(offer.id);
                             const isComparing = compareList.includes(offer.id);
-                            const rating = getAverageRating(offer.producerId);
-                            const producer = producers.find(p => p.id === offer.producerId);
-                            const reviewCount = reviews.filter(r => r.targetId === offer.producerId || (producer?.userId && r.targetId === producer.userId)).length;
+                            const rating = getOfferRating(offer.id) || getAverageRating(offer.producerId);
+                            const reviewCount = reviews.filter((r) => {
+                              const order = orders.find((o) => o.id === r.orderId);
+                              return order?.items?.some((item) => (item.id || (item as { offerId?: string }).offerId) === offer.id);
+                            }).length;
                             return (
                               <div key={offer.id} className="relative">
                                 <div className="absolute top-2 right-2 z-10 flex gap-1">
@@ -247,9 +275,11 @@ export const AtiStore: React.FC = () => {
                           {categoryOffers.map((offer) => {
                             const isFav = favorites.includes(offer.id);
                             const isComparing = compareList.includes(offer.id);
-                            const rating = getAverageRating(offer.producerId);
-                            const producer = producers.find(p => p.id === offer.producerId);
-                            const reviewCount = reviews.filter(r => r.targetId === offer.producerId || (producer?.userId && r.targetId === producer.userId)).length;
+                            const rating = getOfferRating(offer.id) || getAverageRating(offer.producerId);
+                            const reviewCount = reviews.filter((r) => {
+                              const order = orders.find((o) => o.id === r.orderId);
+                              return order?.items?.some((item) => (item.id || (item as { offerId?: string }).offerId) === offer.id);
+                            }).length;
 
                             return (
                               <div key={offer.id} className="relative min-w-[220px] w-[240px] flex-shrink-0">

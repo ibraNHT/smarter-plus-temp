@@ -2498,7 +2498,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (user && isProducerDashboardUser(user) && user.producerId && offer.producerId === user.producerId) {
       return { success: false, error: 'OWN_OFFER' };
     }
-    if (cart.length > 0 && cart[0].producerId !== offer.producerId) return { success: false, error: 'PRODUCER_CONFLICT' };
+    const cartIsRetail = cart.length > 0 && cart.every((i) => i.marketType === MarketType.ATI);
+    const offerIsRetail = offer.marketType === MarketType.ATI;
+    if (cart.length > 0 && cartIsRetail && offerIsRetail) {
+      // ATI retail store: allow multiple products in one cart regardless of producer profile id.
+    } else if (cart.length > 0 && cart[0].producerId !== offer.producerId) {
+      return { success: false, error: 'PRODUCER_CONFLICT' };
+    }
     if (offer.type === OfferType.SERVICE && bookingDate) {
       const alreadyInCart = cart.some(
         (i) =>

@@ -7,6 +7,7 @@ import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, M
 import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { Modal } from '../../components/Modal';
 import { SectionLoader, ListSkeleton } from '../../components/Loaders';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { orderHasService, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
@@ -871,11 +872,16 @@ export const ProducerDashboard: React.FC = () => {
          </div>
 
          {/* Order Details Modal */}
-         {selectedOrder && (
-            <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-               <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
-                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setSelectedOrder(null)}></div>
-                  <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
+         <Modal
+            open={!!selectedOrder}
+            onClose={() => setSelectedOrder(null)}
+            maxWidth="lg"
+            zIndex={50}
+            ariaLabelledBy="modal-title"
+            panelClassName="p-4 sm:p-6"
+         >
+            {selectedOrder && (
+                  <>
                      <div className="flex justify-between items-start mb-4 gap-2">
                         <div>
                            <h3 className="text-lg leading-6 font-bold text-gray-900" id="modal-title">
@@ -1044,18 +1050,12 @@ export const ProducerDashboard: React.FC = () => {
                            {t('dash.close')}
                         </button>
                      </div>
-                  </div>
-               </div>
-            </div>
-         )}
+                  </>
+            )}
+         </Modal>
 
          {/* Review Modal */}
-         {showReviewModal && (
-            <div className="fixed inset-0 z-50 overflow-y-auto">
-               <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
-                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowReviewModal(false)}></div>
-                  <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-                  <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-sm sm:p-6 max-h-[90vh] overflow-y-auto">
+         <Modal open={showReviewModal} onClose={() => setShowReviewModal(false)} maxWidth="sm" zIndex={50} panelClassName="p-4 sm:p-6">
                      <h3 className="text-lg font-medium text-gray-900 mb-4 text-center">{t('dash.rateClient')}</h3>
                      <form onSubmit={handleSubmitReview}>
                         <div className="flex justify-center space-x-2 mb-6">
@@ -1086,17 +1086,10 @@ export const ProducerDashboard: React.FC = () => {
                            {t('review.submit')}
                         </button>
                      </form>
-                  </div>
-               </div>
-            </div>
-         )}
+         </Modal>
 
          {/* Evidence Upload Modal */}
-         {showEvidenceModal && (
-            <div className="fixed inset-0 z-50 overflow-y-auto">
-               <div className="flex items-end sm:items-center justify-center min-h-screen p-2 sm:p-4">
-                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowEvidenceModal(false)}></div>
-                  <div className="relative bg-white rounded-t-lg sm:rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 w-full sm:max-w-lg sm:p-6 max-h-[90vh] overflow-y-auto">
+         <Modal open={showEvidenceModal} onClose={() => setShowEvidenceModal(false)} maxWidth="lg" zIndex={50} panelClassName="p-4 sm:p-6">
                      <div className="flex justify-between items-center mb-4">
                         <h3 className="text-lg font-bold text-gray-900">{t('dash.uploadEvidence')}</h3>
                         <button onClick={() => setShowEvidenceModal(false)}><X className="h-5 w-5 text-gray-400" /></button>
@@ -1136,10 +1129,7 @@ export const ProducerDashboard: React.FC = () => {
                            <button type="submit" className="px-4 py-2 text-white bg-primary-600 rounded-md text-sm hover:bg-primary-700">Upload</button>
                         </div>
                      </form>
-                  </div>
-               </div>
-            </div>
-         )}
+         </Modal>
 
          <ConfirmModal
             open={offerDeleteTarget !== null}

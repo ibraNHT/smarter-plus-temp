@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Phone, Mail, RefreshCw, ShieldCheck, X, Loader2 } from 'lucide-react';
 import { apiFetch } from '../services/apiService';
 import { API_ENDPOINTS } from '../client-api/endpoints';
+import { LegalAcceptanceCheckbox } from './LegalAcceptanceCheckbox';
+import { Modal } from './Modal';
+import { useTranslation } from '../services/i18nContext';
 
 interface RegisterPhoneOtpModalProps {
   open: boolean;
@@ -27,16 +30,10 @@ const RESEND_COOLDOWN_SECONDS = 45;
  * Pre-registration phone verification.
  *
  * Mount this modal once the user has filled in the registration form and
- * clicked "Create account". It will:
- *   1. Immediately POST to /auth/register/request-phone-otp (SMS + email).
- *   2. Show a 6-digit code input + resend button with countdown.
- *   3. POST to /auth/register/verify-phone-otp on submit.
- *   4. Call `onVerified(registrationToken)` on success, which the parent
- *      passes back into registerProducer / registerClient as
- *      `phoneVerificationToken`.
- *
- * Because rural cell networks can delay SMS by minutes, the same code is
- * also emailed. The user can use whichever code lands first.
+ * clicked "Create account". In one view the user must:
+ *   1. Accept Terms & Privacy
+ *   2. Request the verification code (no OTP until accepted)
+ *   3. Enter the 6-digit code and verify
  */
 export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
   open,
@@ -48,16 +45,22 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
   registerError = '',
   onRetryRegister,
 }) => {
+  const { t } = useTranslation();
+  const [legalAccepted, setLegalAccepted] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [isRequesting, setIsRequesting] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [cooldown, setCooldown] = useState(0);
-  const hasRequestedRef = useRef(false);
   const lastSentForRef = useRef<string>('');
 
   const requestCode = async (mode: 'initial' | 'resend') => {
+    if (!legalAccepted) {
+      setError(t('legal.mustAccept'));
+      return;
+    }
     if (!phone) {
       setError('Phone number is required.');
       return;
@@ -78,6 +81,7 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
         setError(res?.message || 'Could not send verification code. Try again in a moment.');
         return;
       }
+      setCodeSent(true);
       setInfo(
         mode === 'initial'
           ? `We sent a 6-digit code to ${phone}${email ? ` and ${email}` : ''}.`
@@ -92,14 +96,14 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
       setError(message);
     } finally {
       setIsRequesting(false);
-      // Mark this phone as attempted so the open-effect does not loop on API failure.
       lastSentForRef.current = phone;
     }
   };
 
   useEffect(() => {
     if (!open) {
-      hasRequestedRef.current = false;
+      setLegalAccepted(false);
+      setCodeSent(false);
       lastSentForRef.current = '';
       setCode('');
       setError('');
@@ -107,14 +111,7 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
       setCooldown(0);
       return;
     }
-    if (isCreatingAccount) return;
-    if (!phone) return;
-    if (hasRequestedRef.current && lastSentForRef.current === phone) return;
-    hasRequestedRef.current = true;
-    lastSentForRef.current = phone;
-    void requestCode('initial');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, phone, isCreatingAccount]);
+  }, [open]);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -124,6 +121,14 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!legalAccepted) {
+      setError(t('legal.mustAccept'));
+      return;
+    }
+    if (!codeSent) {
+      setError('Please send a verification code first.');
+      return;
+    }
     if (code.length !== 6) {
       setError('Please enter the 6-digit code.');
       return;
@@ -152,24 +157,19 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
     }
   };
 
-  if (!open) return null;
-
   const modalLocked = isCreatingAccount || isVerifying;
 
   return (
-    <div
-      className="fixed inset-0 z-[80] overflow-y-auto"
-      aria-modal="true"
-      role="dialog"
-      aria-labelledby="register-phone-otp-title"
+    <Modal
+      open={open}
+      onClose={modalLocked ? undefined : onCancel}
+      closeOnBackdrop={!modalLocked}
+      maxWidth="md"
+      zIndex={80}
+      ariaLabelledBy="register-phone-otp-title"
+      backdropClassName="bg-black/50"
+      panelClassName="p-5 sm:p-7"
     >
-      <div className="flex min-h-screen items-end sm:items-center justify-center p-2 sm:p-4">
-        <div
-          className="fixed inset-0 bg-black/50 agm-modal-backdrop-in"
-          onClick={modalLocked ? undefined : onCancel}
-          aria-hidden="true"
-        />
-        <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md p-5 sm:p-7 max-h-[95vh] overflow-y-auto agm-modal-panel-in">
           {!isCreatingAccount && (
             <button
               type="button"
@@ -202,10 +202,9 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
               </div>
 
               <p className="text-sm text-gray-600 mb-4">
-                For security, we sent a 6-digit code to your email
-                {email ? ` (${email})` : ''}. SMS is temporarily unavailable until our
-                messaging number is active — check your inbox (and spam folder), then enter
-                the code below.
+                {codeSent
+                  ? `Enter the 6-digit code we sent to your email${email ? ` (${email})` : ''}. Check your spam folder if you do not see it.`
+                  : `Accept our terms below, then we will send a 6-digit code to your email${email ? ` (${email})` : ''}.`}
               </p>
 
               <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 mb-4 text-sm text-gray-700 space-y-1">
@@ -222,93 +221,123 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
               </div>
 
               <form onSubmit={handleVerify} className="space-y-4">
-                <div>
-                  <label htmlFor="register-otp-code" className="block text-sm font-medium text-gray-700 mb-1">
-                    Verification code
-                  </label>
-                  <input
-                    id="register-otp-code"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    placeholder="000000"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    className="block w-full rounded-md border border-gray-300 px-3 py-3 text-center text-2xl tracking-[0.5em] font-semibold focus:border-primary-500 focus:ring-2 focus:ring-primary-500"
-                    autoFocus
-                    disabled={isRequesting}
+                {!codeSent ? (
+                  <>
+                  <LegalAcceptanceCheckbox
+                    id="register-otp-legal"
+                    checked={legalAccepted}
+                    onChange={setLegalAccepted}
+                    variant="prominent"
                   />
-                </div>
+                  <button
+                    type="button"
+                    onClick={() => void requestCode('initial')}
+                    disabled={!legalAccepted || isRequesting || !phone}
+                    className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 rounded-md bg-primary-600 text-white font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isRequesting && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {isRequesting ? 'Sending…' : t('legal.sendVerificationCode')}
+                  </button>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label htmlFor="register-otp-code" className="block text-sm font-medium text-gray-700 mb-1">
+                        Verification code
+                      </label>
+                      <input
+                        id="register-otp-code"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        placeholder="000000"
+                        value={code}
+                        onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        className="block w-full rounded-md border border-gray-300 px-3 py-3 text-center text-2xl tracking-[0.5em] font-semibold focus:border-primary-500 focus:ring-2 focus:ring-primary-500"
+                        autoFocus
+                        disabled={isRequesting}
+                      />
+                    </div>
 
-                {registerError && (
-                  <div className="space-y-2">
-                    <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
-                      {registerError}
-                    </p>
-                    {onRetryRegister && (
+                    {registerError && (
+                      <div className="space-y-2">
+                        <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+                          {registerError}
+                        </p>
+                        {onRetryRegister && (
+                          <button
+                            type="button"
+                            onClick={onRetryRegister}
+                            disabled={isVerifying || isRequesting}
+                            className="w-full py-2.5 px-4 rounded-md border border-primary-600 text-primary-700 text-sm font-medium hover:bg-primary-50 disabled:opacity-50"
+                          >
+                            Try creating account again
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {error && (
+                      <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+                        {error}
+                      </p>
+                    )}
+                    {!error && !registerError && info && (
+                      <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2">
+                        {info}
+                      </p>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isVerifying || isRequesting || code.length !== 6}
+                      className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 rounded-md bg-primary-600 text-white font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isVerifying && <Loader2 className="h-4 w-4 animate-spin" />}
+                      {isVerifying ? 'Verifying…' : registerError ? 'Verify code again' : 'Verify & create account'}
+                    </button>
+
+                    <div className="flex items-center justify-between text-sm">
                       <button
                         type="button"
-                        onClick={onRetryRegister}
-                        disabled={isVerifying || isRequesting}
-                        className="w-full py-2.5 px-4 rounded-md border border-primary-600 text-primary-700 text-sm font-medium hover:bg-primary-50 disabled:opacity-50"
+                        onClick={() => void requestCode('resend')}
+                        disabled={cooldown > 0 || isRequesting || isVerifying}
+                        className="inline-flex items-center gap-1.5 text-primary-600 hover:text-primary-700 disabled:text-gray-400 disabled:cursor-not-allowed"
                       >
-                        Try creating account again
+                        <RefreshCw className={`h-4 w-4 ${isRequesting ? 'animate-spin' : ''}`} />
+                        {cooldown > 0 ? `Resend in ${cooldown}s` : isRequesting ? 'Sending…' : 'Resend code'}
                       </button>
-                    )}
-                  </div>
+                      <button
+                        type="button"
+                        onClick={onCancel}
+                        disabled={isVerifying}
+                        className="text-gray-500 hover:text-gray-700 disabled:opacity-40"
+                      >
+                        Change phone number
+                      </button>
+                    </div>
+                  </>
                 )}
 
-                {error && (
+                {error && !codeSent && (
                   <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
                     {error}
                   </p>
                 )}
-                {!error && !registerError && info && (
-                  <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2">
-                    {info}
-                  </p>
-                )}
 
-                <button
-                  type="submit"
-                  disabled={isVerifying || isRequesting || code.length !== 6}
-                  className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 rounded-md bg-primary-600 text-white font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isVerifying && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {isVerifying ? 'Verifying…' : registerError ? 'Verify code again' : 'Verify & create account'}
-                </button>
-
-                <div className="flex items-center justify-between text-sm">
-                  <button
-                    type="button"
-                    onClick={() => void requestCode('resend')}
-                    disabled={cooldown > 0 || isRequesting || isVerifying}
-                    className="inline-flex items-center gap-1.5 text-primary-600 hover:text-primary-700 disabled:text-gray-400 disabled:cursor-not-allowed"
-                  >
-                    <RefreshCw className={`h-4 w-4 ${isRequesting ? 'animate-spin' : ''}`} />
-                    {cooldown > 0 ? `Resend in ${cooldown}s` : isRequesting ? 'Sending…' : 'Resend code'}
-                  </button>
+                {!codeSent && (
                   <button
                     type="button"
                     onClick={onCancel}
-                    disabled={isVerifying}
-                    className="text-gray-500 hover:text-gray-700 disabled:opacity-40"
+                    className="w-full text-sm text-gray-500 hover:text-gray-700"
                   >
-                    Change phone number
+                    {t('form.cancel')}
                   </button>
-                </div>
+                )}
               </form>
-
-              <p className="mt-4 text-xs text-gray-400 leading-relaxed">
-                By continuing you agree this number belongs to you. We use it only for
-                account security and order updates — never for marketing without your
-                permission.
-              </p>
             </>
           )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };

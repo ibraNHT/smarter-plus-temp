@@ -7,6 +7,7 @@ import { apiFetch } from '../services/apiService';
 import { API_ENDPOINTS } from '../client-api/endpoints';
 import { Sprout, Lock, Mail, X, Phone, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { AuthMobileBrand } from '../components/AuthMobileBrand';
+import { Modal } from '../components/Modal';
 import { FieldError, inputErrorClasses, showFieldError } from '../components/FieldError';
 import { useFormik } from 'formik';
 import { z } from 'zod';
@@ -506,9 +507,14 @@ export const LoginPage: React.FC = () => {
       </div>
 
       {/* Forgot Password — SMS OTP + reset (matches API) */}
-      {isForgotPasswordOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-black bg-opacity-50">
-          <div className="bg-white rounded-t-lg sm:rounded-lg max-w-sm w-full p-5 sm:p-6 relative shadow-xl max-h-[90vh] overflow-y-auto">
+      <Modal
+        open={isForgotPasswordOpen}
+        onClose={closeForgotModal}
+        maxWidth="sm"
+        zIndex={50}
+        backdropClassName="bg-black/50"
+        panelClassName="p-5 sm:p-6 relative"
+      >
             <button
               type="button"
               onClick={closeForgotModal}
@@ -724,9 +730,7 @@ export const LoginPage: React.FC = () => {
                 </button>
               </form>
             )}
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 };

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState } from 'react';
+import { Modal } from './Modal';
 import { useTranslation } from '../services/i18nContext';
 import { X, Lock, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useStore } from '../services/storeContext';
@@ -172,41 +172,19 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
     resetModal();
   };
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !loading) handleClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [isOpen, loading]);
-
-  if (!isOpen) return null;
-
-  const modal = (
-    <div
-      className="fixed inset-0 z-[100] overflow-y-auto"
-      aria-labelledby="modal-title"
-      role="dialog"
-      aria-modal="true"
+  return (
+    <Modal
+      open={isOpen}
+      onClose={loading ? undefined : handleClose}
+      closeOnBackdrop={!loading}
+      maxWidth="md"
+      zIndex={100}
+      ariaLabelledBy="modal-title"
+      panelClassName="px-4 pt-5 pb-4 sm:p-6 relative"
     >
-      <div className="flex min-h-[100dvh] items-center justify-center p-4 sm:p-6">
-        <button
-          type="button"
-          aria-label="Close"
-          className="fixed inset-0 bg-gray-900/50 transition-opacity agm-modal-backdrop-in"
-          onClick={handleClose}
-        />
-
-        <div className="relative z-10 bg-white rounded-lg px-4 pt-5 pb-4 text-left shadow-xl w-full max-w-md sm:p-6 max-h-[min(90dvh,calc(100dvh-2rem))] overflow-y-auto agm-modal-panel-in mx-auto">
           <button
             type="button"
-            className="absolute top-3 right-3 rounded-md p-1 text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+            className="absolute top-3 right-3 z-20 rounded-md p-1 text-gray-400 hover:text-gray-500 hover:bg-gray-100"
             onClick={handleClose}
           >
             <span className="sr-only">Close</span>
@@ -346,10 +324,6 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
               )}
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
-
-  return createPortal(modal, document.body);
 };

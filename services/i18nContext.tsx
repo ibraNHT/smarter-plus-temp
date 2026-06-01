@@ -60,6 +60,20 @@ const translations: Record<string, Record<Language, string>> = {
   'faq.title': { en: 'Frequently Asked Questions', fr: 'Foire Aux Questions' },
   'terms.title': { en: 'Terms of Use', fr: 'Conditions d\'Utilisation' },
   'privacy.title': { en: 'Privacy Policy', fr: 'Politique de Confidentialité' },
+  'legal.acceptPrefix': { en: 'I have read and agree to the', fr: 'J\'ai lu et j\'accepte les' },
+  'legal.acceptAnd': { en: 'and the', fr: 'et la' },
+  'legal.mustAccept': {
+    en: 'You must accept the Terms & Conditions and Privacy Policy to continue.',
+    fr: 'Vous devez accepter les Conditions d\'utilisation et la Politique de confidentialité pour continuer.',
+  },
+  'legal.sendVerificationCode': {
+    en: 'Send verification code',
+    fr: 'Envoyer le code de vérification',
+  },
+  'legal.beforeOtpHint': {
+    en: 'Accept our policies below before we send a verification code to your phone and email.',
+    fr: 'Acceptez nos politiques ci-dessous avant l\'envoi du code de vérification sur votre téléphone et votre e-mail.',
+  },
 
   // Landing Page
   'landing.hero.title': { en: 'Two Markets, One Platform', fr: 'Deux Marchés, Une Plateforme' },
