@@ -1,8 +1,23 @@
 import React, { useRef, useState } from 'react';
-import { FileText, Upload, X, Loader2 } from 'lucide-react';
+import { FileText, Upload, X, Loader2, ExternalLink } from 'lucide-react';
 import { useTranslation } from '../services/i18nContext';
 import { uploadDocument } from '../services/uploadService';
 import { documentFileLabel } from '../utils/producerDocuments';
+
+function isImageDocUrl(url: string): boolean {
+  const lower = url.toLowerCase();
+  if (lower.includes('res.cloudinary.com') && lower.includes('/image/upload/')) return true;
+  return /\.(jpe?g|png|gif|webp)(\?|#|$)/i.test(lower);
+}
+
+function cloudinaryImageThumb(url: string): string {
+  const marker = '/upload/';
+  const idx = url.indexOf(marker);
+  if (idx === -1) return url;
+  const after = url.slice(idx + marker.length);
+  if (/^(v\d+\/|f_|c_|w_|h_)/.test(after)) return url;
+  return `${url.slice(0, idx + marker.length)}w_120,h_80,c_fill,f_auto,q_auto/${after}`;
+}
 
 const ACCEPT = '.png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf';
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -73,15 +88,37 @@ const DocSlot: React.FC<DocSlotProps> = ({
         ) : null}
       </div>
       {url ? (
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 text-sm text-primary-700 bg-primary-50 border border-primary-100 px-3 py-2 rounded-md hover:underline max-w-full"
-        >
-          <FileText className="h-4 w-4 shrink-0" />
-          <span className="truncate">{documentFileLabel(url)}</span>
-        </a>
+        isImageDocUrl(url) ? (
+          <div className="flex items-start gap-3">
+            <a href={url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+              <img
+                src={cloudinaryImageThumb(url)}
+                alt="Preview"
+                className="h-20 w-28 object-cover rounded border border-gray-200 hover:opacity-90 transition-opacity"
+                onError={(e) => { (e.target as HTMLImageElement).src = url; }}
+              />
+            </a>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-primary-700 hover:underline mt-1"
+            >
+              <ExternalLink className="h-3 w-3" /> View full image
+            </a>
+          </div>
+        ) : (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-sm text-primary-700 bg-primary-50 border border-primary-100 px-3 py-2 rounded-md hover:bg-primary-100 max-w-full group"
+          >
+            <FileText className="h-5 w-5 shrink-0 text-red-500" />
+            <span className="truncate flex-1">{documentFileLabel(url)}</span>
+            <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </a>
+        )
       ) : (
         <label
           className={`inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 bg-white ${
