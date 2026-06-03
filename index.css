@@ -676,6 +676,53 @@ body.agm-modal-open {
 }
 
 /* ---------------------------------------------------------------
+   Shimmer skeleton — sweeping highlight used by all skeleton
+   placeholder components across the app.
+--------------------------------------------------------------- */
+
+@keyframes agm-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Base shimmer block — apply to any placeholder div / span.
+   Rounded corners and dimensions must be set on the element itself. */
+.agm-shimmer {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #e4e4e4 50%,
+    #f0f0f0 75%
+  );
+  background-size: 200% 100%;
+  animation: agm-shimmer 1.5s ease-in-out infinite;
+}
+
+/* Slightly warmer tint for cards/panels that sit on a white background */
+.agm-shimmer-warm {
+  background: linear-gradient(
+    90deg,
+    #f5f5f5 25%,
+    #eaeaea 50%,
+    #f5f5f5 75%
+  );
+  background-size: 200% 100%;
+  animation: agm-shimmer 1.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agm-shimmer,
+  .agm-shimmer-warm {
+    animation: none;
+    background: #f0f0f0;
+  }
+}
+
+/* ---------------------------------------------------------------
    Toast notifications — slide in from right
 --------------------------------------------------------------- */
 @keyframes agm-toast-in {

@@ -8,7 +8,8 @@ import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Modal } from '../../components/Modal';
-import { SectionLoader, ListSkeleton } from '../../components/Loaders';
+import { ListSkeleton } from '../../components/Loaders';
+import { DashboardSkeleton } from '../../components/skeletons/DashboardSkeleton';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { orderHasService, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
 import {
@@ -142,20 +143,10 @@ export const ProducerDashboard: React.FC = () => {
     */
    if (isProducerProfileLoading) {
       return (
-         <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 px-4">
+         <>
             <SEO title="Producer Dashboard | AgriMarket" noindex={true} />
-            <div className="mb-4 sm:mb-6 flex items-center gap-2 sm:gap-3 min-w-0">
-               <button onClick={() => navigate(-1)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors flex-shrink-0" aria-label="Back">
-                  <ArrowLeft className="h-5 w-5 text-gray-600" />
-               </button>
-               <h2 className="text-xl sm:text-2xl md:text-3xl font-bold leading-tight text-gray-900 truncate min-w-0">
-                  Dashboard
-               </h2>
-            </div>
-            <div className="bg-white shadow rounded-lg p-6 sm:p-8">
-               <SectionLoader message={t('form.loading')} />
-            </div>
-         </div>
+            <DashboardSkeleton />
+         </>
       );
    }
 
@@ -557,7 +548,7 @@ export const ProducerDashboard: React.FC = () => {
             </div>
             <ul className="divide-y divide-gray-200 agm-dash-scroll-4 agm-dash-row-tall scrollbar-thin">
                {pageLoading && pendingValidationOrders.length === 0 ? (
-                  <li className="px-4 py-6"><SectionLoader message={t('form.loading')} /></li>
+                  <li className="px-4 py-3"><ListSkeleton rows={3} /></li>
                ) : pendingValidationOrders.length === 0 ? (
                   <li className="px-4 py-8 text-center text-gray-500">No new orders waiting validation.</li>
                ) : (
@@ -644,7 +635,7 @@ export const ProducerDashboard: React.FC = () => {
             </div>
             <ul className="divide-y divide-gray-200 agm-dash-scroll-4 scrollbar-thin">
                {pageLoading && allMyOrders.length === 0 ? (
-                  <li className="px-4 py-6"><SectionLoader message={t('form.loading')} /></li>
+                  <li className="px-4 py-3"><ListSkeleton rows={3} /></li>
                ) : allMyOrders.length === 0 ? (
                   <li className="px-4 py-8 text-center text-gray-500">No orders yet.</li>
                ) : (

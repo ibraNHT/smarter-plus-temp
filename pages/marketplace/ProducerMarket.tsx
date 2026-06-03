@@ -424,11 +424,11 @@ export const ProducerMarket: React.FC = () => {
         {pageLoading ? (
           <div className="space-y-12">
             <div>
-              <div className="h-8 bg-gray-200 rounded w-64 mb-4 animate-pulse" />
+              <div className="h-8 agm-shimmer rounded w-64 mb-4" />
               <OfferRowSkeleton count={6} variant="producer" />
             </div>
             <div>
-              <div className="h-8 bg-gray-200 rounded w-48 mb-4 animate-pulse" />
+              <div className="h-8 agm-shimmer rounded w-48 mb-4" />
               <OfferRowSkeleton count={6} variant="producer" />
             </div>
           </div>

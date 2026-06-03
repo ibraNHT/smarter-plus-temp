@@ -6,7 +6,7 @@ import { WeeklySchedule, AvailabilityException, DayOfWeek } from '../../types';
 import { isProducerDashboardUser } from '../../services/producerSession';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, Plus, Trash2, CheckCircle, Loader2 } from 'lucide-react';
-import { SectionLoader } from '../../components/Loaders';
+import { ListSkeleton } from '../../components/Loaders';
 
 const DAYS: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -112,7 +112,7 @@ export const ProducerAvailability: React.FC = () => {
 
       {isAvailabilityHydrating && (
          <div className="bg-white shadow rounded-lg p-4 sm:p-6">
-            <SectionLoader message={t('form.loading')} />
+            <ListSkeleton rows={4} />
          </div>
       )}
 

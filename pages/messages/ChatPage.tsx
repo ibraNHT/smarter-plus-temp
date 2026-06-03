@@ -7,7 +7,7 @@ import { Send, MessageCircle, ChevronLeft, Gavel, ArrowLeft, Check, AlertCircle,
 import { ProposalStatus, type ChatMessage } from '../../types';
 import { isProducerDashboardUser } from '../../services/producerSession';
 import { Spinner } from '../../components/Spinner';
-import { SectionLoader } from '../../components/Loaders';
+import { ListSkeleton } from '../../components/Loaders';
 import { Modal } from '../../components/Modal';
 
 export const ChatPage: React.FC = () => {
@@ -639,7 +639,7 @@ export const ChatPage: React.FC = () => {
             </div>
             <div className="flex-1 overflow-y-auto">
                {chatListLoading && chats.filter(c => c.participantIds?.includes(user.id)).length === 0 ? (
-                  <SectionLoader message={t('form.loading')} />
+                  <div className="p-3"><ListSkeleton rows={6} /></div>
                ) : chats.filter(c => c.participantIds?.includes(user.id)).length === 0 ? (
                   <div className="p-8 text-center text-gray-500 text-sm">{t('chat.noChats')}</div>
                ) : (

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Shimmer } from '../Loaders';
 
 type Variant = 'producer' | 'ati';
 
@@ -6,26 +7,27 @@ export const OfferCardSkeleton: React.FC<{ variant?: Variant }> = ({ variant = '
   const isAti = variant === 'ati';
   return (
     <div
-      className={`relative flex-shrink-0 bg-white overflow-hidden animate-pulse ${
+      aria-hidden="true"
+      className={`relative flex-shrink-0 bg-white overflow-hidden ${
         isAti
-          ? 'min-w-[220px] w-[240px] rounded-lg border border-gray-200'
+          ? 'min-w-[220px] w-[240px] rounded-lg border border-gray-100'
           : 'min-w-[280px] w-[300px] rounded-xl shadow-md border border-gray-100'
       }`}
     >
-      <div className={`bg-gray-200 ${isAti ? 'h-36' : 'h-44'}`} />
+      <Shimmer className={`w-full ${isAti ? 'h-36' : 'h-44'}`} />
       <div className={isAti ? 'p-3 space-y-2 flex flex-col' : 'p-4 space-y-3'}>
-        <div className="h-4 bg-gray-200 rounded w-3/4" />
-        <div className={`h-3 bg-gray-200 rounded ${isAti ? 'w-2/3' : 'w-full'}`} />
-        {!isAti && <div className="h-3 bg-gray-200 rounded w-5/6" />}
+        <Shimmer className="h-4 rounded w-3/4" />
+        <Shimmer className={`h-3 rounded ${isAti ? 'w-2/3' : 'w-full'}`} />
+        {!isAti && <Shimmer className="h-3 rounded w-5/6" />}
         {isAti ? (
           <div className="pt-2 border-t border-gray-100 space-y-2 mt-auto">
-            <div className="h-5 bg-gray-200 rounded w-24" />
-            <div className="h-8 bg-gray-200 rounded w-full" />
+            <Shimmer className="h-5 rounded w-24" />
+            <Shimmer className="h-8 rounded w-full" />
           </div>
         ) : (
           <div className="flex justify-between pt-2 border-t border-gray-100">
-            <div className="h-6 bg-gray-200 rounded w-24" />
-            <div className="h-4 bg-gray-200 rounded w-16" />
+            <Shimmer className="h-6 rounded w-24" />
+            <Shimmer className="h-4 rounded w-16" />
           </div>
         )}
       </div>

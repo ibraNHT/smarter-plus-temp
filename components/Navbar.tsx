@@ -419,7 +419,7 @@ export const Navbar: React.FC = () => {
                     title={isUserNameResolving ? undefined : getUserDisplayName()}
                   >
                     {isUserNameResolving ? (
-                      <span className="inline-block h-4 w-28 animate-pulse rounded bg-gray-200 align-middle" />
+                      <span className="inline-block h-4 w-28 agm-shimmer rounded align-middle" />
                     ) : (
                       getUserDisplayName()
                     )}

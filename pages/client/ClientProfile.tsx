@@ -13,6 +13,7 @@ import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Modal } from '../../components/Modal';
 import { SectionLoader, ListSkeleton } from '../../components/Loaders';
+import { ClientProfileSkeleton } from '../../components/skeletons/ClientProfileSkeleton';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { LocationMapPicker } from '../../components/LocationMapPicker';
 import { uploadAvatar } from '../../services/uploadService';
@@ -532,10 +533,10 @@ export const ClientProfile: React.FC = () => {
 
    if (isClientProfileHydrating) {
       return (
-         <div className="max-w-7xl mx-auto py-8 px-4">
+         <>
             <SEO title="Client Profile | AgriMarket" noindex={true} />
-            <SectionLoader message="Loading your profile…" />
-         </div>
+            <ClientProfileSkeleton />
+         </>
       );
    }
 
@@ -1129,7 +1130,7 @@ export const ClientProfile: React.FC = () => {
                         </div>
                         <ul className="divide-y divide-gray-200 agm-dash-scroll-4 agm-dash-all-orders scrollbar-thin">
                            {(tabLoading || isClientProfileHydrating) && allMyOrders.length === 0 ? (
-                              <li className="px-4 py-6"><SectionLoader message={t('form.loading')} /></li>
+                              <li className="px-4 py-3"><ListSkeleton rows={4} /></li>
                            ) : allMyOrders.length === 0 ? (
                               <li className="px-4 py-8 text-center text-gray-500">No orders yet.</li>
                            ) : (
@@ -1208,7 +1209,7 @@ export const ClientProfile: React.FC = () => {
                         </div>
                      )}
                      {(tabLoading || isClientProfileHydrating) && (!favoriteOffers || favoriteOffers.length === 0) ? (
-                        <SectionLoader message={t('form.loading')} />
+                        <ListSkeleton rows={4} />
                      ) : (!favoriteOffers || favoriteOffers.length === 0) ? (
                         <div className="text-center py-12 text-gray-500"><Heart className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('profile.favorites.empty')}</p></div>
                      ) : (
@@ -1241,7 +1242,7 @@ export const ClientProfile: React.FC = () => {
                         </div>
                      </div>
                      {(tabLoading || isClientProfileHydrating) && myReviews.length === 0 ? (
-                        <SectionLoader message={t('form.loading')} />
+                        <ListSkeleton rows={3} />
                      ) : myReviews.length === 0 ? (
                         <div className="text-center py-12 text-gray-500"><Star className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('review.noReviews')}</p></div>
                      ) : (

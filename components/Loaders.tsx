@@ -2,6 +2,14 @@ import React from 'react';
 import { Loader2 } from 'lucide-react';
 
 /**
+ * Single shimmer placeholder block.
+ * Pass width / height / border-radius via className.
+ */
+export const Shimmer: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <div className={`agm-shimmer ${className}`} aria-hidden="true" />
+);
+
+/**
  * Inline spinner — small, used inline next to a label or inside a button.
  */
 export const Spinner: React.FC<{ className?: string; size?: number }> = ({ className = '', size = 16 }) => (
@@ -45,21 +53,23 @@ export const PageLoader: React.FC<{ message?: string }> = ({ message }) => (
 
 /**
  * Skeleton list — generic row skeletons for lists (orders, transactions, reviews…).
+ * Uses the sweeping shimmer gradient instead of pulse.
  */
 export const ListSkeleton: React.FC<{ rows?: number; className?: string }> = ({ rows = 3, className = '' }) => (
-  <div className={`space-y-3 ${className}`} aria-hidden="true">
+  <div className={`space-y-3 ${className}`} aria-hidden="true" role="status">
+    <span className="sr-only">Loading…</span>
     {Array.from({ length: rows }).map((_, i) => (
       <div
         key={i}
-        className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 animate-pulse"
+        className="bg-white border border-gray-100 rounded-lg shadow-sm p-4"
       >
         <div className="flex items-start gap-3">
-          <div className="h-10 w-10 bg-gray-200 rounded-md flex-shrink-0" />
+          <Shimmer className="h-10 w-10 rounded-md flex-shrink-0" />
           <div className="flex-1 space-y-2 min-w-0">
-            <div className="h-3.5 bg-gray-200 rounded w-2/3" />
-            <div className="h-3 bg-gray-200 rounded w-1/2" />
+            <Shimmer className="h-3.5 rounded w-2/3" />
+            <Shimmer className="h-3 rounded w-1/2" />
           </div>
-          <div className="h-6 w-16 bg-gray-200 rounded-full flex-shrink-0" />
+          <Shimmer className="h-6 w-16 rounded-full flex-shrink-0" />
         </div>
       </div>
     ))}

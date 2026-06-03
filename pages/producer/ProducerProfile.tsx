@@ -11,7 +11,7 @@ import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 import { OtpVerificationModal } from '../../components/OtpVerificationModal';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Modal } from '../../components/Modal';
-import { SectionLoader } from '../../components/Loaders';
+import { ListSkeleton } from '../../components/Loaders';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { LocationMapPicker } from '../../components/LocationMapPicker';
 import { uploadAvatar, uploadPortfolioImage, uploadPortfolioVideo } from '../../services/uploadService';
@@ -739,7 +739,7 @@ export const ProducerProfile: React.FC = () => {
 
           {isProducerHydrating && (
             <div className="shadow sm:rounded-md bg-white p-4 sm:p-6">
-              <SectionLoader message={t('form.loading')} />
+              <ListSkeleton rows={4} />
             </div>
           )}
 
@@ -1024,7 +1024,7 @@ export const ProducerProfile: React.FC = () => {
             <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
               <div className="border-b border-gray-200 pb-4 mb-4"><h3 className="text-lg font-medium text-gray-900">{t('profile.tabs.favorites')}</h3></div>
               {unavailableFavoriteIds && unavailableFavoriteIds.length > 0 && (<div className="mb-6 bg-yellow-50 p-4 rounded-md border border-yellow-100"><h4 className="text-sm font-bold text-yellow-800 mb-2">Unavailable Items</h4><ul className="space-y-2">{unavailableFavoriteIds.map(id => (<li key={id} className="flex items-center justify-between text-sm text-yellow-700"><span>Item #{id} is no longer available.</span><div className="flex items-center gap-2"><button onClick={() => setFavoriteToRemove({ id, title: `Item #${id}` })} className="text-xs text-red-600 hover:underline">{t('cart.remove')}</button><Link to="/market/producers" className="text-xs bg-yellow-200 px-2 py-1 rounded hover:bg-yellow-300 flex items-center"><Search className="w-3 h-3 mr-1" /> {t('profile.findSimilar')}</Link></div></li>))}</ul></div>)}
-              {tabLoading && (!favoriteOffers || favoriteOffers.length === 0) ? (<SectionLoader message={t('form.loading')} />) : (!favoriteOffers || favoriteOffers.length === 0) ? (<div className="text-center py-12 text-gray-500"><Heart className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('profile.favorites.empty')}</p></div>) : (<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{favoriteOffers.map((offer: any) => (<div key={offer.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow flex items-center"><div className="mr-4 h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100"><img src={offer.imageUrl} alt="" className={offerImageInBox} /></div><div className="flex-1 min-w-0"><h4 className="font-bold text-gray-900 truncate">{offer.title}</h4><p className="text-sm text-gray-500">{offer.price} XAF / {offer.unit}</p></div><div className="flex flex-col gap-2 ml-2"><Link to={`/offer/${offer.id}`} className="text-primary-600 hover:bg-primary-50 p-2 rounded-full"><ArrowLeft className="h-5 w-5 rotate-180" /></Link><button onClick={() => setFavoriteToRemove({ id: offer.id, title: offer.title })} className="text-red-500 hover:bg-red-50 p-2 rounded-full" aria-label={t('favorites.removeTitle')}><Trash2 className="h-5 w-5" /></button></div></div>))}</div>)}
+              {tabLoading && (!favoriteOffers || favoriteOffers.length === 0) ? (<ListSkeleton rows={3} />) : (!favoriteOffers || favoriteOffers.length === 0) ? (<div className="text-center py-12 text-gray-500"><Heart className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('profile.favorites.empty')}</p></div>) : (<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{favoriteOffers.map((offer: any) => (<div key={offer.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow flex items-center"><div className="mr-4 h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100"><img src={offer.imageUrl} alt="" className={offerImageInBox} /></div><div className="flex-1 min-w-0"><h4 className="font-bold text-gray-900 truncate">{offer.title}</h4><p className="text-sm text-gray-500">{offer.price} XAF / {offer.unit}</p></div><div className="flex flex-col gap-2 ml-2"><Link to={`/offer/${offer.id}`} className="text-primary-600 hover:bg-primary-50 p-2 rounded-full"><ArrowLeft className="h-5 w-5 rotate-180" /></Link><button onClick={() => setFavoriteToRemove({ id: offer.id, title: offer.title })} className="text-red-500 hover:bg-red-50 p-2 rounded-full" aria-label={t('favorites.removeTitle')}><Trash2 className="h-5 w-5" /></button></div></div>))}</div>)}
             </div>
           )}
 

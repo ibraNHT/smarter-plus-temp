@@ -8,7 +8,7 @@ import { isProducerDashboardUser, producerAccountUserId } from '../../services/p
 import { Link, useNavigate } from 'react-router-dom';
 import { OtpVerificationModal } from '../../components/OtpVerificationModal';
 import { Modal } from '../../components/Modal';
-import { SectionLoader } from '../../components/Loaders';
+import { ListSkeleton } from '../../components/Loaders';
 import { useFormik } from 'formik';
 import { z } from 'zod';
 
@@ -254,7 +254,7 @@ export const WalletDashboard: React.FC = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {pageLoading && myRequests.length === 0 ? (
-                    <tr><td colSpan={4} className="px-6 py-4"><SectionLoader message={t('form.loading')} /></td></tr>
+                    <tr><td colSpan={4} className="px-4 py-3"><ListSkeleton rows={3} /></td></tr>
                   ) : myRequests.length === 0 ? (
                     <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500 text-sm">{t('wallet.noReq')}</td></tr>
                   ) : (
@@ -280,7 +280,7 @@ export const WalletDashboard: React.FC = () => {
           </div>
           <ul className="divide-y divide-gray-200">
             {pageLoading && wallet.transactions.length === 0 ? (
-              <li className="px-4 sm:px-6 py-6"><SectionLoader message={t('form.loading')} /></li>
+              <li className="px-4 sm:px-6 py-4"><ListSkeleton rows={5} /></li>
             ) : wallet.transactions.length === 0 ? (
               <li className="px-4 sm:px-6 py-10 sm:py-12 text-center text-gray-500">
                 <TrendingUp className="mx-auto h-12 w-12 text-gray-300 mb-3" />

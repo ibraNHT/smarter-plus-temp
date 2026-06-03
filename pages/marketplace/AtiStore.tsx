@@ -160,11 +160,11 @@ export const AtiStore: React.FC = () => {
             {pageLoading ? (
               <div className="space-y-10 w-full min-w-0">
                 <div className="w-full min-w-0">
-                  <div className="h-7 bg-gray-200 rounded w-48 max-w-full mb-4 animate-pulse" />
+                  <div className="h-7 agm-shimmer rounded w-48 max-w-full mb-4" />
                   <OfferRowSkeleton count={4} variant="ati" />
                 </div>
                 <div className="w-full min-w-0">
-                  <div className="h-7 bg-gray-200 rounded w-40 max-w-full mb-4 animate-pulse" />
+                  <div className="h-7 agm-shimmer rounded w-40 max-w-full mb-4" />
                   <OfferRowSkeleton count={4} variant="ati" />
                 </div>
               </div>
