@@ -11,10 +11,12 @@ import { Spinner } from '../../components/Spinner';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { offerImageHero, offerImageInBox } from '../../utils/offerImageDisplay';
 import { getOfferImageUrls } from '../../utils/offerImages';
-import { displayNameTruncateClass, resolveProducerDisplayName } from '../../utils/displayName';
+import { displayNameTruncateClass, resolveProducerDisplayName, resolveProfileImageUrl } from '../../utils/displayName';
+import { getAverageRatingFromReviews, getReviewsForOffer } from '../../utils/offerReviews';
 import { isProducerDashboardUser } from '../../services/producerSession';
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
+import { showAppToast } from '../../services/appToast';
 
 /** Parse `YYYY-MM-DD` from `<input type="date">` as a local calendar day (avoids UTC weekday shifts). */
 function parseLocalYmd(ymd: string): Date {
@@ -25,7 +27,7 @@ function parseLocalYmd(ymd: string): Date {
 
 export const ProductDetails: React.FC = () => {
   const { offerId } = useParams<{ offerId: string }>();
-  const { getOfferById, producers, addToCart, clearCart, startNegotiation, user, getAverageRating, getProducerPortfolios, toggleFavorite, clients, reviews, compareList, addToCompare, removeFromCompare, orders, cart, refreshOffers, refreshProducers, refreshAllReviews, refreshMyPortfolios, refreshClients } = useStore();
+  const { getOfferById, producers, addToCart, clearCart, startNegotiation, user, getAverageRating, getProducerPortfolios, toggleFavorite, clients, reviews, compareList, addToCompare, removeFromCompare, orders, cart, refreshOffers, refreshProducers, refreshAllReviews, refreshMyPortfolios, refreshClients, refreshOrders } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -40,6 +42,7 @@ export const ProductDetails: React.FC = () => {
       refreshProducers(),
       refreshClients(),
       refreshAllReviews(),
+      refreshOrders(),
       refreshMyPortfolios(),
     ]).finally(() => {
       if (!cancelled) setPageLoading(false);
@@ -129,6 +132,11 @@ export const ProductDetails: React.FC = () => {
   }, [producer, reviews, fetchedProducerReviews]);
 
   const producerReviews = allProducerReviews;
+
+  const offerReviews = React.useMemo(() => {
+    if (!offerId) return [];
+    return getReviewsForOffer(offerId, reviews, orders);
+  }, [offerId, reviews, orders]);
 
   const getClientByUserOrProfileId = (id: string) =>
     clients.find((c) => c.id === id || c.userId === id);
@@ -288,7 +296,10 @@ export const ProductDetails: React.FC = () => {
   const isNegotiationAllowed = isProducerMarket && offer.isNegotiable && !offer.reservedClientId;
   const maxOrder = offer.maxQuantity && offer.maxQuantity > 0 ? Math.min(offer.maxQuantity, offer.quantity) : offer.quantity;
   const minOrder = offer.minQuantity || 1;
-  const producerRating = producer ? getAverageRating(producer.id) : 0;
+  const productReviews = isProducerMarket ? producerReviews : offerReviews;
+  const productRating = isProducerMarket
+    ? (producer ? getAverageRating(producer.id) : 0)
+    : getAverageRatingFromReviews(offerReviews);
 
   const handleQuantityChange = (delta: number) => {
     const newQty = quantity + delta;
@@ -299,13 +310,13 @@ export const ProductDetails: React.FC = () => {
 
   const handleAddToCart = () => {
     if (offer.type === OfferType.SERVICE && !selectedSlot) {
-      alert("Please select a time slot.");
+      showAppToast('Please select a time slot.', 'WARNING');
       return;
     }
 
     const result = addToCart(offer, quantity, selectedSlot || undefined);
     if (!result.success && result.error === 'OWN_OFFER') {
-      alert('You cannot add your own offer to cart.');
+      showAppToast('You cannot add your own offer to cart.', 'WARNING');
       return;
     }
     if (!result.success && result.error === 'PRODUCER_CONFLICT') {
@@ -313,7 +324,7 @@ export const ProductDetails: React.FC = () => {
       return;
     }
     if (!result.success && result.error === 'DUPLICATE_SERVICE_SLOT') {
-      alert('This exact service slot is already booked or already in your cart.');
+      showAppToast('This exact service slot is already booked or already in your cart.', 'WARNING');
       return;
     }
     navigate(offer.type === OfferType.SERVICE ? '/cart?booking=1' : '/cart');
@@ -343,6 +354,7 @@ export const ProductDetails: React.FC = () => {
   const producerDisplayName = !isProducerMarket
     ? 'ATI Retail Store'
     : resolveProducerDisplayName(producer);
+  const producerAvatarUrl = isProducerMarket ? resolveProfileImageUrl(producer) : undefined;
 
   const productSchema = offer ? {
     "@context": "https://schema.org/",
@@ -350,10 +362,10 @@ export const ProductDetails: React.FC = () => {
     "name": offer.title,
     "image": offer.imageUrl,
     "description": offer.description,
-    "aggregateRating": producerRating > 0 ? {
+    "aggregateRating": productRating > 0 ? {
       "@type": "AggregateRating",
-      "ratingValue": producerRating,
-      "reviewCount": producerReviews.length > 0 ? producerReviews.length : 1
+      "ratingValue": productRating,
+      "reviewCount": productReviews.length > 0 ? productReviews.length : 1
     } : undefined,
     "offers": {
       "@type": "Offer",
@@ -610,8 +622,16 @@ export const ProductDetails: React.FC = () => {
                   <div className="bg-primary-50 p-4 rounded-lg mb-6 border border-primary-100 min-w-0 overflow-hidden">
                     <h3 className="text-xs font-bold text-primary-800 uppercase tracking-wide mb-3">{t('product.soldBy')}</h3>
                     <div className="flex items-start space-x-3 min-w-0">
-                      <div className="flex-shrink-0 h-12 w-12 rounded-full bg-white border border-primary-200 flex items-center justify-center text-primary-700 font-bold text-lg shadow-sm">
-                        {(producerDisplayName || 'U').charAt(0)}
+                      <div className="flex-shrink-0 h-12 w-12 rounded-full bg-white border border-primary-200 overflow-hidden shadow-sm flex items-center justify-center">
+                        {producerAvatarUrl ? (
+                          <img
+                            src={producerAvatarUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <User className="h-6 w-6 text-primary-600" aria-hidden />
+                        )}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
@@ -622,9 +642,9 @@ export const ProductDetails: React.FC = () => {
                           >
                             {producerDisplayName}
                           </Link>
-                          {producerRating > 0 && (
+                          {productRating > 0 && (
                             <span className="flex shrink-0 items-center text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">
-                              <Star className="h-3 w-3 mr-0.5 fill-current" /> {producerRating}
+                              <Star className="h-3 w-3 mr-0.5 fill-current" /> {productRating}
                             </span>
                           )}
                         </div>
@@ -657,6 +677,11 @@ export const ProductDetails: React.FC = () => {
                           <span className="text-base font-bold text-gray-900">
                             ATI Retail Store
                           </span>
+                          {productRating > 0 && (
+                            <span className="flex shrink-0 items-center text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">
+                              <Star className="h-3 w-3 mr-0.5 fill-current" /> {productRating}
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center text-xs text-gray-600 mt-1">
                           <MapPin className="h-3 w-3 mr-1" />
@@ -751,21 +776,25 @@ export const ProductDetails: React.FC = () => {
           </div>
         )}
 
-        {/* REVIEWS SECTION */}
-        {isProducerMarket && producer && (
+        {/* REVIEWS SECTION — producer market (seller) or ATI store (this product) */}
+        {(isProducerMarket ? !!producer : true) && (
           <div className="mt-12 bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="p-6 border-b border-gray-100 flex items-center">
               <Star className="h-6 w-6 text-yellow-500 fill-current mr-3" />
-              <h2 className="text-2xl font-bold text-gray-900">Producer Reviews</h2>
-              <span className="ml-3 bg-gray-100 text-gray-600 text-sm px-2 py-1 rounded-full font-medium">{producerReviews.length}</span>
+              <h2 className="text-2xl font-bold text-gray-900">
+                {isProducerMarket ? t('product.producerReviews') : t('product.offerReviews')}
+              </h2>
+              <span className="ml-3 bg-gray-100 text-gray-600 text-sm px-2 py-1 rounded-full font-medium">{productReviews.length}</span>
             </div>
 
             <div className="p-6">
-              {producerReviews.length === 0 ? (
-                <p className="text-gray-500 italic text-center py-8">No reviews yet. Be the first to review this producer after a purchase!</p>
+              {productReviews.length === 0 ? (
+                <p className="text-gray-500 italic text-center py-8">
+                  {isProducerMarket ? t('product.noReviewsProducer') : t('product.noReviewsOffer')}
+                </p>
               ) : (
                 <div className="space-y-6">
-                  {producerReviews.map((review) => {
+                  {productReviews.map((review) => {
                     const reviewer = getReviewerDisplay(review);
                     const initial = reviewer.name.charAt(0).toUpperCase();
                     return (

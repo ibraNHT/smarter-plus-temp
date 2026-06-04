@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useSearc
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { ToastContainer } from './components/ToastContainer';
+import { AppToastContainer } from './components/AppToastContainer';
 import { SupportChatWidget } from './components/SupportChatWidget';
 import { CompareWidget } from './components/CompareWidget'; // New
 import { LandingPage } from './pages/LandingPage';
@@ -122,6 +123,7 @@ const AppShell: React.FC = () => {
       {!authFullscreen && <ProducerPendingBanner />}
       {!authFullscreen && <InstallAppBanner />}
       <ToastContainer />
+      <AppToastContainer />
       {!authFullscreen && <SupportChatWidget />}
       {!authFullscreen && <CompareWidget />}
       <SupportDeepLinkHandler />

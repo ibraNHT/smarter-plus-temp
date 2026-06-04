@@ -9,6 +9,7 @@ import { comparePageAddQuantity, effectiveMinOrder } from '../../utils/offerCart
 import { ComparePageSkeleton } from '../../components/skeletons/ComparePageSkeleton';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { showAppToast } from '../../services/appToast';
 
 export const ComparePage: React.FC = () => {
   const { compareList, offers, producers, getAverageRating, removeFromCompare, addToCart, clearCart, clearCompare, refreshOffers, refreshProducers } = useStore();
@@ -61,7 +62,7 @@ export const ComparePage: React.FC = () => {
     const qty = comparePageAddQuantity(canonical);
     const result = addToCart(canonical, qty);
     if (!result.success && result.error === 'OWN_OFFER') {
-      alert('You cannot add your own offer to cart.');
+      showAppToast('You cannot add your own offer to cart.', 'WARNING');
       return;
     }
     if (!result.success && result.error === 'PRODUCER_CONFLICT') {

@@ -61,7 +61,10 @@ export const API_ENDPOINTS = {
     cancel: (id: string) => `/api/orders/${id}/cancel`,
     pay: (id: string) => `/api/orders/${id}/pay`,
     deliver: (id: string) => `/api/orders/${id}/deliver`,
+    markDelivered: (id: string) => `/api/orders/${id}/mark-delivered`,
     confirmReceipt: (id: string) => `/api/orders/${id}/confirm-receipt`,
+    requestCancellation: (id: string) => `/api/orders/${id}/request-cancellation`,
+    appointment: (id: string) => `/api/orders/${id}/appointment`,
     dispute: (id: string) => `/api/orders/${id}/dispute`,
   },
   cart: {

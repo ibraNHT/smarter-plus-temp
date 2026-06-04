@@ -24,6 +24,7 @@ import { isProducerDashboardUser, isManagerSession } from '../../services/produc
 import { findProducerForUser } from '../../utils/producerAccountStatus';
 import { useFormik } from 'formik';
 import { z } from 'zod';
+import { showAppToast } from '../../services/appToast';
 
 type ProducerFormData = ProducerProfileType & {
   niuCertificateUrl?: string;
@@ -335,12 +336,12 @@ export const ProducerProfile: React.FC = () => {
     const file = e.target.files[0];
     const maxBytes = 2 * 1024 * 1024;
     if (file.size > maxBytes) {
-      alert('Image must be 2 MB or less.');
+      showAppToast('Image must be 2 MB or less.', 'WARNING');
       return;
     }
     const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
-      alert('Only PNG, JPG, and WebP are allowed for profile photos.');
+      showAppToast('Only PNG, JPG, and WebP are allowed for profile photos.', 'WARNING');
       return;
     }
     setAvatarUploading(true);
@@ -348,7 +349,7 @@ export const ProducerProfile: React.FC = () => {
       const url = await uploadAvatar(file);
       setFormData({ ...formData, profileImageUrl: url });
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Upload failed.');
+      showAppToast(err instanceof Error ? err.message : 'Upload failed.', 'ERROR');
     } finally {
       setAvatarUploading(false);
     }
@@ -368,19 +369,19 @@ export const ProducerProfile: React.FC = () => {
       email: formData.email ?? '',
     });
     if (!parsed.success) {
-      alert(parsed.error.issues[0]?.message || 'Please fix profile form errors.');
+      showAppToast(parsed.error.issues[0]?.message || 'Please fix profile form errors.', 'WARNING');
       return;
     }
     if (!String(formData.taxIdentificationNumber ?? '').trim()) {
-      alert('NIU / Tax identification number is required.');
+      showAppToast('NIU / Tax identification number is required.', 'WARNING');
       return;
     }
     if (!String(formData.niuCertificateUrl ?? '').trim()) {
-      alert('NIU certificate upload is required.');
+      showAppToast('NIU certificate upload is required.', 'WARNING');
       return;
     }
     if (!String(formData.taxClearanceCertificateUrl ?? '').trim()) {
-      alert('Tax compliance certificate (ACF) is required.');
+      showAppToast('Tax compliance certificate (ACF) is required.', 'WARNING');
       return;
     }
     let displayName = formData.name;
@@ -426,7 +427,7 @@ export const ProducerProfile: React.FC = () => {
     if (!referralCodeDisplay) return;
     const link = `${window.location.origin}/#/register?ref=${referralCodeDisplay}`;
     void navigator.clipboard.writeText(link);
-    alert('Referral link copied!');
+    showAppToast('Referral link copied!', 'SUCCESS');
   };
   useEffect(() => {
     const query = String(locationSearch ?? '').trim();
@@ -551,7 +552,7 @@ export const ProducerProfile: React.FC = () => {
       });
       setLocationSearch(rev?.address || '');
     } catch {
-      alert('Could not read your location. Allow permission or set the pin on the map.');
+      showAppToast('Could not read your location. Allow permission or set the pin on the map.', 'WARNING');
     } finally {
       setGeoLoading(false);
     }
@@ -564,17 +565,17 @@ export const ProducerProfile: React.FC = () => {
     e.target.value = '';
     if (files.length === 0) return;
     if ((portfolioForm.imageUrls?.length || 0) + files.length > 10) {
-      alert('Maximum 10 images allowed.');
+      showAppToast('Maximum 10 images allowed.', 'WARNING');
       return;
     }
     const validFiles: File[] = [];
     for (const file of files) {
       if (file.size > 5 * 1024 * 1024) {
-        alert(`File ${file.name} is too large. Max 5MB.`);
+        showAppToast(`File ${file.name} is too large. Max 5MB.`, 'WARNING');
         continue;
       }
       if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-        alert(`File ${file.name} is invalid format. PNG, JPG, or WebP only.`);
+        showAppToast(`File ${file.name} is invalid format. PNG, JPG, or WebP only.`, 'WARNING');
         continue;
       }
       validFiles.push(file);
@@ -585,7 +586,7 @@ export const ProducerProfile: React.FC = () => {
       const uploaded = await Promise.all(validFiles.map((f) => uploadPortfolioImage(f)));
       setPortfolioForm(prev => ({ ...prev, imageUrls: [...(prev.imageUrls || []), ...uploaded] }));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Portfolio image upload failed.');
+      showAppToast(err instanceof Error ? err.message : 'Portfolio image upload failed.', 'ERROR');
     } finally {
       setPortfolioImageUploading(false);
     }
@@ -595,7 +596,7 @@ export const ProducerProfile: React.FC = () => {
     e.target.value = '';
     if (!file) return;
     if (file.size > 50 * 1024 * 1024) {
-      alert('Video file too large. Max 50MB.');
+      showAppToast('Video file too large. Max 50MB.', 'WARNING');
       return;
     }
     setPortfolioVideoUploading(true);
@@ -603,7 +604,7 @@ export const ProducerProfile: React.FC = () => {
       const url = await uploadPortfolioVideo(file);
       setPortfolioForm(prev => ({ ...prev, videoUrl: url }));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Video upload failed.');
+      showAppToast(err instanceof Error ? err.message : 'Video upload failed.', 'ERROR');
     } finally {
       setPortfolioVideoUploading(false);
     }
@@ -622,16 +623,19 @@ export const ProducerProfile: React.FC = () => {
       description: portfolioForm.description ?? '',
     });
     if (!parsed.success) {
-      alert(parsed.error.issues[0]?.message || 'Please fix portfolio form errors.');
+      showAppToast(parsed.error.issues[0]?.message || 'Please fix portfolio form errors.', 'WARNING');
       return;
     }
     if (portfolioImageUploading || portfolioVideoUploading) {
-      alert('Please wait for media uploads to finish.');
+      showAppToast('Please wait for media uploads to finish.', 'INFO');
       return;
     }
     const chosenCategory = (portfolioForm.category ?? '').trim();
     if (!portfolioForm.id && myPortfolios.some(p => p.category === chosenCategory)) {
-      alert(`You already have a portfolio for the "${portfolioCategoryLabel(chosenCategory, t)}" category. You can edit the existing one instead.`);
+      showAppToast(
+        `You already have a portfolio for the "${portfolioCategoryLabel(chosenCategory, t)}" category. You can edit the existing one instead.`,
+        'WARNING',
+      );
       return;
     }
     const data = {

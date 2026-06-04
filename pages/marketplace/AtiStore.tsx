@@ -10,20 +10,17 @@ import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { offerImageInBox, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
 import { isProducerDashboardUser } from '../../services/producerSession';
 import { findProducerForUser } from '../../utils/producerAccountStatus';
+import { getAverageRatingFromReviews, getReviewsForOffer } from '../../utils/offerReviews';
 
 export const AtiStore: React.FC = () => {
-  const { offers, toggleFavorite, user, clients, producers, compareList, addToCompare, removeFromCompare, getAverageRating, reviews, orders, refreshOffers, refreshProducers, refreshAllReviews } = useStore();
+  const { offers, toggleFavorite, user, clients, producers, compareList, addToCompare, removeFromCompare, reviews, orders, refreshOffers, refreshProducers, refreshAllReviews } = useStore();
 
-  const getOfferRating = (offerId: string) => {
-    const orderIds = new Set(
-      orders
-        .filter((o) => (o.items || []).some((item) => (item.id || (item as { offerId?: string }).offerId) === offerId))
-        .map((o) => o.id),
-    );
-    const related = reviews.filter((r) => orderIds.has(r.orderId));
-    return related.length
-      ? parseFloat((related.reduce((a, b) => a + b.rating, 0) / related.length).toFixed(1))
-      : 0;
+  const getOfferReviewStats = (offerId: string) => {
+    const offerReviews = getReviewsForOffer(offerId, reviews, orders);
+    return {
+      reviewCount: offerReviews.length,
+      rating: getAverageRatingFromReviews(offerReviews),
+    };
   };
   const { t } = useTranslation();
 
@@ -222,11 +219,8 @@ export const AtiStore: React.FC = () => {
                           {categoryOffers.map((offer) => {
                             const isFav = favorites.includes(offer.id);
                             const isComparing = compareList.includes(offer.id);
-                            const rating = getOfferRating(offer.id) || getAverageRating(offer.producerId);
-                            const reviewCount = reviews.filter((r) => {
-                              const order = orders.find((o) => o.id === r.orderId);
-                              return order?.items?.some((item) => (item.id || (item as { offerId?: string }).offerId) === offer.id);
-                            }).length;
+                            const { reviewCount, rating } = getOfferReviewStats(offer.id);
+                            const filledStars = reviewCount > 0 ? Math.round(rating) : 0;
                             return (
                               <div key={offer.id} className="relative">
                                 <div className="absolute top-2 right-2 z-10 flex gap-1">
@@ -253,8 +247,15 @@ export const AtiStore: React.FC = () => {
                                   <div className="flex-1 p-3 space-y-2 flex flex-col">
                                     <h3 className="text-sm font-medium text-gray-900 line-clamp-2 h-10">{offer.title}</h3>
                                     <div className="flex items-center mb-1">
-                                      {[...Array(5)].map((_, i) => <Star key={i} className={`w-3 h-3 ${i < Math.round(rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} />)}
-                                      <span className="text-xs text-gray-400 ml-1">{reviewCount > 0 ? `(${rating.toFixed(1)})` : '(No reviews)'}</span>
+                                      {[...Array(5)].map((_, i) => (
+                                        <Star
+                                          key={i}
+                                          className={`w-3 h-3 ${i < filledStars ? 'text-yellow-400 fill-current' : 'text-gray-300'}`}
+                                        />
+                                      ))}
+                                      <span className="text-xs text-gray-400 ml-1">
+                                        {reviewCount > 0 ? `(${rating.toFixed(1)})` : '(No reviews)'}
+                                      </span>
                                     </div>
                                     <div className="flex flex-col pt-2 border-t border-gray-100 mt-auto">
                                       <span className="text-lg font-bold text-gray-900">{offer.price.toLocaleString()} XAF</span>
@@ -275,11 +276,8 @@ export const AtiStore: React.FC = () => {
                           {categoryOffers.map((offer) => {
                             const isFav = favorites.includes(offer.id);
                             const isComparing = compareList.includes(offer.id);
-                            const rating = getOfferRating(offer.id) || getAverageRating(offer.producerId);
-                            const reviewCount = reviews.filter((r) => {
-                              const order = orders.find((o) => o.id === r.orderId);
-                              return order?.items?.some((item) => (item.id || (item as { offerId?: string }).offerId) === offer.id);
-                            }).length;
+                            const { reviewCount, rating } = getOfferReviewStats(offer.id);
+                            const filledStars = reviewCount > 0 ? Math.round(rating) : 0;
 
                             return (
                               <div key={offer.id} className="relative min-w-[220px] w-[240px] flex-shrink-0">
@@ -319,9 +317,14 @@ export const AtiStore: React.FC = () => {
                                     </h3>
                                     <div className="flex items-center mb-1">
                                       {[...Array(5)].map((_, i) => (
-                                        <Star key={i} className={`w-3 h-3 ${i < Math.round(rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} />
+                                        <Star
+                                          key={i}
+                                          className={`w-3 h-3 ${i < filledStars ? 'text-yellow-400 fill-current' : 'text-gray-300'}`}
+                                        />
                                       ))}
-                                      <span className="text-xs text-gray-400 ml-1">{reviewCount > 0 ? `(${rating.toFixed(1)})` : '(No reviews)'}</span>
+                                      <span className="text-xs text-gray-400 ml-1">
+                                        {reviewCount > 0 ? `(${rating.toFixed(1)})` : '(No reviews)'}
+                                      </span>
                                     </div>
                                     <div className="flex flex-col pt-2 border-t border-gray-100 mt-auto">
                                       <span className="text-lg font-bold text-gray-900">{offer.price.toLocaleString()} XAF</span>

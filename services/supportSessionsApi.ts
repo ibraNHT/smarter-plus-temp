@@ -4,6 +4,7 @@
 
 import type { SupportMessage } from '../types';
 import { apiFetch, getToken } from './apiService';
+import { logApiWarn } from './apiDebug';
 import { apiGet, apiPost } from '../client-api/http';
 import { API_ENDPOINTS } from '../client-api/endpoints';
 
@@ -66,7 +67,7 @@ export async function getSupportMessages(sessionId: string): Promise<SupportMess
   try {
     return await apiGet<SupportMessageDto[]>(API_ENDPOINTS.support.sessionMessages(sessionId), { silent401: true });
   } catch (e: any) {
-    console.warn(`Support messages poll failed: ${e?.message || 'unknown'}`);
+    logApiWarn(`Support messages poll failed: ${e?.message || 'unknown'}`, e);
     return [];
   }
 }

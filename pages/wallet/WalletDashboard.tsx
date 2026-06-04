@@ -11,6 +11,7 @@ import { Modal } from '../../components/Modal';
 import { ListSkeleton } from '../../components/Loaders';
 import { useFormik } from 'formik';
 import { z } from 'zod';
+import { showAppToast } from '../../services/appToast';
 
 export const WalletDashboard: React.FC = () => {
   const { user, getWallet, fundWallet, requestWithdrawal, requestOtp, verifyOtp, producers, withdrawalRequests, refreshWallet, refreshWithdrawals } = useStore();
@@ -74,7 +75,7 @@ export const WalletDashboard: React.FC = () => {
         setShowTopUp(false);
         topUpFormik.resetForm();
       }
-      alert(result.message);
+      showAppToast(result.message, result.success ? 'SUCCESS' : 'ERROR');
     },
   });
 
@@ -98,11 +99,11 @@ export const WalletDashboard: React.FC = () => {
     },
     onSubmit: async (values) => {
     if (!isProducer || !currentProducer) {
-      alert("Withdrawals are for producers only.");
+      showAppToast('Withdrawals are for producers only.', 'WARNING');
       return;
     }
     if (!selectedSavedMethodId) {
-      alert("Please select a payment method.");
+      showAppToast('Please select a payment method.', 'WARNING');
       return;
     }
     const method = currentProducer.paymentMethods.find(pm => pm.id === selectedSavedMethodId);
@@ -123,10 +124,8 @@ export const WalletDashboard: React.FC = () => {
     if (result.success) {
       setShowWithdraw(false);
       withdrawFormik.resetForm();
-      alert(result.message);
-    } else {
-      alert(result.message);
     }
+    showAppToast(result.message, result.success ? 'SUCCESS' : 'ERROR');
   };
 
   const getIcon = (type: TransactionType) => {

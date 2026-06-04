@@ -351,6 +351,12 @@ export interface Order {
   clientReviewed?: boolean; // Has client rated producer?
   producerReviewed?: boolean; // Has producer rated client?
   contactRevealed?: boolean; // New: Allows sharing phone/email after payment
+  /** Two-step delivery handshake: buyer confirmed receipt; producer/admin can then finalize. */
+  clientConfirmedReceipt?: boolean;
+  clientConfirmedReceiptAt?: string;
+  /** Buyer requested cancellation; awaiting administrator approval. */
+  cancellationRequested?: boolean;
+  cancellationReason?: string;
   disputeReason?: string;
   disputeEvidence?: DisputeEvidence[];
 

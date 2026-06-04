@@ -3,6 +3,7 @@ import { FileText, Upload, X, Loader2, ExternalLink } from 'lucide-react';
 import { useTranslation } from '../services/i18nContext';
 import { uploadDocument } from '../services/uploadService';
 import { documentFileLabel } from '../utils/producerDocuments';
+import { showAppToast } from '../services/appToast';
 
 function isImageDocUrl(url: string): boolean {
   const lower = url.toLowerCase();
@@ -47,12 +48,12 @@ const DocSlot: React.FC<DocSlotProps> = ({
     e.target.value = '';
     if (!file) return;
     if (file.size > MAX_BYTES) {
-      alert('File size exceeds 10MB limit.');
+      showAppToast('File size exceeds 10MB limit.', 'WARNING');
       return;
     }
     const allowed = ['image/png', 'image/jpeg', 'application/pdf'];
     if (!allowed.includes(file.type)) {
-      alert('Only PNG, JPG, and PDF formats are allowed.');
+      showAppToast('Only PNG, JPG, and PDF formats are allowed.', 'WARNING');
       return;
     }
     setUploading(true);
@@ -60,7 +61,7 @@ const DocSlot: React.FC<DocSlotProps> = ({
       const uploaded = await uploadDocument(file);
       onUpload(uploaded);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Upload failed.');
+      showAppToast(err instanceof Error ? err.message : 'Upload failed.', 'ERROR');
     } finally {
       setUploading(false);
     }

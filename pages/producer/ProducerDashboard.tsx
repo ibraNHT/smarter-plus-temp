@@ -3,7 +3,7 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { ProducerStatus, OrderStatus, Order, OfferType, Review } from '../../types';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2 } from 'lucide-react';
+import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2, Clock } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -20,7 +20,7 @@ import {
 import { isProducerDashboardUser, isManagerSession, producerAccountUserId } from '../../services/producerSession';
 
 export const ProducerDashboard: React.FC = () => {
-   const { user, getProducerOffers, deleteOffer, producers, clients, orders, confirmOrder, rejectOrder, startDelivery, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating, pickupPoints, refreshOrders, refreshOffers, refreshProducers, refreshClients } = useStore();
+   const { user, getProducerOffers, deleteOffer, producers, clients, orders, confirmOrder, rejectOrder, startDelivery, markOrderDelivered, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating, pickupPoints, refreshOrders, refreshOffers, refreshProducers, refreshClients } = useStore();
    const { t } = useTranslation();
    const navigate = useNavigate();
    const [searchParams, setSearchParams] = useSearchParams();
@@ -710,6 +710,18 @@ export const ProducerDashboard: React.FC = () => {
                                     >
                                        <Navigation className="h-3 w-3 inline mr-1" /> Loc
                                     </button>
+                                    {order.clientConfirmedReceipt ? (
+                                       <button
+                                          onClick={(e) => { e.stopPropagation(); void markOrderDelivered(order.id); }}
+                                          className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 font-bold flex items-center"
+                                       >
+                                          <CheckCircle className="h-3 w-3 mr-1" /> {t('order.markDelivered')}
+                                       </button>
+                                    ) : (
+                                       <span className="text-xs text-gray-500 flex items-center" title={t('dash.awaitingClientReceipt')}>
+                                          <Clock className="h-3 w-3 mr-1" /> {t('dash.awaitingClientReceipt')}
+                                       </span>
+                                    )}
                                  </>
                               )}
 

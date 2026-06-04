@@ -5,6 +5,7 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { MapPin, X, Plus, Lock, Phone, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { ProducerType, Location } from '../../types';
+import { showAppToast } from '../../services/appToast';
 
 // Mock Data for Regions/Cities
 const CAMEROON_LOCATIONS: Record<string, string[]> = {
@@ -114,7 +115,7 @@ export const RegisterProducer: React.FC = () => {
     }
 
     if (locations.length === 0) {
-      alert('Please add at least one location.');
+      showAppToast('Please add at least one location.', 'WARNING');
       return;
     }
 

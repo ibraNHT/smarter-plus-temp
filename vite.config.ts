@@ -38,6 +38,12 @@ export default defineConfig({
               "apple-touch-icon.png",
             ],
             workbox: {
+              // Skip terser minification of the generated service worker.
+              // workbox-build's internal @rollup/plugin-terser worker pool can exit
+              // early on Node 20+/22 ("Unexpected early exit … (terser) renderChunk"),
+              // which fails the whole build. The SW is a tiny generated file, so an
+              // unminified version has no meaningful size/perf impact.
+              mode: "development",
               maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
               cleanupOutdatedCaches: true,
               skipWaiting: true,

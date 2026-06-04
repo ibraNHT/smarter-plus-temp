@@ -16,6 +16,7 @@ import { apiFetch, apiUpload, setToken, clearToken, getToken, getRefreshToken, s
 import { normalizeRegisterPhoneFull } from '../utils/registerPhone';
 import { resolveOfferImageSrc } from '../utils/offerImageDisplay';
 import { logApiFailure } from './apiDebug';
+import { showAppToast } from './appToast';
 import { uploadAvatar } from './uploadService';
 // `clientProfileMatchesSession` lives in its own module so this file only
 // exports React-related symbols (provider + hooks). Vite's React plugin
@@ -293,7 +294,7 @@ interface StoreContextType {
    * the global `chats` array.
    */
   emitTyping: (chatId: string, isTyping: boolean, recipientIds: string[]) => void;
-  respondToProposal: (chatId: string, messageId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', counterPrice?: number, counterQty?: number) => Promise<boolean>;
+  respondToProposal: (chatId: string, messageId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', counterPrice?: number, counterQty?: number, bookingDate?: string) => Promise<boolean>;
 
   // Support Chat (Client Side)
   supportMessages: SupportMessage[];
@@ -357,7 +358,10 @@ interface StoreContextType {
   cancelOrder: (orderId: string) => Promise<void>;
   payForOrder: (orderId: string) => Promise<{ success: boolean; error?: 'INSUFFICIENT_FUNDS' }>;
   startDelivery: (orderId: string) => Promise<void>;
+  markOrderDelivered: (orderId: string) => Promise<void>;
   confirmReceipt: (orderId: string) => Promise<void>;
+  requestOrderCancellation: (orderId: string, reason?: string) => Promise<void>;
+  updateAppointment: (orderId: string, bookingDate: string) => Promise<boolean>;
   reportProblem: (orderId: string, reason: string, files: File[]) => Promise<void>;
   addDisputeEvidence: (orderId: string, files: File[]) => void;
   revealContactInfo: (orderId: string) => void;
@@ -847,8 +851,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       // Ignore echoes for our own user id (shouldn't happen — server filters —
       // but defensive when sender has multiple tabs open as the same user).
       if (userRef.current && fromUserId === userRef.current.id) return;
-      // eslint-disable-next-line no-console
-      console.debug('[chat:typing] received', { sessionId, fromUserId, isTyping: data.isTyping });
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.debug('[chat:typing] received', { sessionId, fromUserId, isTyping: data.isTyping });
+      }
       setTypingByChatId((prev) => {
         const next = { ...prev };
         if (data?.isTyping === false) {
@@ -933,13 +939,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         ? recipientIds.filter((id) => typeof id === 'string' && id.length > 0 && id !== u.id)
         : [];
       if (safeRecipients.length === 0) return;
-      // eslint-disable-next-line no-console
-      console.debug('[chat:typing] emit', {
-        sessionId: chatId,
-        recipientIds: safeRecipients,
-        isTyping,
-        connected: socket.connected,
-      });
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.debug('[chat:typing] emit', {
+          sessionId: chatId,
+          recipientIds: safeRecipients,
+          isTyping,
+          connected: socket.connected,
+        });
+      }
       socket.emit('chat:typing', { sessionId: chatId, recipientIds: safeRecipients, isTyping });
     },
     [],
@@ -2066,7 +2074,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             body: JSON.stringify({ profileImageUrl: url }),
           });
         } catch (avatarErr) {
-          console.warn('Client avatar upload failed', avatarErr);
+          logApiFailure('Client avatar upload failed', avatarErr);
         }
       }
 
@@ -2483,7 +2491,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return { success: true };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to delete offer.';
-      console.error('Failed to delete offer', error);
+      logApiFailure('Failed to delete offer', error);
       if (user) addNotification(user.id, message, 'ERROR');
       return { success: false, error: message };
     }
@@ -2702,16 +2710,72 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
+  /**
+   * Producer/seller finalizes delivery. Only succeeds once the buyer has confirmed
+   * receipt (enforced server-side via the two-step delivery handshake).
+   */
+  const markOrderDelivered = async (id: string) => {
+    try {
+      await apiFetch(API_ENDPOINTS.orders.markDelivered(id), { method: 'PATCH' });
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, status: OrderStatus.DELIVERED } : o));
+      bustCache(['orders']);
+      if (user) addNotification(user.id, 'Order marked as delivered.', 'SUCCESS');
+    } catch (error) {
+      logApiFailure('Failed to mark order as delivered', error);
+      if (user) addNotification(user.id, 'The customer must confirm receipt before you can mark this order as delivered.', 'ERROR');
+    }
+  };
+
+  /**
+   * Buyer confirms they received the order (first step of the delivery handshake).
+   * Status stays IN_TRANSIT until the seller finalizes delivery.
+   */
   const confirmReceipt = async (id: string) => {
     try {
       await apiFetch(API_ENDPOINTS.orders.confirmReceipt(id), { method: 'PATCH' });
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, status: OrderStatus.DELIVERED } : o));
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, clientConfirmedReceipt: true } : o));
       bustCache(['orders']);
       if (user) {
-        addNotification(user.id, 'Delivery confirmed. Thank you!', 'SUCCESS');
+        addNotification(user.id, 'Receipt confirmed. Waiting for the seller to finalize delivery.', 'SUCCESS');
       }
     } catch (error) {
       logApiFailure('Failed to confirm receipt', error);
+    }
+  };
+
+  /** Buyer requests cancellation of a paid, non-in-transit order (admin approves). */
+  const requestOrderCancellation = async (orderId: string, reason?: string) => {
+    try {
+      await apiFetch(API_ENDPOINTS.orders.requestCancellation(orderId), {
+        method: 'PATCH',
+        body: JSON.stringify({ reason: reason ?? '' }),
+      });
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, cancellationRequested: true, cancellationReason: reason ?? '' } : o));
+      bustCache(['orders']);
+      if (user) addNotification(user.id, 'Cancellation requested. An administrator will review it shortly.', 'WARNING');
+    } catch (error) {
+      logApiFailure('Failed to request cancellation', error);
+      if (user) addNotification(user.id, 'Could not request cancellation. Please try again.', 'ERROR');
+    }
+  };
+
+  /** Buyer reschedules the appointment date of a SERVICE booking before fulfilment. */
+  const updateAppointment = async (orderId: string, bookingDate: string): Promise<boolean> => {
+    try {
+      await apiFetch(API_ENDPOINTS.orders.appointment(orderId), {
+        method: 'PATCH',
+        body: JSON.stringify({ bookingDate }),
+      });
+      setOrders(prev => prev.map(o => o.id === orderId
+        ? { ...o, requestedDeliveryDate: bookingDate, items: (o.items || []).map((it: any) => (String(it.type ?? '').toUpperCase() === 'SERVICE' ? { ...it, bookingDate } : it)) }
+        : o));
+      bustCache(['orders']);
+      if (user) addNotification(user.id, 'Appointment updated.', 'SUCCESS');
+      return true;
+    } catch (error) {
+      logApiFailure('Failed to update appointment', error);
+      if (user) addNotification(user.id, 'Could not update the appointment. Please try again.', 'ERROR');
+      return false;
     }
   };
 
@@ -2756,18 +2820,18 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       });
       const saved = mapReviewFromApi(savedRaw);
       setReviews(prev => [...prev, saved]);
+      // Hide the review CTA immediately. Attribute the review by the session user's
+      // role on THIS order: if they are the producer side, it's a producer review,
+      // otherwise it's the client's review. This does not rely on the (possibly
+      // incomplete) client catalog, so the button always disappears after rating.
       setOrders(prev =>
         prev.map((o) => {
           if (o.id !== saved.orderId) return o;
-          const clientProf = clients.find((c) => c.userId === saved.reviewerId);
-          if (clientProf && o.clientId === clientProf.id) {
-            return { ...o, clientReviewed: true };
-          }
-          const producerProf = producers.find((p) => p.userId === saved.reviewerId);
-          if (producerProf && o.producerId === producerProf.id) {
-            return { ...o, producerReviewed: true };
-          }
-          return o;
+          const orderProducer = producers.find((p) => p.id === o.producerId);
+          const sessionIsProducer = !!orderProducer && orderProducer.userId === user?.id;
+          return sessionIsProducer
+            ? { ...o, producerReviewed: true }
+            : { ...o, clientReviewed: true };
         }),
       );
       bustCache(['reviews']);
@@ -3094,7 +3158,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const addToCompare = (offerId: string) => {
     if (compareList.includes(offerId)) return;
-    if (compareList.length >= 3) { alert('You can compare up to 3 products at a time.'); return; }
+    if (compareList.length >= 3) {
+      showAppToast('You can compare up to 3 products at a time.', 'WARNING');
+      return;
+    }
     setCompareList(prev => [...prev, offerId]);
   };
 
@@ -3461,7 +3528,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const respondToProposal = async (chatId: string, msgId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', price?: number, qty?: number): Promise<boolean> => {
+  const respondToProposal = async (chatId: string, msgId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', price?: number, qty?: number, bookingDate?: string): Promise<boolean> => {
     if (!user) return false;
 
     if (action === 'COUNTER') {
@@ -3516,7 +3583,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         API_ENDPOINTS.chat.proposalAction(msgId),
         {
           method: 'PATCH',
-          body: JSON.stringify({ response: action === 'ACCEPT' ? 'ACCEPTED' : 'REJECTED' }),
+          body: JSON.stringify({
+            response: action === 'ACCEPT' ? 'ACCEPTED' : 'REJECTED',
+            ...(action === 'ACCEPT' && bookingDate ? { bookingDate } : {}),
+          }),
         }
       );
 
@@ -3775,7 +3845,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     startNegotiation,
     sendMessage, retryMessage, emitTyping, respondToProposal,
     login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, deleteOffer, getProducerOffers, getOfferById,
-    addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, confirmReceipt, reportProblem, addDisputeEvidence, revealContactInfo,
+    addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, markOrderDelivered, confirmReceipt, requestOrderCancellation, updateAppointment, reportProblem, addDisputeEvidence, revealContactInfo,
     getWallet, fundWallet, requestWithdrawal, markNotificationsAsRead, markNotificationAsRead, deleteNotification, clearNotifications, getAvailableSlots, submitReview, getAverageRating,
     getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,
     trackUserSearch, toggleFavorite, moveToFavorites, getRecommendedOffers,

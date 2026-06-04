@@ -54,6 +54,7 @@ function pickDefaultHomeLocationIndex(
 import { loadGooglePlacesApi, parseGooglePlace, citiesLooselyMatch } from '../../services/googlePlaces';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { cartHasService } from '../../utils/orderLabels';
+import { showAppToast } from '../../services/appToast';
 import { useFormik } from 'formik';
 import { z } from 'zod';
 
@@ -98,7 +99,7 @@ export const ShoppingCart: React.FC = () => {
     onSubmit: (values) => {
       setGuestEmail(values.tempEmail.trim());
       setShowGuestEmailModal(false);
-      alert(t('cart.loginRequired'));
+      showAppToast(t('cart.loginRequired'), 'INFO');
       navigate('/login');
     },
   });
@@ -354,19 +355,19 @@ export const ShoppingCart: React.FC = () => {
     }
 
     if (!user) {
-      alert("For security reasons, please log in or create an account to finalize your purchase.");
+      showAppToast('For security reasons, please log in or create an account to finalize your purchase.', 'WARNING');
       navigate('/login');
       return;
     }
 
     if (!legalAccepted) {
-      alert(t('legal.mustAccept'));
+      showAppToast(t('legal.mustAccept'), 'WARNING');
       return;
     }
 
     if (!canPlaceOrder) {
-      if (!isDeliveryMethodValid) alert("Please select a valid delivery method and address/pickup point.");
-      else if (!isAtiDateValid) alert("Please select a delivery date.");
+      if (!isDeliveryMethodValid) showAppToast('Please select a valid delivery method and address/pickup point.', 'WARNING');
+      else if (!isAtiDateValid) showAppToast('Please select a delivery date.', 'WARNING');
       return;
     }
 
@@ -374,7 +375,7 @@ export const ShoppingCart: React.FC = () => {
     if (isAtiOrder && deliveryMethod === 'PICKUP') {
       const point = pickupPoints.find(p => p.id === selectedPickupPointId);
       if (point && !citiesLooselyMatch(point.city, clientCity)) {
-        alert(`ATI Store policy: Pickup must be in your registered city (${clientCity}).`);
+        showAppToast(`ATI Store policy: Pickup must be in your registered city (${clientCity}).`, 'WARNING');
         return;
       }
     }

@@ -3,6 +3,7 @@
 
 import { apiFetch } from './apiService';
 import { getToken } from './apiService';
+import { logApiFailure } from './apiDebug';
 import { API_ENDPOINTS } from '../client-api/endpoints';
 import { sendSupportChatMessage } from '../client-api/endpoints/support';
 
@@ -17,7 +18,7 @@ export const generateProductDescription = async (title: string, category: string
     } as any);
     return data.text || "No description generated.";
   } catch (error) {
-    console.error("Error calling backend:", error);
+    logApiFailure("Error calling backend:", error);
     return "Could not connect to AI server. Please ensure the backend is running.";
   }
 };
@@ -67,7 +68,7 @@ export const generateSupportResponse = async (
     };
 
   } catch (error) {
-    console.error("Error calling support backend:", error);
+    logApiFailure("Error calling support backend:", error);
     return {
       text: "Connection error. Please try again later.",
       handover: true,

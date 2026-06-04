@@ -24,6 +24,7 @@ import { orderHasService, orderIsServiceOnly, serviceLineCount, serviceSlotTotal
 import { ORDER_STATUS_LABEL_KEY, ORDER_STATUS_PILL_CLASS } from '../../utils/orderStatusDisplay';
 import { useFormik } from 'formik';
 import { z } from 'zod';
+import { showAppToast } from '../../services/appToast';
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
@@ -50,7 +51,7 @@ export const ClientProfile: React.FC = () => {
    const isProfileTab = (v: string | null): v is ProfileTab =>
       v === 'info' || v === 'orders' || v === 'security' || v === 'favorites' || v === 'reputation' || v === 'referrals';
 
-   const { user, orders, payForOrder, confirmReceipt, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, pickupPoints, revealContactInfo, refreshClients, refreshOrders, refreshOffers, refreshProducers, refreshAllReviews, refreshMyReviews, refreshWallet } = useStore();
+   const { user, orders, payForOrder, confirmReceipt, requestOrderCancellation, updateAppointment, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, pickupPoints, revealContactInfo, refreshClients, refreshOrders, refreshOffers, refreshProducers, refreshAllReviews, refreshMyReviews, refreshWallet } = useStore();
    const updateClientMutation = useUpdateClientProfileMutation();
    const { t } = useTranslation();
    const navigate = useNavigate();
@@ -162,6 +163,12 @@ export const ClientProfile: React.FC = () => {
    const [cancelingOrder, setCancelingOrder] = useState(false);
    const [confirmReceiptId, setConfirmReceiptId] = useState<string | null>(null);
    const [confirmingReceipt, setConfirmingReceipt] = useState(false);
+   const [cancelRequestOrderId, setCancelRequestOrderId] = useState<string | null>(null);
+   const [cancelRequestReason, setCancelRequestReason] = useState('');
+   const [requestingCancel, setRequestingCancel] = useState(false);
+   const [rescheduleOrderId, setRescheduleOrderId] = useState<string | null>(null);
+   const [rescheduleDate, setRescheduleDate] = useState('');
+   const [reschedulingAppt, setReschedulingAppt] = useState(false);
    const [favoriteToRemove, setFavoriteToRemove] = useState<{ id: string; title?: string } | null>(null);
    const [locationToRemoveIdx, setLocationToRemoveIdx] = useState<number | null>(null);
    /** Seeds the map/address editor once per loaded profile — do not re-run when the user clears the form to add another address. */
@@ -210,7 +217,7 @@ export const ClientProfile: React.FC = () => {
             certifications: [],
          } as any);
          if (!ok) {
-            alert('Upgrade failed. Please try again.');
+            showAppToast('Upgrade failed. Please try again.', 'ERROR');
             return;
          }
          setShowUpgradeModal(false);
@@ -395,7 +402,7 @@ export const ClientProfile: React.FC = () => {
          });
          setLocationSearch(rev?.address || '');
       } catch {
-         alert('Could not read your location. Allow permission or set the pin on the map.');
+         showAppToast('Could not read your location. Allow permission or set the pin on the map.', 'WARNING');
       } finally {
          setGeoLoading(false);
       }
@@ -405,7 +412,7 @@ export const ClientProfile: React.FC = () => {
       if (!referralCodeDisplay) return;
       const link = `${window.location.origin}/#/register/client?ref=${referralCodeDisplay}`;
       void navigator.clipboard.writeText(link);
-      alert('Referral link copied!');
+      showAppToast('Referral link copied!', 'SUCCESS');
    };
 
    const myReviews = user ? reviews.filter(r => r.targetId === user.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : [];
@@ -582,7 +589,7 @@ export const ClientProfile: React.FC = () => {
       try {
          const result = await payForOrder(paymentOrderId);
          if (!result.success && result.error === 'INSUFFICIENT_FUNDS') {
-            alert(t('order.insufficient'));
+            showAppToast(t('order.insufficient'), 'ERROR');
          }
          setShowPaymentRecap(false);
          setPaymentOrderId(null);
@@ -653,12 +660,12 @@ export const ClientProfile: React.FC = () => {
       if (!formData || !file) return;
       const maxBytes = 2 * 1024 * 1024;
       if (file.size > maxBytes) {
-         alert('Image must be 2 MB or less.');
+         showAppToast('Image must be 2 MB or less.', 'WARNING');
          return;
       }
       const allowed = ['image/jpeg', 'image/png', 'image/webp'];
       if (!allowed.includes(file.type)) {
-         alert('Use JPG, PNG, or WebP.');
+         showAppToast('Use JPG, PNG, or WebP.', 'WARNING');
          return;
       }
       setAvatarUploading(true);
@@ -666,7 +673,7 @@ export const ClientProfile: React.FC = () => {
          const url = await uploadAvatar(file);
          setFormData({ ...formData, profileImageUrl: url });
       } catch (err: unknown) {
-         alert(err instanceof Error ? err.message : 'Upload failed.');
+         showAppToast(err instanceof Error ? err.message : 'Upload failed.', 'ERROR');
       } finally {
          setAvatarUploading(false);
       }
@@ -739,6 +746,30 @@ export const ClientProfile: React.FC = () => {
    };
   const openDisputeModal = (orderId: string) => { setDisputeOrderId(orderId); disputeFormik.setFieldValue('disputeReason', ''); setDisputeFiles([]); setShowDisputeModal(true); };
    const handleDisputeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) { setDisputeFiles(Array.from(e.target.files)); } };
+   /** Unpaid orders can be cancelled immediately; paid orders not yet in transit need admin approval. */
+   const isImmediatelyCancellable = (order: Order) =>
+      [OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(order.status);
+   const canRequestCancellation = (order: Order) =>
+      [OrderStatus.PAID_IN_PREPARATION, OrderStatus.DELIVERED].includes(order.status);
+   /** Reportable while in transit, after delivery, and during the settlement window. */
+   const canReportProblem = (order: Order) =>
+      [OrderStatus.PAID_IN_PREPARATION, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED, OrderStatus.COMPLETED].includes(order.status)
+      && order.status !== OrderStatus.DISPUTE;
+   /** Service appointments can be rescheduled until the order goes in transit. */
+   const canRescheduleAppointment = (order: Order) =>
+      orderHasService(order)
+      && [OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT, OrderStatus.PAID_IN_PREPARATION].includes(order.status);
+   const firstServiceBookingDate = (order: Order): string => {
+      const svc = (order.items || []).find((it: any) => String(it.type ?? '').toUpperCase() === 'SERVICE' && it.bookingDate);
+      const raw = (svc as any)?.bookingDate || order.requestedDeliveryDate;
+      if (!raw) return '';
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) return '';
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+   };
+   const openRescheduleModal = (order: Order) => { setRescheduleOrderId(order.id); setRescheduleDate(firstServiceBookingDate(order) || ''); };
+   const openCancelRequestModal = (orderId: string) => { setCancelRequestOrderId(orderId); setCancelRequestReason(''); };
    const getStatusBadge = (status: OrderStatus) => (
       <span
          className={`agm-order-status-pill ${ORDER_STATUS_PILL_CLASS[status] || 'bg-gray-100 text-gray-800 ring-1 ring-gray-200/80'}`}
@@ -799,16 +830,30 @@ export const ClientProfile: React.FC = () => {
                         <div className="w-full sm:w-auto sm:text-right" onClick={e => e.stopPropagation()}>
                            <p className="text-sm font-bold text-gray-900 mb-2">{order.totalAmount?.toLocaleString?.() ?? order.totalAmount} XAF</p>
                            <div className="flex gap-2 flex-wrap sm:justify-end">
-                              {order.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT && (
+                              {[OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(order.status) && (
                                  <button onClick={() => initiatePayment(order.id)} className="bg-primary-600 text-white px-4 py-1.5 rounded-md text-xs font-bold hover:bg-primary-700 shadow-sm flex items-center gap-1"><CreditCard className="w-3 h-3" /> {t('order.payNow')}</button>
                               )}
-                              {order.status === OrderStatus.IN_TRANSIT && (
-                                 <button onClick={() => setConfirmReceiptId(order.id)} className="bg-green-600 text-white px-4 py-1.5 rounded-md text-xs font-bold hover:bg-green-700 shadow-sm flex items-center gap-1"><CheckCircle className="w-3 h-3" /> {t('order.confirmReceipt')}</button>
+                              {canRescheduleAppointment(order) && (
+                                 <button onClick={() => openRescheduleModal(order)} className="text-purple-700 hover:bg-purple-50 px-3 py-1.5 rounded-md text-xs font-medium border border-purple-200 flex items-center gap-1"><Calendar className="w-3 h-3" /> {t('order.reschedule')}</button>
                               )}
-                              {([OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(order.status)) && (
+                              {order.status === OrderStatus.IN_TRANSIT && (
+                                 order.clientConfirmedReceipt ? (
+                                    <span className="text-green-700 bg-green-50 px-3 py-1.5 rounded-md text-xs font-medium border border-green-100 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> {t('order.awaitingSellerDelivery')}</span>
+                                 ) : (
+                                    <button onClick={() => setConfirmReceiptId(order.id)} className="bg-green-600 text-white px-4 py-1.5 rounded-md text-xs font-bold hover:bg-green-700 shadow-sm flex items-center gap-1"><CheckCircle className="w-3 h-3" /> {t('order.confirmReceipt')}</button>
+                                 )
+                              )}
+                              {isImmediatelyCancellable(order) && (
                                  <button onClick={() => setCancelOrderId(order.id)} className="text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-md text-xs font-medium border border-red-100">{t('order.cancel')}</button>
                               )}
-                              {(order.status === OrderStatus.PAID_IN_PREPARATION || order.status === OrderStatus.IN_TRANSIT || order.status === OrderStatus.DELIVERED) && (
+                              {canRequestCancellation(order) && (
+                                 order.cancellationRequested ? (
+                                    <span className="text-gray-500 bg-gray-50 px-3 py-1.5 rounded-md text-xs font-medium border border-gray-200">{t('order.cancellationPending')}</span>
+                                 ) : (
+                                    <button onClick={() => openCancelRequestModal(order.id)} className="text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-md text-xs font-medium border border-red-100">{t('order.requestCancellation')}</button>
+                                 )
+                              )}
+                              {canReportProblem(order) && (
                                  <button onClick={() => openDisputeModal(order.id)} className="text-orange-600 hover:bg-orange-50 px-3 py-1.5 rounded-md text-xs font-medium border border-orange-100 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {t('order.reportProblem')}</button>
                               )}
                               {(order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED) && !order.clientReviewed && (
@@ -1675,16 +1720,30 @@ export const ClientProfile: React.FC = () => {
                      )}
 
                      <div className="mt-4 flex flex-wrap gap-2">
-                        {selectedOrder.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT && (
+                        {[OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(selectedOrder.status) && (
                            <button onClick={() => { initiatePayment(selectedOrder.id); setSelectedOrder(null); }} className="bg-primary-600 text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-primary-700"><CreditCard className="w-4 h-4 inline mr-1" /> {t('order.payNow')}</button>
                         )}
-                        {selectedOrder.status === OrderStatus.IN_TRANSIT && (
-                           <button onClick={() => { setConfirmReceiptId(selectedOrder.id); setSelectedOrder(null); }} className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-green-700"><CheckCircle className="w-4 h-4 inline mr-1" /> {t('order.confirmReceipt')}</button>
+                        {canRescheduleAppointment(selectedOrder) && (
+                           <button onClick={() => { openRescheduleModal(selectedOrder); setSelectedOrder(null); }} className="text-purple-700 hover:bg-purple-50 px-4 py-2 rounded-md text-sm font-medium border border-purple-200"><Calendar className="w-4 h-4 inline mr-1" /> {t('order.reschedule')}</button>
                         )}
-                        {[OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(selectedOrder.status) && (
+                        {selectedOrder.status === OrderStatus.IN_TRANSIT && (
+                           selectedOrder.clientConfirmedReceipt ? (
+                              <span className="text-green-700 bg-green-50 px-4 py-2 rounded-md text-sm font-medium border border-green-100"><CheckCircle className="w-4 h-4 inline mr-1" /> {t('order.awaitingSellerDelivery')}</span>
+                           ) : (
+                              <button onClick={() => { setConfirmReceiptId(selectedOrder.id); setSelectedOrder(null); }} className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-green-700"><CheckCircle className="w-4 h-4 inline mr-1" /> {t('order.confirmReceipt')}</button>
+                           )
+                        )}
+                        {isImmediatelyCancellable(selectedOrder) && (
                            <button onClick={() => { setCancelOrderId(selectedOrder.id); setSelectedOrder(null); }} className="text-red-600 hover:bg-red-50 px-4 py-2 rounded-md text-sm font-medium border border-red-100">{t('order.cancel')}</button>
                         )}
-                        {[OrderStatus.PAID_IN_PREPARATION, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED].includes(selectedOrder.status) && (
+                        {canRequestCancellation(selectedOrder) && (
+                           selectedOrder.cancellationRequested ? (
+                              <span className="text-gray-500 bg-gray-50 px-4 py-2 rounded-md text-sm font-medium border border-gray-200">{t('order.cancellationPending')}</span>
+                           ) : (
+                              <button onClick={() => { openCancelRequestModal(selectedOrder.id); setSelectedOrder(null); }} className="text-red-600 hover:bg-red-50 px-4 py-2 rounded-md text-sm font-medium border border-red-100">{t('order.requestCancellation')}</button>
+                           )
+                        )}
+                        {canReportProblem(selectedOrder) && (
                            <button onClick={() => { openDisputeModal(selectedOrder.id); setSelectedOrder(null); }} className="text-orange-600 hover:bg-orange-50 px-4 py-2 rounded-md text-sm font-medium border border-orange-100"><AlertTriangle className="w-4 h-4 inline mr-1" /> {t('order.reportProblem')}</button>
                         )}
                         {(selectedOrder.status === OrderStatus.DELIVERED || selectedOrder.status === OrderStatus.COMPLETED) && !selectedOrder.clientReviewed && (
@@ -1725,6 +1784,76 @@ export const ClientProfile: React.FC = () => {
                         <div><label className="block text-sm font-medium text-gray-700 mb-1">{t('order.uploadFiles')}</label><input type="file" multiple accept="image/*,application/pdf" className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100" onChange={handleDisputeFileChange} /></div>
                         <div className="flex justify-end gap-3 pt-4"><button type="button" onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">{t('form.cancel')}</button><button type="submit" className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700">{t('order.submitReport')}</button></div>
                      </form>
+         </Modal>
+
+         <Modal open={rescheduleOrderId !== null} onClose={() => { if (!reschedulingAppt) setRescheduleOrderId(null); }} maxWidth="sm" zIndex={50} panelClassName="p-4 sm:p-6">
+            <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
+               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Calendar className="h-5 w-5 text-purple-600" /> {t('order.reschedule')}</h3>
+               <button onClick={() => { if (!reschedulingAppt) setRescheduleOrderId(null); }}><X className="h-5 w-5 text-gray-400" /></button>
+            </div>
+            <p className="text-sm text-gray-500 mb-3">{t('order.rescheduleHint')}</p>
+            <input
+               type="datetime-local"
+               value={rescheduleDate}
+               onChange={(e) => setRescheduleDate(e.target.value)}
+               className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
+            />
+            <div className="flex justify-end gap-3 pt-4">
+               <button type="button" onClick={() => setRescheduleOrderId(null)} disabled={reschedulingAppt} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:opacity-50">{t('form.cancel')}</button>
+               <button
+                  type="button"
+                  disabled={!rescheduleDate || reschedulingAppt}
+                  onClick={async () => {
+                     if (!rescheduleOrderId || !rescheduleDate) return;
+                     try {
+                        setReschedulingAppt(true);
+                        const iso = new Date(rescheduleDate).toISOString();
+                        const ok = await updateAppointment(rescheduleOrderId, iso);
+                        if (ok) setRescheduleOrderId(null);
+                     } finally {
+                        setReschedulingAppt(false);
+                     }
+                  }}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-md text-sm font-bold hover:bg-purple-700 disabled:opacity-50"
+               >
+                  {reschedulingAppt ? t('wallet.processing') : t('order.saveAppointment')}
+               </button>
+            </div>
+         </Modal>
+
+         <Modal open={cancelRequestOrderId !== null} onClose={() => { if (!requestingCancel) setCancelRequestOrderId(null); }} maxWidth="sm" zIndex={50} panelClassName="p-4 sm:p-6">
+            <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
+               <h3 className="text-lg font-bold text-gray-900">{t('order.requestCancellation')}</h3>
+               <button onClick={() => { if (!requestingCancel) setCancelRequestOrderId(null); }}><X className="h-5 w-5 text-gray-400" /></button>
+            </div>
+            <p className="text-sm text-gray-500 mb-3">{t('order.requestCancellationHint')}</p>
+            <textarea
+               rows={3}
+               value={cancelRequestReason}
+               onChange={(e) => setCancelRequestReason(e.target.value)}
+               placeholder={t('order.reason')}
+               className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
+            />
+            <div className="flex justify-end gap-3 pt-4">
+               <button type="button" onClick={() => setCancelRequestOrderId(null)} disabled={requestingCancel} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:opacity-50">{t('order.cancelKeep')}</button>
+               <button
+                  type="button"
+                  disabled={requestingCancel}
+                  onClick={async () => {
+                     if (!cancelRequestOrderId) return;
+                     try {
+                        setRequestingCancel(true);
+                        await requestOrderCancellation(cancelRequestOrderId, cancelRequestReason.trim());
+                        setCancelRequestOrderId(null);
+                     } finally {
+                        setRequestingCancel(false);
+                     }
+                  }}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-bold hover:bg-red-700 disabled:opacity-50"
+               >
+                  {requestingCancel ? t('wallet.processing') : t('order.submitCancellation')}
+               </button>
+            </div>
          </Modal>
 
          <LogoutConfirmModal

@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { Send, MessageCircle, ChevronLeft, Gavel, ArrowLeft, Check, AlertCircle, ChevronDown, Clock } from 'lucide-react';
-import { ProposalStatus, type ChatMessage } from '../../types';
+import { ProposalStatus, OfferType, type ChatMessage } from '../../types';
 import { isProducerDashboardUser } from '../../services/producerSession';
 import { Spinner } from '../../components/Spinner';
 import { ListSkeleton } from '../../components/Loaders';
@@ -36,6 +36,10 @@ export const ChatPage: React.FC = () => {
    const [proposalSending, setProposalSending] = useState(false);
    const [counterSending, setCounterSending] = useState(false);
    const [proposalActionBusy, setProposalActionBusy] = useState<string | null>(null);
+   // Appointment picker shown when accepting a SERVICE proposal so the booking
+   // date reflects the real appointment rather than the moment of acceptance.
+   const [apptMsg, setApptMsg] = useState<ChatMessage | null>(null);
+   const [apptDate, setApptDate] = useState('');
 
    const messagesEndRef = useRef<HTMLDivElement>(null);
    const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -548,6 +552,35 @@ export const ChatPage: React.FC = () => {
       setShowCounterModal(true);
    };
 
+   const isServiceProposal = (msg: ChatMessage) => {
+      const offerId = msg.proposal?.offerId;
+      if (!offerId) return false;
+      const offer = getOfferById(offerId);
+      return String((offer as any)?.type ?? '').toUpperCase() === OfferType.SERVICE;
+   };
+
+   /** Accept directly for products; for services, collect the appointment date first. */
+   const handleAcceptProposal = (msg: ChatMessage) => {
+      if (isServiceProposal(msg)) {
+         setApptMsg(msg);
+         setApptDate('');
+         return;
+      }
+      setProposalActionBusy(`${msg.id}:accept`);
+      void respondToProposal(msg.chatId, msg.id, 'ACCEPT').finally(() => setProposalActionBusy(null));
+   };
+
+   const confirmServiceAppointment = () => {
+      if (!apptMsg || !apptDate) return;
+      const iso = new Date(apptDate).toISOString();
+      const m = apptMsg;
+      setProposalActionBusy(`${m.id}:accept`);
+      void respondToProposal(m.chatId, m.id, 'ACCEPT', undefined, undefined, iso).finally(() => {
+         setProposalActionBusy(null);
+         setApptMsg(null);
+      });
+   };
+
    const handleSendCounter = async () => {
       if (!counterTargetMsgId || !chatId || counterSending) return;
       if (!canSendMoreCounters) {
@@ -790,10 +823,7 @@ export const ChatPage: React.FC = () => {
                                              <button
                                                 type="button"
                                                 disabled={!!proposalActionBusy}
-                                                onClick={() => {
-                                                   setProposalActionBusy(`${msg.id}:accept`);
-                                                   void respondToProposal(msg.chatId, msg.id, 'ACCEPT').finally(() => setProposalActionBusy(null));
-                                                }}
+                                                onClick={() => handleAcceptProposal(msg)}
                                                 className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded font-bold transition-colors min-w-[60px] disabled:opacity-60 inline-flex items-center justify-center gap-1"
                                              >
                                                 {proposalActionBusy === `${msg.id}:accept` ? <Spinner className="h-3.5 w-3.5" /> : null}
@@ -1047,6 +1077,37 @@ export const ChatPage: React.FC = () => {
                         {proposalSending ? 'Sending…' : t('chat.proposed')}
                      </button>
                   </div>
+         </Modal>
+
+         {/* Service appointment picker — collected when accepting a SERVICE proposal */}
+         <Modal
+            open={apptMsg !== null}
+            onClose={() => { if (!proposalActionBusy) setApptMsg(null); }}
+            maxWidth="sm"
+            zIndex={50}
+            backdropClassName="bg-black/50"
+            panelClassName="p-5 sm:p-6"
+         >
+            <h3 className="text-lg font-bold text-gray-900 mb-1">{t('chat.appointmentTitle')}</h3>
+            <p className="text-sm text-gray-500 mb-4">{t('chat.appointmentHint')}</p>
+            <input
+               type="datetime-local"
+               value={apptDate}
+               onChange={(e) => setApptDate(e.target.value)}
+               className="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
+            />
+            <div className="flex justify-end gap-3 pt-5">
+               <button type="button" onClick={() => setApptMsg(null)} disabled={!!proposalActionBusy} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:opacity-50">{t('form.cancel')}</button>
+               <button
+                  type="button"
+                  disabled={!apptDate || !!proposalActionBusy}
+                  onClick={confirmServiceAppointment}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-bold hover:bg-green-700 disabled:opacity-50 inline-flex items-center gap-1"
+               >
+                  {proposalActionBusy ? <Spinner className="h-3.5 w-3.5" /> : null}
+                  {t('chat.acceptBooking')}
+               </button>
+            </div>
          </Modal>
 
          {/* Counter-Offer Modal */}

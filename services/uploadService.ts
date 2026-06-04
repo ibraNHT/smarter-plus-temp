@@ -1,4 +1,5 @@
 import { apiUpload } from './apiService';
+import { logApiWarn } from './apiDebug';
 import { API_ENDPOINTS } from '../client-api/endpoints';
 import {
   isCloudinaryConfigured,
@@ -42,7 +43,7 @@ async function uploadAsset(file: File, options: UploadOptions): Promise<string> 
     } catch (err) {
       // If the unsigned preset rejects (bad config / wrong folder rules),
       // fall through to the API so the user isn't blocked.
-      console.warn(
+      logApiWarn(
         '[upload] Cloudinary direct upload failed, falling back to API:',
         err,
       );

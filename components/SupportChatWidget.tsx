@@ -24,6 +24,121 @@ export const SupportChatWidget: React.FC = () => {
   const chatBodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Draggable launcher (closed FAB): persisted so it can be moved off the
+  // chat composer's "Send" button. Uses pointer events (mouse + touch).
+  const FAB_POS_KEY = 'agm_support_fab_pos';
+  const fabRef = useRef<HTMLButtonElement>(null);
+  const [fabPosition, setFabPosition] = useState<{ top: number; left: number } | null>(() => {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(FAB_POS_KEY) : null;
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (typeof p?.top === 'number' && typeof p?.left === 'number') return p;
+      }
+    } catch { /* ignore */ }
+    return null;
+  });
+  const fabDraggingRef = useRef(false);
+  const fabMovedRef = useRef(false);
+  const fabOffsetRef = useRef({ x: 0, y: 0 });
+  const fabPointerStartRef = useRef({ x: 0, y: 0 });
+  const FAB_DRAG_THRESHOLD_PX = 8;
+
+  const clampToViewport = (top: number, left: number, el: HTMLElement | null) => {
+    const w = el?.offsetWidth ?? 56;
+    const h = el?.offsetHeight ?? 56;
+    const maxLeft = (typeof window !== 'undefined' ? window.innerWidth : 1024) - w - 8;
+    const maxTop = (typeof window !== 'undefined' ? window.innerHeight : 768) - h - 8;
+    return {
+      top: Math.max(8, Math.min(top, Math.max(8, maxTop))),
+      left: Math.max(8, Math.min(left, Math.max(8, maxLeft))),
+    };
+  };
+
+  const persistFabPosition = () => {
+    if (!fabRef.current || !fabMovedRef.current) return;
+    const rect = fabRef.current.getBoundingClientRect();
+    const clamped = clampToViewport(rect.top, rect.left, fabRef.current);
+    setFabPosition(clamped);
+    try {
+      localStorage.setItem(FAB_POS_KEY, JSON.stringify(clamped));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const finishFabPointerDrag = (el: HTMLButtonElement, pointerId: number) => {
+    if (!fabDraggingRef.current) return;
+    fabDraggingRef.current = false;
+    document.body.style.userSelect = '';
+    try {
+      if (el.hasPointerCapture(pointerId)) el.releasePointerCapture(pointerId);
+    } catch {
+      /* ignore */
+    }
+    persistFabPosition();
+  };
+
+  const handleFabPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const el = fabRef.current;
+    if (!el) return;
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    const rect = el.getBoundingClientRect();
+    fabOffsetRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    fabPointerStartRef.current = { x: e.clientX, y: e.clientY };
+    fabDraggingRef.current = true;
+    fabMovedRef.current = false;
+    document.body.style.userSelect = 'none';
+  };
+
+  const handleFabPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!fabDraggingRef.current || !fabRef.current) return;
+    const dx = e.clientX - fabPointerStartRef.current.x;
+    const dy = e.clientY - fabPointerStartRef.current.y;
+    if (!fabMovedRef.current && Math.hypot(dx, dy) < FAB_DRAG_THRESHOLD_PX) return;
+    fabMovedRef.current = true;
+    const left = e.clientX - fabOffsetRef.current.x;
+    const top = e.clientY - fabOffsetRef.current.y;
+    fabRef.current.style.left = `${left}px`;
+    fabRef.current.style.top = `${top}px`;
+    fabRef.current.style.right = 'auto';
+    fabRef.current.style.bottom = 'auto';
+  };
+
+  const handleFabPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    finishFabPointerDrag(e.currentTarget, e.pointerId);
+  };
+
+  const handleFabPointerCancel = (e: React.PointerEvent<HTMLButtonElement>) => {
+    finishFabPointerDrag(e.currentTarget, e.pointerId);
+  };
+
+  const handleFabClick = () => {
+    // Suppress the click that follows a drag so moving the button doesn't open chat.
+    if (fabMovedRef.current) {
+      fabMovedRef.current = false;
+      return;
+    }
+    toggleSupportChat();
+  };
+
+  // Keep a saved FAB position on-screen after viewport resizes / rotation.
+  useEffect(() => {
+    const onResize = () => {
+      setFabPosition((prev) => {
+        if (!prev) return prev;
+        const clamped = clampToViewport(prev.top, prev.left, fabRef.current);
+        if (clamped.top === prev.top && clamped.left === prev.left) return prev;
+        try { localStorage.setItem(FAB_POS_KEY, JSON.stringify(clamped)); } catch { /* ignore */ }
+        return clamped;
+      });
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   const isSupportChatOpen = store?.isSupportChatOpen ?? false;
   const toggleSupportChat = store?.toggleSupportChat ?? (() => {});
   const supportMessages = store?.supportMessages ?? [];
@@ -68,40 +183,63 @@ export const SupportChatWidget: React.FC = () => {
     }
   }, [isSupportChatOpen, showGuestForm]);
 
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDraggingRef.current || !widgetRef.current) return;
-      const newLeft = e.clientX - dragOffsetRef.current.x;
-      const newTop = e.clientY - dragOffsetRef.current.y;
-      widgetRef.current.style.left = `${newLeft}px`;
-      widgetRef.current.style.top = `${newTop}px`;
+  const widgetDragStartRef = useRef({ x: 0, y: 0 });
+  const widgetMovedRef = useRef(false);
+  const WIDGET_DRAG_THRESHOLD_PX = 8;
+
+  const finishWidgetPointerDrag = (el: HTMLElement, pointerId: number) => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    document.body.style.userSelect = '';
+    try {
+      if (el.hasPointerCapture(pointerId)) el.releasePointerCapture(pointerId);
+    } catch {
+      /* ignore */
+    }
+    if (widgetRef.current && widgetMovedRef.current) {
+      const rect = widgetRef.current.getBoundingClientRect();
+      const clamped = clampToViewport(rect.top, rect.left, widgetRef.current);
+      setPosition(clamped);
+      widgetRef.current.style.left = `${clamped.left}px`;
+      widgetRef.current.style.top = `${clamped.top}px`;
       widgetRef.current.style.bottom = 'auto';
       widgetRef.current.style.right = 'auto';
-    };
+    }
+  };
 
-    const handleMouseUp = () => {
-      if (isDraggingRef.current && widgetRef.current) {
-        isDraggingRef.current = false;
-        document.body.style.userSelect = '';
-        const rect = widgetRef.current.getBoundingClientRect();
-        setPosition({ top: rect.top, left: rect.left });
-      }
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, []);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0 || !widgetRef.current) return;
+  const handleWidgetHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (!widgetRef.current) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
     const rect = widgetRef.current.getBoundingClientRect();
     dragOffsetRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    widgetDragStartRef.current = { x: e.clientX, y: e.clientY };
+    widgetMovedRef.current = false;
     isDraggingRef.current = true;
     document.body.style.userSelect = 'none';
+  };
+
+  const handleWidgetHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current || !widgetRef.current) return;
+    const dx = e.clientX - widgetDragStartRef.current.x;
+    const dy = e.clientY - widgetDragStartRef.current.y;
+    if (!widgetMovedRef.current && Math.hypot(dx, dy) < WIDGET_DRAG_THRESHOLD_PX) return;
+    widgetMovedRef.current = true;
+    const newLeft = e.clientX - dragOffsetRef.current.x;
+    const newTop = e.clientY - dragOffsetRef.current.y;
+    widgetRef.current.style.left = `${newLeft}px`;
+    widgetRef.current.style.top = `${newTop}px`;
+    widgetRef.current.style.bottom = 'auto';
+    widgetRef.current.style.right = 'auto';
+  };
+
+  const handleWidgetHeaderPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    finishWidgetPointerDrag(e.currentTarget, e.pointerId);
+  };
+
+  const handleWidgetHeaderPointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    finishWidgetPointerDrag(e.currentTarget, e.pointerId);
   };
 
   const handleSend = async (e: React.FormEvent) => {
@@ -127,9 +265,6 @@ export const SupportChatWidget: React.FC = () => {
     submitGuestForm(guestEmailInput.trim(), guestNameInput.trim() || 'Guest');
   };
 
-  const isNarrowViewport =
-    typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches;
-
   const dockBottom =
     compareCount > 0
       ? 'calc(max(1rem, env(safe-area-inset-bottom)) + 5rem)'
@@ -137,7 +272,7 @@ export const SupportChatWidget: React.FC = () => {
 
   const widgetStyle: React.CSSProperties = {
     maxHeight: 'min(560px, calc(100dvh - 5rem))',
-    ...(position && !isNarrowViewport
+    ...(position
       ? { top: position.top, left: position.left }
       : { bottom: dockBottom, right: 'max(0.75rem, env(safe-area-inset-right))' }),
   };
@@ -154,12 +289,23 @@ export const SupportChatWidget: React.FC = () => {
     <>
       {!isSupportChatOpen && (
         <button
-          onClick={toggleSupportChat}
-          className="fixed z-50 bg-blue-600 text-white p-3.5 sm:p-4 rounded-full shadow-lg hover:bg-blue-700 transition-all hover:scale-110 flex items-center justify-center ring-2 ring-blue-400/30"
-          style={{ bottom: dockBottom, right: 'max(0.75rem, env(safe-area-inset-right))' }}
-          aria-label="Open Support Chat"
+          ref={fabRef}
+          type="button"
+          onPointerDown={handleFabPointerDown}
+          onPointerMove={handleFabPointerMove}
+          onPointerUp={handleFabPointerUp}
+          onPointerCancel={handleFabPointerCancel}
+          onClick={handleFabClick}
+          className="fixed z-50 bg-blue-600 text-white p-3.5 sm:p-4 rounded-full shadow-lg hover:bg-blue-700 transition-colors hover:scale-110 flex items-center justify-center ring-2 ring-blue-400/30 cursor-grab active:cursor-grabbing touch-none select-none"
+          style={
+            fabPosition
+              ? { top: fabPosition.top, left: fabPosition.left }
+              : { bottom: dockBottom, right: 'max(0.75rem, env(safe-area-inset-right))' }
+          }
+          aria-label="Open Support Chat (drag to move)"
+          title="Drag to move"
         >
-          <Headphones className="h-6 w-6" />
+          <Headphones className="h-6 w-6 pointer-events-none" />
         </button>
       )}
 
@@ -173,8 +319,11 @@ export const SupportChatWidget: React.FC = () => {
       >
         {/* Header */}
         <div
-          className="bg-gradient-to-r from-blue-600 to-blue-700 p-3 sm:p-4 flex justify-between items-center sm:cursor-move select-none shrink-0"
-          onMouseDown={handleMouseDown}
+          className="bg-gradient-to-r from-blue-600 to-blue-700 p-3 sm:p-4 flex justify-between items-center cursor-move select-none shrink-0 touch-none"
+          onPointerDown={handleWidgetHeaderPointerDown}
+          onPointerMove={handleWidgetHeaderPointerMove}
+          onPointerUp={handleWidgetHeaderPointerUp}
+          onPointerCancel={handleWidgetHeaderPointerCancel}
         >
           <div className="flex items-center text-white min-w-0">
             <div
@@ -198,7 +347,7 @@ export const SupportChatWidget: React.FC = () => {
             type="button"
             onClick={toggleSupportChat}
             className="text-blue-100 hover:text-white p-1.5 rounded-lg hover:bg-white/15 transition-colors shrink-0"
-            onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
             aria-label="Close support chat"
           >
             <X className="h-5 w-5" />
