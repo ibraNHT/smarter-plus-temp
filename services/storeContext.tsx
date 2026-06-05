@@ -360,11 +360,12 @@ interface StoreContextType {
   startDelivery: (orderId: string) => Promise<void>;
   markOrderDelivered: (orderId: string) => Promise<void>;
   confirmReceipt: (orderId: string) => Promise<void>;
+  completeOrder: (orderId: string) => Promise<void>;
   requestOrderCancellation: (orderId: string, reason?: string) => Promise<void>;
   updateAppointment: (orderId: string, bookingDate: string) => Promise<boolean>;
   reportProblem: (orderId: string, reason: string, files: File[]) => Promise<void>;
   addDisputeEvidence: (orderId: string, files: File[]) => void;
-  revealContactInfo: (orderId: string) => void;
+  revealContactInfo: (orderId: string) => Promise<void>;
   submitReview: (review: Omit<Review, 'id' | 'createdAt'>) => Promise<void>;
   getAverageRating: (targetId: string) => number;
   changePassword: (
@@ -2743,6 +2744,22 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
+  /**
+   * Buyer confirms receipt and closes the order (DELIVERED → COMPLETED). This is
+   * the buyer's final step and starts the escrow-release window for the seller.
+   */
+  const completeOrder = async (id: string) => {
+    try {
+      await apiFetch(API_ENDPOINTS.orders.complete(id), { method: 'PATCH' });
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, status: OrderStatus.COMPLETED, clientConfirmedReceipt: true } : o));
+      bustCache(['orders']);
+      if (user) addNotification(user.id, 'Order completed. Thank you!', 'SUCCESS');
+    } catch (error) {
+      logApiFailure('Failed to complete order', error);
+      if (user) addNotification(user.id, 'Could not complete the order. Please try again.', 'ERROR');
+    }
+  };
+
   /** Buyer requests cancellation of a paid, non-in-transit order (admin approves). */
   const requestOrderCancellation = async (orderId: string, reason?: string) => {
     try {
@@ -2804,7 +2821,27 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     addNotification(user.id, 'Evidence uploaded successfully', 'SUCCESS');
   };
 
-  const revealContactInfo = (id: string) => setOrders(prev => prev.map(o => o.id === id ? { ...o, contactRevealed: true } : o));
+  const revealContactInfo = async (id: string) => {
+    const u = userRef.current;
+    setOrders((prev) =>
+      prev.map((o) => (o.id === id ? { ...o, contactRevealed: true } : o)),
+    );
+    try {
+      await apiFetch(API_ENDPOINTS.orders.revealContact(id), { method: 'PATCH' });
+      if (u) {
+        const ordersCacheOwner = producerAccountUserId(u) || u.id;
+        bustCache(QK.orders(ordersCacheOwner, u.role, u.clientId));
+      }
+    } catch (e) {
+      setOrders((prev) =>
+        prev.map((o) => (o.id === id ? { ...o, contactRevealed: false } : o)),
+      );
+      logApiFailure('Failed to reveal contact info', e);
+      if (u?.id) {
+        addNotification(u.id, 'Could not reveal contact info. Please try again.', 'ERROR');
+      }
+    }
+  };
 
   // ─── REVIEWS ─────────────────────────────────────────────────────────────────
 
@@ -3845,7 +3882,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     startNegotiation,
     sendMessage, retryMessage, emitTyping, respondToProposal,
     login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, deleteOffer, getProducerOffers, getOfferById,
-    addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, markOrderDelivered, confirmReceipt, requestOrderCancellation, updateAppointment, reportProblem, addDisputeEvidence, revealContactInfo,
+    addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, markOrderDelivered, confirmReceipt, completeOrder, requestOrderCancellation, updateAppointment, reportProblem, addDisputeEvidence, revealContactInfo,
     getWallet, fundWallet, requestWithdrawal, markNotificationsAsRead, markNotificationAsRead, deleteNotification, clearNotifications, getAvailableSlots, submitReview, getAverageRating,
     getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,
     trackUserSearch, toggleFavorite, moveToFavorites, getRecommendedOffers,

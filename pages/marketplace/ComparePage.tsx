@@ -16,10 +16,11 @@ export const ComparePage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
 //upadted
-  const [pageLoading, setPageLoading] = useState(true);
+  const hasCachedCatalog = offers.length > 0 && producers.length > 0;
+  const [pageLoading, setPageLoading] = useState(!hasCachedCatalog);
   useEffect(() => {
     let cancelled = false;
-    setPageLoading(true);
+    if (!hasCachedCatalog) setPageLoading(true);
     Promise.all([refreshOffers(), refreshProducers()]).finally(() => {
       if (!cancelled) setPageLoading(false);
     });

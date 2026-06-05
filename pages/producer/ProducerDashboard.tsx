@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { ProducerStatus, OrderStatus, Order, OfferType, Review } from '../../types';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2, Clock } from 'lucide-react';
+import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2 } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -30,14 +30,15 @@ export const ProducerDashboard: React.FC = () => {
    // once, so it fetches everything it shows in one go. Per-section loaders
    // read the local `pageLoading` flag so they all turn off together when the
    // (deduplicated) requests resolve.
-   const [pageLoading, setPageLoading] = useState(true);
+   const hasCachedDashboard = producers.length > 0;
+   const [pageLoading, setPageLoading] = useState(!hasCachedDashboard);
    useEffect(() => {
       let cancelled = false;
-      setPageLoading(true);
+      if (!hasCachedDashboard) setPageLoading(true);
       const load = async () => {
          await refreshProducers();
          if (cancelled) return;
-         await Promise.all([refreshClients(), refreshOffers(), refreshOrders({ force: true })]);
+         await Promise.all([refreshClients(), refreshOffers(), refreshOrders()]);
       };
       void load().finally(() => {
          if (!cancelled) setPageLoading(false);
@@ -45,6 +46,10 @@ export const ProducerDashboard: React.FC = () => {
       return () => { cancelled = true; };
    }, []);
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+   const selectedOrderLive = useMemo(() => {
+      if (!selectedOrder) return null;
+      return orders.find((o) => o.id === selectedOrder.id) ?? selectedOrder;
+   }, [selectedOrder, orders]);
    const [profileLookupTimedOut, setProfileLookupTimedOut] = useState(false);
 
    // Review State
@@ -59,6 +64,11 @@ export const ProducerDashboard: React.FC = () => {
    const [evidenceOrderId, setEvidenceOrderId] = useState<string | null>(null);
    const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
    const [orderActionBusy, setOrderActionBusy] = useState<string | null>(null);
+
+   const handleMarkDelivered = async (orderId: string) => {
+      setOrderActionBusy(`${orderId}:deliver`);
+      try { await markOrderDelivered(orderId); } finally { setOrderActionBusy(null); }
+   };
    const [rejectOrderTarget, setRejectOrderTarget] = useState<string | null>(null);
    const [offerDeleteTarget, setOfferDeleteTarget] = useState<{ id: string; title: string } | null>(null);
    const [isDeletingOffer, setIsDeletingOffer] = useState(false);
@@ -112,14 +122,15 @@ export const ProducerDashboard: React.FC = () => {
    const pendingValidationOrders = producerOwnedOrders.filter(o => o.status === OrderStatus.PENDING_VALIDATION);
    const awaitingPaymentOrders = producerOwnedOrders.filter(o => o.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT);
    const ordersToShip = producerOwnedOrders.filter(o => o.status === OrderStatus.PAID_IN_PREPARATION);
+   // Active deliveries the producer still has to finalize (mark as delivered).
+   const inTransitOrders = producerOwnedOrders.filter(o => o.status === OrderStatus.IN_TRANSIT);
 
-   // Past Orders (Completed, Cancelled, Dispute, Delivered, In Transit) — always visible so producers can see full history
+   // Past Orders (Completed, Cancelled, Dispute, Delivered) — always visible so producers can see full history
    const pastOrders = allMyOrders.filter(o =>
       o.status === OrderStatus.COMPLETED ||
       o.status === OrderStatus.CANCELLED ||
       o.status === OrderStatus.DELIVERED ||
-      o.status === OrderStatus.DISPUTE ||
-      o.status === OrderStatus.IN_TRANSIT
+      o.status === OrderStatus.DISPUTE
    );
 
    // My Reviews
@@ -541,6 +552,68 @@ export const ProducerDashboard: React.FC = () => {
             </ul>
          </div>
 
+         {/* Out for Delivery Section (IN_TRANSIT) — producer finalizes delivery here */}
+         {inTransitOrders.length > 0 && (
+            <div className="bg-white shadow overflow-hidden sm:rounded-md mb-8 border-l-4 border-indigo-500">
+               <div className="px-4 py-5 border-b border-gray-200 sm:px-6 flex justify-between items-center bg-indigo-50">
+                  <h3 className="text-lg leading-6 font-bold text-gray-900 flex items-center">
+                     <Truck className="h-5 w-5 mr-2 text-indigo-600" />
+                     {t('dash.outForDelivery')}
+                  </h3>
+                  <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-2 py-1 rounded-full">Action Required</span>
+               </div>
+               <ul className="divide-y divide-gray-200 agm-dash-scroll-4 agm-dash-row-tall scrollbar-thin">
+                  {inTransitOrders.map(order => (
+                     <li key={order.id} className="px-4 py-4 hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedOrder(order)}>
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+                           <div>
+                              <p className="font-medium text-gray-900 flex items-center gap-2 flex-wrap">
+                                 {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
+                                 #{order.id.substring(6)}
+                                 {orderIsServiceOnly(order) && (
+                                    <span className="text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
+                                 )}
+                              </p>
+                              <p className="text-sm text-gray-500">{formatProducerOrderSubtitle(order)}</p>
+                              <p className="text-xs text-indigo-600 font-medium mt-1">{t('dash.markDeliveredHint')}</p>
+                           </div>
+
+                           <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto">
+                              {!order.contactRevealed ? (
+                                 <button
+                                    onClick={(e) => { e.stopPropagation(); void revealContactInfo(order.id); }}
+                                    className="inline-flex items-center justify-center px-3 py-2 border border-blue-200 text-sm font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 w-full sm:w-auto"
+                                 >
+                                    <Phone className="h-4 w-4 mr-2" /> {t('order.revealContact')}
+                                 </button>
+                              ) : (
+                                 <span className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-green-700"><CheckCircle className="h-4 w-4 mr-1" /> Contact Shared</span>
+                              )}
+                              <button
+                                 onClick={(e) => { e.stopPropagation(); openOrderDeliveryInMaps(order); }}
+                                 className="inline-flex items-center justify-center px-3 py-2 border border-purple-200 text-sm font-medium rounded-md text-purple-700 bg-purple-50 hover:bg-purple-100 w-full sm:w-auto"
+                              >
+                                 <Navigation className="h-4 w-4 mr-2" /> {t('order.shareLocation')}
+                              </button>
+                              <button
+                                 onClick={(e) => { e.stopPropagation(); void handleMarkDelivered(order.id); }}
+                                 disabled={orderActionBusy === `${order.id}:deliver`}
+                                 className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm w-full sm:w-auto disabled:opacity-60 disabled:cursor-not-allowed"
+                              >
+                                 {orderActionBusy === `${order.id}:deliver`
+                                    ? <Spinner className="h-4 w-4 mr-2" />
+                                    : <CheckCircle className="h-4 w-4 mr-2" />
+                                 }
+                                 {t('order.markDelivered')}
+                              </button>
+                           </div>
+                        </div>
+                     </li>
+                  ))}
+               </ul>
+            </div>
+         )}
+
          {/* Incoming Orders Section (PENDING_VALIDATION) */}
          <div className="bg-white shadow overflow-hidden sm:rounded-md mb-8">
             <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
@@ -691,40 +764,6 @@ export const ProducerDashboard: React.FC = () => {
                            </div>
 
                            <div className="agm-dash-order-actions flex-wrap">
-                              {/* Show share buttons for In Transit orders too */}
-                              {order.status === OrderStatus.IN_TRANSIT && (
-                                 <>
-                                    {!order.contactRevealed ? (
-                                       <button
-                                          onClick={(e) => { e.stopPropagation(); revealContactInfo(order.id); }}
-                                          className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-200 hover:bg-blue-100"
-                                       >
-                                          <Phone className="h-3 w-3 inline mr-1" /> Contact
-                                       </button>
-                                    ) : (
-                                       <span className="text-xs text-green-600 flex items-center"><CheckCircle className="w-3 h-3 mr-1" /> Contact Shared</span>
-                                    )}
-                                    <button
-                                       onClick={(e) => { e.stopPropagation(); openOrderDeliveryInMaps(order); }}
-                                       className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded border border-purple-200 hover:bg-purple-100"
-                                    >
-                                       <Navigation className="h-3 w-3 inline mr-1" /> Loc
-                                    </button>
-                                    {order.clientConfirmedReceipt ? (
-                                       <button
-                                          onClick={(e) => { e.stopPropagation(); void markOrderDelivered(order.id); }}
-                                          className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 font-bold flex items-center"
-                                       >
-                                          <CheckCircle className="h-3 w-3 mr-1" /> {t('order.markDelivered')}
-                                       </button>
-                                    ) : (
-                                       <span className="text-xs text-gray-500 flex items-center" title={t('dash.awaitingClientReceipt')}>
-                                          <Clock className="h-3 w-3 mr-1" /> {t('dash.awaitingClientReceipt')}
-                                       </span>
-                                    )}
-                                 </>
-                              )}
-
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${order.status === OrderStatus.CANCELLED || order.status === OrderStatus.DISPUTE ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
                                  {order.status.replace(/_/g, ' ')}
                               </span>
@@ -883,17 +922,17 @@ export const ProducerDashboard: React.FC = () => {
             ariaLabelledBy="modal-title"
             panelClassName="p-4 sm:p-6"
          >
-            {selectedOrder && (
+            {selectedOrderLive && (
                   <>
                      <div className="flex justify-between items-start mb-4 gap-2">
                         <div>
                            <h3 className="text-lg leading-6 font-bold text-gray-900" id="modal-title">
-                              {orderIsServiceOnly(selectedOrder) ? t('service.booking') : t('dash.orderDetails')} #{selectedOrder.id.substring(6)}
+                              {orderIsServiceOnly(selectedOrderLive) ? t('service.booking') : t('dash.orderDetails')} #{selectedOrderLive.id.substring(6)}
                            </h3>
-                           {orderIsServiceOnly(selectedOrder) && (
+                           {orderIsServiceOnly(selectedOrderLive) && (
                               <span className="inline-flex mt-1 text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
                            )}
-                           {orderHasService(selectedOrder) && !orderIsServiceOnly(selectedOrder) && (
+                           {orderHasService(selectedOrderLive) && !orderIsServiceOnly(selectedOrderLive) && (
                               <p className="text-xs text-amber-700 mt-1">{t('dash.mixedOrderHint')}</p>
                            )}
                         </div>
@@ -905,8 +944,8 @@ export const ProducerDashboard: React.FC = () => {
                         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{t('dash.orderTimeline')}</h4>
                         <div className="flex flex-wrap gap-x-1 gap-y-1 items-center">
                            {ORDER_TIMELINE_STEPS.map((step, idx) => {
-                              const isCurrent = selectedOrder.status === step.status;
-                              const currentIdx = getOrderTimelineStepIndex(selectedOrder.status);
+                              const isCurrent = selectedOrderLive.status === step.status;
+                              const currentIdx = getOrderTimelineStepIndex(selectedOrderLive.status);
                               const isPast = currentIdx >= 0 && idx < currentIdx;
                               return (
                                  <span
@@ -918,13 +957,13 @@ export const ProducerDashboard: React.FC = () => {
                                  </span>
                               );
                            })}
-                           {(selectedOrder.status === OrderStatus.CANCELLED || selectedOrder.status === OrderStatus.DISPUTE) && (
+                           {(selectedOrderLive.status === OrderStatus.CANCELLED || selectedOrderLive.status === OrderStatus.DISPUTE) && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 ml-1">
-                                 {selectedOrder.status === OrderStatus.CANCELLED ? 'Cancelled' : 'Dispute'}
+                                 {selectedOrderLive.status === OrderStatus.CANCELLED ? 'Cancelled' : 'Dispute'}
                               </span>
                            )}
                         </div>
-                        <p className="text-xs text-gray-500 mt-2">{t('dash.orderPlaced')}: {new Date(selectedOrder.createdAt).toLocaleString()}</p>
+                        <p className="text-xs text-gray-500 mt-2">{t('dash.orderPlaced')}: {new Date(selectedOrderLive.createdAt).toLocaleString()}</p>
                      </div>
 
                      {/* Client Info */}
@@ -932,44 +971,70 @@ export const ProducerDashboard: React.FC = () => {
                         <div className="flex items-center mb-2">
                            <User className="h-4 w-4 text-gray-500 mr-2" />
                            <span className="text-sm font-medium text-gray-900">{t('dash.client')}:
-                              <Link to={`/profile/client/${selectedOrder.clientId}`} className="ml-1 text-blue-600 hover:underline">
-                                 {getClientDisplayName(selectedOrder)}
+                              <Link to={`/profile/client/${selectedOrderLive.clientId}`} className="ml-1 text-blue-600 hover:underline">
+                                 {getClientDisplayName(selectedOrderLive)}
                               </Link>
                            </span>
                         </div>
                         <div className="flex items-start flex-wrap gap-2">
                            <MapPin className="h-4 w-4 text-gray-500 mr-2 mt-0.5 shrink-0" />
                            <span className="text-sm text-gray-600 flex-1 min-w-0">
-                              {orderIsServiceOnly(selectedOrder) ? t('service.visitLocation') : t('dash.address')}: {getClientAddress(selectedOrder)}
+                              {orderIsServiceOnly(selectedOrderLive) ? t('service.visitLocation') : t('dash.address')}: {getClientAddress(selectedOrderLive)}
                            </span>
                            <button
                               type="button"
-                              onClick={() => openOrderDeliveryInMaps(selectedOrder)}
+                              onClick={() => openOrderDeliveryInMaps(selectedOrderLive)}
                               className="inline-flex items-center text-xs font-medium text-purple-700 hover:text-purple-900 shrink-0"
                            >
                               <Navigation className="h-3 w-3 mr-1" /> {t('order.shareLocation')}
                            </button>
                         </div>
 
-                        {selectedOrder.contactRevealed && (
+                        {selectedOrderLive.status === OrderStatus.IN_TRANSIT && (
                            <div className="mt-2 pt-2 border-t border-gray-200 text-sm">
-                              <div className="font-bold text-gray-700 mb-1">Contact Info:</div>
-                                 <div className="text-gray-600"><Phone className="h-3 w-3 inline mr-1" /> {getClientPhone(selectedOrder.clientId)}</div>
-                                 <div className="text-gray-600"><Mail className="h-3 w-3 inline mr-1" /> {getClientEmail(selectedOrder.clientId)}</div>
+                              {selectedOrderLive.contactRevealed ? (
+                                 <>
+                                    <div className="font-bold text-gray-700 mb-1">Contact Info:</div>
+                                    <div className="text-gray-600"><Phone className="h-3 w-3 inline mr-1" /> {getClientPhone(selectedOrderLive.clientId)}</div>
+                                    <div className="text-gray-600"><Mail className="h-3 w-3 inline mr-1" /> {getClientEmail(selectedOrderLive.clientId)}</div>
+                                 </>
+                              ) : (
+                                 <button
+                                    type="button"
+                                    onClick={() => void revealContactInfo(selectedOrderLive.id)}
+                                    className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 font-medium"
+                                 >
+                                    {t('order.revealContact')}
+                                 </button>
+                              )}
+                              <div className="mt-3">
+                                 <button
+                                    type="button"
+                                    onClick={() => { void handleMarkDelivered(selectedOrderLive.id).then(() => setSelectedOrder(null)); }}
+                                    disabled={orderActionBusy === `${selectedOrderLive.id}:deliver`}
+                                    className="inline-flex items-center text-xs bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700 font-bold disabled:opacity-60 disabled:cursor-not-allowed"
+                                 >
+                                    {orderActionBusy === `${selectedOrderLive.id}:deliver`
+                                       ? <Spinner className="h-3.5 w-3.5 mr-1" />
+                                       : <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                                    }
+                                    {t('order.markDelivered')}
+                                 </button>
+                              </div>
                            </div>
                         )}
                      </div>
 
                      {/* Dispute Info if any */}
-                     {selectedOrder.status === OrderStatus.DISPUTE && (
+                     {selectedOrderLive.status === OrderStatus.DISPUTE && (
                         <div className="bg-red-50 p-3 rounded-md mb-4 border border-red-200">
                            <h4 className="text-sm font-bold text-red-800 mb-2 flex items-center"><AlertTriangle className="h-4 w-4 mr-2" /> Dispute Active</h4>
-                           <p className="text-sm text-red-700 mb-2"><span className="font-semibold">Reason:</span> {selectedOrder.disputeReason || 'N/A'}</p>
-                           {selectedOrder.disputeEvidence && selectedOrder.disputeEvidence.length > 0 && (
+                           <p className="text-sm text-red-700 mb-2"><span className="font-semibold">Reason:</span> {selectedOrderLive.disputeReason || 'N/A'}</p>
+                           {selectedOrderLive.disputeEvidence && selectedOrderLive.disputeEvidence.length > 0 && (
                               <div>
                                  <p className="text-xs font-bold text-red-800 mb-1">Evidence Uploaded:</p>
                                  <ul className="list-disc ml-4">
-                                    {selectedOrder.disputeEvidence.map(ev => (
+                                    {selectedOrderLive.disputeEvidence.map(ev => (
                                        <li key={ev.id} className="text-xs text-red-600">
                                           {ev.fileName} ({ev.uploaderId === user?.id ? 'You' : 'Client'})
                                        </li>
@@ -983,7 +1048,7 @@ export const ProducerDashboard: React.FC = () => {
                      {/* Items / scheduled services */}
                      <div className="mt-4">
                         <h4 className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-2">
-                           {orderHasService(selectedOrder) ? (
+                           {orderHasService(selectedOrderLive) ? (
                               <>
                                  <Calendar className="h-4 w-4 text-purple-600" /> {t('service.scheduledServices')}
                               </>
@@ -992,7 +1057,7 @@ export const ProducerDashboard: React.FC = () => {
                            )}
                         </h4>
                         <ul className="divide-y divide-gray-200 border border-gray-200 rounded-md">
-                           {selectedOrder.items.map((item) => (
+                           {selectedOrderLive.items.map((item) => (
                               <li
                                  key={item.id}
                                  className={`p-3 flex justify-between items-start gap-2 ${item.type === OfferType.SERVICE ? 'bg-purple-50/50 border-l-4 border-l-purple-400' : ''}`}
@@ -1042,7 +1107,7 @@ export const ProducerDashboard: React.FC = () => {
 
                      <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
                         <span className="text-base font-medium text-gray-900">Total</span>
-                        <span className="text-xl font-bold text-primary-600">{selectedOrder.totalAmount.toLocaleString()} XAF</span>
+                        <span className="text-xl font-bold text-primary-600">{selectedOrderLive.totalAmount.toLocaleString()} XAF</span>
                      </div>
 
                      <div className="mt-6">

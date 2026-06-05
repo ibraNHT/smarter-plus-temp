@@ -329,13 +329,13 @@ export const ChatPage: React.FC = () => {
       adjustMessageInputHeight();
    }, [inputText, chatId, adjustMessageInputHeight]);
 
-   // Fetch chats + catalog slices on mount; `chatListLoading` shows a
-   // scoped loader inside the conversations list only.
-   const [chatListLoading, setChatListLoading] = useState(true);
+   // Fetch chats + catalog slices on mount; show sidebar loader only when nothing cached yet.
+   const hasCachedChats = chats.some((c) => c.participantIds?.includes(user?.id ?? ''));
+   const [chatListLoading, setChatListLoading] = useState(!hasCachedChats);
    useEffect(() => {
       if (!user) return;
       let cancelled = false;
-      setChatListLoading(true);
+      if (!hasCachedChats) setChatListLoading(true);
       Promise.all([
          fetchChats(),
          refreshOffers(),
@@ -346,6 +346,21 @@ export const ChatPage: React.FC = () => {
       });
       return () => { cancelled = true; };
    }, [user?.id]);
+
+   const hasCachedMessagesForChat = Boolean(
+      chatId && messages.some((m) => m.chatId === chatId),
+   );
+   const [messagesLoading, setMessagesLoading] = useState(
+      Boolean(chatId) && !hasCachedMessagesForChat,
+   );
+
+   useEffect(() => {
+      if (!chatId) {
+         setMessagesLoading(false);
+         return;
+      }
+      setMessagesLoading(!messages.some((m) => m.chatId === chatId));
+   }, [chatId]);
 
    // Fetch messages when a specific chat is selected, and keep a SAFETY-NET
    // poll running as a backup to the real-time WebSocket push.
@@ -365,30 +380,34 @@ export const ChatPage: React.FC = () => {
    //       •  paused entirely while the tab is hidden
    //   - In-flight de-dup is preserved so requests never queue.
    useEffect(() => {
-      if (!user || !chatId) return;
+      if (!user || !chatId) {
+         setMessagesLoading(false);
+         return;
+      }
 
       let interval: ReturnType<typeof setInterval> | null = null;
+      let cancelled = false;
 
       const isVisible = () =>
          typeof document === 'undefined' || document.visibilityState === 'visible';
 
-      // One initial fetch on chat open / user change (the WS handles every
-      // subsequent message — but we still need the initial render).
-      if (!isPollingMessagesRef.current) {
+      const loadMessages = (showLoader: boolean) => {
+         if (isPollingMessagesRef.current) return;
          isPollingMessagesRef.current = true;
+         if (showLoader) setMessagesLoading(true);
          Promise.resolve(fetchMessages(chatId)).finally(() => {
             isPollingMessagesRef.current = false;
+            if (!cancelled) setMessagesLoading(false);
          });
-      }
+      };
+
+      // Initial fetch — show loader only when this thread is not cached yet.
+      const hasCached = messages.some((m) => m.chatId === chatId);
+      loadMessages(!hasCached);
 
       const tick = () => {
          if (!isVisible()) return;
-         if (!isPollingMessagesRef.current) {
-            isPollingMessagesRef.current = true;
-            Promise.resolve(fetchMessages(chatId)).finally(() => {
-               isPollingMessagesRef.current = false;
-            });
-         }
+         loadMessages(false);
          // Refresh the sidebar/session list on every other tick to keep last-
          // message previews in sync if a WS update was missed.
          chatPollTickRef.current += 1;
@@ -409,6 +428,7 @@ export const ChatPage: React.FC = () => {
       document.addEventListener('visibilitychange', onVisibility);
 
       return () => {
+         cancelled = true;
          if (interval) clearInterval(interval);
          document.removeEventListener('visibilitychange', onVisibility);
       };
@@ -555,7 +575,11 @@ export const ChatPage: React.FC = () => {
    const isServiceProposal = (msg: ChatMessage) => {
       const offerId = msg.proposal?.offerId;
       if (!offerId) return false;
-      const offer = getOfferById(offerId);
+      // Fall back to the chat's listing offer when the proposal offer isn't in the
+      // loaded catalog, so the appointment picker still appears for service bookings.
+      const offer =
+         getOfferById(offerId) ??
+         (activeChat?.offerId ? getOfferById(activeChat.offerId) : undefined);
       return String((offer as any)?.type ?? '').toUpperCase() === OfferType.SERVICE;
    };
 
@@ -753,7 +777,35 @@ export const ChatPage: React.FC = () => {
                            </div>
                         </div>
                      ) : null}
-                     {activeMessages.map((msg, idx) => {
+                     {messagesLoading ? (
+                        <div
+                           className="flex flex-col items-center justify-center py-12 gap-4"
+                           role="status"
+                           aria-live="polite"
+                           aria-busy="true"
+                        >
+                           <Spinner className="h-8 w-8 text-primary-600" label={t('chat.loadingMessages')} />
+                           <p className="text-sm text-gray-500">{t('chat.loadingMessages')}</p>
+                           <div className="w-full max-w-sm space-y-3 mt-2" aria-hidden="true">
+                              <div className="flex justify-start">
+                                 <div className="h-10 w-48 agm-shimmer rounded-2xl rounded-bl-none" />
+                              </div>
+                              <div className="flex justify-end">
+                                 <div className="h-10 w-36 agm-shimmer rounded-2xl rounded-br-none" />
+                              </div>
+                              <div className="flex justify-start">
+                                 <div className="h-14 w-56 agm-shimmer rounded-2xl rounded-bl-none" />
+                              </div>
+                           </div>
+                        </div>
+                     ) : null}
+                     {!messagesLoading && activeMessages.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 text-gray-400 text-sm">
+                           <MessageCircle className="h-10 w-10 mb-3 opacity-30" />
+                           <p>{t('chat.typeMessage')}</p>
+                        </div>
+                     ) : null}
+                     {!messagesLoading && activeMessages.map((msg, idx) => {
                         const isMe = msg.senderId === user.id;
                         const isSystem = msg.systemMessage;
                         const prev = idx > 0 ? activeMessages[idx - 1] : null;

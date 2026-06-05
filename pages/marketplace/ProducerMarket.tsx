@@ -7,6 +7,7 @@ import { MarketType, UserRole } from '../../types';
 import { Tractor, Search, MapPin, ArrowLeft, MessageCircle, Truck, Heart, Star, Layers } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
+import { ClampText } from '../../components/ClampText';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { displayNameTruncateClass, resolveProducerDisplayName } from '../../utils/displayName';
 import { isProducerDashboardUser } from '../../services/producerSession';
@@ -17,10 +18,14 @@ export const ProducerMarket: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  const [pageLoading, setPageLoading] = useState(true);
+  // Show cached catalog instantly on return visits; React Query dedupes refetches
+  // within staleTime so repeat navigation does not hit the network or flash skeletons.
+  const hasCachedCatalog =
+    offers.some((o) => o.marketType === MarketType.PRODUCER) && producers.length > 0;
+  const [pageLoading, setPageLoading] = useState(!hasCachedCatalog);
   useEffect(() => {
     let cancelled = false;
-    setPageLoading(true);
+    if (!hasCachedCatalog) setPageLoading(true);
     Promise.all([refreshOffers(), refreshProducers(), refreshAllReviews()]).finally(() => {
       if (!cancelled) setPageLoading(false);
     });
@@ -255,7 +260,7 @@ export const ProducerMarket: React.FC = () => {
           </button>
         </div>
 
-        <Link to={`/offer/${offer.id}`} className="block h-full flex flex-col">
+        <Link to={`/offer/${offer.id}`} className="flex h-full flex-col min-h-0">
           <div className="relative bg-gray-100 h-40 sm:h-44 md:h-44">
             <img src={offer.imageUrl} alt={offer.title} className={offerImageInBox} />
 
@@ -280,35 +285,46 @@ export const ProducerMarket: React.FC = () => {
             )}
           </div>
 
-          <div className="flex flex-col flex-1 p-3 md:p-4">
-            <div className="mb-1.5 md:mb-2">
+          <div className="flex flex-col flex-1 min-h-0 p-3 md:p-4">
+            <div className="mb-1.5 md:mb-2 shrink-0">
               <p className="text-[10px] md:text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5 md:mb-1 flex items-center justify-between gap-1 min-w-0">
                 <span className={`${displayNameTruncateClass} flex-1`} title={producer ? getProducerName(producer) : ''}>
                   {producer ? getProducerName(producer) : 'Unknown Producer'}
                 </span>
                 {rating > 0 && (
-                  <span className="flex items-center text-yellow-600 font-bold text-xs">
+                  <span className="flex items-center text-yellow-600 font-bold text-xs shrink-0">
                     <Star className="w-3 h-3 fill-current mr-0.5" /> {rating} <span className="text-gray-400 font-normal ml-1">({reviewCount})</span>
                   </span>
                 )}
               </p>
-              <h3 className="text-sm md:text-lg font-bold text-gray-900 line-clamp-2 md:line-clamp-1 group-hover:text-primary-600 transition-colors leading-snug">{offer.title}</h3>
+              <ClampText
+                as="h3"
+                text={offer.title}
+                lines={2}
+                className="text-sm md:text-base font-bold text-gray-900 group-hover:text-primary-600 transition-colors leading-5 min-h-[2.5rem]"
+              />
             </div>
 
-            <p className="text-gray-600 text-xs md:text-sm line-clamp-2 flex-1 mb-2 md:mb-3 hidden sm:block">{offer.description}</p>
+            <div className="min-h-[2.5rem] mb-2 md:mb-3 hidden sm:block shrink-0">
+              <ClampText
+                text={offer.description}
+                lines={2}
+                className="text-gray-600 text-xs md:text-sm leading-5"
+              />
+            </div>
 
             {/* Delivery Status */}
             {offer.isDeliveryAvailable ? (
-              <div className="flex items-center text-xs text-green-600 font-medium mb-3">
-                <Truck className="h-3 w-3 mr-1" /> Delivery Available
+              <div className="flex items-center text-xs text-green-600 font-medium mb-3 shrink-0">
+                <Truck className="h-3 w-3 mr-1 shrink-0" /> Delivery Available
               </div>
             ) : (
-              <div className="flex items-center text-xs text-gray-400 font-medium mb-3">
-                <MapPin className="h-3 w-3 mr-1" /> Pickup Only
+              <div className="flex items-center text-xs text-gray-400 font-medium mb-3 shrink-0">
+                <MapPin className="h-3 w-3 mr-1 shrink-0" /> Pickup Only
               </div>
             )}
 
-            <div className="mt-auto flex items-end justify-between pt-2 md:pt-3 border-t border-gray-100 gap-2">
+            <div className="mt-auto flex items-end justify-between pt-2 md:pt-3 border-t border-gray-100 gap-2 shrink-0">
               <div className="min-w-0">
                 <p className="text-[10px] md:text-xs text-gray-400">{t('market.per')} {t(`unit.${offer.unit}`)}</p>
                 <p className="text-base md:text-lg font-bold text-primary-700 leading-tight">{offer.price.toLocaleString()} XAF</p>
@@ -502,9 +518,9 @@ export const ProducerMarket: React.FC = () => {
                       </div>
 
                       {isExpanded ? (
-                        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pt-2">
+                        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pt-2 items-stretch">
                           {sortedCategoryOffers.map((offer) => (
-                            <div key={offer.id} className="w-full min-w-0">
+                            <div key={offer.id} className="w-full min-w-0 h-full flex">
                               {renderOfferCard(offer)}
                             </div>
                           ))}

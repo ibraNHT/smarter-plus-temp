@@ -5,7 +5,7 @@ import { clientProfileMatchesSession } from '../../services/clientProfileMatcher
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order, Review, OfferType } from '../../types';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle, Loader2, Calendar, Phone } from 'lucide-react';
+import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle, Loader2, Calendar, Phone, Mail, Truck } from 'lucide-react';
 import { useUpdateClientProfileMutation } from '../../client-api/hooks/useUpdateClientProfileMutation';
 import { SEO } from '../../components/SEO';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
@@ -51,7 +51,7 @@ export const ClientProfile: React.FC = () => {
    const isProfileTab = (v: string | null): v is ProfileTab =>
       v === 'info' || v === 'orders' || v === 'security' || v === 'favorites' || v === 'reputation' || v === 'referrals';
 
-   const { user, orders, payForOrder, confirmReceipt, requestOrderCancellation, updateAppointment, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, pickupPoints, revealContactInfo, refreshClients, refreshOrders, refreshOffers, refreshProducers, refreshAllReviews, refreshMyReviews, refreshWallet } = useStore();
+   const { user, orders, payForOrder, completeOrder, requestOrderCancellation, updateAppointment, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, pickupPoints, revealContactInfo, refreshClients, refreshOrders, refreshOffers, refreshProducers, refreshAllReviews, refreshMyReviews, refreshWallet } = useStore();
    const updateClientMutation = useUpdateClientProfileMutation();
    const { t } = useTranslation();
    const navigate = useNavigate();
@@ -157,12 +157,16 @@ export const ClientProfile: React.FC = () => {
    const [showPasswordModal, setShowPasswordModal] = useState(false);
    const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+   const selectedOrderLive = useMemo(() => {
+      if (!selectedOrder) return null;
+      return orders.find((o) => o.id === selectedOrder.id) ?? selectedOrder;
+   }, [selectedOrder, orders]);
    const [avatarUploading, setAvatarUploading] = useState(false);
    const [profileHydrating, setProfileHydrating] = useState(false);
    const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
    const [cancelingOrder, setCancelingOrder] = useState(false);
-   const [confirmReceiptId, setConfirmReceiptId] = useState<string | null>(null);
-   const [confirmingReceipt, setConfirmingReceipt] = useState(false);
+   const [completeOrderId, setCompleteOrderId] = useState<string | null>(null);
+   const [completingOrder, setCompletingOrder] = useState(false);
    const [cancelRequestOrderId, setCancelRequestOrderId] = useState<string | null>(null);
    const [cancelRequestReason, setCancelRequestReason] = useState('');
    const [requestingCancel, setRequestingCancel] = useState(false);
@@ -560,8 +564,8 @@ export const ClientProfile: React.FC = () => {
    }
 
    const allMyOrders = orders.filter(o => o.clientId === currentClient?.id || o.clientId === user.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-   const activeOrders = allMyOrders.filter(o => [OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT, OrderStatus.PAID_IN_PREPARATION, OrderStatus.IN_TRANSIT, OrderStatus.DISPUTE].includes(o.status));
-   const pastOrders = allMyOrders.filter(o => [OrderStatus.COMPLETED, OrderStatus.DELIVERED, OrderStatus.CANCELLED].includes(o.status));
+   const activeOrders = allMyOrders.filter(o => [OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT, OrderStatus.PAID_IN_PREPARATION, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED, OrderStatus.DISPUTE].includes(o.status));
+   const pastOrders = allMyOrders.filter(o => [OrderStatus.COMPLETED, OrderStatus.CANCELLED].includes(o.status));
 
    // Order lifecycle steps for timeline (booking → receiving)
    const ORDER_TIMELINE_STEPS: { status: OrderStatus; label: string }[] = [
@@ -724,7 +728,13 @@ export const ClientProfile: React.FC = () => {
       };
    };
    const getProducerDisplayName = (order: Order) => order.producerDisplayName || getProducerName(order.producerId);
-   const getProducerPhone = (producerId: string) => { const p = producers.find(prod => prod.id === producerId) as any; return p?.phone || p?.user?.phone || null; };
+   const getProducerContact = (producerId: string) => {
+      const p = producers.find((prod) => prod.id === producerId) as any;
+      return {
+         phone: p?.phone || p?.user?.phone || null,
+         email: p?.email || p?.user?.email || null,
+      };
+   };
    const getOrderItemImage = (item: any) => {
       if (item?.imageUrl) return item.imageUrl as string;
       const offerId = item?.offerId || item?.id;
@@ -837,11 +847,10 @@ export const ClientProfile: React.FC = () => {
                                  <button onClick={() => openRescheduleModal(order)} className="text-purple-700 hover:bg-purple-50 px-3 py-1.5 rounded-md text-xs font-medium border border-purple-200 flex items-center gap-1"><Calendar className="w-3 h-3" /> {t('order.reschedule')}</button>
                               )}
                               {order.status === OrderStatus.IN_TRANSIT && (
-                                 order.clientConfirmedReceipt ? (
-                                    <span className="text-green-700 bg-green-50 px-3 py-1.5 rounded-md text-xs font-medium border border-green-100 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> {t('order.awaitingSellerDelivery')}</span>
-                                 ) : (
-                                    <button onClick={() => setConfirmReceiptId(order.id)} className="bg-green-600 text-white px-4 py-1.5 rounded-md text-xs font-bold hover:bg-green-700 shadow-sm flex items-center gap-1"><CheckCircle className="w-3 h-3" /> {t('order.confirmReceipt')}</button>
-                                 )
+                                 <span className="text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-md text-xs font-medium border border-indigo-100 flex items-center gap-1"><Truck className="w-3 h-3" /> {t('order.onItsWay')}</span>
+                              )}
+                              {order.status === OrderStatus.DELIVERED && (
+                                 <button onClick={() => setCompleteOrderId(order.id)} className="bg-green-600 text-white px-4 py-1.5 rounded-md text-xs font-bold hover:bg-green-700 shadow-sm flex items-center gap-1"><CheckCircle className="w-3 h-3" /> {t('order.completeOrder')}</button>
                               )}
                               {isImmediatelyCancellable(order) && (
                                  <button onClick={() => setCancelOrderId(order.id)} className="text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-md text-xs font-medium border border-red-100">{t('order.cancel')}</button>
@@ -1559,18 +1568,18 @@ export const ClientProfile: React.FC = () => {
             zIndex={50}
             panelClassName="p-4 sm:p-6"
          >
-            {selectedOrder && (
+            {selectedOrderLive && (
                <>
                      <div className="flex justify-between items-start mb-4 gap-2">
                         <div>
                            <h3 className="text-lg leading-6 font-bold text-gray-900">
-                              {orderIsServiceOnly(selectedOrder) ? t('service.booking') : t('dash.orderDetails')}{' '}
-                              #{selectedOrder.id.substring(selectedOrder.id.length - 6).toUpperCase()}
+                              {orderIsServiceOnly(selectedOrderLive) ? t('service.booking') : t('dash.orderDetails')}{' '}
+                              #{selectedOrderLive.id.substring(selectedOrderLive.id.length - 6).toUpperCase()}
                            </h3>
-                           {orderIsServiceOnly(selectedOrder) && (
+                           {orderIsServiceOnly(selectedOrderLive) && (
                               <span className="inline-flex mt-1 text-xs font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{t('service.badge')}</span>
                            )}
-                           {orderHasService(selectedOrder) && !orderIsServiceOnly(selectedOrder) && (
+                           {orderHasService(selectedOrderLive) && !orderIsServiceOnly(selectedOrderLive) && (
                               <p className="text-xs text-amber-700 mt-1">{t('dash.mixedOrderHint')}</p>
                            )}
                         </div>
@@ -1582,8 +1591,8 @@ export const ClientProfile: React.FC = () => {
                         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{t('dash.orderTimeline')}</h4>
                         <div className="flex flex-wrap gap-x-1 gap-y-1 items-center">
                            {ORDER_TIMELINE_STEPS.map((step, idx) => {
-                              const isCurrent = selectedOrder.status === step.status;
-                              const currentIdx = getOrderTimelineStepIndex(selectedOrder.status);
+                              const isCurrent = selectedOrderLive.status === step.status;
+                              const currentIdx = getOrderTimelineStepIndex(selectedOrderLive.status);
                               const isPast = currentIdx >= 0 && idx < currentIdx;
                               return (
                                  <span
@@ -1595,38 +1604,26 @@ export const ClientProfile: React.FC = () => {
                                  </span>
                               );
                            })}
-                           {(selectedOrder.status === OrderStatus.CANCELLED || selectedOrder.status === OrderStatus.DISPUTE) && (
+                           {(selectedOrderLive.status === OrderStatus.CANCELLED || selectedOrderLive.status === OrderStatus.DISPUTE) && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 ml-1">
-                                 {selectedOrder.status === OrderStatus.CANCELLED ? 'Cancelled' : 'Dispute'}
+                                 {selectedOrderLive.status === OrderStatus.CANCELLED ? 'Cancelled' : 'Dispute'}
                               </span>
                            )}
                         </div>
-                        <p className="text-xs text-gray-500 mt-2">{t('dash.orderPlaced')}: {new Date(selectedOrder.createdAt).toLocaleString()}</p>
+                        <p className="text-xs text-gray-500 mt-2">{t('dash.orderPlaced')}: {new Date(selectedOrderLive.createdAt).toLocaleString()}</p>
                      </div>
 
                      {/* Seller */}
                      <div className="bg-gray-50 p-3 rounded-md mb-4">
                         <p className="text-sm font-medium text-gray-900">
-                           {t('order.soldBy')}: <Link to={`/profile/producer/${selectedOrder.producerId}`} className="text-primary-600 hover:underline">{getProducerDisplayName(selectedOrder)}</Link>
+                           {t('order.soldBy')}: <Link to={`/profile/producer/${selectedOrderLive.producerId}`} className="text-primary-600 hover:underline">{getProducerDisplayName(selectedOrderLive)}</Link>
                         </p>
-                        {['IN_TRANSIT', 'DELIVERED', 'COMPLETED'].includes(selectedOrder.status) && (() => {
-                           const prod = producers.find(p => p.id === selectedOrder.producerId);
-                           const phone = (prod as any)?.phone || (prod as any)?.user?.phone;
-                           const email = (prod as any)?.email || (prod as any)?.user?.email;
-                           return (phone || email) ? (
-                              <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600">
-                                 <span className="font-bold text-gray-700">Producer Contact:</span>
-                                 {phone && <p className="mt-0.5">Phone: {phone}</p>}
-                                 {email && <p className="mt-0.5">Email: {email}</p>}
-                              </div>
-                           ) : null;
-                        })()}
                      </div>
 
                      {/* Items / scheduled services */}
                      <div className="mt-4">
                         <h4 className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-2">
-                           {orderHasService(selectedOrder) ? (
+                           {orderHasService(selectedOrderLive) ? (
                               <>
                                  <Calendar className="h-4 w-4 text-purple-600" /> {t('service.scheduledServices')}
                               </>
@@ -1635,7 +1632,7 @@ export const ClientProfile: React.FC = () => {
                            )}
                         </h4>
                         <ul className="divide-y divide-gray-200 border border-gray-200 rounded-md">
-                           {(selectedOrder.items || []).map((item: any, idx: number) => (
+                           {(selectedOrderLive.items || []).map((item: any, idx: number) => (
                               <li
                                  key={item.id || idx}
                                  className={`p-3 flex justify-between items-start gap-2 ${item.type === OfferType.SERVICE ? 'bg-purple-50/50 border-l-4 border-l-purple-400' : ''}`}
@@ -1677,40 +1674,56 @@ export const ClientProfile: React.FC = () => {
 
                      <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
                         <span className="text-base font-medium text-gray-900">Total</span>
-                        <span className="text-xl font-bold text-primary-600">{(selectedOrder.totalAmount ?? 0).toLocaleString()} XAF</span>
+                        <span className="text-xl font-bold text-primary-600">{(selectedOrderLive.totalAmount ?? 0).toLocaleString()} XAF</span>
                      </div>
 
                      {/* Shipping / Delivery address */}
-                     {selectedOrder.deliveryMethod === 'HOME' && selectedOrder.shippingAddress && typeof selectedOrder.shippingAddress === 'object' && (
+                     {selectedOrderLive.deliveryMethod === 'HOME' && selectedOrderLive.shippingAddress && typeof selectedOrderLive.shippingAddress === 'object' && (
                         <div className="mt-3 p-3 bg-gray-50 rounded-md border border-gray-200 text-sm">
                            <p className="font-medium text-gray-700 mb-1">Shipping Address:</p>
                            <p className="text-gray-600">
                               {[
-                                 (selectedOrder.shippingAddress as any).address,
-                                 (selectedOrder.shippingAddress as any).city,
-                                 (selectedOrder.shippingAddress as any).region,
+                                 (selectedOrderLive.shippingAddress as any).address,
+                                 (selectedOrderLive.shippingAddress as any).city,
+                                 (selectedOrderLive.shippingAddress as any).region,
                               ].filter(Boolean).join(', ')}
                            </p>
                         </div>
                      )}
-                     {selectedOrder.deliveryMethod === 'PICKUP' && selectedOrder.pickupPointId && (
+                     {selectedOrderLive.deliveryMethod === 'PICKUP' && selectedOrderLive.pickupPointId && (
                         <div className="mt-3 p-3 bg-gray-50 rounded-md border border-gray-200 text-sm">
                            <p className="font-medium text-gray-700 mb-1">Pickup Point:</p>
                            <p className="text-gray-600">
-                              {(() => { const pp = pickupPoints.find(p => p.id === selectedOrder.pickupPointId); return pp ? `${pp.name} — ${pp.address}, ${pp.city}` : selectedOrder.pickupPointId; })()}
+                              {(() => { const pp = pickupPoints.find(p => p.id === selectedOrderLive.pickupPointId); return pp ? `${pp.name} — ${pp.address}, ${pp.city}` : selectedOrderLive.pickupPointId; })()}
                            </p>
                         </div>
                      )}
 
-                     {/* Phone reveal for IN_TRANSIT orders */}
-                     {selectedOrder.status === OrderStatus.IN_TRANSIT && (
+                     {/* Contact reveal for IN_TRANSIT orders */}
+                     {selectedOrderLive.status === OrderStatus.IN_TRANSIT && (
                         <div className="mt-3 p-3 bg-blue-50 rounded-md border border-blue-200 text-sm">
                            <p className="font-medium text-blue-800 mb-1 flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> Producer Contact</p>
-                           {selectedOrder.contactRevealed ? (
-                              <p className="text-blue-700">{getProducerPhone(selectedOrder.producerId) ?? 'Phone not available'}</p>
+                           {selectedOrderLive.contactRevealed ? (
+                              (() => {
+                                 const contact = getProducerContact(selectedOrderLive.producerId);
+                                 return (
+                                    <div className="space-y-1 text-blue-700">
+                                       {contact.phone ? (
+                                          <p className="flex items-center gap-1"><Phone className="h-3.5 w-3.5 shrink-0" /> {contact.phone}</p>
+                                       ) : null}
+                                       {contact.email ? (
+                                          <p className="flex items-center gap-1"><Mail className="h-3.5 w-3.5 shrink-0" /> {contact.email}</p>
+                                       ) : null}
+                                       {!contact.phone && !contact.email ? (
+                                          <p>Contact not available</p>
+                                       ) : null}
+                                    </div>
+                                 );
+                              })()
                            ) : (
                               <button
-                                 onClick={() => revealContactInfo(selectedOrder.id)}
+                                 type="button"
+                                 onClick={() => void revealContactInfo(selectedOrderLive.id)}
                                  className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 font-medium"
                               >
                                  {t('order.revealContact')}
@@ -1720,34 +1733,33 @@ export const ClientProfile: React.FC = () => {
                      )}
 
                      <div className="mt-4 flex flex-wrap gap-2">
-                        {[OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(selectedOrder.status) && (
-                           <button onClick={() => { initiatePayment(selectedOrder.id); setSelectedOrder(null); }} className="bg-primary-600 text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-primary-700"><CreditCard className="w-4 h-4 inline mr-1" /> {t('order.payNow')}</button>
+                        {[OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(selectedOrderLive.status) && (
+                           <button onClick={() => { initiatePayment(selectedOrderLive.id); setSelectedOrder(null); }} className="bg-primary-600 text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-primary-700"><CreditCard className="w-4 h-4 inline mr-1" /> {t('order.payNow')}</button>
                         )}
-                        {canRescheduleAppointment(selectedOrder) && (
-                           <button onClick={() => { openRescheduleModal(selectedOrder); setSelectedOrder(null); }} className="text-purple-700 hover:bg-purple-50 px-4 py-2 rounded-md text-sm font-medium border border-purple-200"><Calendar className="w-4 h-4 inline mr-1" /> {t('order.reschedule')}</button>
+                        {canRescheduleAppointment(selectedOrderLive) && (
+                           <button onClick={() => { openRescheduleModal(selectedOrderLive); setSelectedOrder(null); }} className="text-purple-700 hover:bg-purple-50 px-4 py-2 rounded-md text-sm font-medium border border-purple-200"><Calendar className="w-4 h-4 inline mr-1" /> {t('order.reschedule')}</button>
                         )}
-                        {selectedOrder.status === OrderStatus.IN_TRANSIT && (
-                           selectedOrder.clientConfirmedReceipt ? (
-                              <span className="text-green-700 bg-green-50 px-4 py-2 rounded-md text-sm font-medium border border-green-100"><CheckCircle className="w-4 h-4 inline mr-1" /> {t('order.awaitingSellerDelivery')}</span>
-                           ) : (
-                              <button onClick={() => { setConfirmReceiptId(selectedOrder.id); setSelectedOrder(null); }} className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-green-700"><CheckCircle className="w-4 h-4 inline mr-1" /> {t('order.confirmReceipt')}</button>
-                           )
+                        {selectedOrderLive.status === OrderStatus.IN_TRANSIT && (
+                           <span className="text-indigo-700 bg-indigo-50 px-4 py-2 rounded-md text-sm font-medium border border-indigo-100"><Truck className="w-4 h-4 inline mr-1" /> {t('order.onItsWay')}</span>
                         )}
-                        {isImmediatelyCancellable(selectedOrder) && (
-                           <button onClick={() => { setCancelOrderId(selectedOrder.id); setSelectedOrder(null); }} className="text-red-600 hover:bg-red-50 px-4 py-2 rounded-md text-sm font-medium border border-red-100">{t('order.cancel')}</button>
+                        {selectedOrderLive.status === OrderStatus.DELIVERED && (
+                           <button onClick={() => { setCompleteOrderId(selectedOrderLive.id); setSelectedOrder(null); }} className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-green-700"><CheckCircle className="w-4 h-4 inline mr-1" /> {t('order.completeOrder')}</button>
                         )}
-                        {canRequestCancellation(selectedOrder) && (
-                           selectedOrder.cancellationRequested ? (
+                        {isImmediatelyCancellable(selectedOrderLive) && (
+                           <button onClick={() => { setCancelOrderId(selectedOrderLive.id); setSelectedOrder(null); }} className="text-red-600 hover:bg-red-50 px-4 py-2 rounded-md text-sm font-medium border border-red-100">{t('order.cancel')}</button>
+                        )}
+                        {canRequestCancellation(selectedOrderLive) && (
+                           selectedOrderLive.cancellationRequested ? (
                               <span className="text-gray-500 bg-gray-50 px-4 py-2 rounded-md text-sm font-medium border border-gray-200">{t('order.cancellationPending')}</span>
                            ) : (
-                              <button onClick={() => { openCancelRequestModal(selectedOrder.id); setSelectedOrder(null); }} className="text-red-600 hover:bg-red-50 px-4 py-2 rounded-md text-sm font-medium border border-red-100">{t('order.requestCancellation')}</button>
+                              <button onClick={() => { openCancelRequestModal(selectedOrderLive.id); setSelectedOrder(null); }} className="text-red-600 hover:bg-red-50 px-4 py-2 rounded-md text-sm font-medium border border-red-100">{t('order.requestCancellation')}</button>
                            )
                         )}
-                        {canReportProblem(selectedOrder) && (
-                           <button onClick={() => { openDisputeModal(selectedOrder.id); setSelectedOrder(null); }} className="text-orange-600 hover:bg-orange-50 px-4 py-2 rounded-md text-sm font-medium border border-orange-100"><AlertTriangle className="w-4 h-4 inline mr-1" /> {t('order.reportProblem')}</button>
+                        {canReportProblem(selectedOrderLive) && (
+                           <button onClick={() => { openDisputeModal(selectedOrderLive.id); setSelectedOrder(null); }} className="text-orange-600 hover:bg-orange-50 px-4 py-2 rounded-md text-sm font-medium border border-orange-100"><AlertTriangle className="w-4 h-4 inline mr-1" /> {t('order.reportProblem')}</button>
                         )}
-                        {(selectedOrder.status === OrderStatus.DELIVERED || selectedOrder.status === OrderStatus.COMPLETED) && !selectedOrder.clientReviewed && (
-                           <button onClick={() => { openReviewModal(selectedOrder.id, selectedOrder.producerId); setSelectedOrder(null); }} className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-md text-sm font-bold hover:bg-yellow-200 border border-yellow-200"><Star className="w-4 h-4 inline mr-1 fill-current" /> {t('review.rate')}</button>
+                        {(selectedOrderLive.status === OrderStatus.DELIVERED || selectedOrderLive.status === OrderStatus.COMPLETED) && !selectedOrderLive.clientReviewed && (
+                           <button onClick={() => { openReviewModal(selectedOrderLive.id, selectedOrderLive.producerId); setSelectedOrder(null); }} className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-md text-sm font-bold hover:bg-yellow-200 border border-yellow-200"><Star className="w-4 h-4 inline mr-1 fill-current" /> {t('review.rate')}</button>
                         )}
                      </div>
 
@@ -1884,21 +1896,21 @@ export const ClientProfile: React.FC = () => {
          />
 
          <ConfirmModal
-            open={confirmReceiptId !== null}
+            open={completeOrderId !== null}
             tone="info"
-            title={t('order.receiptConfirmTitle')}
-            description={t('order.receiptConfirmBody')}
-            confirmLabel={t('order.confirmReceipt')}
-            busy={confirmingReceipt}
-            onClose={() => { if (!confirmingReceipt) setConfirmReceiptId(null); }}
+            title={t('order.completeConfirmTitle')}
+            description={t('order.completeConfirmBody')}
+            confirmLabel={t('order.completeOrder')}
+            busy={completingOrder}
+            onClose={() => { if (!completingOrder) setCompleteOrderId(null); }}
             onConfirm={async () => {
-               if (!confirmReceiptId) return;
+               if (!completeOrderId) return;
                try {
-                  setConfirmingReceipt(true);
-                  await confirmReceipt(confirmReceiptId);
+                  setCompletingOrder(true);
+                  await completeOrder(completeOrderId);
                } finally {
-                  setConfirmingReceipt(false);
-                  setConfirmReceiptId(null);
+                  setCompletingOrder(false);
+                  setCompleteOrderId(null);
                }
             }}
          />

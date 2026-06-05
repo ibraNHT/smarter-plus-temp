@@ -629,6 +629,37 @@ body.agm-modal-open {
 }
 
 /* ---------------------------------------------------------------
+   Multi-line text clamp — reliable ellipsis (Tailwind CDN + flex)
+--------------------------------------------------------------- */
+.agm-clamp-1,
+.agm-clamp-2,
+.agm-clamp-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
+  overflow-wrap: break-word;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.agm-clamp-1 {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+.agm-clamp-2 {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.agm-clamp-3 {
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+/* ---------------------------------------------------------------
    Card hover lift — apply to offer/product cards
 --------------------------------------------------------------- */
 .agm-card-lift {

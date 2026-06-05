@@ -24,10 +24,11 @@ export const AtiStore: React.FC = () => {
   };
   const { t } = useTranslation();
 
-  const [pageLoading, setPageLoading] = useState(true);
+  const hasCachedCatalog = offers.length > 0 && producers.length > 0;
+  const [pageLoading, setPageLoading] = useState(!hasCachedCatalog);
   useEffect(() => {
     let cancelled = false;
-    setPageLoading(true);
+    if (!hasCachedCatalog) setPageLoading(true);
     Promise.all([refreshOffers(), refreshProducers(), refreshAllReviews()]).finally(() => {
       if (!cancelled) setPageLoading(false);
     });
