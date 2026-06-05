@@ -118,6 +118,14 @@ export function mapDtoToSupportMessage(dto: SupportMessageDto): SupportMessage {
   };
 }
 
+/** User resets their own session from WAITING_FOR_AGENT / AGENT_ACTIVE back to AI_HANDLING. */
+export async function returnSessionToAi(sessionId: string): Promise<void> {
+  await apiFetch<{ ok: boolean }>(
+    `${API_ENDPOINTS.support.sessions}/${sessionId}/return-to-ai`,
+    { method: 'POST' },
+  );
+}
+
 /** Merge server messages into previous list by id (append only new). */
 export function mergeIncomingSupportMessages<T extends { id: string }>(
   prev: T[],

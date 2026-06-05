@@ -303,6 +303,12 @@ interface StoreContextType {
   supportAiTyping: boolean;
   /** True while a support message is being sent (disables composer). */
   supportChatSending: boolean;
+  /** True when the session has been handed over to a human agent. */
+  isHandedOver: boolean;
+  /** True while returnToAiMode() is in-flight. */
+  returningToAi: boolean;
+  /** User voluntarily switches back from agent mode to AI (AgriBot) mode. */
+  returnToAiMode: () => Promise<void>;
   toggleSupportChat: () => void;
   /** Open the support widget and sync agent messages when available. */
   openSupportChat: () => void;
@@ -530,6 +536,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     { id: 'init-1', sender: 'AI', text: 'Hello! I am AgriBot, your automated assistant. How can I help you today?', timestamp: new Date().toISOString() }
   ]);
   const [isHandedOver, setIsHandedOver] = useState(false);
+  const [returningToAi, setReturningToAi] = useState(false);
   const [showGuestForm, setShowGuestForm] = useState(false);
   const [guestEmailInput, setGuestEmailInput] = useState('');
   const [guestNameInput, setGuestNameInput] = useState('');
@@ -813,7 +820,25 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (message.sender === 'AGENT') setIsHandedOver(true);
       if (!current) setSupportSessionId(sessionId);
       const mapped = mapDtoToSupportMessage(message);
-      setSupportMessages((prev) => mergeIncomingSupportMessages(prev, [mapped]));
+      setSupportMessages((prev) => {
+        // Replace an optimistic placeholder (temp id starting with "u-", "a-", or "s-")
+        // that has the same sender+text, rather than appending a duplicate. This happens
+        // because the AI controller saves both the USER message and the AI reply to the
+        // DB (emitting WS events each time) while the frontend has already shown them
+        // optimistically with local temp ids.
+        const dupIdx = prev.findIndex(
+          (m) =>
+            (m.id.startsWith('u-') || m.id.startsWith('a-') || m.id.startsWith('s-')) &&
+            m.sender === mapped.sender &&
+            m.text === mapped.text,
+        );
+        if (dupIdx !== -1) {
+          const next = [...prev];
+          next[dupIdx] = { ...mapped, status: (prev[dupIdx] as any).status };
+          return next;
+        }
+        return mergeIncomingSupportMessages(prev, [mapped]);
+      });
     };
 
     socket.on(
@@ -3219,11 +3244,20 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         );
       const active = open[0];
       if (!active?.sessionId) return;
+
       const agentReady =
         active.status === 'AGENT_ACTIVE' || active.status === 'WAITING_FOR_AGENT';
-      if (!agentReady) return;
 
+      // Always store the session ID so subsequent sends can reuse it.
       setSupportSessionId(active.sessionId);
+
+      if (!agentReady) {
+        // Session is back to AI_HANDLING — make sure the frontend is NOT stuck
+        // in agent mode (e.g. after an admin resets the status).
+        setIsHandedOver(false);
+        return;
+      }
+
       setIsHandedOver(true);
 
       const data = await getSupportMessages(active.sessionId);
@@ -3351,10 +3385,19 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setSupportSessionId(res.sessionId);
       }
 
-      setSupportMessages((prev) => [
-        ...prev,
-        { id: `a-${Date.now()}`, sender: 'AI', text: res.text, timestamp: new Date().toISOString() },
-      ]);
+      setSupportMessages((prev) => {
+        // The backend emits a support:message WS event when it saves the AI reply —
+        // this happens server-side BEFORE the HTTP response is sent back, so the WS
+        // push can arrive first and already be in `prev`. Guard against that race.
+        const alreadyDelivered = prev.some(
+          (m) => m.sender === 'AI' && m.text === res.text,
+        );
+        if (alreadyDelivered) return prev;
+        return [
+          ...prev,
+          { id: `a-${Date.now()}`, sender: 'AI', text: res.text, timestamp: new Date().toISOString() },
+        ];
+      });
       if (res.handover) {
         setIsHandedOver(true);
         setTimeout(
@@ -3398,6 +3441,29 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     await sendSupportMessage(failed.text);
   };
 
+  const returnToAiMode = async () => {
+    if (returningToAi || !supportSessionId) return;
+    setReturningToAi(true);
+    try {
+      const { returnSessionToAi } = await import('./supportSessionsApi');
+      await returnSessionToAi(supportSessionId);
+      setIsHandedOver(false);
+      setSupportMessages((prev) => [
+        ...prev,
+        {
+          id: `sys-${Date.now()}`,
+          sender: 'AI',
+          text: 'You\'ve been reconnected to AgriBot. How can I help you?',
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    } catch (e) {
+      logApiFailure('Failed to return to AI mode', e);
+    } finally {
+      setReturningToAi(false);
+    }
+  };
+
   // Polling for guest support messages when handed over to agent
   useEffect(() => {
     if (!isSupportChatOpen || !isHandedOver || user || !supportSessionId || !guestEmail) return;
@@ -3424,7 +3490,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return () => clearInterval(pollInterval);
   }, [isSupportChatOpen, isHandedOver, user, supportSessionId, guestEmail]);
 
-  // Polling for authenticated users when handed over to agent
+  // Polling for authenticated users when handed over to agent.
+  // Also re-syncs inbox every 15s to detect if an admin resets the session
+  // back to AI_HANDLING (which should unlock Gemini for the user again).
   useEffect(() => {
     if (!isSupportChatOpen || !isHandedOver || !user || !supportSessionId) return;
 
@@ -3439,8 +3507,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }
     }, 5000);
 
-    return () => clearInterval(pollInterval);
-  }, [isSupportChatOpen, isHandedOver, user, supportSessionId]);
+    // Periodically re-sync session status so the frontend can exit agent mode
+    // if an admin resets the session back to AI_HANDLING.
+    const statusInterval = setInterval(() => void syncSupportInbox(), 15000);
+
+    return () => {
+      clearInterval(pollInterval);
+      clearInterval(statusInterval);
+    };
+  }, [isSupportChatOpen, isHandedOver, user, supportSessionId, syncSupportInbox]);
 
   // ─── CHAT & NEGOTIATION ───────────────────────────────────────────────────────
 
@@ -3887,7 +3962,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,
     trackUserSearch, toggleFavorite, moveToFavorites, getRecommendedOffers,
     compareList, addToCompare, removeFromCompare, clearCompare,
-    supportMessages, isSupportChatOpen, supportAiTyping, supportChatSending, toggleSupportChat, openSupportChat, syncSupportInbox, sendSupportMessage, retrySupportMessage, showGuestForm, setShowGuestForm, guestEmailInput, setGuestEmailInput, guestNameInput, setGuestNameInput, guestName, setGuestName, submitGuestForm, supportSessionId, setSupportSessionId,
+    supportMessages, isSupportChatOpen, supportAiTyping, supportChatSending, isHandedOver, returningToAi, returnToAiMode, toggleSupportChat, openSupportChat, syncSupportInbox, sendSupportMessage, retrySupportMessage, showGuestForm, setShowGuestForm, guestEmailInput, setGuestEmailInput, guestNameInput, setGuestNameInput, guestName, setGuestName, submitGuestForm, supportSessionId, setSupportSessionId,
     validateCoupon,
     addPickupPoint, deletePickupPoint,
     changePassword,

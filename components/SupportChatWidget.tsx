@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useStoreOptional } from '../services/storeContext';
-import { X, Send, Headphones, Bot, User, Check, Clock, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Send, Headphones, Bot, User, Check, Clock, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -149,6 +149,9 @@ export const SupportChatWidget: React.FC = () => {
   const compareCount = store?.compareList?.length ?? 0;
 
   const user = store?.user ?? null;
+  const isHandedOver = store?.isHandedOver ?? false;
+  const returningToAi = store?.returningToAi ?? false;
+  const returnToAiMode = store?.returnToAiMode ?? (async () => {});
   const showGuestForm = store?.showGuestForm ?? false;
   const guestEmailInput = store?.guestEmailInput ?? '';
   const setGuestEmailInput = store?.setGuestEmailInput ?? (() => {});
@@ -278,10 +281,12 @@ export const SupportChatWidget: React.FC = () => {
   };
 
   const headerStatus = supportAiTyping
-    ? { label: '.......', dot: 'bg-amber-300 animate-pulse' }
+    ? { label: 'AgriBot is typing…', dot: 'bg-amber-300 animate-pulse' }
     : supportChatSending
       ? { label: 'Sending…', dot: 'bg-blue-300 animate-pulse' }
-      : { label: 'Online', dot: 'bg-green-400 animate-pulse' };
+      : isHandedOver
+        ? { label: 'Waiting for agent…', dot: 'bg-yellow-400 animate-pulse' }
+        : { label: 'Online', dot: 'bg-green-400 animate-pulse' };
 
   if (!store) return null;
 
@@ -327,16 +332,20 @@ export const SupportChatWidget: React.FC = () => {
         >
           <div className="flex items-center text-white min-w-0">
             <div
-              className={`p-1.5 rounded-full mr-2 shrink-0 transition-colors ${supportAiTyping ? 'bg-white/30' : 'bg-white/20'}`}
+              className={`p-1.5 rounded-full mr-2 shrink-0 transition-colors ${supportAiTyping ? 'bg-white/30' : isHandedOver ? 'bg-purple-400/30' : 'bg-white/20'}`}
             >
               {supportAiTyping ? (
                 <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+              ) : isHandedOver ? (
+                <Headphones className="h-5 w-5" aria-hidden />
               ) : (
                 <Bot className="h-5 w-5" />
               )}
             </div>
             <div className="min-w-0">
-              <h3 className="font-bold text-sm truncate">AgriBot Support</h3>
+              <h3 className="font-bold text-sm truncate">
+                {isHandedOver ? 'Human Agent' : 'AgriBot Support'}
+              </h3>
               <span className="text-xs text-blue-100 flex items-center gap-1" aria-live="polite">
                 <span className={`w-2 h-2 rounded-full shrink-0 ${headerStatus.dot}`} />
                 <span className="truncate">{headerStatus.label}</span>
@@ -485,6 +494,34 @@ export const SupportChatWidget: React.FC = () => {
               </div>
             );
           })}
+
+          {/* Agent-mode banner with Back to AgriBot option */}
+          {isHandedOver && (
+            <div className="sticky bottom-0 mx-1 mb-1 rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2.5 text-xs text-yellow-800 shadow-sm agm-chat-bubble-in">
+              <div className="flex items-start gap-2">
+                <Headphones className="h-4 w-4 shrink-0 mt-0.5 text-yellow-600" aria-hidden />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium leading-snug">Waiting for a human agent</p>
+                  <p className="text-yellow-700 mt-0.5 leading-snug">
+                    An agent will reply here shortly. No response yet?
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void returnToAiMode()}
+                    disabled={returningToAi}
+                    className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-white border border-yellow-300 px-2.5 py-1 text-xs font-medium text-yellow-800 hover:bg-yellow-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {returningToAi ? (
+                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                    ) : (
+                      <RefreshCw className="h-3 w-3" aria-hidden />
+                    )}
+                    {returningToAi ? 'Switching…' : 'Back to AgriBot'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* AI typing indicator */}
           {supportAiTyping && (
