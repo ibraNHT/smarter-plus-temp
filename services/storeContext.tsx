@@ -3013,20 +3013,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!producer) return [];
     const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
     let schedule = producer.availability?.[dayName];
-    const hasAnyConfigured =
-      producer.availability &&
-      typeof producer.availability === 'object' &&
-      Object.values(producer.availability).some(
-        (r) => Array.isArray(r) && r.length > 0,
-      );
-    // Local dev: if the producer never saved a schedule, use a simple weekday window so services can be booked.
-    if (
-      (!schedule || schedule.length === 0) &&
-      import.meta.env.DEV &&
-      !hasAnyConfigured
-    ) {
-      schedule = [{ start: '09:00', end: '17:00' }];
-    }
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
@@ -3612,12 +3598,18 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const existing = freshChats.find((c: ChatSession) =>
           c.participantIds?.includes(user.id) && c.participantIds?.includes(pid) && c.offerId === oid
         );
-        if (existing) return existing.id;
+        if (existing) {
+          await fetchMessages(existing.id);
+          return existing.id;
+        }
       }
     } catch (_) {
       // Network error — fall through to check local cache
       const existing = chats.find(c => c.participantIds?.includes(user.id) && c.participantIds?.includes(pid) && c.offerId === oid);
-      if (existing) return existing.id;
+      if (existing) {
+        await fetchMessages(existing.id);
+        return existing.id;
+      }
     }
 
     try {
@@ -3627,6 +3619,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       });
       const normalized = normalizeChatSessionFromApi(res);
       setChats(prev => [...prev, normalized]);
+      await fetchMessages(normalized.id);
       return normalized.id;
     } catch (e) {
       logApiFailure('Failed to create chat:', e);

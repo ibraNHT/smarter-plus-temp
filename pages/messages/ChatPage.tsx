@@ -9,11 +9,12 @@ import { isProducerDashboardUser } from '../../services/producerSession';
 import { Spinner } from '../../components/Spinner';
 import { ListSkeleton } from '../../components/Loaders';
 import { Modal } from '../../components/Modal';
+import { ServiceAppointmentPicker } from '../../components/ServiceAppointmentPicker';
 
 export const ChatPage: React.FC = () => {
    const { chatId } = useParams<{ chatId: string }>();
    const navigate = useNavigate();
-   const { user, chats, messages, typingByChatId, realtimeConnected, sendMessage, retryMessage, emitTyping, respondToProposal, clients, producers, getOfferById, fetchChats, fetchMessages, refreshOffers, refreshProducers, refreshClients } = useStore();
+   const { user, chats, messages, typingByChatId, realtimeConnected, sendMessage, retryMessage, emitTyping, respondToProposal, clients, producers, getOfferById, fetchChats, fetchMessages, refreshOffers, refreshProducers, refreshClients, orders, cart } = useStore();
    const { t } = useTranslation();
 
    const [inputText, setInputText] = useState('');
@@ -39,13 +40,13 @@ export const ChatPage: React.FC = () => {
    // Appointment picker shown when accepting a SERVICE proposal so the booking
    // date reflects the real appointment rather than the moment of acceptance.
    const [apptMsg, setApptMsg] = useState<ChatMessage | null>(null);
-   const [apptDate, setApptDate] = useState('');
+   const [apptSlotIso, setApptSlotIso] = useState<string | null>(null);
 
    const messagesEndRef = useRef<HTMLDivElement>(null);
    const messagesContainerRef = useRef<HTMLDivElement>(null);
    const messageInputRef = useRef<HTMLTextAreaElement>(null);
    const proposalModalWasOpenRef = useRef(false);
-   const isPollingMessagesRef = useRef(false);
+   const messagesInFlightRef = useRef<Set<string>>(new Set());
    const isPollingChatsRef = useRef(false);
    const chatPollTickRef = useRef(0);
    // Track which message ids we've already rendered, so newly-arrived bubbles
@@ -329,21 +330,19 @@ export const ChatPage: React.FC = () => {
       adjustMessageInputHeight();
    }, [inputText, chatId, adjustMessageInputHeight]);
 
-   // Fetch chats + catalog slices on mount; show sidebar loader only when nothing cached yet.
+   // Fetch chats on mount; catalog slices load in the background so the thread opens fast.
    const hasCachedChats = chats.some((c) => c.participantIds?.includes(user?.id ?? ''));
    const [chatListLoading, setChatListLoading] = useState(!hasCachedChats);
    useEffect(() => {
       if (!user) return;
       let cancelled = false;
       if (!hasCachedChats) setChatListLoading(true);
-      Promise.all([
-         fetchChats(),
-         refreshOffers(),
-         refreshProducers(),
-         refreshClients(),
-      ]).finally(() => {
+      void fetchChats().finally(() => {
          if (!cancelled) setChatListLoading(false);
       });
+      void refreshOffers();
+      void refreshProducers();
+      void refreshClients();
       return () => { cancelled = true; };
    }, [user?.id]);
 
@@ -359,8 +358,10 @@ export const ChatPage: React.FC = () => {
          setMessagesLoading(false);
          return;
       }
-      setMessagesLoading(!messages.some((m) => m.chatId === chatId));
-   }, [chatId]);
+      if (messages.some((m) => m.chatId === chatId)) {
+         setMessagesLoading(false);
+      }
+   }, [chatId, messages]);
 
    // Fetch messages when a specific chat is selected, and keep a SAFETY-NET
    // poll running as a backup to the real-time WebSocket push.
@@ -392,11 +393,11 @@ export const ChatPage: React.FC = () => {
          typeof document === 'undefined' || document.visibilityState === 'visible';
 
       const loadMessages = (showLoader: boolean) => {
-         if (isPollingMessagesRef.current) return;
-         isPollingMessagesRef.current = true;
+         if (messagesInFlightRef.current.has(chatId)) return;
+         messagesInFlightRef.current.add(chatId);
          if (showLoader) setMessagesLoading(true);
          Promise.resolve(fetchMessages(chatId)).finally(() => {
-            isPollingMessagesRef.current = false;
+            messagesInFlightRef.current.delete(chatId);
             if (!cancelled) setMessagesLoading(false);
          });
       };
@@ -525,12 +526,13 @@ export const ChatPage: React.FC = () => {
       const price = parseFloat(String(proposalPriceStr).replace(',', '.').trim());
       const qty = parseFloat(String(proposalQtyStr).replace(',', '.').trim());
       let hasFieldError = false;
+      const serviceProposal = String(offer.type ?? '').toUpperCase() === OfferType.SERVICE;
       if (!Number.isFinite(price) || price <= 0) {
-         setProposalPriceError('Enter a valid price per unit (greater than 0).');
+         setProposalPriceError(serviceProposal ? 'Enter a valid service rate (greater than 0).' : 'Enter a valid price per unit (greater than 0).');
          hasFieldError = true;
       }
       if (!Number.isFinite(qty) || qty <= 0) {
-         setProposalQtyError('Enter a valid quantity (greater than 0).');
+         setProposalQtyError(serviceProposal ? 'Enter a valid number of sessions (greater than 0).' : 'Enter a valid quantity (greater than 0).');
          hasFieldError = true;
       }
       if (hasFieldError) return;
@@ -572,22 +574,25 @@ export const ChatPage: React.FC = () => {
       setShowCounterModal(true);
    };
 
+   const getProposalOffer = (msg: ChatMessage) => {
+      const offerId = msg.proposal?.offerId || activeChat?.offerId;
+      if (!offerId) return undefined;
+      const direct = getOfferById(offerId);
+      if (direct) return direct;
+      if (activeChat?.offerId) return getOfferById(activeChat.offerId);
+      return undefined;
+   };
+
    const isServiceProposal = (msg: ChatMessage) => {
-      const offerId = msg.proposal?.offerId;
-      if (!offerId) return false;
-      // Fall back to the chat's listing offer when the proposal offer isn't in the
-      // loaded catalog, so the appointment picker still appears for service bookings.
-      const offer =
-         getOfferById(offerId) ??
-         (activeChat?.offerId ? getOfferById(activeChat.offerId) : undefined);
-      return String((offer as any)?.type ?? '').toUpperCase() === OfferType.SERVICE;
+      const offer = getProposalOffer(msg);
+      return String(offer?.type ?? '').toUpperCase() === OfferType.SERVICE;
    };
 
    /** Accept directly for products; for services, collect the appointment date first. */
    const handleAcceptProposal = (msg: ChatMessage) => {
       if (isServiceProposal(msg)) {
          setApptMsg(msg);
-         setApptDate('');
+         setApptSlotIso(null);
          return;
       }
       setProposalActionBusy(`${msg.id}:accept`);
@@ -595,8 +600,8 @@ export const ChatPage: React.FC = () => {
    };
 
    const confirmServiceAppointment = () => {
-      if (!apptMsg || !apptDate) return;
-      const iso = new Date(apptDate).toISOString();
+      if (!apptMsg || !apptSlotIso) return;
+      const iso = apptSlotIso;
       const m = apptMsg;
       setProposalActionBusy(`${m.id}:accept`);
       void respondToProposal(m.chatId, m.id, 'ACCEPT', undefined, undefined, iso).finally(() => {
@@ -652,6 +657,8 @@ export const ChatPage: React.FC = () => {
    if (!user) return <div className="p-8 text-center">Login required.</div>;
 
    const listingOffer = activeChat?.offerId ? getOfferById(activeChat.offerId) ?? null : null;
+   const isServiceListing = String(listingOffer?.type ?? '').toUpperCase() === OfferType.SERVICE;
+   const listingUnitLabel = listingOffer ? t(`unit.${listingOffer.unit}`) : '';
    const maxPricePerUnit =
       listingOffer != null
          ? (() => {
@@ -856,15 +863,15 @@ export const ChatPage: React.FC = () => {
                                        </div>
                                        <div className="space-y-1 text-sm">
                                           <div className="flex justify-between">
-                                             <span>{t('chat.pricePerUnit')}:</span>
+                                             <span>{isServiceProposal(msg) ? t('chat.serviceRate') : t('chat.pricePerUnit')}:</span>
                                              <span className="font-mono font-bold">{msg.proposal.pricePerUnit} XAF</span>
                                           </div>
                                           <div className="flex justify-between">
-                                             <span>{t('form.quantity')}:</span>
+                                             <span>{isServiceProposal(msg) ? t('chat.serviceSessions') : t('form.quantity')}:</span>
                                              <span className="font-mono font-bold">{msg.proposal.quantity}</span>
                                           </div>
                                           <div className="flex justify-between pt-1 border-t border-white/20 mt-1">
-                                             <span>{t('chat.total')}:</span>
+                                             <span>{isServiceProposal(msg) ? t('chat.estimatedTotal') : t('chat.total')}:</span>
                                              <span className="font-mono font-bold">{(msg.proposal.pricePerUnit * msg.proposal.quantity).toLocaleString()} XAF</span>
                                           </div>
                                        </div>
@@ -879,7 +886,7 @@ export const ChatPage: React.FC = () => {
                                                 className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded font-bold transition-colors min-w-[60px] disabled:opacity-60 inline-flex items-center justify-center gap-1"
                                              >
                                                 {proposalActionBusy === `${msg.id}:accept` ? <Spinner className="h-3.5 w-3.5" /> : null}
-                                                {t('chat.accept')}
+                                                {isServiceProposal(msg) ? t('chat.acceptBooking') : t('chat.accept')}
                                              </button>
                                              <button
                                                 type="button"
@@ -977,6 +984,10 @@ export const ChatPage: React.FC = () => {
                               setProposalModalError('');
                               setProposalPriceError('');
                               setProposalQtyError('');
+                              const openOffer = getOfferById(activeChat?.offerId || '');
+                              if (String(openOffer?.type ?? '').toUpperCase() === OfferType.SERVICE) {
+                                 setProposalQtyStr('1');
+                              }
                               setShowProposalModal(true);
                            }}
                            disabled={!activeChat?.offerId || !(getOfferById(activeChat?.offerId || '')?.isNegotiable ?? false) || !canSendMoreCounters || !canInitiateFirstProposal}
@@ -1044,12 +1055,41 @@ export const ChatPage: React.FC = () => {
             backdropClassName="bg-black/50"
             panelClassName="p-5 sm:p-6"
          >
-                  <h3 className="text-lg font-bold text-gray-900 mb-1">{t('chat.makeProposal')}</h3>
-                  {maxPricePerUnit != null && (
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">
+                     {isServiceListing ? t('chat.makeServiceProposal') : t('chat.makeProposal')}
+                  </h3>
+                  {isServiceListing && listingOffer ? (
+                     <div className="text-xs text-gray-500 mb-3 space-y-1">
+                        <p>
+                           {t('chat.serviceListedRate')
+                              .replace('{price}', Number(listingOffer.price || 0).toLocaleString())
+                              .replace('{unit}', listingUnitLabel)}
+                        </p>
+                        {maxPricePerUnit != null && (
+                           <p>
+                              {minPricePerUnit > 0
+                                 ? t('chat.serviceRateRange')
+                                    .replace('{min}', minPricePerUnit.toLocaleString())
+                                    .replace('{max}', maxPricePerUnit.toLocaleString())
+                                    .replace('{unit}', listingUnitLabel)
+                                 : t('chat.serviceRateUpTo')
+                                    .replace('{max}', maxPricePerUnit.toLocaleString())
+                                    .replace('{unit}', listingUnitLabel)}
+                           </p>
+                        )}
+                        <p className="text-purple-700">
+                           {t('chat.serviceProposalHint').replace('{hours}', String(listingOffer.serviceDuration || 1))}
+                        </p>
+                     </div>
+                  ) : maxPricePerUnit != null ? (
                      <p className="text-xs text-gray-500 mb-3">
-                        Allowed range: {minPricePerUnit.toLocaleString()} - {maxPricePerUnit.toLocaleString()} XAF per unit.
+                        {minPricePerUnit > 0
+                           ? t('chat.productRateRange')
+                              .replace('{min}', minPricePerUnit.toLocaleString())
+                              .replace('{max}', maxPricePerUnit.toLocaleString())
+                           : t('chat.productRateUpTo').replace('{max}', maxPricePerUnit.toLocaleString())}
                      </p>
-                  )}
+                  ) : null}
                   {proposalModalError ? (
                      <p className="text-sm text-red-600 mb-3" role="alert">
                         {proposalModalError}
@@ -1058,12 +1098,22 @@ export const ChatPage: React.FC = () => {
 
                   <div className="space-y-4">
                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('chat.pricePerUnit')} (XAF)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                           {isServiceListing
+                              ? `${t('chat.serviceRate')} (${listingUnitLabel}) (XAF)`
+                              : `${t('chat.pricePerUnit')} (XAF)`}
+                        </label>
                         <input
                            type="text"
                            inputMode="decimal"
                            autoComplete="off"
-                           placeholder={maxPricePerUnit != null ? `${minPricePerUnit.toLocaleString()} - ${maxPricePerUnit.toLocaleString()}` : 'e.g. 2500'}
+                           placeholder={
+                              isServiceListing && listingOffer
+                                 ? String(Number(listingOffer.price || 0).toLocaleString())
+                                 : maxPricePerUnit != null
+                                    ? `${minPricePerUnit.toLocaleString()} - ${maxPricePerUnit.toLocaleString()}`
+                                    : 'e.g. 2500'
+                           }
                            value={proposalPriceStr}
                            onChange={(e) => {
                               setProposalPriceStr(e.target.value.replace(/[^\d.,]/g, ''));
@@ -1078,12 +1128,14 @@ export const ChatPage: React.FC = () => {
                         ) : null}
                      </div>
                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('form.quantity')}</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                           {isServiceListing ? t('chat.serviceSessions') : t('form.quantity')}
+                        </label>
                         <input
                            type="text"
                            inputMode="decimal"
                            autoComplete="off"
-                           placeholder="e.g. 10"
+                           placeholder={isServiceListing ? '1' : 'e.g. 10'}
                            value={proposalQtyStr}
                            onChange={(e) => {
                               setProposalQtyStr(e.target.value.replace(/[^\d.,]/g, ''));
@@ -1100,7 +1152,7 @@ export const ChatPage: React.FC = () => {
                      {proposalTotalPreview != null && (
                         <div className="bg-gray-50 p-3 rounded text-sm">
                            <div className="flex justify-between font-bold text-gray-900">
-                              <span>Total:</span>
+                              <span>{isServiceListing ? t('chat.estimatedTotal') : t('chat.total')}:</span>
                               <span>{Math.round(proposalTotalPreview).toLocaleString()} XAF</span>
                            </div>
                         </div>
@@ -1142,17 +1194,29 @@ export const ChatPage: React.FC = () => {
          >
             <h3 className="text-lg font-bold text-gray-900 mb-1">{t('chat.appointmentTitle')}</h3>
             <p className="text-sm text-gray-500 mb-4">{t('chat.appointmentHint')}</p>
-            <input
-               type="datetime-local"
-               value={apptDate}
-               onChange={(e) => setApptDate(e.target.value)}
-               className="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
-            />
+            {apptMsg && (() => {
+               const offer = getProposalOffer(apptMsg);
+               if (!offer?.producerId) {
+                  return <p className="text-sm text-red-600">Unable to load service details. Refresh and try again.</p>;
+               }
+               return (
+                  <ServiceAppointmentPicker
+                     producerId={offer.producerId}
+                     durationHours={offer.serviceDuration || 1}
+                     selectedSlotIso={apptSlotIso}
+                     onSelectSlot={setApptSlotIso}
+                     offerId={offer.id}
+                     clientId={user?.clientId}
+                     orders={orders}
+                     cart={cart}
+                  />
+               );
+            })()}
             <div className="flex justify-end gap-3 pt-5">
                <button type="button" onClick={() => setApptMsg(null)} disabled={!!proposalActionBusy} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:opacity-50">{t('form.cancel')}</button>
                <button
                   type="button"
-                  disabled={!apptDate || !!proposalActionBusy}
+                  disabled={!apptSlotIso || !!proposalActionBusy}
                   onClick={confirmServiceAppointment}
                   className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-bold hover:bg-green-700 disabled:opacity-50 inline-flex items-center gap-1"
                >
@@ -1176,16 +1240,36 @@ export const ChatPage: React.FC = () => {
             backdropClassName="bg-black/50"
             panelClassName="p-5 sm:p-6"
          >
-                  <h3 className="text-lg font-bold text-gray-900 mb-1">Send a Counter-Offer</h3>
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">{t('chat.counter')}</h3>
                   <p className="text-sm text-gray-500 mb-4">
-                     Propose your own price and quantity. The other party will receive it as a new proposal.
+                     {isServiceListing
+                        ? 'Propose your own service rate and number of sessions.'
+                        : 'Propose your own price and quantity. The other party will receive it as a new proposal.'}
                      {maxPricePerUnit != null && (
-                        <> Allowed price range is {minPricePerUnit.toLocaleString()} to {maxPricePerUnit.toLocaleString()} XAF.</>
+                        <> {isServiceListing
+                           ? (minPricePerUnit > 0
+                              ? t('chat.serviceRateRange')
+                                 .replace('{min}', minPricePerUnit.toLocaleString())
+                                 .replace('{max}', maxPricePerUnit.toLocaleString())
+                                 .replace('{unit}', listingUnitLabel)
+                              : t('chat.serviceRateUpTo')
+                                 .replace('{max}', maxPricePerUnit.toLocaleString())
+                                 .replace('{unit}', listingUnitLabel))
+                           : (minPricePerUnit > 0
+                              ? t('chat.productRateRange')
+                                 .replace('{min}', minPricePerUnit.toLocaleString())
+                                 .replace('{max}', maxPricePerUnit.toLocaleString())
+                              : t('chat.productRateUpTo').replace('{max}', maxPricePerUnit.toLocaleString()))}
+                        </>
                      )}
                   </p>
                   <div className="space-y-4">
                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('chat.pricePerUnit')} (XAF)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                           {isServiceListing
+                              ? `${t('chat.serviceRate')} (${listingUnitLabel}) (XAF)`
+                              : `${t('chat.pricePerUnit')} (XAF)`}
+                        </label>
                         <input
                            type="number"
                            min={minPricePerUnit > 0 ? minPricePerUnit : 0.01}
@@ -1204,7 +1288,9 @@ export const ChatPage: React.FC = () => {
                         ) : null}
                      </div>
                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('form.quantity')}</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                           {isServiceListing ? t('chat.serviceSessions') : t('form.quantity')}
+                        </label>
                         <input
                            type="number" min="0.01" step="0.01"
                            value={counterQty || ''}
@@ -1221,7 +1307,7 @@ export const ChatPage: React.FC = () => {
                      </div>
                      <div className="bg-gray-50 p-3 rounded text-sm">
                         <div className="flex justify-between font-bold text-gray-900">
-                           <span>New Total:</span>
+                           <span>{isServiceListing ? t('chat.estimatedTotal') : 'New Total'}:</span>
                            <span>{(Number(counterPrice) * Number(counterQty)).toLocaleString()} XAF</span>
                         </div>
                      </div>

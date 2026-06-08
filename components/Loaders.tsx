@@ -77,6 +77,27 @@ export const ListSkeleton: React.FC<{ rows?: number; className?: string }> = ({ 
 );
 
 /**
+ * Shimmer grid mimicking service time-slot buttons (3-column layout).
+ */
+export const ServiceSlotsSkeleton: React.FC<{
+  count?: number;
+  label?: string;
+  className?: string;
+}> = ({ count = 6, label = 'Loading available slots…', className = '' }) => (
+  <div
+    className={`col-span-3 grid grid-cols-3 gap-2 ${className}`}
+    role="status"
+    aria-live="polite"
+    aria-busy="true"
+  >
+    <span className="sr-only">{label}</span>
+    {Array.from({ length: count }).map((_, i) => (
+      <Shimmer key={i} className="h-9 rounded border border-gray-100/80" />
+    ))}
+  </div>
+);
+
+/**
  * Inline button content with spinner — convenience wrapper.
  */
 export const ButtonSpinner: React.FC<{ label?: string; size?: number }> = ({ label, size = 16 }) => (

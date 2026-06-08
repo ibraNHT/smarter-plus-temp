@@ -7,6 +7,7 @@ import { ArrowLeft, ShoppingCart, MessageCircle, MapPin, ShieldCheck, Package, P
 import { MarketType, OfferType, OrderStatus, UserRole, Review } from '../../types';
 import { SEO } from '../../components/SEO';
 import { ProductDetailsSkeleton } from '../../components/skeletons/ProductDetailsSkeleton';
+import { ServiceSlotsSkeleton } from '../../components/Loaders';
 import { Spinner } from '../../components/Spinner';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { offerImageHero, offerImageInBox } from '../../utils/offerImageDisplay';
@@ -60,6 +61,7 @@ export const ProductDetails: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [slotBlockReason, setSlotBlockReason] = useState<string>('');
+  const [slotsLoading, setSlotsLoading] = useState(false);
   const [serviceSlotStates, setServiceSlotStates] = useState<Array<{
     time: Date;
     status: 'AVAILABLE' | 'BOOKED_BY_ME' | 'BOOKED' | 'BLOCKED';
@@ -176,6 +178,7 @@ export const ProductDetails: React.FC = () => {
       const d = String(dateObj.getDate()).padStart(2, '0');
       const dateStr = `${y}-${m}-${d}`;
       const durationHours = offer.serviceDuration || 1;
+      setSlotsLoading(true);
       try {
         const res = await apiFetch<{
           blocked: boolean;
@@ -251,6 +254,8 @@ export const ProductDetails: React.FC = () => {
         setSlotBlockReason('Availability check failed. Please try another date.');
         setServiceSlotStates([]);
         setSelectedSlot(null);
+      } finally {
+        if (alive) setSlotsLoading(false);
       }
     };
     void loadAvailability();
@@ -531,7 +536,9 @@ export const ProductDetails: React.FC = () => {
                       />
                     </div>
                     <div className="grid grid-cols-3 gap-2">
-                      {serviceSlotStates.length === 0 ? (
+                      {slotsLoading ? (
+                        <ServiceSlotsSkeleton label={t('product.loadingSlots')} />
+                      ) : serviceSlotStates.length === 0 ? (
                         <div className="col-span-3 space-y-2 py-2">
                           <p className="text-sm text-gray-500 italic">
                             {slotBlockReason || 'No slots available for this date.'}

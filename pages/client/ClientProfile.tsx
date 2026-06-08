@@ -31,6 +31,7 @@ import {
 import { useFormik } from 'formik';
 import { z } from 'zod';
 import { showAppToast } from '../../services/appToast';
+import { ServiceAppointmentPicker } from '../../components/ServiceAppointmentPicker';
 
 const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
 
@@ -206,7 +207,7 @@ export const ClientProfile: React.FC = () => {
    const [cancelRequestReason, setCancelRequestReason] = useState('');
    const [requestingCancel, setRequestingCancel] = useState(false);
    const [rescheduleOrderId, setRescheduleOrderId] = useState<string | null>(null);
-   const [rescheduleDate, setRescheduleDate] = useState('');
+   const [rescheduleSlotIso, setRescheduleSlotIso] = useState<string | null>(null);
    const [reschedulingAppt, setReschedulingAppt] = useState(false);
    const [favoriteToRemove, setFavoriteToRemove] = useState<{ id: string; title?: string } | null>(null);
    const [locationToRemoveIdx, setLocationToRemoveIdx] = useState<number | null>(null);
@@ -799,16 +800,25 @@ export const ClientProfile: React.FC = () => {
    const canRescheduleAppointment = (order: Order) =>
       orderHasService(order)
       && [OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT, OrderStatus.PAID_IN_PREPARATION].includes(order.status);
-   const firstServiceBookingDate = (order: Order): string => {
+   const firstServiceBookingIso = (order: Order): string | null => {
       const svc = (order.items || []).find((it: any) => String(it.type ?? '').toUpperCase() === 'SERVICE' && it.bookingDate);
       const raw = (svc as any)?.bookingDate || order.requestedDeliveryDate;
-      if (!raw) return '';
+      if (!raw) return null;
       const d = new Date(raw);
-      if (Number.isNaN(d.getTime())) return '';
-      const pad = (n: number) => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      return Number.isNaN(d.getTime()) ? null : d.toISOString();
    };
-   const openRescheduleModal = (order: Order) => { setRescheduleOrderId(order.id); setRescheduleDate(firstServiceBookingDate(order) || ''); };
+   const openRescheduleModal = (order: Order) => {
+      setRescheduleOrderId(order.id);
+      setRescheduleSlotIso(firstServiceBookingIso(order));
+   };
+   const rescheduleOrder = rescheduleOrderId ? orders.find((o) => o.id === rescheduleOrderId) ?? null : null;
+   const rescheduleServiceItem = rescheduleOrder
+      ? (rescheduleOrder.items || []).find((it: any) => String(it.type ?? '').toUpperCase() === 'SERVICE')
+      : null;
+   const rescheduleDurationHours = Math.max(
+      1,
+      Number((rescheduleServiceItem as any)?.serviceDuration ?? 1) || 1,
+   );
    const openCancelRequestModal = (orderId: string) => { setCancelRequestOrderId(orderId); setCancelRequestReason(''); };
    const getStatusBadge = (status: OrderStatus) => (
       <span
@@ -1825,23 +1835,29 @@ export const ClientProfile: React.FC = () => {
                <button onClick={() => { if (!reschedulingAppt) setRescheduleOrderId(null); }}><X className="h-5 w-5 text-gray-400" /></button>
             </div>
             <p className="text-sm text-gray-500 mb-3">{t('order.rescheduleHint')}</p>
-            <input
-               type="datetime-local"
-               value={rescheduleDate}
-               onChange={(e) => setRescheduleDate(e.target.value)}
-               className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
-            />
+            {rescheduleOrder?.producerId ? (
+               <ServiceAppointmentPicker
+                  producerId={rescheduleOrder.producerId}
+                  durationHours={rescheduleDurationHours}
+                  selectedSlotIso={rescheduleSlotIso}
+                  onSelectSlot={setRescheduleSlotIso}
+                  clientId={user?.clientId}
+                  orders={orders}
+                  currentBookingIso={firstServiceBookingIso(rescheduleOrder) ?? undefined}
+               />
+            ) : (
+               <p className="text-sm text-red-600">Unable to load appointment details.</p>
+            )}
             <div className="flex justify-end gap-3 pt-4">
                <button type="button" onClick={() => setRescheduleOrderId(null)} disabled={reschedulingAppt} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:opacity-50">{t('form.cancel')}</button>
                <button
                   type="button"
-                  disabled={!rescheduleDate || reschedulingAppt}
+                  disabled={!rescheduleSlotIso || reschedulingAppt}
                   onClick={async () => {
-                     if (!rescheduleOrderId || !rescheduleDate) return;
+                     if (!rescheduleOrderId || !rescheduleSlotIso) return;
                      try {
                         setReschedulingAppt(true);
-                        const iso = new Date(rescheduleDate).toISOString();
-                        const ok = await updateAppointment(rescheduleOrderId, iso);
+                        const ok = await updateAppointment(rescheduleOrderId, rescheduleSlotIso);
                         if (ok) setRescheduleOrderId(null);
                      } finally {
                         setReschedulingAppt(false);
