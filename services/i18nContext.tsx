@@ -536,7 +536,10 @@ const translations: Record<string, Record<Language, string>> = {
   'profile.upgrade': { en: 'Become a Producer', fr: 'Devenir Producteur' },
   'profile.upgradeDesc': { en: 'Upgrade your account to start selling your own products.', fr: 'Passez votre compte en mode producteur pour commencer à vendre.' },
   'profile.producerApprovedTitle': { en: 'Approved Producer', fr: 'Producteur approuvé' },
-  'profile.producerApprovedMsg': { en: 'Your producer account is approved. You can publish offers normally.', fr: 'Votre compte producteur est approuvé. Vous pouvez publier des offres normalement.' },
+  'profile.producerApprovedMsg': {
+    en: 'Your producer account is approved. You can publish offers and still buy from other producers or the ATI store as a client.',
+    fr: 'Votre compte producteur est approuvé. Vous pouvez publier des offres et continuer à acheter chez d\'autres producteurs ou à la boutique ATI en tant que client.',
+  },
   'profile.producerPendingTitle': { en: 'Producer account pending', fr: 'Compte producteur en attente' },
   'profile.producerPendingMsg': {
     en: 'Your producer account is pending. You can still buy as a client. Enter your NIU / tax ID and upload your NIU certificate (and business registration if applicable) below to complete verification.',

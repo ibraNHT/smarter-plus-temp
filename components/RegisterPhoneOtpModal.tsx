@@ -61,6 +61,10 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
       setError(t('legal.mustAccept'));
       return;
     }
+    if (!email?.trim()) {
+      setError('Email is required to receive your verification code.');
+      return;
+    }
     if (!phone) {
       setError('Phone number is required.');
       return;
@@ -84,8 +88,8 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
       setCodeSent(true);
       setInfo(
         mode === 'initial'
-          ? `We sent a 6-digit code to ${phone}${email ? ` and ${email}` : ''}.`
-          : `New code sent to ${phone}${email ? ` and ${email}` : ''}.`,
+          ? `We sent a 6-digit code to ${email}.`
+          : `New code sent to ${email}.`,
       );
       setCooldown(RESEND_COOLDOWN_SECONDS);
       lastSentForRef.current = phone;
@@ -142,7 +146,7 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
         message?: string;
       }>(API_ENDPOINTS.auth.registerVerifyPhoneOtp, {
         method: 'POST',
-        body: JSON.stringify({ phone, code }),
+        body: JSON.stringify({ phone, email, code }),
         silent401: true,
       } as any);
       if (res?.success && res.registrationToken) {
@@ -197,7 +201,7 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
                   <ShieldCheck className="h-5 w-5" />
                 </span>
                 <h3 id="register-phone-otp-title" className="text-lg font-semibold text-gray-900">
-                  Verify your phone
+                  Verify your email
                 </h3>
               </div>
 
@@ -232,7 +236,7 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
                   <button
                     type="button"
                     onClick={() => void requestCode('initial')}
-                    disabled={!legalAccepted || isRequesting || !phone}
+                    disabled={!legalAccepted || isRequesting || !email?.trim() || !phone}
                     className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 rounded-md bg-primary-600 text-white font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isRequesting && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -314,7 +318,7 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
                         disabled={isVerifying}
                         className="text-gray-500 hover:text-gray-700 disabled:opacity-40"
                       >
-                        Change phone number
+                        Go back
                       </button>
                     </div>
                   </>

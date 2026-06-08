@@ -1307,25 +1307,41 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const refreshClients = async (opts?: { force?: boolean }) => {
     if (!getToken()) return;
     const session = userRef.current;
-    if (session?.role === UserRole.CLIENT) {
+
+    const fetchMyBuyerProfile = async (userId: string) =>
+      cached(
+        [...QK.clients(), 'me', userId] as const,
+        () =>
+          apiFetch<any>(API_ENDPOINTS.profiles.meClient, { silent401: true } as any).catch(
+            () => apiFetch<any>(API_ENDPOINTS.clients.me, { silent401: true } as any),
+          ),
+        STALE.catalog,
+        opts?.force,
+      );
+
+    // Clients and producers both need a buyer profile for checkout. Producers
+    // (PENDING or VALIDATED) get one mirrored from their producer profile on first call.
+    if (session && (session.role === UserRole.CLIENT || isProducerDashboardUser(session))) {
       try {
-        const me = await cached(
-          [...QK.clients(), 'me', session.id] as const,
-          () =>
-            apiFetch<any>(API_ENDPOINTS.profiles.meClient, { silent401: true } as any).catch(
-              () => apiFetch<any>(API_ENDPOINTS.clients.me, { silent401: true } as any),
-            ),
-          STALE.catalog,
-          opts?.force,
-        );
+        const me = await fetchMyBuyerProfile(session.id);
         if (me?.id) {
           upsertClientInStore({ ...me, userId: (me as any).userId ?? session.id });
+          if (session.clientId !== me.id) {
+            setUser((prev) => {
+              if (!prev) return prev;
+              const next = { ...prev, clientId: me.id };
+              localStorage.setItem('currentUser', JSON.stringify(next));
+              return next;
+            });
+          }
+          if (isProducerDashboardUser(session)) return;
           return;
         }
       } catch {
         /* fall through to list */
       }
     }
+
     const data = await cached(
       QK.clients(),
       () => apiFetch<any[]>(API_ENDPOINTS.clients.list, { silent401: true } as any),
@@ -1996,7 +2012,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (otpP == null || String(otpP).trim() === '') {
         return {
           success: false,
-          message: 'Phone verification is required. Complete the OTP step before creating your account.',
+          message: 'Email verification is required. Complete the OTP step before creating your account.',
         };
       }
       producerRegisterBody.phoneVerificationToken = String(otpP).trim();
@@ -2076,7 +2092,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (otpC == null || String(otpC).trim() === '') {
         return {
           success: false,
-          message: 'Phone verification is required. Complete the OTP step before creating your account.',
+          message: 'Email verification is required. Complete the OTP step before creating your account.',
         };
       }
       clientRegisterBody.phoneVerificationToken = String(otpC).trim();

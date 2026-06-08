@@ -7,7 +7,6 @@ import { User, Mail, Phone, MapPin, Camera, Lock, Eye, EyeOff, Loader2 } from 'l
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { useFormik } from 'formik';
 import { z } from 'zod';
-import { RegisterPhoneOtpModal } from '../../components/RegisterPhoneOtpModal';
 import {
   AuthOnboardingLayout,
   AuthFormActions,
@@ -15,6 +14,7 @@ import {
   authActionButtonSecondary,
 } from '../../components/AuthOnboardingLayout';
 import { FieldError, inputErrorClasses, showFieldError } from '../../components/FieldError';
+import { RegisterPhoneOtpModal } from '../../components/RegisterPhoneOtpModal';
 import { buildRegisterPhone } from '../../utils/registerPhone';
 
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
@@ -63,17 +63,29 @@ export const RegisterClient: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState('');
-  // Phone-verification gate — opens AFTER the form passes validation so we
-  // never spam SMS for incomplete forms. Holds the in-flight payload until
-  // the OTP token comes back, then submits the registration.
   const [otpOpen, setOtpOpen] = useState(false);
+  const [otpPhone, setOtpPhone] = useState('');
+  const [otpEmail, setOtpEmail] = useState('');
+  const [registerError, setRegisterError] = useState('');
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
-  const [pendingPhone, setPendingPhone] = useState('');
-  const [pendingEmail, setPendingEmail] = useState('');
-  const [otpRegisterError, setOtpRegisterError] = useState('');
-  const registrationTokenRef = useRef<string | null>(null);
 
   const avatarFileRef = useRef<File | null>(null);
+  const pendingValuesRef = useRef<{
+    firstName: string;
+    lastName: string;
+    gender: string;
+    dateOfBirth: string;
+    email: string;
+    phoneCode: string;
+    phone: string;
+    address: string;
+    region: string;
+    city: string;
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const pendingPasswordRef = useRef('');
+  const verificationTokenRef = useRef('');
 
   const registerClientSchema = z
     .object({
@@ -126,36 +138,33 @@ export const RegisterClient: React.FC = () => {
       }
       return nextErrors;
     },
-    // Form submit only OPENS the OTP modal. The actual register API call is
-    // gated behind `submitWithToken`, which is invoked by the OTP modal once
-    // the user proves they control the phone (and/or email).
     onSubmit: async (values, { setSubmitting }) => {
       setError('');
-      setOtpRegisterError('');
-      try {
-        const fullPhone = buildRegisterPhone(values.phoneCode, values.phone);
-        setPendingPhone(fullPhone);
-        setPendingEmail(values.email.trim());
-        setOtpOpen(true);
-      } finally {
-        setSubmitting(false);
-      }
+      setRegisterError('');
+      pendingValuesRef.current = values;
+      pendingPasswordRef.current = values.password;
+      setOtpPhone(buildRegisterPhone(values.phoneCode, values.phone));
+      setOtpEmail(values.email.trim());
+      setOtpOpen(true);
+      setSubmitting(false);
     },
   });
 
-  const submitWithToken = async (registrationToken: string) => {
-    const values = formik.values;
-    const address = String(values.address ?? '').trim();
-    const addressParts = address.split(',').map((x) => x.trim()).filter(Boolean);
-    const inferredCity = String(values.city ?? '').trim() || addressParts[1] || addressParts[0] || 'Unknown';
-    const inferredRegion = String(values.region ?? '').trim() || addressParts[2] || addressParts[1] || 'Unknown';
+  const completeRegistration = async (phoneVerificationToken: string) => {
+    const values = pendingValuesRef.current;
+    if (!values) return;
 
-    registrationTokenRef.current = registrationToken;
+    verificationTokenRef.current = phoneVerificationToken;
     setIsCreatingAccount(true);
+    setRegisterError('');
     setIsLoading(true);
-    setError('');
-    setOtpRegisterError('');
     try {
+      const fullPhone = buildRegisterPhone(values.phoneCode, values.phone);
+      const address = String(values.address ?? '').trim();
+      const addressParts = address.split(',').map((x) => x.trim()).filter(Boolean);
+      const inferredCity = String(values.city ?? '').trim() || addressParts[1] || addressParts[0] || 'Unknown';
+      const inferredRegion = String(values.region ?? '').trim() || addressParts[2] || addressParts[1] || 'Unknown';
+
       const result = await registerClient({
         name: `${values.firstName} ${values.lastName}`,
         firstName: values.firstName,
@@ -163,8 +172,7 @@ export const RegisterClient: React.FC = () => {
         gender: values.gender as 'MALE' | 'FEMALE',
         dateOfBirth: values.dateOfBirth,
         email: values.email,
-        phone: pendingPhone,
-        phoneVerificationToken: registrationToken,
+        phone: fullPhone,
         locations: [{
           lat: Number(values.lat) || 0,
           lng: Number(values.lng) || 0,
@@ -175,19 +183,18 @@ export const RegisterClient: React.FC = () => {
         favorites: [],
         searchHistory: [],
         referrerCode: refCode || undefined,
-      }, values.password, avatarFileRef.current);
+        phoneVerificationToken,
+      }, pendingPasswordRef.current, avatarFileRef.current);
 
       if (result.success) {
         setOtpOpen(false);
         navigate('/client/profile?tab=orders', { replace: true });
       } else {
-        const msg = result.message || 'Registration failed.';
-        setOtpRegisterError(msg);
-        setError(msg);
+        setRegisterError(result.message || 'Registration failed.');
       }
     } finally {
-      setIsLoading(false);
       setIsCreatingAccount(false);
+      setIsLoading(false);
     }
   };
 
@@ -500,7 +507,7 @@ export const RegisterClient: React.FC = () => {
           <button type="button" onClick={() => navigate('/')} className={authActionButtonSecondary}>
             {t('form.cancel')}
           </button>
-          <button type="submit" disabled={isLoading || otpOpen} className={authActionButtonPrimary}>
+          <button type="submit" disabled={isLoading} className={authActionButtonPrimary}>
             {isLoading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             {isLoading ? 'Creating…' : t('form.create')}
           </button>
@@ -509,21 +516,19 @@ export const RegisterClient: React.FC = () => {
 
       <RegisterPhoneOtpModal
         open={otpOpen}
-        phone={pendingPhone}
-        email={pendingEmail}
-        isCreatingAccount={isCreatingAccount}
-        registerError={otpRegisterError}
-        onRetryRegister={() => {
-          if (registrationTokenRef.current) {
-            void submitWithToken(registrationTokenRef.current);
-          }
-        }}
-        onVerified={(token) => void submitWithToken(token)}
+        phone={otpPhone}
+        email={otpEmail}
+        onVerified={(token) => void completeRegistration(token)}
         onCancel={() => {
-          if (isCreatingAccount) return;
           setOtpOpen(false);
-          setOtpRegisterError('');
-          registrationTokenRef.current = null;
+          setIsLoading(false);
+        }}
+        isCreatingAccount={isCreatingAccount}
+        registerError={registerError}
+        onRetryRegister={() => {
+          if (verificationTokenRef.current) {
+            void completeRegistration(verificationTokenRef.current);
+          }
         }}
       />
     </AuthOnboardingLayout>

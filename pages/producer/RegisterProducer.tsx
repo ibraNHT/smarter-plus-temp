@@ -8,7 +8,6 @@ import { ProducerType, Location } from '../../types';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { useFormik } from 'formik';
 import { z } from 'zod';
-import { RegisterPhoneOtpModal } from '../../components/RegisterPhoneOtpModal';
 import {
   AuthOnboardingLayout,
   AuthFormActions,
@@ -16,6 +15,7 @@ import {
   authActionButtonSecondary,
 } from '../../components/AuthOnboardingLayout';
 import { FieldError, inputErrorClasses, showFieldError } from '../../components/FieldError';
+import { RegisterPhoneOtpModal } from '../../components/RegisterPhoneOtpModal';
 import { buildRegisterPhone } from '../../utils/registerPhone';
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
 const PASSWORD_RULE_MESSAGE = 'Password must be at least 4 characters with 1 letter, 1 number, and 1 special character.';
@@ -70,17 +70,27 @@ export const RegisterProducer: React.FC = () => {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  // Phone-verification gate — opens only after the form passes validation
-  // AND at least one location is present. Holds the registration payload
-  // until the SMS+email OTP is verified.
-  const [otpOpen, setOtpOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
-  const [pendingPhone, setPendingPhone] = useState('');
-  const [pendingEmail, setPendingEmail] = useState('');
-  const [otpRegisterError, setOtpRegisterError] = useState('');
   const [locationsTouched, setLocationsTouched] = useState(false);
-  const registrationTokenRef = useRef<string | null>(null);
+  const [otpOpen, setOtpOpen] = useState(false);
+  const [otpPhone, setOtpPhone] = useState('');
+  const [otpEmail, setOtpEmail] = useState('');
+  const [registerError, setRegisterError] = useState('');
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
+
+  const pendingValuesRef = useRef<{
+    type: ProducerType;
+    name: string;
+    email: string;
+    phoneCode: string;
+    phone: string;
+    description: string;
+    productionTypes: string[];
+    taxIdentificationNumber: string;
+  } | null>(null);
+  const pendingPasswordRef = useRef('');
+  const pendingLocationsRef = useRef<Location[]>([]);
+  const verificationTokenRef = useRef('');
 
   const registerProducerSchema = z.object({
     type: z.enum(['BUSINESS', 'INDIVIDUAL']),
@@ -131,55 +141,56 @@ export const RegisterProducer: React.FC = () => {
     },
     onSubmit: async (values, { setSubmitting }) => {
       setError('');
+      setRegisterError('');
       setLocationsTouched(true);
-      try {
-        // validate() already blocks submit when locations is empty; keep as safety net.
-        if (locations.length === 0) return;
-        setOtpRegisterError('');
-        const fullPhone = buildRegisterPhone(values.phoneCode, values.phone);
-        setPendingPhone(fullPhone);
-        setPendingEmail(values.email.trim());
-        setOtpOpen(true);
-      } finally {
-        // Formik 2.4+ does not reset isSubmitting for sync onSubmit — must clear explicitly.
+      if (locations.length === 0) {
         setSubmitting(false);
+        return;
       }
+
+      pendingValuesRef.current = values;
+      pendingPasswordRef.current = values.password;
+      pendingLocationsRef.current = locations;
+      setOtpPhone(buildRegisterPhone(values.phoneCode, values.phone));
+      setOtpEmail(values.email.trim());
+      setOtpOpen(true);
+      setSubmitting(false);
     },
   });
 
-  const submitWithToken = async (registrationToken: string) => {
-    const values = formik.values;
-    registrationTokenRef.current = registrationToken;
+  const completeRegistration = async (phoneVerificationToken: string) => {
+    const values = pendingValuesRef.current;
+    if (!values) return;
+
+    verificationTokenRef.current = phoneVerificationToken;
     setIsCreatingAccount(true);
+    setRegisterError('');
     setIsSubmitting(true);
-    setError('');
-    setOtpRegisterError('');
     try {
+      const fullPhone = buildRegisterPhone(values.phoneCode, values.phone);
       const result = await registerProducer({
         type: values.type,
         name: values.name,
         email: values.email,
-        phone: pendingPhone,
-        phoneVerificationToken: registrationToken,
+        phone: fullPhone,
         description: values.description,
-        locations: locations,
+        locations: pendingLocationsRef.current,
         certifications: [],
         productionTypes: values.productionTypes.length > 0 ? values.productionTypes : ['Agriculture'],
         referrerCode: refCode || undefined,
         taxIdentificationNumber: values.taxIdentificationNumber.trim() || undefined,
-      } as any, values.password);
+        phoneVerificationToken,
+      } as any, pendingPasswordRef.current);
 
       if (result.success) {
         setOtpOpen(false);
         navigate('/producer/dashboard?welcome=pending', { replace: true });
       } else {
-        const msg = result.message || 'Registration failed.';
-        setOtpRegisterError(msg);
-        setError(msg);
+        setRegisterError(result.message || 'Registration failed.');
       }
     } finally {
-      setIsSubmitting(false);
       setIsCreatingAccount(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -693,7 +704,7 @@ export const RegisterProducer: React.FC = () => {
           </button>
           <button
             type="submit"
-            disabled={formik.isSubmitting || isSubmitting || otpOpen}
+            disabled={formik.isSubmitting || isSubmitting}
             className={authActionButtonPrimary}
           >
             {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -704,21 +715,19 @@ export const RegisterProducer: React.FC = () => {
 
       <RegisterPhoneOtpModal
         open={otpOpen}
-        phone={pendingPhone}
-        email={pendingEmail}
-        isCreatingAccount={isCreatingAccount}
-        registerError={otpRegisterError}
-        onRetryRegister={() => {
-          if (registrationTokenRef.current) {
-            void submitWithToken(registrationTokenRef.current);
-          }
-        }}
-        onVerified={(token) => void submitWithToken(token)}
+        phone={otpPhone}
+        email={otpEmail}
+        onVerified={(token) => void completeRegistration(token)}
         onCancel={() => {
-          if (isCreatingAccount) return;
           setOtpOpen(false);
-          setOtpRegisterError('');
-          registrationTokenRef.current = null;
+          setIsSubmitting(false);
+        }}
+        isCreatingAccount={isCreatingAccount}
+        registerError={registerError}
+        onRetryRegister={() => {
+          if (verificationTokenRef.current) {
+            void completeRegistration(verificationTokenRef.current);
+          }
         }}
       />
     </AuthOnboardingLayout>
