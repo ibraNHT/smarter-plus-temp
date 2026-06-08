@@ -366,6 +366,10 @@ export interface Order {
   pickupPointId?: string; // New
   /** HOME: address chosen at checkout (persisted on order; not profile order). */
   shippingAddress?: PreferredHomeDeliverySnapshot | null;
+  /** When the producer/admin marked the order delivered. */
+  deliveredAt?: string;
+  /** When escrow funds were released to the producer (end of settlement window). */
+  settledAt?: string;
 }
 
 export interface Review {

@@ -188,6 +188,7 @@ import { io, Socket } from 'socket.io-client';
 import { isWebAppAllowedRole, isWebAppSessionBlocked } from './authRoles';
 import { isProducerDashboardUser, isManagerSession, producerAccountUserId } from './producerSession';
 import { findProducerForUser } from '../utils/producerAccountStatus';
+import { normalizeOrderStatus } from '../utils/orderActions';
 import { useSessionStore } from '../stores/sessionStore';
 import { API_ENDPOINTS } from '../client-api/endpoints';
 import { queryClient } from '../client-api/queryClient';
@@ -1053,6 +1054,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const mapOrderRow = (o: any) => ({
     ...o,
+    status: normalizeOrderStatus(o.status),
+    clientConfirmedReceipt: o.clientConfirmedReceipt ?? false,
+    cancellationRequested: o.cancellationRequested ?? false,
+    settledAt: o.settledAt ?? undefined,
+    deliveredAt: o.deliveredAt ?? undefined,
     items: Array.isArray(o.orderItems || o.items)
       ? (o.orderItems || o.items).map((item: any) => ({
           ...item,
@@ -2624,16 +2630,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(payload),
       });
       // Append the saved order immediately for optimistic UI
-      setOrders(prev => [...prev, {
-        ...saved,
-        items: Array.isArray((saved as any).orderItems || saved.items)
-          ? ((saved as any).orderItems || saved.items).map((item: any) => ({
-            ...item,
-            cartQuantity: item.cartQuantity || item.quantity || 1,
-            id: item.offerId || item.id
-          }))
-          : []
-      }]);
+      setOrders(prev => [...prev, mapOrderRow(saved)]);
       bustCache(['orders']);
       bustCache(['offers']);
       if (user?.id) bustCache(QK.cart(user.id));
@@ -2823,13 +2820,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const reportProblem = async (orderId: string, reason: string, files: File[]) => {
     const formData = new FormData();
-    formData.append('orderId', orderId);
     formData.append('reason', reason);
     files.forEach(f => formData.append('files', f));
     let evidence: DisputeEvidence[] = [];
     try {
-      const result = await apiUpload<{ evidence: DisputeEvidence[] }>(API_ENDPOINTS.orders.dispute(orderId), formData);
-      evidence = result.evidence;
+      const result = await apiUpload<DisputeEvidence[] | { evidence: DisputeEvidence[] }>(API_ENDPOINTS.orders.dispute(orderId), formData);
+      evidence = Array.isArray(result) ? result : (result?.evidence ?? []);
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.DISPUTE, disputeReason: reason, disputeEvidence: evidence } : o));
       bustCache(['orders']);
       if (user) addNotification(user.id, 'Dispute opened.', 'WARNING');

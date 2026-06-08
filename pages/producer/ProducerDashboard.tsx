@@ -45,6 +45,24 @@ export const ProducerDashboard: React.FC = () => {
       });
       return () => { cancelled = true; };
    }, []);
+
+   // Poll while any in-transit order is waiting for the customer to confirm receipt,
+   // so "Mark as Delivered" enables without a manual page refresh.
+   const awaitingCustomerReceipt = useMemo(
+      () => orders.some((o) => o.status === OrderStatus.IN_TRANSIT && !o.clientConfirmedReceipt),
+      [orders],
+   );
+   useEffect(() => {
+      if (!awaitingCustomerReceipt) return;
+      const poll = () => { void refreshOrders(); };
+      const id = window.setInterval(poll, 12_000);
+      window.addEventListener('focus', poll);
+      return () => {
+         window.clearInterval(id);
+         window.removeEventListener('focus', poll);
+      };
+   }, [awaitingCustomerReceipt, refreshOrders]);
+
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
    const selectedOrderLive = useMemo(() => {
       if (!selectedOrder) return null;
@@ -597,7 +615,8 @@ export const ProducerDashboard: React.FC = () => {
                               </button>
                               <button
                                  onClick={(e) => { e.stopPropagation(); void handleMarkDelivered(order.id); }}
-                                 disabled={orderActionBusy === `${order.id}:deliver`}
+                                 disabled={orderActionBusy === `${order.id}:deliver` || !order.clientConfirmedReceipt}
+                                 title={!order.clientConfirmedReceipt ? t('order.awaitingCustomerConfirm') : undefined}
                                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm w-full sm:w-auto disabled:opacity-60 disabled:cursor-not-allowed"
                               >
                                  {orderActionBusy === `${order.id}:deliver`
@@ -607,6 +626,9 @@ export const ProducerDashboard: React.FC = () => {
                                  {t('order.markDelivered')}
                               </button>
                            </div>
+                           {!order.clientConfirmedReceipt && (
+                              <p className="text-xs text-amber-600 mt-2 w-full text-right">{t('order.awaitingCustomerConfirm')}</p>
+                           )}
                         </div>
                      </li>
                   ))}
@@ -1011,7 +1033,8 @@ export const ProducerDashboard: React.FC = () => {
                                  <button
                                     type="button"
                                     onClick={() => { void handleMarkDelivered(selectedOrderLive.id).then(() => setSelectedOrder(null)); }}
-                                    disabled={orderActionBusy === `${selectedOrderLive.id}:deliver`}
+                                    disabled={orderActionBusy === `${selectedOrderLive.id}:deliver` || !selectedOrderLive.clientConfirmedReceipt}
+                                    title={!selectedOrderLive.clientConfirmedReceipt ? t('order.awaitingCustomerConfirm') : undefined}
                                     className="inline-flex items-center text-xs bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700 font-bold disabled:opacity-60 disabled:cursor-not-allowed"
                                  >
                                     {orderActionBusy === `${selectedOrderLive.id}:deliver`
@@ -1020,6 +1043,9 @@ export const ProducerDashboard: React.FC = () => {
                                     }
                                     {t('order.markDelivered')}
                                  </button>
+                                 {!selectedOrderLive.clientConfirmedReceipt && (
+                                    <p className="text-xs text-amber-600 mt-1.5">{t('order.awaitingCustomerConfirm')}</p>
+                                 )}
                               </div>
                            </div>
                         )}

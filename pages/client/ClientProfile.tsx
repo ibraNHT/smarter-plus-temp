@@ -5,7 +5,7 @@ import { clientProfileMatchesSession } from '../../services/clientProfileMatcher
 import { useTranslation } from '../../services/i18nContext';
 import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order, Review, OfferType } from '../../types';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle, Loader2, Calendar, Phone, Mail, Truck } from 'lucide-react';
+import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle, Loader2, Calendar, Phone, Mail } from 'lucide-react';
 import { useUpdateClientProfileMutation } from '../../client-api/hooks/useUpdateClientProfileMutation';
 import { SEO } from '../../components/SEO';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
@@ -22,6 +22,11 @@ import { API_ENDPOINTS } from '../../client-api/endpoints';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { orderHasService, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
 import { ORDER_STATUS_LABEL_KEY, ORDER_STATUS_PILL_CLASS } from '../../utils/orderStatusDisplay';
+import {
+  canRequestCancellation,
+  canReportProblem,
+  isActiveOrderStatus,
+} from '../../utils/orderActions';
 import { useFormik } from 'formik';
 import { z } from 'zod';
 import { showAppToast } from '../../services/appToast';
@@ -51,7 +56,7 @@ export const ClientProfile: React.FC = () => {
    const isProfileTab = (v: string | null): v is ProfileTab =>
       v === 'info' || v === 'orders' || v === 'security' || v === 'favorites' || v === 'reputation' || v === 'referrals';
 
-   const { user, orders, payForOrder, completeOrder, requestOrderCancellation, updateAppointment, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, pickupPoints, revealContactInfo, refreshClients, refreshOrders, refreshOffers, refreshProducers, refreshAllReviews, refreshMyReviews, refreshWallet } = useStore();
+   const { user, orders, payForOrder, completeOrder, confirmReceipt, requestOrderCancellation, updateAppointment, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, pickupPoints, revealContactInfo, refreshClients, refreshOrders, refreshOffers, refreshProducers, refreshAllReviews, refreshMyReviews, refreshWallet } = useStore();
    const updateClientMutation = useUpdateClientProfileMutation();
    const { t } = useTranslation();
    const navigate = useNavigate();
@@ -132,6 +137,33 @@ export const ClientProfile: React.FC = () => {
       }, { replace: true });
    }, [activeTab, searchParams, setSearchParams]);
 
+   // Deep link from order notifications (`/orders/:id` → `?order=<id>`): open that
+   // specific order's detail modal so the customer can act on it (pay, confirm
+   // receipt, review…) instead of hunting through the list. Runs once orders load.
+   const handledDeepLinkOrderRef = useRef<string | null>(null);
+   useEffect(() => {
+      const orderId = searchParams.get('order');
+      if (!orderId || orders.length === 0) return;
+      if (handledDeepLinkOrderRef.current === orderId) return;
+      const target = orders.find((o) => o.id === orderId);
+      if (!target) return;
+      handledDeepLinkOrderRef.current = orderId;
+      setActiveTab('orders');
+      setSelectedOrder(target);
+      if (
+         searchParams.get('pay') === '1' &&
+         [OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(target.status)
+      ) {
+         initiatePayment(target.id);
+      }
+      setSearchParams((prev) => {
+         const next = new URLSearchParams(prev);
+         next.delete('order');
+         next.delete('pay');
+         return next;
+      }, { replace: true });
+   }, [searchParams, orders, setSearchParams]);
+
    const [formData, setFormData] = useState<ClientProfileType | null>(null);
    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
    const [newLoc, setNewLoc] = useState<Partial<Location>>({ region: '', city: '', address: '', lat: 0, lng: 0 });
@@ -167,6 +199,8 @@ export const ClientProfile: React.FC = () => {
    const [cancelingOrder, setCancelingOrder] = useState(false);
    const [completeOrderId, setCompleteOrderId] = useState<string | null>(null);
    const [completingOrder, setCompletingOrder] = useState(false);
+   const [confirmReceiptOrderId, setConfirmReceiptOrderId] = useState<string | null>(null);
+   const [confirmingReceipt, setConfirmingReceipt] = useState(false);
    const [cancelRequestOrderId, setCancelRequestOrderId] = useState<string | null>(null);
    const [cancelRequestReason, setCancelRequestReason] = useState('');
    const [requestingCancel, setRequestingCancel] = useState(false);
@@ -259,8 +293,12 @@ export const ClientProfile: React.FC = () => {
          if (parsed.success) return {};
          return { disputeReason: parsed.error.issues[0]?.message || 'Invalid reason.' };
       },
-      onSubmit: (values) => {
+      onSubmit: (values, { setFieldError }) => {
          if (disputeOrderId) {
+            if (disputeFiles.length === 0) {
+               setFieldError('disputeReason', t('order.disputeFileRequired'));
+               return;
+            }
             reportProblem(disputeOrderId, values.disputeReason, disputeFiles);
             setShowDisputeModal(false);
          }
@@ -564,7 +602,7 @@ export const ClientProfile: React.FC = () => {
    }
 
    const allMyOrders = orders.filter(o => o.clientId === currentClient?.id || o.clientId === user.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-   const activeOrders = allMyOrders.filter(o => [OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT, OrderStatus.PAID_IN_PREPARATION, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED, OrderStatus.DISPUTE].includes(o.status));
+   const activeOrders = allMyOrders.filter(o => isActiveOrderStatus(o.status));
    const pastOrders = allMyOrders.filter(o => [OrderStatus.COMPLETED, OrderStatus.CANCELLED].includes(o.status));
 
    // Order lifecycle steps for timeline (booking → receiving)
@@ -756,15 +794,6 @@ export const ClientProfile: React.FC = () => {
    };
   const openDisputeModal = (orderId: string) => { setDisputeOrderId(orderId); disputeFormik.setFieldValue('disputeReason', ''); setDisputeFiles([]); setShowDisputeModal(true); };
    const handleDisputeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) { setDisputeFiles(Array.from(e.target.files)); } };
-   /** Unpaid orders can be cancelled immediately; paid orders not yet in transit need admin approval. */
-   const isImmediatelyCancellable = (order: Order) =>
-      [OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(order.status);
-   const canRequestCancellation = (order: Order) =>
-      [OrderStatus.PAID_IN_PREPARATION, OrderStatus.DELIVERED].includes(order.status);
-   /** Reportable while in transit, after delivery, and during the settlement window. */
-   const canReportProblem = (order: Order) =>
-      [OrderStatus.PAID_IN_PREPARATION, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED, OrderStatus.COMPLETED].includes(order.status)
-      && order.status !== OrderStatus.DISPUTE;
    /** Service appointments can be rescheduled until the order goes in transit. */
    const canRescheduleAppointment = (order: Order) =>
       orderHasService(order)
@@ -788,6 +817,48 @@ export const ClientProfile: React.FC = () => {
          {t(ORDER_STATUS_LABEL_KEY[status] || 'order.status')}
       </span>
    );
+
+   /** Shared order action buttons — used in list cards, all-orders panel, and detail modal. */
+   const renderOrderActions = (order: Order, size: 'sm' | 'md' = 'sm', afterAction?: () => void) => {
+      const btn = size === 'sm' ? 'text-xs px-3 py-1.5' : 'text-sm px-4 py-2';
+      const btnBold = size === 'sm' ? 'text-xs px-4 py-1.5' : 'text-sm px-4 py-2';
+      const iconSm = size === 'sm' ? 'w-3 h-3' : 'w-4 h-4';
+      const wrap = (fn: () => void) => () => { fn(); afterAction?.(); };
+
+      return (
+         <>
+            {[OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(order.status) && (
+               <button onClick={wrap(() => initiatePayment(order.id))} className={`bg-primary-600 text-white ${btnBold} rounded-md font-bold hover:bg-primary-700 shadow-sm flex items-center gap-1`}><CreditCard className={iconSm} /> {t('order.payNow')}</button>
+            )}
+            {canRescheduleAppointment(order) && (
+               <button onClick={wrap(() => openRescheduleModal(order))} className={`text-purple-700 hover:bg-purple-50 ${btn} rounded-md font-medium border border-purple-200 flex items-center gap-1`}><Calendar className={iconSm} /> {t('order.reschedule')}</button>
+            )}
+            {order.status === OrderStatus.IN_TRANSIT && (
+               order.clientConfirmedReceipt ? (
+                  <span className={`text-emerald-700 bg-emerald-50 ${btn} rounded-md font-medium border border-emerald-100 flex items-center gap-1`}><CheckCircle className={iconSm} /> {t('order.awaitingSellerDelivery')}</span>
+               ) : (
+                  <button onClick={wrap(() => setConfirmReceiptOrderId(order.id))} className={`bg-emerald-600 text-white ${btnBold} rounded-md font-bold hover:bg-emerald-700 shadow-sm flex items-center gap-1`}><CheckCircle className={iconSm} /> {t('order.confirmReceipt')}</button>
+               )
+            )}
+            {order.status === OrderStatus.DELIVERED && (
+               <button onClick={wrap(() => setCompleteOrderId(order.id))} className={`bg-green-600 text-white ${btnBold} rounded-md font-bold hover:bg-green-700 shadow-sm flex items-center gap-1`}><CheckCircle className={iconSm} /> {t('order.completeOrder')}</button>
+            )}
+            {canRequestCancellation(order) && (
+               order.cancellationRequested ? (
+                  <span className={`text-gray-500 bg-gray-50 ${btn} rounded-md font-medium border border-gray-200`}>{t('order.cancellationPending')}</span>
+               ) : (
+                  <button onClick={wrap(() => openCancelRequestModal(order.id))} className={`text-red-600 hover:bg-red-50 ${btn} rounded-md font-medium border border-red-100`}>{t('order.requestCancellation')}</button>
+               )
+            )}
+            {canReportProblem(order) && (
+               <button onClick={wrap(() => openDisputeModal(order.id))} className={`text-orange-600 hover:bg-orange-50 ${btn} rounded-md font-medium border border-orange-100 flex items-center gap-1`}><AlertTriangle className={iconSm} /> {t('order.reportProblem')}</button>
+            )}
+            {(order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED) && !order.clientReviewed && (
+               <button onClick={wrap(() => openReviewModal(order.id, order.producerId))} className={`bg-yellow-100 text-yellow-800 ${btnBold} rounded-md font-bold hover:bg-yellow-200 border border-yellow-200 flex items-center gap-1`}><Star className={`${iconSm} fill-current`} /> {t('review.rate')}</button>
+            )}
+         </>
+      );
+   };
 
    const renderOrderList = (orderList: any[], emptyMsg: string) => {
       if (orderList.length === 0) {
@@ -840,34 +911,7 @@ export const ClientProfile: React.FC = () => {
                         <div className="w-full sm:w-auto sm:text-right" onClick={e => e.stopPropagation()}>
                            <p className="text-sm font-bold text-gray-900 mb-2">{order.totalAmount?.toLocaleString?.() ?? order.totalAmount} XAF</p>
                            <div className="flex gap-2 flex-wrap sm:justify-end">
-                              {[OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(order.status) && (
-                                 <button onClick={() => initiatePayment(order.id)} className="bg-primary-600 text-white px-4 py-1.5 rounded-md text-xs font-bold hover:bg-primary-700 shadow-sm flex items-center gap-1"><CreditCard className="w-3 h-3" /> {t('order.payNow')}</button>
-                              )}
-                              {canRescheduleAppointment(order) && (
-                                 <button onClick={() => openRescheduleModal(order)} className="text-purple-700 hover:bg-purple-50 px-3 py-1.5 rounded-md text-xs font-medium border border-purple-200 flex items-center gap-1"><Calendar className="w-3 h-3" /> {t('order.reschedule')}</button>
-                              )}
-                              {order.status === OrderStatus.IN_TRANSIT && (
-                                 <span className="text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-md text-xs font-medium border border-indigo-100 flex items-center gap-1"><Truck className="w-3 h-3" /> {t('order.onItsWay')}</span>
-                              )}
-                              {order.status === OrderStatus.DELIVERED && (
-                                 <button onClick={() => setCompleteOrderId(order.id)} className="bg-green-600 text-white px-4 py-1.5 rounded-md text-xs font-bold hover:bg-green-700 shadow-sm flex items-center gap-1"><CheckCircle className="w-3 h-3" /> {t('order.completeOrder')}</button>
-                              )}
-                              {isImmediatelyCancellable(order) && (
-                                 <button onClick={() => setCancelOrderId(order.id)} className="text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-md text-xs font-medium border border-red-100">{t('order.cancel')}</button>
-                              )}
-                              {canRequestCancellation(order) && (
-                                 order.cancellationRequested ? (
-                                    <span className="text-gray-500 bg-gray-50 px-3 py-1.5 rounded-md text-xs font-medium border border-gray-200">{t('order.cancellationPending')}</span>
-                                 ) : (
-                                    <button onClick={() => openCancelRequestModal(order.id)} className="text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-md text-xs font-medium border border-red-100">{t('order.requestCancellation')}</button>
-                                 )
-                              )}
-                              {canReportProblem(order) && (
-                                 <button onClick={() => openDisputeModal(order.id)} className="text-orange-600 hover:bg-orange-50 px-3 py-1.5 rounded-md text-xs font-medium border border-orange-100 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {t('order.reportProblem')}</button>
-                              )}
-                              {(order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED) && !order.clientReviewed && (
-                                 <button onClick={() => openReviewModal(order.id, order.producerId)} className="bg-yellow-100 text-yellow-800 px-4 py-1.5 rounded-md text-xs font-bold hover:bg-yellow-200 border border-yellow-200 flex items-center gap-1"><Star className="w-3 h-3 fill-current" /> {t('review.rate')}</button>
-                              )}
+                              {renderOrderActions(order)}
                            </div>
                         </div>
                      </div>
@@ -1219,6 +1263,9 @@ export const ClientProfile: React.FC = () => {
                                           <Eye className="h-3.5 w-3.5" />
                                           <span className="sm:inline">{t('dash.viewDetails')}</span>
                                        </span>
+                                    </div>
+                                    <div className="px-4 pb-4 flex gap-2 flex-wrap" onClick={e => e.stopPropagation()}>
+                                       {renderOrderActions(order)}
                                     </div>
                                  </li>
                               ))
@@ -1733,34 +1780,7 @@ export const ClientProfile: React.FC = () => {
                      )}
 
                      <div className="mt-4 flex flex-wrap gap-2">
-                        {[OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(selectedOrderLive.status) && (
-                           <button onClick={() => { initiatePayment(selectedOrderLive.id); setSelectedOrder(null); }} className="bg-primary-600 text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-primary-700"><CreditCard className="w-4 h-4 inline mr-1" /> {t('order.payNow')}</button>
-                        )}
-                        {canRescheduleAppointment(selectedOrderLive) && (
-                           <button onClick={() => { openRescheduleModal(selectedOrderLive); setSelectedOrder(null); }} className="text-purple-700 hover:bg-purple-50 px-4 py-2 rounded-md text-sm font-medium border border-purple-200"><Calendar className="w-4 h-4 inline mr-1" /> {t('order.reschedule')}</button>
-                        )}
-                        {selectedOrderLive.status === OrderStatus.IN_TRANSIT && (
-                           <span className="text-indigo-700 bg-indigo-50 px-4 py-2 rounded-md text-sm font-medium border border-indigo-100"><Truck className="w-4 h-4 inline mr-1" /> {t('order.onItsWay')}</span>
-                        )}
-                        {selectedOrderLive.status === OrderStatus.DELIVERED && (
-                           <button onClick={() => { setCompleteOrderId(selectedOrderLive.id); setSelectedOrder(null); }} className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-green-700"><CheckCircle className="w-4 h-4 inline mr-1" /> {t('order.completeOrder')}</button>
-                        )}
-                        {isImmediatelyCancellable(selectedOrderLive) && (
-                           <button onClick={() => { setCancelOrderId(selectedOrderLive.id); setSelectedOrder(null); }} className="text-red-600 hover:bg-red-50 px-4 py-2 rounded-md text-sm font-medium border border-red-100">{t('order.cancel')}</button>
-                        )}
-                        {canRequestCancellation(selectedOrderLive) && (
-                           selectedOrderLive.cancellationRequested ? (
-                              <span className="text-gray-500 bg-gray-50 px-4 py-2 rounded-md text-sm font-medium border border-gray-200">{t('order.cancellationPending')}</span>
-                           ) : (
-                              <button onClick={() => { openCancelRequestModal(selectedOrderLive.id); setSelectedOrder(null); }} className="text-red-600 hover:bg-red-50 px-4 py-2 rounded-md text-sm font-medium border border-red-100">{t('order.requestCancellation')}</button>
-                           )
-                        )}
-                        {canReportProblem(selectedOrderLive) && (
-                           <button onClick={() => { openDisputeModal(selectedOrderLive.id); setSelectedOrder(null); }} className="text-orange-600 hover:bg-orange-50 px-4 py-2 rounded-md text-sm font-medium border border-orange-100"><AlertTriangle className="w-4 h-4 inline mr-1" /> {t('order.reportProblem')}</button>
-                        )}
-                        {(selectedOrderLive.status === OrderStatus.DELIVERED || selectedOrderLive.status === OrderStatus.COMPLETED) && !selectedOrderLive.clientReviewed && (
-                           <button onClick={() => { openReviewModal(selectedOrderLive.id, selectedOrderLive.producerId); setSelectedOrder(null); }} className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-md text-sm font-bold hover:bg-yellow-200 border border-yellow-200"><Star className="w-4 h-4 inline mr-1 fill-current" /> {t('review.rate')}</button>
-                        )}
+                        {renderOrderActions(selectedOrderLive, 'md', () => setSelectedOrder(null))}
                      </div>
 
                      <div className="mt-6">
@@ -1911,6 +1931,26 @@ export const ClientProfile: React.FC = () => {
                } finally {
                   setCompletingOrder(false);
                   setCompleteOrderId(null);
+               }
+            }}
+         />
+
+         <ConfirmModal
+            open={confirmReceiptOrderId !== null}
+            tone="info"
+            title={t('order.receiptConfirmTitle')}
+            description={t('order.receiptConfirmBody')}
+            confirmLabel={t('order.confirmReceipt')}
+            busy={confirmingReceipt}
+            onClose={() => { if (!confirmingReceipt) setConfirmReceiptOrderId(null); }}
+            onConfirm={async () => {
+               if (!confirmReceiptOrderId) return;
+               try {
+                  setConfirmingReceipt(true);
+                  await confirmReceipt(confirmReceiptOrderId);
+               } finally {
+                  setConfirmingReceipt(false);
+                  setConfirmReceiptOrderId(null);
                }
             }}
          />

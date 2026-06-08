@@ -1,6 +1,6 @@
 
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useSearchParams, useParams } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { ToastContainer } from './components/ToastContainer';
@@ -96,6 +96,27 @@ const AUTH_FULLSCREEN_PREFIXES = ['/login', '/register', '/verify-email'];
  */
 const FOOTER_HIDDEN_PREFIXES = ['/messages', ...AUTH_FULLSCREEN_PREFIXES];
 
+/**
+ * Notifications/emails link to `/orders/:id` (e.g. "your proposal was accepted",
+ * dispute filed). There is no standalone order page, so route the user to the
+ * orders view that matches their role: clients land on their profile orders tab,
+ * producers/managers on the dashboard. Falls back to login when signed out.
+ */
+const OrderDeepLinkRedirect: React.FC = () => {
+  const { user } = useStore();
+  const { id } = useParams<{ id: string }>();
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role === UserRole.PRODUCER || (user.role === UserRole.MANAGER && user.producerId)) {
+    return <Navigate to="/producer/dashboard" replace />;
+  }
+  // Carry the order id so the client profile can open that specific order
+  // (and surface its Pay action) instead of dropping the user on a generic list.
+  const target = id
+    ? `/client/profile?tab=orders&order=${encodeURIComponent(id)}`
+    : '/client/profile?tab=orders';
+  return <Navigate to={target} replace />;
+};
+
 /** Opens AgriBot when the user lands with ?openSupport=1 (e.g. from admin email/notification). */
 const SupportDeepLinkHandler: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -156,6 +177,9 @@ const AppShell: React.FC = () => {
             <Route path="/messages" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER, UserRole.MANAGER]}><ChatPage /></GuardedRoute>} />
             <Route path="/messages/:chatId" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER, UserRole.MANAGER]}><ChatPage /></GuardedRoute>} />
             <Route path="/client/profile" element={<GuardedRoute allowedRoles={[UserRole.CLIENT]}><ClientProfile /></GuardedRoute>} />
+
+            {/* Order notification deep links → role-appropriate orders view */}
+            <Route path="/orders/:id" element={<OrderDeepLinkRedirect />} />
 
             {/* Producer Routes */}
             <Route path="/producer/dashboard" element={<GuardedRoute allowedRoles={PRODUCER_ROUTE_ROLES}><ProducerDashboard /></GuardedRoute>} />
