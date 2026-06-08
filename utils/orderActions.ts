@@ -34,30 +34,30 @@ export function isTerminalOrderStatus(status: OrderStatus): boolean {
 }
 
 /**
- * Per spec: ANY order that is not in transit can be cancelled, subject to
- * administrator approval. This includes freshly placed orders. In-transit and
- * terminal (cancelled / dispute / completed) orders cannot be cancelled — a
- * delivered order is handled via "Report an issue" during settlement instead.
+ * Request cancellation from order placed until it goes in transit (admin approval).
+ * Once in transit, use "Report a problem" instead.
  */
 export function canRequestCancellation(order: Order): boolean {
-  if (order.status === OrderStatus.IN_TRANSIT) return false;
   if (isTerminalOrderStatus(order.status)) return false;
-  if (order.status === OrderStatus.COMPLETED) return false;
   return [
     OrderStatus.PENDING_VALIDATION,
     OrderStatus.CONFIRMED_AWAITING_PAYMENT,
     OrderStatus.PAID_IN_PREPARATION,
-    OrderStatus.DELIVERED,
   ].includes(order.status);
 }
 
 /**
- * Report issues while the order is in transit (wrong/damaged package) or after
- * delivery while awaiting customer confirmation. Not available once COMPLETED.
+ * Report issues from in transit onward (wrong/damaged package, delivery issues).
+ * Not available before transit or after the order is completed.
  */
 export function canReportProblem(order: Order): boolean {
   if (order.status === OrderStatus.DISPUTE) return false;
   return [OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED].includes(order.status);
+}
+
+/** Leave a review only after the order is fully completed. */
+export function canLeaveReview(order: Order): boolean {
+  return order.status === OrderStatus.COMPLETED && !order.clientReviewed;
 }
 
 export function isActiveOrderStatus(status: OrderStatus): boolean {

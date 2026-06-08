@@ -25,6 +25,7 @@ import { ORDER_STATUS_LABEL_KEY, ORDER_STATUS_PILL_CLASS } from '../../utils/ord
 import {
   canRequestCancellation,
   canReportProblem,
+  canLeaveReview,
   isActiveOrderStatus,
 } from '../../utils/orderActions';
 import { useFormik } from 'formik';
@@ -853,7 +854,7 @@ export const ClientProfile: React.FC = () => {
             {canReportProblem(order) && (
                <button onClick={wrap(() => openDisputeModal(order.id))} className={`text-orange-600 hover:bg-orange-50 ${btn} rounded-md font-medium border border-orange-100 flex items-center gap-1`}><AlertTriangle className={iconSm} /> {t('order.reportProblem')}</button>
             )}
-            {(order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED) && !order.clientReviewed && (
+            {canLeaveReview(order) && (
                <button onClick={wrap(() => openReviewModal(order.id, order.producerId))} className={`bg-yellow-100 text-yellow-800 ${btnBold} rounded-md font-bold hover:bg-yellow-200 border border-yellow-200 flex items-center gap-1`}><Star className={`${iconSm} fill-current`} /> {t('review.rate')}</button>
             )}
          </>
