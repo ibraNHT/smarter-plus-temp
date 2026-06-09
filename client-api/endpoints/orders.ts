@@ -7,22 +7,22 @@ const uniqueById = <T extends { id: string }>(rows: T[]): T[] =>
   Array.from(new Map(rows.map((row) => [row.id, row])).values());
 
 /**
- * Fetches order lists for the session. Producers only call `GET /orders/my-orders` when
- * `user.clientId` is set, otherwise the backend returns 403 (no client profile).
+ * Fetches order lists for the session. Producers are both seller and buyer, so they always
+ * fetch their selling orders (`/orders/producer`) AND their buyer orders (`/orders/my-orders`).
+ * The buyer endpoint returns 403 until a client profile exists; with `silent401` the failed
+ * call resolves to [], so purchases appear as soon as the producer has a buyer profile even
+ * before `user.clientId` is synced onto the session.
  */
 export const getRoleOrders = async (user: UserSession): Promise<Order[]> => {
   if (user.role === UserRole.CLIENT) {
     return apiGet<Order[]>(API_ENDPOINTS.orders.my, { silent401: true });
   }
   if (isProducerDashboardUser(user)) {
-    if (user.clientId) {
-      const [producerOrders, myOrders] = await Promise.all([
-        apiGet<Order[]>(API_ENDPOINTS.orders.producer, { silent401: true }),
-        apiGet<Order[]>(API_ENDPOINTS.orders.my, { silent401: true }),
-      ]);
-      return uniqueById([...(producerOrders || []), ...(myOrders || [])]);
-    }
-    return apiGet<Order[]>(API_ENDPOINTS.orders.producer, { silent401: true });
+    const [producerOrders, myOrders] = await Promise.all([
+      apiGet<Order[]>(API_ENDPOINTS.orders.producer, { silent401: true }).catch(() => [] as Order[]),
+      apiGet<Order[]>(API_ENDPOINTS.orders.my, { silent401: true }).catch(() => [] as Order[]),
+    ]);
+    return uniqueById([...(producerOrders || []), ...(myOrders || [])]);
   }
   return [];
 };

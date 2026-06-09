@@ -454,11 +454,13 @@ const getOrdersEndpointsForUser = (activeUser?: UserSession | null): string[] =>
   if (!activeUser) return [];
   if (activeUser.role === UserRole.CLIENT) return [API_ENDPOINTS.orders.my];
   if (isProducerDashboardUser(activeUser)) {
-    // `GET /orders/my-orders` uses GetClientOrders and returns 403 without a client profile.
-    // Only add it when the session has a client profile (producer–buyer or linked clientId).
-    const out: string[] = [API_ENDPOINTS.orders.producer];
-    if (activeUser.clientId) out.push(API_ENDPOINTS.orders.my);
-    return out;
+    // Producers act as both seller and buyer. Always fetch their selling orders
+    // (`/orders/producer`) AND their buyer orders (`/orders/my-orders`). The buyer
+    // endpoint returns 403 until a client profile exists, but the request is sent with
+    // `silent401` and the failed call resolves to []. Fetching it unconditionally means
+    // a producer's purchases show up as soon as they have a buyer profile, even before
+    // the session's `clientId` has been synced.
+    return [API_ENDPOINTS.orders.producer, API_ENDPOINTS.orders.my];
   }
   return [];
 };

@@ -3,7 +3,8 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { ProducerStatus, OrderStatus, Order, OfferType, Review } from '../../types';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2 } from 'lucide-react';
+import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2, ShoppingBag } from 'lucide-react';
+import { BuyerOrderFlowsProvider, BuyerOrderActions, BuyerPurchaseOrdersSection, BuyerPurchaseProducerContact, isOrderAsBuyer } from '../../components/BuyerOrderFlows';
 import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -20,7 +21,7 @@ import {
 import { isProducerDashboardUser, isManagerSession, producerAccountUserId } from '../../services/producerSession';
 
 export const ProducerDashboard: React.FC = () => {
-   const { user, getProducerOffers, deleteOffer, producers, clients, orders, confirmOrder, rejectOrder, startDelivery, markOrderDelivered, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating, pickupPoints, refreshOrders, refreshOffers, refreshProducers, refreshClients } = useStore();
+   const { user, getProducerOffers, deleteOffer, producers, clients, orders, offers, confirmOrder, rejectOrder, startDelivery, markOrderDelivered, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating, pickupPoints, refreshOrders, refreshOffers, refreshProducers, refreshClients } = useStore();
    const { t } = useTranslation();
    const navigate = useNavigate();
    const [searchParams, setSearchParams] = useSearchParams();
@@ -149,6 +150,17 @@ export const ProducerDashboard: React.FC = () => {
       o.status === OrderStatus.CANCELLED ||
       o.status === OrderStatus.DELIVERED ||
       o.status === OrderStatus.DISPUTE
+   );
+
+   // Active buyer-side purchases (orders this producer placed on other producers' offers).
+   const activePurchaseOrders = producerPurchaseOrders.filter(
+      (o) =>
+         o.status === OrderStatus.PENDING_VALIDATION ||
+         o.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT ||
+         o.status === OrderStatus.PAID_IN_PREPARATION ||
+         o.status === OrderStatus.IN_TRANSIT ||
+         o.status === OrderStatus.DELIVERED ||
+         o.status === OrderStatus.DISPUTE,
    );
 
    // My Reviews
@@ -290,9 +302,18 @@ export const ProducerDashboard: React.FC = () => {
       if (item?.imageUrl) return item.imageUrl as string;
       const offerId = item?.offerId || item?.id;
       if (!offerId) return '';
-      const offerMatch = myOffers.find((o) => o.id === offerId);
+      const offerMatch = myOffers.find((o) => o.id === offerId) || offers.find((o) => o.id === offerId);
       return offerMatch?.imageUrl || '';
    };
+
+   const getProducerDisplayName = (order: Order) => {
+      if (order.producerDisplayName) return order.producerDisplayName;
+      const p = producers.find((prod) => prod.id === order.producerId);
+      if (!p) return 'Unknown Producer';
+      return p.name || (p as any).user?.displayName || `${(p.firstName ?? '').trim()} ${(p.lastName ?? '').trim()}`.trim() || 'Unknown Producer';
+   };
+
+   const isSelectedOrderAsBuyer = selectedOrderLive ? isOrderAsBuyer(selectedOrderLive, user) : false;
 
    // Order lifecycle steps for timeline (booking → receiving)
    const ORDER_TIMELINE_STEPS: { status: OrderStatus; label: string }[] = [
@@ -417,6 +438,7 @@ export const ProducerDashboard: React.FC = () => {
       'this producer';
 
    return (
+      <BuyerOrderFlowsProvider>
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 px-4">
          <SEO title="Producer Dashboard | AgriMarket" noindex={true} />
          {managingAsAccountManager && (
@@ -501,6 +523,33 @@ export const ProducerDashboard: React.FC = () => {
                   <dd className="mt-1 text-3xl font-semibold text-gray-900 text-primary-600">{ordersToShip.length}</dd>
                </div>
             </div>
+         </div>
+
+         {/* My Purchases — buyer-side orders (same flow as the client profile) */}
+         <div className="bg-white shadow overflow-hidden sm:rounded-md mb-8 border-l-4 border-emerald-500">
+            <div className="px-4 py-5 border-b border-gray-200 sm:px-6 flex justify-between items-center bg-emerald-50">
+               <div>
+                  <h3 className="text-lg leading-6 font-bold text-gray-900 flex items-center">
+                     <ShoppingBag className="h-5 w-5 mr-2 text-emerald-600" />
+                     {t('dash.myPurchases')}
+                  </h3>
+                  <p className="text-sm text-emerald-800 mt-1">{t('dash.myPurchasesHint')}</p>
+               </div>
+               {activePurchaseOrders.length > 0 && (
+                  <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-1 rounded-full shrink-0">
+                     {activePurchaseOrders.length} active
+                  </span>
+               )}
+            </div>
+            {pageLoading && producerPurchaseOrders.length === 0 ? (
+               <div className="px-4 py-3"><ListSkeleton rows={2} /></div>
+            ) : (
+               <BuyerPurchaseOrdersSection
+                  orders={producerPurchaseOrders}
+                  onSelectOrder={setSelectedOrder}
+                  emptyMsg={t('dash.myPurchasesEmpty')}
+               />
+            )}
          </div>
 
          {/* Orders to Ship Section (PAID_IN_PREPARATION) */}
@@ -785,27 +834,34 @@ export const ProducerDashboard: React.FC = () => {
                               <p className="text-sm text-gray-500">{new Date(order.createdAt).toLocaleDateString()} · {formatProducerOrderSubtitle(order)}</p>
                            </div>
 
-                           <div className="agm-dash-order-actions flex-wrap">
+                           <div className="agm-dash-order-actions flex-wrap" onClick={(e) => e.stopPropagation()}>
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${order.status === OrderStatus.CANCELLED || order.status === OrderStatus.DISPUTE ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
                                  {order.status.replace(/_/g, ' ')}
                               </span>
 
-                              {order.status === OrderStatus.DISPUTE && (
-                                 <button
-                                    onClick={(e) => openEvidenceModal(order.id, e)}
-                                    className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded border border-orange-200 hover:bg-orange-200 flex items-center font-bold"
-                                 >
-                                    <Upload className="h-3 w-3 mr-1" /> {t('dash.uploadEvidence')}
-                                 </button>
-                              )}
+                              {isOrderAsBuyer(order, user) ? (
+                                 // Buyer-side history row → client-style actions (rate producer, etc.)
+                                 <BuyerOrderActions order={order} />
+                              ) : (
+                                 <>
+                                    {order.status === OrderStatus.DISPUTE && (
+                                       <button
+                                          onClick={(e) => openEvidenceModal(order.id, e)}
+                                          className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded border border-orange-200 hover:bg-orange-200 flex items-center font-bold"
+                                       >
+                                          <Upload className="h-3 w-3 mr-1" /> {t('dash.uploadEvidence')}
+                                       </button>
+                                    )}
 
-                              {(order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED) && !order.producerReviewed && (
-                                 <button
-                                    onClick={(e) => openReviewModal(order.id, order.clientId, e)}
-                                    className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-xs font-bold hover:bg-yellow-200"
-                                 >
-                                    {t('dash.rateClient')}
-                                 </button>
+                                    {(order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED) && !order.producerReviewed && (
+                                       <button
+                                          onClick={(e) => openReviewModal(order.id, order.clientId, e)}
+                                          className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-xs font-bold hover:bg-yellow-200"
+                                       >
+                                          {t('dash.rateClient')}
+                                       </button>
+                                    )}
+                                 </>
                               )}
                            </div>
                         </div>
@@ -988,7 +1044,41 @@ export const ProducerDashboard: React.FC = () => {
                         <p className="text-xs text-gray-500 mt-2">{t('dash.orderPlaced')}: {new Date(selectedOrderLive.createdAt).toLocaleString()}</p>
                      </div>
 
-                     {/* Client Info */}
+                     {/* Buyer view (your purchase) → seller info; otherwise seller view → client info */}
+                     {isSelectedOrderAsBuyer ? (
+                        <div className="bg-gray-50 p-3 rounded-md mb-4">
+                           <div className="flex items-center mb-2">
+                              <Package className="h-4 w-4 text-gray-500 mr-2" />
+                              <span className="text-sm font-medium text-gray-900">
+                                 Sold by:{' '}
+                                 <Link to={`/profile/producer/${selectedOrderLive.producerId}`} className="text-blue-600 hover:underline">
+                                    {getProducerDisplayName(selectedOrderLive)}
+                                 </Link>
+                              </span>
+                           </div>
+                           {selectedOrderLive.deliveryMethod === 'HOME' && selectedOrderLive.shippingAddress && typeof selectedOrderLive.shippingAddress === 'object' && (
+                              <div className="flex items-start gap-2 text-sm text-gray-600">
+                                 <MapPin className="h-4 w-4 text-gray-500 shrink-0 mt-0.5" />
+                                 <span>
+                                    {[
+                                       (selectedOrderLive.shippingAddress as any).address,
+                                       (selectedOrderLive.shippingAddress as any).city,
+                                       (selectedOrderLive.shippingAddress as any).region,
+                                    ].filter(Boolean).join(', ')}
+                                 </span>
+                              </div>
+                           )}
+                           {selectedOrderLive.deliveryMethod === 'PICKUP' && selectedOrderLive.pickupPointId && (
+                              <p className="text-sm text-gray-600 mt-1">
+                                 Pickup:{' '}
+                                 {(() => {
+                                    const pp = pickupPoints.find((p) => p.id === selectedOrderLive.pickupPointId);
+                                    return pp ? `${pp.name} — ${pp.address}, ${pp.city}` : selectedOrderLive.pickupPointId;
+                                 })()}
+                              </p>
+                           )}
+                        </div>
+                     ) : (
                      <div className="bg-gray-50 p-3 rounded-md mb-4">
                         <div className="flex items-center mb-2">
                            <User className="h-4 w-4 text-gray-500 mr-2" />
@@ -1050,6 +1140,7 @@ export const ProducerDashboard: React.FC = () => {
                            </div>
                         )}
                      </div>
+                     )}
 
                      {/* Dispute Info if any */}
                      {selectedOrderLive.status === OrderStatus.DISPUTE && (
@@ -1135,6 +1226,15 @@ export const ProducerDashboard: React.FC = () => {
                         <span className="text-base font-medium text-gray-900">Total</span>
                         <span className="text-xl font-bold text-primary-600">{selectedOrderLive.totalAmount.toLocaleString()} XAF</span>
                      </div>
+
+                     {isSelectedOrderAsBuyer && (
+                        <>
+                           <BuyerPurchaseProducerContact order={selectedOrderLive} />
+                           <div className="mt-4 flex flex-wrap gap-2">
+                              <BuyerOrderActions order={selectedOrderLive} size="md" afterAction={() => setSelectedOrder(null)} />
+                           </div>
+                        </>
+                     )}
 
                      <div className="mt-6">
                         <button
@@ -1261,5 +1361,6 @@ export const ProducerDashboard: React.FC = () => {
             }}
          />
       </div>
+      </BuyerOrderFlowsProvider>
    );
 };
