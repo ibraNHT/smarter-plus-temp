@@ -517,7 +517,7 @@ export const RegisterClient: React.FC = () => {
       <RegisterPhoneOtpModal
         open={otpOpen}
         phone={otpPhone}
-        email={otpEmail}
+        email={otpEmail || formik.values.email.trim()}
         onVerified={(token) => void completeRegistration(token)}
         onCancel={() => {
           setOtpOpen(false);

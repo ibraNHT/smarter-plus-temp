@@ -55,13 +55,27 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
   const [isVerifying, setIsVerifying] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const lastSentForRef = useRef<string>('');
+  /** Captured when the modal opens so verify/resend always include the registration email. */
+  const registrationEmailRef = useRef('');
+
+  const resolveRegistrationEmail = (): string =>
+    registrationEmailRef.current || String(email ?? '').trim();
+
+  useEffect(() => {
+    if (!open) return;
+    const trimmed = String(email ?? '').trim();
+    if (trimmed) {
+      registrationEmailRef.current = trimmed;
+    }
+  }, [open, email]);
 
   const requestCode = async (mode: 'initial' | 'resend') => {
     if (!legalAccepted) {
       setError(t('legal.mustAccept'));
       return;
     }
-    if (!email?.trim()) {
+    const registrationEmail = resolveRegistrationEmail();
+    if (!registrationEmail) {
       setError('Email is required to receive your verification code.');
       return;
     }
@@ -77,7 +91,7 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
         API_ENDPOINTS.auth.registerRequestPhoneOtp,
         {
           method: 'POST',
-          body: JSON.stringify({ phone, email: email || undefined }),
+          body: JSON.stringify({ phone, email: registrationEmail }),
           silent401: true,
         } as any,
       );
@@ -88,8 +102,8 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
       setCodeSent(true);
       setInfo(
         mode === 'initial'
-          ? `We sent a 6-digit code to ${email}.`
-          : `New code sent to ${email}.`,
+          ? `We sent a 6-digit code to ${registrationEmail}.`
+          : `New code sent to ${registrationEmail}.`,
       );
       setCooldown(RESEND_COOLDOWN_SECONDS);
       lastSentForRef.current = phone;
@@ -137,6 +151,11 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
       setError('Please enter the 6-digit code.');
       return;
     }
+    const registrationEmail = resolveRegistrationEmail();
+    if (!registrationEmail) {
+      setError('Email is required. Go back and enter your email on the registration form.');
+      return;
+    }
     setError('');
     setIsVerifying(true);
     try {
@@ -146,7 +165,7 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
         message?: string;
       }>(API_ENDPOINTS.auth.registerVerifyPhoneOtp, {
         method: 'POST',
-        body: JSON.stringify({ phone, email, code }),
+        body: JSON.stringify({ phone, email: registrationEmail, code }),
         silent401: true,
       } as any);
       if (res?.success && res.registrationToken) {
@@ -329,6 +348,7 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
                     {error}
                   </p>
                 )}
+                {/* //sadasda */}
 
                 {!codeSent && (
                   <button
