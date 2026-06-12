@@ -20,6 +20,7 @@ import { uploadAvatar } from '../../services/uploadService';
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
+import { PAYMENTS_ENABLED } from '../../utils/featureFlags';
 import { orderHasService, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
 import { ORDER_STATUS_LABEL_KEY, ORDER_STATUS_PILL_CLASS } from '../../utils/orderStatusDisplay';
 import {
@@ -153,8 +154,9 @@ export const ClientProfile: React.FC = () => {
       setActiveTab('orders');
       setSelectedOrder(target);
       if (
+         PAYMENTS_ENABLED &&
          searchParams.get('pay') === '1' &&
-         [OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(target.status)
+         target.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT
       ) {
          initiatePayment(target.id);
       }
@@ -838,7 +840,7 @@ export const ClientProfile: React.FC = () => {
 
       return (
          <>
-            {[OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(order.status) && (
+            {PAYMENTS_ENABLED && order.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT && (
                <button onClick={wrap(() => initiatePayment(order.id))} className={`bg-primary-600 text-white ${btnBold} rounded-md font-bold hover:bg-primary-700 shadow-sm flex items-center gap-1`}><CreditCard className={iconSm} /> {t('order.payNow')}</button>
             )}
             {canRescheduleAppointment(order) && (

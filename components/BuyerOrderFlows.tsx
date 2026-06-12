@@ -24,6 +24,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { ServiceAppointmentPicker } from './ServiceAppointmentPicker';
 import { Order, OrderStatus, UserSession } from '../types';
 import { offerImageInBox } from '../utils/offerImageDisplay';
+import { PAYMENTS_ENABLED } from '../utils/featureFlags';
 import { orderHasService, orderIsServiceOnly, serviceLineCount } from '../utils/orderLabels';
 import {
   canLeaveReview,
@@ -257,7 +258,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
 
       return (
         <>
-          {[OrderStatus.PENDING_VALIDATION, OrderStatus.CONFIRMED_AWAITING_PAYMENT].includes(order.status) && (
+          {PAYMENTS_ENABLED && order.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT && (
             <button
               type="button"
               onClick={wrap(() => initiatePayment(order.id))}
