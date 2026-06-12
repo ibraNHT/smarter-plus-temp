@@ -1,0 +1,25 @@
+name: CI (web)
+
+on:
+  push:
+    branches: [dev, staging, prod]
+  pull_request:
+    branches: [dev, staging, prod]
+
+jobs:
+  build:
+    name: Type-check & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+      - run: yarn install --frozen-lockfile
+      - name: Build (verifies tsc + vite)
+        run: yarn build
+        env:
+          # CI build just needs to compile; real values are injected at deploy time.
+          VITE_API_BASE_URL: https://api.example.com
+          DISABLE_PWA: 'true'

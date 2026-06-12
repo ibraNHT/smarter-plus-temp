@@ -12,6 +12,7 @@ import { ListSkeleton } from '../../components/Loaders';
 import { useFormik } from 'formik';
 import { z } from 'zod';
 import { showAppToast } from '../../services/appToast';
+import { PAYMENTS_ENABLED } from '../../utils/featureFlags';
 
 export const WalletDashboard: React.FC = () => {
   const { user, getWallet, fundWallet, requestWithdrawal, requestOtp, verifyOtp, producers, withdrawalRequests, refreshWallet, refreshWithdrawals } = useStore();
@@ -178,13 +179,15 @@ export const WalletDashboard: React.FC = () => {
           <div className="md:col-span-2 bg-white rounded-2xl shadow-xl overflow-hidden p-5 sm:p-8 relative border border-gray-200">
             <div className="flex items-start justify-between gap-2 mb-2">
               <p className="text-gray-600 text-sm sm:text-base font-semibold tracking-wide">{t('wallet.balance')}</p>
-              <button
-                onClick={() => setShowTopUp(true)}
-                className="p-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-colors flex-shrink-0"
-                aria-label={t('wallet.topup')}
-              >
-                <Plus className="h-5 w-5 sm:h-6 sm:w-6" />
-              </button>
+              {PAYMENTS_ENABLED && (
+                <button
+                  onClick={() => setShowTopUp(true)}
+                  className="p-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-colors flex-shrink-0"
+                  aria-label={t('wallet.topup')}
+                >
+                  <Plus className="h-5 w-5 sm:h-6 sm:w-6" />
+                </button>
+              )}
             </div>
             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-1 tabular-nums tracking-tight text-gray-900 break-words">
               {wallet.balance.toLocaleString()} <span className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800 ml-1">XAF</span>
@@ -213,13 +216,15 @@ export const WalletDashboard: React.FC = () => {
           </div>
 
           <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-6 flex flex-col justify-center gap-3 sm:gap-4 border border-gray-100">
-            <button
-              onClick={() => setShowTopUp(true)}
-              className="w-full flex items-center justify-center bg-primary-50 text-primary-700 px-4 py-3 rounded-lg font-bold hover:bg-primary-100 transition-colors"
-            >
-              <Plus className="h-5 w-5 mr-2" />
-              {t('wallet.topup')}
-            </button>
+            {PAYMENTS_ENABLED && (
+              <button
+                onClick={() => setShowTopUp(true)}
+                className="w-full flex items-center justify-center bg-primary-50 text-primary-700 px-4 py-3 rounded-lg font-bold hover:bg-primary-100 transition-colors"
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                {t('wallet.topup')}
+              </button>
+            )}
 
             {/* Withdraw Button - Only for Producers */}
             {isProducer && (
@@ -313,7 +318,7 @@ export const WalletDashboard: React.FC = () => {
         </div>
 
         {/* Top Up Modal */}
-        <Modal open={showTopUp} onClose={() => setShowTopUp(false)} maxWidth="lg" zIndex={50} panelClassName="p-4 sm:p-6">
+        <Modal open={PAYMENTS_ENABLED && showTopUp} onClose={() => setShowTopUp(false)} maxWidth="lg" zIndex={50} panelClassName="p-4 sm:p-6">
                 <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">{t('wallet.topup')}</h3>
                 <form onSubmit={topUpFormik.handleSubmit} className="space-y-4">
                   <div>
