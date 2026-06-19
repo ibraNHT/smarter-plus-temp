@@ -21,6 +21,8 @@ import { API_ENDPOINTS } from "../../client-api/endpoints";
 import { PublicProfileSkeleton } from "../../components/skeletons/PublicProfileSkeleton";
 import { offerImageHero, offerImageInBox } from "../../utils/offerImageDisplay";
 import { displayNameTruncateClass } from "../../utils/displayName";
+import { SEO } from "../../components/SEO";
+import { buildProducerProfileSchema } from "../../services/seo/schemaBuilders";
 
 function mapReviewRow(r: any): Review {
   const pic = r.reviewerProfileImageUrl;
@@ -57,7 +59,7 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
     refreshClients,
     refreshOffers,
   } = useStore();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
 
   // Public profile needs the producers/clients/offers catalogs. `pageLoading`
   // scopes the full-page skeleton to this page so it falls when (cached)
@@ -225,6 +227,30 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
 
   return (
     <div className="max-w-4xl mx-auto py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
+      <SEO
+        title={
+          role === "PRODUCER"
+            ? `${displayName} — Agricultural Producer Africa`
+            : `${displayName} — AgriMarket Client`
+        }
+        description={
+          role === "PRODUCER"
+            ? `Buy farm products from ${displayName}, a verified agricultural producer on AgriMarket Connect — Africa's trusted farming marketplace.`
+            : `${displayName} on AgriMarket Connect — Africa's trusted agricultural marketplace.`
+        }
+        url={role === "PRODUCER" ? `/profile/producer/${id}` : `/profile/client/${id}`}
+        locale={language}
+        imageUrl={profileData.profileImageUrl}
+        schema={
+          role === "PRODUCER"
+            ? buildProducerProfileSchema({
+                name: displayName,
+                path: `/profile/producer/${id}`,
+                imageUrl: profileData.profileImageUrl,
+              })
+            : undefined
+        }
+      />
       <button
         onClick={() => navigate(-1)}
         className="flex items-center text-gray-600 hover:text-primary-600 mb-4 sm:mb-6 transition-colors font-medium"

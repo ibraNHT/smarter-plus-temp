@@ -556,7 +556,7 @@ export const ClientProfile: React.FC = () => {
    if (!user) {
       return (
          <div className="max-w-7xl mx-auto py-8 px-4">
-            <SEO title="Client Profile | AgriMarket" noindex={true} />
+            <SEO title="Client Profile" noindex={true} />
             <p className="p-8 text-center text-gray-600">Please log in to view your profile.</p>
          </div>
       );
@@ -565,7 +565,7 @@ export const ClientProfile: React.FC = () => {
    if (user.role !== UserRole.CLIENT) {
       return (
          <div className="max-w-7xl mx-auto py-8 px-4">
-            <SEO title="Client Profile | AgriMarket" noindex={true} />
+            <SEO title="Client Profile" noindex={true} />
             <p className="p-8 text-center">Access Denied</p>
          </div>
       );
@@ -587,7 +587,7 @@ export const ClientProfile: React.FC = () => {
    if (isClientProfileHydrating) {
       return (
          <>
-            <SEO title="Client Profile | AgriMarket" noindex={true} />
+            <SEO title="Client Profile" noindex={true} />
             <ClientProfileSkeleton />
          </>
       );
@@ -596,7 +596,7 @@ export const ClientProfile: React.FC = () => {
    if (!currentClient?.id && user.role === UserRole.CLIENT) {
       return (
          <div className="max-w-7xl mx-auto py-8 px-4">
-            <SEO title="Client Profile | AgriMarket" noindex={true} />
+            <SEO title="Client Profile" noindex={true} />
             <div className="p-8 text-center max-w-lg mx-auto space-y-4">
                <p className="text-gray-700">No client profile was found for your account.</p>
                <Link to="/register/client" className="text-primary-600 font-medium hover:underline">Complete client registration</Link>
@@ -937,7 +937,7 @@ export const ClientProfile: React.FC = () => {
 
    return (
       <div className="max-w-7xl mx-auto py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
-         <SEO title="Client Profile | AgriMarket" noindex={true} />
+         <SEO title="Client Profile" noindex={true} />
          <div className="mb-4 sm:mb-6">
             <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 hover:text-primary-600 transition-colors font-medium text-sm sm:text-base">
                <ArrowLeft className="h-5 w-5 mr-2" /> Back

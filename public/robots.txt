@@ -2,14 +2,15 @@
 User-agent: *
 Allow: /
 
-# Private sections - Do not index
+# Private sections - do not index
 Disallow: /producer/
 Disallow: /client/
 Disallow: /wallet
 Disallow: /cart
-Disallow: /checkout
+Disallow: /messages
+Disallow: /compare
+Disallow: /login
+Disallow: /verify-email
 Disallow: /api/
 
-# Sitemaps for both domains
 Sitemap: https://acheteici.com/sitemap.xml
-Sitemap: https://agrimarketconnect.shop/sitemap.xml

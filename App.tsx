@@ -31,6 +31,8 @@ import { Blog } from './pages/footer/Blog';
 import { FAQ } from './pages/footer/FAQ';
 import { Jobs, Partners } from './pages/footer/Company';
 import { Terms, Privacy } from './pages/footer/Legal';
+import { HelpCenterIndex } from './pages/footer/helpCenter/HelpCenterIndex';
+import { HelpCenterArticle } from './pages/footer/helpCenter/HelpCenterArticle';
 
 import { StoreProvider, useStore, useStoreOptional } from './services/storeContext';
 import { I18nProvider } from './services/i18nContext';
@@ -190,6 +192,8 @@ const AppShell: React.FC = () => {
 
             {/* Footer Routes */}
             <Route path="/blog" element={<Blog />} />
+            <Route path="/help" element={<HelpCenterIndex />} />
+            <Route path="/help/:topicId" element={<HelpCenterArticle />} />
             <Route path="/faq" element={<FAQ />} />
             <Route path="/jobs" element={<Jobs />} />
             <Route path="/partners" element={<Partners />} />

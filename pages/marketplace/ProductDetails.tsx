@@ -6,6 +6,7 @@ import { useTranslation } from '../../services/i18nContext';
 import { ArrowLeft, ShoppingCart, MessageCircle, MapPin, ShieldCheck, Package, Plus, Minus, User, Lock, Truck, AlertCircle, Calendar, Clock, Star, Image as ImageIcon, PlayCircle, X, Heart, Layers } from 'lucide-react';
 import { MarketType, OfferType, OrderStatus, UserRole, Review } from '../../types';
 import { SEO } from '../../components/SEO';
+import { buildProductBreadcrumbSchema } from '../../services/seo/schemaBuilders';
 import { ProductDetailsSkeleton } from '../../components/skeletons/ProductDetailsSkeleton';
 import { ServiceSlotsSkeleton } from '../../components/Loaders';
 import { Spinner } from '../../components/Spinner';
@@ -367,6 +368,7 @@ export const ProductDetails: React.FC = () => {
     "name": offer.title,
     "image": offer.imageUrl,
     "description": offer.description,
+    "url": `https://acheteici.com/offer/${offer.id}`,
     "aggregateRating": productRating > 0 ? {
       "@type": "AggregateRating",
       "ratingValue": productRating,
@@ -377,6 +379,7 @@ export const ProductDetails: React.FC = () => {
       "priceCurrency": "XAF",
       "price": offer.price,
       "availability": offer.quantity > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+      "url": `https://acheteici.com/offer/${offer.id}`,
       "seller": {
         "@type": "Organization",
         "name": producerDisplayName
@@ -384,15 +387,20 @@ export const ProductDetails: React.FC = () => {
     }
   } : undefined;
 
+  const seoSchema =
+    offer && productSchema
+      ? [productSchema, buildProductBreadcrumbSchema(offer.title, offer.id)]
+      : undefined;
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <SEO
-        title={offer.title}
-        description={offer.description}
+        title={offer ? `Buy ${offer.title} — Agriculture Africa` : 'Product'}
+        description={offer?.description ?? 'Agricultural product on AgriMarket Connect — Africa\'s trusted farming marketplace.'}
         imageUrl={offer.imageUrl}
         type="product"
         url={`/offer/${offer.id}`}
-        schema={productSchema}
+        schema={seoSchema}
       />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 

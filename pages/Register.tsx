@@ -3,9 +3,11 @@ import React from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from '../services/i18nContext';
 import { Tractor, ShoppingBag } from 'lucide-react';
+import { SEO } from '../components/SEO';
+import { SEO_PAGE_META } from '../services/seo/seoConfig';
 
 export const Register: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [searchParams] = useSearchParams();
   const refCode = searchParams.get('ref');
 
@@ -15,6 +17,12 @@ export const Register: React.FC = () => {
 
   return (
     <div className="app-screen bg-gray-50 flex flex-col justify-center py-10 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <SEO
+        title={SEO_PAGE_META.register.title}
+        description={SEO_PAGE_META.register.description}
+        url="/register"
+        locale={language}
+      />
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <h2 className="mt-4 sm:mt-6 text-center text-2xl sm:text-3xl font-extrabold text-gray-900">
           {t('register.title')}

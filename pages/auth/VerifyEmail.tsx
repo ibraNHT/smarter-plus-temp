@@ -5,10 +5,12 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { Mail, Lock } from 'lucide-react';
 import { AuthOnboardingLayout } from '../../components/AuthOnboardingLayout';
+import { SEO } from '../../components/SEO';
+import { SEO_PAGE_META } from '../../services/seo/seoConfig';
 
 export const VerifyEmail: React.FC = () => {
   const { pendingRegistration, verifyEmail } = useStore();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const navigate = useNavigate();
 
   const [code, setCode] = useState('');
@@ -37,6 +39,14 @@ export const VerifyEmail: React.FC = () => {
   };
 
   return (
+    <>
+      <SEO
+        title={SEO_PAGE_META.verifyEmail.title}
+        description={SEO_PAGE_META.verifyEmail.description}
+        url="/verify-email"
+        noindex
+        locale={language}
+      />
     <AuthOnboardingLayout centerContent maxWidth="md">
       <div className="w-full space-y-6 sm:space-y-8 bg-white p-5 sm:p-8 rounded-xl shadow-lg border border-gray-100">
         <div className="text-center">
@@ -94,5 +104,6 @@ export const VerifyEmail: React.FC = () => {
         </p>
       </div>
     </AuthOnboardingLayout>
+    </>
   );
 };
