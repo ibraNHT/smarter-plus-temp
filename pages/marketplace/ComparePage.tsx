@@ -10,10 +10,12 @@ import { ComparePageSkeleton } from '../../components/skeletons/ComparePageSkele
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { showAppToast } from '../../services/appToast';
+import { SEO } from '../../components/SEO';
+import { SEO_PAGE_META } from '../../services/seo/seoConfig';
 
 export const ComparePage: React.FC = () => {
   const { compareList, offers, producers, getAverageRating, removeFromCompare, addToCart, clearCart, clearCompare, refreshOffers, refreshProducers } = useStore();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const navigate = useNavigate();
 //upadted
   const hasCachedCatalog = offers.length > 0 && producers.length > 0;
@@ -75,6 +77,13 @@ export const ComparePage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto py-6 sm:py-8 px-4 sm:px-6 lg:px-8 pb-32">
+      <SEO
+        title={SEO_PAGE_META.compare.title}
+        description={SEO_PAGE_META.compare.description}
+        url="/compare"
+        noindex
+        locale={language}
+      />
        <div className="flex items-center justify-between mb-6 sm:mb-8 gap-3 flex-wrap">
           <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 hover:text-primary-600 font-medium text-sm sm:text-base">
              <ArrowLeft className="h-5 w-5 mr-1 sm:mr-2" /> {t('product.back')}

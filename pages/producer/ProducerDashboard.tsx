@@ -185,7 +185,7 @@ export const ProducerDashboard: React.FC = () => {
    if (isProducerProfileLoading) {
       return (
          <>
-            <SEO title="Producer Dashboard | AgriMarket" noindex={true} />
+            <SEO title="Producer Dashboard" noindex={true} />
             <DashboardSkeleton />
          </>
       );
@@ -194,7 +194,7 @@ export const ProducerDashboard: React.FC = () => {
    if (!currentProducer) {
       return (
          <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 px-4">
-            <SEO title="Producer Dashboard | AgriMarket" noindex={true} />
+            <SEO title="Producer Dashboard" noindex={true} />
             <div className="mb-4 sm:mb-6 flex items-center gap-2 sm:gap-3 min-w-0">
                <button onClick={() => navigate(-1)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors flex-shrink-0" aria-label="Back">
                   <ArrowLeft className="h-5 w-5 text-gray-600" />
@@ -440,7 +440,7 @@ export const ProducerDashboard: React.FC = () => {
    return (
       <BuyerOrderFlowsProvider>
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 px-4">
-         <SEO title="Producer Dashboard | AgriMarket" noindex={true} />
+         <SEO title="Producer Dashboard" noindex={true} />
          {managingAsAccountManager && (
             <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
                <p className="font-semibold">Account manager mode</p>

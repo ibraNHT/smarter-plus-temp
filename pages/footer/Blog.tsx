@@ -2,9 +2,11 @@
 import React from 'react';
 import { useTranslation } from '../../services/i18nContext';
 import { User, ArrowRight } from 'lucide-react';
+import { SEO } from '../../components/SEO';
+import { SEO_PAGE_META } from '../../services/seo/seoConfig';
 
 export const Blog: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
 
   const posts = [
     {
@@ -38,6 +40,12 @@ export const Blog: React.FC = () => {
 
   return (
     <div className="bg-gray-50 min-h-screen py-8 sm:py-12">
+      <SEO
+        title={SEO_PAGE_META.blog.title}
+        description={SEO_PAGE_META.blog.description}
+        url="/blog"
+        locale={language}
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-8 sm:mb-12">
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900">

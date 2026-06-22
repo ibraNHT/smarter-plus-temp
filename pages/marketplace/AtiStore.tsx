@@ -6,6 +6,11 @@ import { useTranslation } from '../../services/i18nContext';
 import { MarketType, UserRole } from '../../types';
 import { ShoppingBasket, Search, Star, Filter, Heart, Layers, ArrowLeft } from 'lucide-react';
 import { SEO } from '../../components/SEO';
+import { SEO_PAGE_META } from '../../services/seo/seoConfig';
+import {
+  buildBreadcrumbSchema,
+  buildCollectionPageSchema,
+} from '../../services/seo/schemaBuilders';
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { offerImageInBox, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
 import { isProducerDashboardUser } from '../../services/producerSession';
@@ -92,9 +97,21 @@ export const AtiStore: React.FC = () => {
   return (
     <div className="min-h-screen bg-white">
       <SEO
-        title="ATI Store | Premium Retail Agriculture"
-        description="Shop premium processed foods, canned goods, spices, and more directly from the official ATI Store. Verified quality, fast delivery."
+        title={SEO_PAGE_META.atiStore.title}
+        description={SEO_PAGE_META.atiStore.description}
+        keywords={SEO_PAGE_META.atiStore.keywords}
         url="/market/ati"
+        schema={[
+          buildCollectionPageSchema({
+            name: SEO_PAGE_META.atiStore.title,
+            description: SEO_PAGE_META.atiStore.description,
+            path: '/market/ati',
+          }),
+          buildBreadcrumbSchema([
+            { name: 'Home', path: '/' },
+            { name: 'ATI Store', path: '/market/ati' },
+          ]),
+        ]}
       />
       {/* Header */}
       <div className="bg-blue-800 text-white py-6 sm:py-8">

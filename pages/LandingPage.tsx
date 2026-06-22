@@ -3,16 +3,20 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from '../services/i18nContext';
 import { ArrowRight, CheckCircle, BarChart3, Truck, ShoppingBasket, Tractor } from 'lucide-react';
 import { SEO } from '../components/SEO';
+import { SEO_PAGE_META } from '../services/seo/seoConfig';
+import { buildOrganizationSchema, buildWebSiteSchema } from '../services/seo/schemaBuilders';
 
 export const LandingPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
 
   return (
     <div className="bg-white">
       <SEO
-        title="Wholesale & Retail Agricultural Products"
-        description="AgriMarket Connect connects you to verified local farmers for wholesale supply and the ATI Store for premium retail agricultural products. Buy direct, buy secure."
+        title={SEO_PAGE_META.home.title}
+        description={SEO_PAGE_META.home.description}
         url="/"
+        locale={language}
+        schema={[buildOrganizationSchema(), buildWebSiteSchema()]}
       />
       {/* Hero Section */}
       <div className="relative bg-primary-900">

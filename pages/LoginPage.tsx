@@ -9,6 +9,8 @@ import { Sprout, Lock, Mail, X, Phone, Eye, EyeOff, Loader2 } from 'lucide-react
 import { AuthMobileBrand } from '../components/AuthMobileBrand';
 import { Modal } from '../components/Modal';
 import { FieldError, inputErrorClasses, showFieldError } from '../components/FieldError';
+import { SEO } from '../components/SEO';
+import { SEO_PAGE_META } from '../services/seo/seoConfig';
 import { useFormik } from 'formik';
 import { z } from 'zod';
 
@@ -63,7 +65,7 @@ type LoginFormValues = {
 
 export const LoginPage: React.FC = () => {
   const { login } = useStore();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const navigate = useNavigate();
 
   const [showPassword, setShowPassword] = useState(false);
@@ -330,6 +332,13 @@ export const LoginPage: React.FC = () => {
 
   return (
     <div className="min-h-[100dvh] flex flex-col md:flex-row bg-gray-50">
+      <SEO
+        title={SEO_PAGE_META.login.title}
+        description={SEO_PAGE_META.login.description}
+        url="/login"
+        noindex
+        locale={language}
+      />
 
       {/* Left Side - Image/Branding */}
       <div className="hidden md:flex md:w-1/2 bg-primary-900 items-center justify-center p-8 lg:p-12 relative overflow-hidden">

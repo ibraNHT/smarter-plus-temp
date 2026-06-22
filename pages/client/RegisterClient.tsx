@@ -16,6 +16,8 @@ import {
 import { FieldError, inputErrorClasses, showFieldError } from '../../components/FieldError';
 import { RegisterPhoneOtpModal } from '../../components/RegisterPhoneOtpModal';
 import { buildRegisterPhone } from '../../utils/registerPhone';
+import { SEO } from '../../components/SEO';
+import { SEO_PAGE_META } from '../../services/seo/seoConfig';
 
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
 const PASSWORD_RULE_MESSAGE = 'Password must be at least 4 characters with 1 letter, 1 number, and 1 special character.';
@@ -52,7 +54,7 @@ const AFRICA_COUNTRY_CODES = [
 
 export const RegisterClient: React.FC = () => {
   const { registerClient } = useStore();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const refCode = searchParams.get('ref');
@@ -238,6 +240,13 @@ export const RegisterClient: React.FC = () => {
   };
 
   return (
+    <>
+      <SEO
+        title={SEO_PAGE_META.registerClient.title}
+        description={SEO_PAGE_META.registerClient.description}
+        url="/register/client"
+        locale={language}
+      />
     <AuthOnboardingLayout
       maxWidth="2xl"
       reserveStickyActions
@@ -532,5 +541,6 @@ export const RegisterClient: React.FC = () => {
         }}
       />
     </AuthOnboardingLayout>
+    </>
   );
 };

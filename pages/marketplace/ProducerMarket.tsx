@@ -6,6 +6,11 @@ import { useTranslation } from '../../services/i18nContext';
 import { MarketType, UserRole } from '../../types';
 import { Tractor, Search, MapPin, ArrowLeft, MessageCircle, Truck, Heart, Star, Layers } from 'lucide-react';
 import { SEO } from '../../components/SEO';
+import { SEO_PAGE_META } from '../../services/seo/seoConfig';
+import {
+  buildBreadcrumbSchema,
+  buildCollectionPageSchema,
+} from '../../services/seo/schemaBuilders';
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { ClampText } from '../../components/ClampText';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
@@ -343,9 +348,21 @@ export const ProducerMarket: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <SEO
-        title="Producer Market | Wholesale Agriculture"
-        description="Browse wholesale agricultural products directly from verified producers in your region. Buy onions, tomatoes, livestock, and more directly from the farm."
+        title={SEO_PAGE_META.producerMarket.title}
+        description={SEO_PAGE_META.producerMarket.description}
+        keywords={SEO_PAGE_META.producerMarket.keywords}
         url="/market/producers"
+        schema={[
+          buildCollectionPageSchema({
+            name: SEO_PAGE_META.producerMarket.title,
+            description: SEO_PAGE_META.producerMarket.description,
+            path: '/market/producers',
+          }),
+          buildBreadcrumbSchema([
+            { name: 'Home', path: '/' },
+            { name: 'Producer Market', path: '/market/producers' },
+          ]),
+        ]}
       />
       {/* Header */}
       <div className="bg-primary-900 text-white pt-6 sm:pt-8 pb-12 sm:pb-16 relative">

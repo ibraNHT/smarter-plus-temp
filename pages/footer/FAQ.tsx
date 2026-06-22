@@ -2,9 +2,12 @@
 import React, { useState } from 'react';
 import { useTranslation } from '../../services/i18nContext';
 import { ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
+import { SEO } from '../../components/SEO';
+import { SEO_PAGE_META } from '../../services/seo/seoConfig';
+import { buildFaqPageSchema } from '../../services/seo/schemaBuilders';
 
 export const FAQ: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [openIndex, setOpenIndex] = useState<number | null>(0);
 
   const faqs = [
@@ -32,6 +35,13 @@ export const FAQ: React.FC = () => {
 
   return (
     <div className="bg-white min-h-screen py-8 sm:py-12">
+      <SEO
+        title={SEO_PAGE_META.faq.title}
+        description={SEO_PAGE_META.faq.description}
+        url="/faq"
+        locale={language}
+        schema={buildFaqPageSchema(faqs.map((faq) => ({ question: faq.q, answer: faq.a })))}
+      />
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-8 sm:mb-12">
           <HelpCircle className="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-primary-600 mb-4" />

@@ -97,6 +97,11 @@ export const Footer: React.FC = () => {
             </h3>
             <ul className="space-y-3">
               <li>
+                <Link to="/help" className="text-base text-primary-100 hover:text-white transition-colors">
+                  {t('footer.link.helpCenter')}
+                </Link>
+              </li>
+              <li>
                 <Link to="/faq" className="text-base text-primary-100 hover:text-white transition-colors">
                   {t('footer.link.faq')}
                 </Link>
