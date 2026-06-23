@@ -274,6 +274,8 @@ const translations: Record<string, Record<Language, string>> = {
   'product.loadingSlots': { en: 'Loading available slots…', fr: 'Chargement des créneaux disponibles…' },
   'product.rateProducer': { en: 'Rate Producer', fr: 'Noter le Producteur' },
   'product.compare': { en: 'Compare', fr: 'Comparer' },
+  'product.share': { en: 'Share', fr: 'Partager' },
+  'product.linkCopied': { en: 'Link copied to clipboard', fr: 'Lien copié dans le presse-papiers' },
   
   // Cart
   'cart.title': { en: 'Shopping Cart', fr: 'Panier' },

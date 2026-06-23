@@ -193,7 +193,9 @@ export const WalletDashboard: React.FC = () => {
               {wallet.balance.toLocaleString()} <span className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800 ml-1">XAF</span>
             </h2>
 
-            {/* Balance Breakdown */}
+            {/* Balance Breakdown — producer-only (withdrawal / earnings concepts).
+                Clients have no withdrawals, so "Available to Withdraw" must not show. */}
+            {isProducer && (
             <div className="mt-5 pt-5 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">{t('wallet.available')}</p>
@@ -213,6 +215,7 @@ export const WalletDashboard: React.FC = () => {
                 </div>
               )}
             </div>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-6 flex flex-col justify-center gap-3 sm:gap-4 border border-gray-100">

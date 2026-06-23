@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
-import { ArrowLeft, ShoppingCart, MessageCircle, MapPin, ShieldCheck, Package, Plus, Minus, User, Lock, Truck, AlertCircle, Calendar, Clock, Star, Image as ImageIcon, PlayCircle, X, Heart, Layers } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, MessageCircle, MapPin, ShieldCheck, Package, Plus, Minus, User, Lock, Truck, AlertCircle, Calendar, Clock, Star, Image as ImageIcon, PlayCircle, X, Heart, Layers, Share2 } from 'lucide-react';
 import { MarketType, OfferType, OrderStatus, UserRole, Review } from '../../types';
 import { SEO } from '../../components/SEO';
 import { buildProductBreadcrumbSchema } from '../../services/seo/schemaBuilders';
@@ -357,6 +357,25 @@ export const ProductDetails: React.FC = () => {
     else addToCompare(offer.id);
   };
 
+  const handleShare = async () => {
+    const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
+    const shareData = {
+      title: offer.title,
+      text: `${offer.title} — ATI AgriMarket`,
+      url: shareUrl,
+    };
+    try {
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share(shareData);
+      } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(shareUrl);
+        showAppToast(t('product.linkCopied'), 'SUCCESS');
+      }
+    } catch {
+      // User dismissed the share sheet or clipboard was blocked — no action needed.
+    }
+  };
+
   const producerDisplayName = !isProducerMarket
     ? 'ATI Retail Store'
     : resolveProducerDisplayName(producer);
@@ -480,6 +499,15 @@ export const ProductDetails: React.FC = () => {
                       title={t('product.compare')}
                     >
                       <Layers className="h-5 w-5" />
+                    </button>
+
+                    {/* Share Button */}
+                    <button
+                      onClick={() => void handleShare()}
+                      className="p-1.5 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors text-gray-400 hover:text-primary-600"
+                      title={t('product.share')}
+                    >
+                      <Share2 className="h-5 w-5" />
                     </button>
 
                     {isNegotiationAllowed && (
