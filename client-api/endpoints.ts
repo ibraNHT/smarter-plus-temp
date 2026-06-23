@@ -126,9 +126,9 @@ export const API_ENDPOINTS = {
     sessionMessages: (sessionId: string) =>
       `/api/support/sessions/${sessionId}/messages`,
     guestSessionMessagesPost: (sessionId: string) =>
-      `/api/support/sessions/${sessionId}/guest/messages`,
+      `/api/support/guest/sessions/${sessionId}/messages`,
     guestSessionMessages: (sessionId: string, guestEmail: string) =>
-      `/api/support/sessions/${sessionId}/guest/messages?guestEmail=${encodeURIComponent(guestEmail)}`,
+      `/api/support/guest/sessions/${sessionId}/messages?guestEmail=${encodeURIComponent(guestEmail)}`,
   },
   ai: {
     supportChat: "/api/ai/support-chat",
