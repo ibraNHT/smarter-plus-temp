@@ -95,6 +95,13 @@ export const API_ENDPOINTS = {
     /** Aligned with Nest: `WalletController` @Get("me/withdrawals") */
     myWithdrawals: "/api/wallet/me/withdrawals",
   },
+  payments: {
+    /** Start a Tranzak wallet top-up; returns a hosted paymentUrl to redirect to. */
+    walletTopup: "/api/payments/wallet/topup",
+    /** Poll a top-up's status by merchantRef. */
+    topupStatus: (merchantRef: string) =>
+      `/api/payments/topup/${encodeURIComponent(merchantRef)}/status`,
+  },
   reviews: {
     create: "/api/reviews",
     byUser: (userId: string) => `/api/reviews/user/${userId}`,

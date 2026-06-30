@@ -62,7 +62,12 @@ export const ProducerDashboard: React.FC = () => {
          window.clearInterval(id);
          window.removeEventListener('focus', poll);
       };
-   }, [awaitingCustomerReceipt, refreshOrders]);
+      // `refreshOrders` is re-created every render (store value isn't memoized);
+      // depending on it would tear down and recreate the interval/listener on every
+      // render, so the 12s timer could never actually fire. We only want to (re)start
+      // polling when the awaiting-receipt condition flips.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [awaitingCustomerReceipt]);
 
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
    const selectedOrderLive = useMemo(() => {

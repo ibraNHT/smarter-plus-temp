@@ -107,7 +107,13 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (user?.id) void refreshWallet();
-  }, [user?.id, refreshWallet]);
+    // NOTE: `refreshWallet` is intentionally NOT a dependency. The store value is
+    // rebuilt every render, so `refreshWallet` gets a new identity each time;
+    // depending on it would re-run this effect every render → refreshWallet() →
+    // setWallets() → re-render → loop, freezing the tab. We only need to refresh
+    // when the signed-in user changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const reviewFormik = useFormik({
     initialValues: { comment: '', rating: 5 },

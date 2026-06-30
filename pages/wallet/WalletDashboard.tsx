@@ -1,21 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
-import { Wallet as WalletIcon, ArrowUpRight, ArrowDownLeft, Plus, CreditCard, Smartphone, Building, MinusCircle, Clock, CheckCircle, XCircle, ArrowLeft, TrendingUp } from 'lucide-react';
+import { Wallet as WalletIcon, ArrowUpRight, ArrowDownLeft, Plus, CreditCard, MinusCircle, Clock, CheckCircle, XCircle, ArrowLeft, TrendingUp } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { TransactionType, WithdrawalStatus, PaymentMethod } from '../../types';
 import { isProducerDashboardUser, producerAccountUserId } from '../../services/producerSession';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { OtpVerificationModal } from '../../components/OtpVerificationModal';
 import { Modal } from '../../components/Modal';
 import { ListSkeleton } from '../../components/Loaders';
 import { useFormik } from 'formik';
 import { z } from 'zod';
-import { showAppToast } from '../../services/appToast';
+import { showAppToast, dismissAppToast } from '../../services/appToast';
 import { PAYMENTS_ENABLED } from '../../utils/featureFlags';
 
 export const WalletDashboard: React.FC = () => {
-  const { user, getWallet, fundWallet, requestWithdrawal, requestOtp, verifyOtp, producers, withdrawalRequests, refreshWallet, refreshWithdrawals } = useStore();
+  const { user, getWallet, initiateTopUp, checkTopUpStatus, requestWithdrawal, requestOtp, verifyOtp, producers, withdrawalRequests, refreshWallet, refreshWithdrawals } = useStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -31,10 +31,63 @@ export const WalletDashboard: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
+  // Reconcile a pending top-up on mount. Tranzak strips the hash fragment from
+  // the return URL (so we can't rely on ?payment=return surviving in a HashRouter
+  // app), but we stashed the merchantRef in sessionStorage before redirecting.
+  // Polling the status endpoint makes the server reconcile with Tranzak and
+  // credit the wallet — works even when the webhook never reached us.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const ref = sessionStorage.getItem('pendingTopUpRef');
+    const isReturn = searchParams.get('payment') === 'return';
+    if (isReturn) {
+      searchParams.delete('payment');
+      setSearchParams(searchParams, { replace: true });
+    }
+    if (!ref) return;
+    sessionStorage.removeItem('pendingTopUpRef');
+
+    let cancelled = false;
+    // Persistent toast (durationMs = 0): stays on screen until we dismiss it,
+    // i.e. until the top-up actually reflects in the wallet balance.
+    const confirmingId = showAppToast('Confirming your payment…', 'INFO', 0);
+    const clearConfirming = () => { if (confirmingId) dismissAppToast(confirmingId); };
+    (async () => {
+      // Poll the status endpoint (which reconciles with Tranzak and credits the
+      // wallet) until the payment settles. Keep going long enough for the hosted
+      // page + webhook to land (~2 min), holding the "Confirming…" toast the
+      // whole time so the user isn't left guessing.
+      const MAX_ATTEMPTS = 40;
+      for (let i = 0; i < MAX_ATTEMPTS && !cancelled; i++) {
+        const { status } = await checkTopUpStatus(ref);
+        if (status === 'SUCCESSFUL') {
+          await refreshWallet({ force: true });
+          clearConfirming();
+          if (!cancelled) showAppToast('Wallet topped up successfully!', 'SUCCESS');
+          return;
+        }
+        if (status === 'FAILED' || status === 'CANCELLED') {
+          clearConfirming();
+          if (!cancelled) showAppToast('Payment was not completed.', 'ERROR');
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+      // Timed out still pending — drop the spinner toast and refresh in case a
+      // late webhook credited us; tell the user it's still settling.
+      await refreshWallet({ force: true });
+      clearConfirming();
+      if (!cancelled) {
+        showAppToast('Still confirming your payment — it will appear once settled.', 'WARNING');
+      }
+    })();
+    return () => { cancelled = true; clearConfirming(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [showTopUp, setShowTopUp] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState<'ORANGE' | 'MTN' | 'BANK'>('ORANGE');
   const [selectedSavedMethodId, setSelectedSavedMethodId] = useState<string>('');
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [pendingWithdraw, setPendingWithdraw] = useState<{ amount: number; method: PaymentMethod } | null>(null);
@@ -49,15 +102,17 @@ export const WalletDashboard: React.FC = () => {
   // Calculate pending withdrawals
   const myRequests = withdrawalRequests.filter(r => r.userId === walletOwnerId).sort((a, b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime());
   const pendingAmount = myRequests.filter(r => r.status === WithdrawalStatus.PENDING).reduce((acc, curr) => acc + curr.amount, 0);
-  const availableBalance = wallet.balance - pendingAmount;
+  // The backend debits wallet.balance the instant a withdrawal is requested (funds are
+  // held), so the balance already excludes pending requests — don't subtract them again.
+  // `pendingAmount` is still shown below as an informational "being processed" figure.
+  const availableBalance = wallet.balance;
 
   const topUpSchema = z.object({
     amount: z.coerce.number().min(100, 'Amount must be at least 100 XAF.'),
-    txnId: z.string().trim().min(3, 'Transaction ID is required.'),
   });
 
   const topUpFormik = useFormik({
-    initialValues: { amount: '', txnId: '' },
+    initialValues: { amount: '' },
     validate: (values) => {
       const parsed = topUpSchema.safeParse(values);
       if (parsed.success) return {};
@@ -70,13 +125,18 @@ export const WalletDashboard: React.FC = () => {
     },
     onSubmit: async (values) => {
       setLoading(true);
-      const result = await fundWallet(Number(values.amount), selectedProvider, values.txnId.trim());
-      setLoading(false);
-      if (result.success) {
-        setShowTopUp(false);
-        topUpFormik.resetForm();
+      // Hosted-link flow: create the Tranzak request, then redirect the user to
+      // its payment page. The wallet is credited when Tranzak's webhook lands.
+      const result = await initiateTopUp(Number(values.amount));
+      if (result.success && result.paymentUrl) {
+        if (result.merchantRef) {
+          sessionStorage.setItem('pendingTopUpRef', result.merchantRef);
+        }
+        window.location.href = result.paymentUrl;
+        return;
       }
-      showAppToast(result.message, result.success ? 'SUCCESS' : 'ERROR');
+      setLoading(false);
+      showAppToast(result.message || 'Could not start payment.', 'ERROR');
     },
   });
 
@@ -133,6 +193,7 @@ export const WalletDashboard: React.FC = () => {
     switch (type) {
       case TransactionType.DEPOSIT:
       case TransactionType.RECEIVED:
+      case TransactionType.REFUND:
         return <ArrowDownLeft className="h-5 w-5 text-green-600" />;
       case TransactionType.PAYMENT:
       case TransactionType.WITHDRAWAL:
@@ -307,8 +368,8 @@ export const WalletDashboard: React.FC = () => {
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className={`text-sm font-bold whitespace-nowrap ${tx.type === TransactionType.DEPOSIT || tx.type === TransactionType.RECEIVED ? 'text-green-700' : 'text-gray-900'}`}>
-                        {tx.type === TransactionType.DEPOSIT || tx.type === TransactionType.RECEIVED ? '+' : '-'}
+                      <p className={`text-sm font-bold whitespace-nowrap ${tx.type === TransactionType.DEPOSIT || tx.type === TransactionType.RECEIVED || tx.type === TransactionType.REFUND ? 'text-green-700' : 'text-gray-900'}`}>
+                        {tx.type === TransactionType.DEPOSIT || tx.type === TransactionType.RECEIVED || tx.type === TransactionType.REFUND ? '+' : '-'}
                         {tx.amount.toLocaleString()} XAF
                       </p>
                       <p className="text-xs text-gray-400 capitalize">{tx.type.toLowerCase()}</p>
@@ -324,19 +385,13 @@ export const WalletDashboard: React.FC = () => {
         <Modal open={PAYMENTS_ENABLED && showTopUp} onClose={() => setShowTopUp(false)} maxWidth="lg" zIndex={50} panelClassName="p-4 sm:p-6">
                 <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">{t('wallet.topup')}</h3>
                 <form onSubmit={topUpFormik.handleSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">{t('wallet.selectMethod')}</label>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div onClick={() => setSelectedProvider('ORANGE')} className={`cursor-pointer border rounded-lg p-3 flex flex-col items-center text-center ${selectedProvider === 'ORANGE' ? 'border-orange-500 bg-orange-50' : ''}`}><Smartphone className="h-6 w-6 text-orange-500 mb-2" /><span className="text-xs text-gray-900">Orange</span></div>
-                      <div onClick={() => setSelectedProvider('MTN')} className={`cursor-pointer border rounded-lg p-3 flex flex-col items-center text-center ${selectedProvider === 'MTN' ? 'border-yellow-400 bg-yellow-50' : ''}`}><Smartphone className="h-6 w-6 text-yellow-400 mb-2" /><span className="text-xs text-gray-900">MTN</span></div>
-                      <div onClick={() => setSelectedProvider('BANK')} className={`cursor-pointer border rounded-lg p-3 flex flex-col items-center text-center ${selectedProvider === 'BANK' ? 'border-blue-500 bg-blue-50' : ''}`}><Building className="h-6 w-6 text-blue-500 mb-2" /><span className="text-xs text-gray-900">Bank</span></div>
-                    </div>
-                  </div>
-                  <input type="number" name="amount" required min="100" className="w-full border border-gray-300 p-2 rounded bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500" value={topUpFormik.values.amount} onChange={topUpFormik.handleChange} onBlur={topUpFormik.handleBlur} placeholder="Amount" />
+                  <p className="text-sm text-gray-500">
+                    Enter the amount to add to your wallet. You&apos;ll be redirected to our
+                    secure payment page to complete payment (Mobile Money, card, etc.).
+                  </p>
+                  <input type="number" name="amount" required min="100" className="w-full border border-gray-300 p-2 rounded bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500" value={topUpFormik.values.amount} onChange={topUpFormik.handleChange} onBlur={topUpFormik.handleBlur} placeholder="Amount (XAF)" />
                   {topUpFormik.touched.amount && topUpFormik.errors.amount ? <p className="text-xs text-red-600">{topUpFormik.errors.amount}</p> : null}
-                  <input type="text" name="txnId" required className="w-full border border-gray-300 p-2 rounded bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500" value={topUpFormik.values.txnId} onChange={topUpFormik.handleChange} onBlur={topUpFormik.handleBlur} placeholder="Transaction ID" />
-                  {topUpFormik.touched.txnId && topUpFormik.errors.txnId ? <p className="text-xs text-red-600">{topUpFormik.errors.txnId}</p> : null}
-                  <button type="submit" disabled={loading} className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700">{loading ? 'Processing...' : 'Fund Wallet'}</button>
+                  <button type="submit" disabled={loading} className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700">{loading ? 'Redirecting…' : 'Proceed to Pay'}</button>
                 </form>
         </Modal>
 

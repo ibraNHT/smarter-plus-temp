@@ -26,14 +26,19 @@ export function dismissAppToast(id: string) {
   notify();
 }
 
-/** Themed ephemeral toast (replaces `window.alert` for user feedback). */
+/**
+ * Themed toast (replaces `window.alert` for user feedback). Returns the toast id
+ * so callers can dismiss/replace it manually. Pass `durationMs <= 0` (or
+ * `Infinity`) for a persistent toast that stays until `dismissAppToast(id)` is
+ * called — e.g. a "confirming payment…" toast held until the balance updates.
+ */
 export function showAppToast(
   message: string,
   type: AppToastType = 'INFO',
   durationMs = 5000,
-) {
+): string {
   const trimmed = message.trim();
-  if (!trimmed) return;
+  if (!trimmed) return '';
 
   const toast: AppToastItem = {
     id: typeof crypto !== 'undefined' && crypto.randomUUID
@@ -46,5 +51,8 @@ export function showAppToast(
   toasts = [...toasts, toast];
   notify();
 
-  window.setTimeout(() => dismissAppToast(toast.id), durationMs);
+  if (durationMs > 0 && Number.isFinite(durationMs)) {
+    window.setTimeout(() => dismissAppToast(toast.id), durationMs);
+  }
+  return toast.id;
 }

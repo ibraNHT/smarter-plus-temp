@@ -414,6 +414,10 @@ interface StoreContextType {
   // Wallet Methods
   getWallet: (userId: string) => Wallet;
   fundWallet: (amount: number, provider: string, referenceId: string) => Promise<{ success: boolean; message: string }>;
+  /** Start a Tranzak hosted-link top-up; returns a paymentUrl to redirect the user to. */
+  initiateTopUp: (amount: number, currency?: string) => Promise<{ success: boolean; paymentUrl?: string; merchantRef?: string; message: string }>;
+  /** Poll a top-up's status (server reconciles with Tranzak + credits on success). */
+  checkTopUpStatus: (merchantRef: string) => Promise<{ status: string }>;
   requestWithdrawal: (amount: number, method: PaymentMethod, otpToken?: string) => Promise<{ success: boolean; message: string }>;
   // Notification Methods
   markNotificationsAsRead: () => void;
@@ -571,7 +575,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const onTokenRefreshed = () => setSocketAuthEpoch((n) => n + 1);
+    const onTokenRefreshed = () => {
+      // A refresh kicked off by the socket's own connect_error must NOT rebuild
+      // the socket: the connect_error handler already reconnects it in place.
+      // Rebuilding here would reset that handler's guard and, when the socket
+      // keeps failing for a non-auth reason, spin an infinite refresh/reconnect
+      // loop that freezes the tab. Background refreshes (from a 401 on a normal
+      // API call) still fall through and reconnect the socket with the new JWT.
+      if (socketDrivenRefreshRef.current) return;
+      setSocketAuthEpoch((n) => n + 1);
+    };
     window.addEventListener('agm:token-refreshed', onTokenRefreshed);
     return () => window.removeEventListener('agm:token-refreshed', onTokenRefreshed);
   }, []);
@@ -637,6 +650,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── REALTIME: WebSocket for instant order/notification updates ───────────────
   const socketRef = useRef<Socket | null>(null);
+  // True while the socket's own connect_error handler is refreshing the token.
+  // Used to suppress the `agm:token-refreshed` → epoch-bump that would tear down
+  // and rebuild this socket — the connect_error handler reconnects it in place,
+  // so rebuilding would race and, if the socket keeps failing for a non-auth
+  // reason, loop forever (refresh → rebuild → connect_error → refresh → …).
+  const socketDrivenRefreshRef = useRef(false);
+  // Timestamp of the last socket-initiated refresh, to rate-limit connect_error
+  // from triggering a refresh storm when the socket can't connect at all.
+  const lastSocketRefreshAtRef = useRef(0);
   const userRef = useRef<typeof user>(user);
   userRef.current = user;
   const supportSessionIdRef = useRef<string | null>(supportSessionId);
@@ -904,13 +926,27 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setIsSocketConnected(false);
       setRealtimeConnected(false);
       if (refreshOnConnectError) return;
+      // Belt-and-suspenders: don't let connect_error trigger a refresh more than
+      // once per 30s. Guards against a non-auth connect failure (server down,
+      // proxy/CORS) repeatedly burning refresh-token rotations.
+      if (Date.now() - lastSocketRefreshAtRef.current < 30_000) return;
       refreshOnConnectError = true;
+      lastSocketRefreshAtRef.current = Date.now();
       void (async () => {
-        const ok = await attemptTokenRefresh();
-        const nextToken = getToken();
-        if (ok && nextToken) {
-          socket.auth = { token: nextToken };
-          socket.connect();
+        // Mark this refresh as socket-driven so the `agm:token-refreshed`
+        // listener skips the epoch bump (which would rebuild this socket and
+        // can loop forever). The event is dispatched synchronously inside
+        // attemptTokenRefresh, so the flag is still set when it fires.
+        socketDrivenRefreshRef.current = true;
+        try {
+          const ok = await attemptTokenRefresh();
+          const nextToken = getToken();
+          if (ok && nextToken) {
+            socket.auth = { token: nextToken };
+            socket.connect();
+          }
+        } finally {
+          socketDrivenRefreshRef.current = false;
         }
       })();
     });
@@ -2732,6 +2768,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (result.wallet) setWallets(prev => ({ ...prev, [user.id]: result.wallet! }));
       bustCache(['orders']);
       bustCache(QK.wallet(user.id));
+      // The payment debits the wallet server-side; pull the fresh balance so the
+      // UI reflects the deduction immediately (the response no longer carries it).
+      await refreshWallet({ force: true });
       addNotification(user.id, 'Payment successful!', 'SUCCESS');
       return { success: true };
     } catch (error) {
@@ -2953,6 +2992,46 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     } catch (error: any) {
       logApiFailure('Failed to fund wallet', error);
       return { success: false, message: error.message || 'Funding failed' };
+    }
+  };
+
+  const initiateTopUp = async (
+    amount: number,
+    currency = 'XAF',
+  ): Promise<{ success: boolean; paymentUrl?: string; merchantRef?: string; message: string }> => {
+    if (!user) return { success: false, message: 'No user' };
+    try {
+      const result = await apiFetch<{
+        paymentUrl: string;
+        merchantRef: string;
+        reference: string;
+        status: string;
+      }>(API_ENDPOINTS.payments.walletTopup, {
+        method: 'POST',
+        body: JSON.stringify({ amount, currency }),
+      });
+      return {
+        success: true,
+        paymentUrl: result.paymentUrl,
+        merchantRef: result.merchantRef,
+        message: 'ok',
+      };
+    } catch (error: any) {
+      logApiFailure('Failed to initiate top-up', error);
+      return { success: false, message: error.message || 'Could not start payment' };
+    }
+  };
+
+  const checkTopUpStatus = async (merchantRef: string): Promise<{ status: string }> => {
+    try {
+      const result = await apiFetch<{ merchantRef: string; status: string; amount: number }>(
+        API_ENDPOINTS.payments.topupStatus(merchantRef),
+        { silent401: true } as any,
+      );
+      return { status: result.status };
+    } catch (error: any) {
+      logApiFailure('Failed to check top-up status', error);
+      return { status: 'UNKNOWN' };
     }
   };
 
@@ -3965,7 +4044,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     sendMessage, retryMessage, emitTyping, respondToProposal,
     login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, deleteOffer, getProducerOffers, getOfferById,
     addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, markOrderDelivered, confirmReceipt, completeOrder, requestOrderCancellation, updateAppointment, reportProblem, addDisputeEvidence, revealContactInfo,
-    getWallet, fundWallet, requestWithdrawal, markNotificationsAsRead, markNotificationAsRead, deleteNotification, clearNotifications, getAvailableSlots, submitReview, getAverageRating,
+    getWallet, fundWallet, initiateTopUp, checkTopUpStatus, requestWithdrawal, markNotificationsAsRead, markNotificationAsRead, deleteNotification, clearNotifications, getAvailableSlots, submitReview, getAverageRating,
     getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,
     trackUserSearch, toggleFavorite, moveToFavorites, getRecommendedOffers,
     compareList, addToCompare, removeFromCompare, clearCompare,
