@@ -24,6 +24,7 @@ import { PAYMENTS_ENABLED } from '../../utils/featureFlags';
 import { orderHasService, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
 import { ORDER_STATUS_LABEL_KEY, ORDER_STATUS_PILL_CLASS } from '../../utils/orderStatusDisplay';
 import {
+  canCancelDirectly,
   canRequestCancellation,
   canReportProblem,
   canLeaveReview,
@@ -55,9 +56,9 @@ function normalizeDob(dobRaw: unknown): string {
 }
 
 export const ClientProfile: React.FC = () => {
-   type ProfileTab = 'info' | 'orders' | 'security' | 'favorites' | 'reputation' | 'referrals';
+   type ProfileTab = 'info' | 'orders' | 'security' | 'favorites' | 'reputation' | 'referrals' | 'payment';
    const isProfileTab = (v: string | null): v is ProfileTab =>
-      v === 'info' || v === 'orders' || v === 'security' || v === 'favorites' || v === 'reputation' || v === 'referrals';
+      v === 'info' || v === 'orders' || v === 'security' || v === 'favorites' || v === 'reputation' || v === 'referrals' || v === 'payment';
 
    const { user, orders, payForOrder, completeOrder, confirmReceipt, requestOrderCancellation, updateAppointment, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, pickupPoints, revealContactInfo, refreshClients, refreshOrders, refreshOffers, refreshProducers, refreshAllReviews, refreshMyReviews, refreshWallet } = useStore();
    const updateClientMutation = useUpdateClientProfileMutation();
@@ -856,6 +857,9 @@ export const ClientProfile: React.FC = () => {
             {order.status === OrderStatus.DELIVERED && (
                <button onClick={wrap(() => setCompleteOrderId(order.id))} className={`bg-green-600 text-white ${btnBold} rounded-md font-bold hover:bg-green-700 shadow-sm flex items-center gap-1`}><CheckCircle className={iconSm} /> {t('order.completeOrder')}</button>
             )}
+            {canCancelDirectly(order) && (
+               <button onClick={wrap(() => setCancelOrderId(order.id))} className={`text-red-600 hover:bg-red-50 ${btn} rounded-md font-medium border border-red-100`}>{t('order.cancel')}</button>
+            )}
             {canRequestCancellation(order) && (
                order.cancellationRequested ? (
                   <span className={`text-gray-500 bg-gray-50 ${btn} rounded-md font-medium border border-gray-200`}>{t('order.cancellationPending')}</span>
@@ -956,6 +960,9 @@ export const ClientProfile: React.FC = () => {
                   <button onClick={() => setActiveTab('favorites')} className={`${activeTab === 'favorites' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
                      <Heart className={`${activeTab === 'favorites' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.favorites')}</span>
                   </button>
+                  <button onClick={() => setActiveTab('payment')} className={`${activeTab === 'payment' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
+                     <CreditCard className={`${activeTab === 'payment' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">Payment</span>
+                  </button>
                   <button onClick={() => setActiveTab('reputation')} className={`${activeTab === 'reputation' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
                      <ThumbsUp className={`${activeTab === 'reputation' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.reputation')}</span>
                   </button>
@@ -987,6 +994,32 @@ export const ClientProfile: React.FC = () => {
                   <button onClick={() => setShowUpgradeModal(true)} className="lg:hidden bg-primary-600 text-white group rounded-md px-3 py-3 flex items-center justify-center text-sm font-bold w-full hover:bg-primary-700 shadow-md transition-all">
                      <Tractor className="flex-shrink-0 mr-2 h-5 w-5" /> {t('profile.upgrade')}
                   </button>
+               )}
+               {activeTab === 'payment' && (
+                  <div className="shadow sm:rounded-md bg-white p-4 sm:p-6 space-y-4">
+                     <div className="flex items-center">
+                        <CreditCard className="h-5 w-5 text-primary-600 mr-2" />
+                        <h3 className="text-lg font-medium text-gray-900">Payment &amp; reload</h3>
+                     </div>
+                     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                        <p className="text-sm text-gray-500">Wallet balance</p>
+                        <p className="text-2xl font-extrabold text-gray-900">{(wallet?.balance ?? 0).toLocaleString()} XAF</p>
+                     </div>
+                     <p className="text-sm text-gray-600 leading-relaxed">
+                        Add money to your wallet to pay for orders. You pay securely through the
+                        hosted payment page — no card details are stored here. Wallet funds are for
+                        purchases only and can&apos;t be withdrawn.
+                     </p>
+                     {PAYMENTS_ENABLED ? (
+                        <Link to="/wallet" className="inline-flex items-center justify-center bg-primary-600 text-white px-5 py-2.5 rounded-md font-bold hover:bg-primary-700 shadow-sm">
+                           <Plus className="h-5 w-5 mr-1" /> Reload wallet
+                        </Link>
+                     ) : (
+                        <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-md p-3">
+                           Reloading is temporarily unavailable. Please check back soon.
+                        </p>
+                     )}
+                  </div>
                )}
                {activeTab === 'info' && !formData && (
                   <div className="shadow sm:rounded-md bg-white p-4 sm:p-6">

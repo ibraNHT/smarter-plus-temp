@@ -31,6 +31,23 @@ type ProducerFormData = ProducerProfileType & {
   businessRegistrationUrl?: string;
 };
 
+/**
+ * Normalize a Cameroon mobile-money number to the payable `237` + 9-digit form
+ * (accepts `+237…`, `00237…`, or a bare local `6…` number). Returns null if it
+ * can't be made valid. Mirrors the backend check so the payout provider (Tranzak)
+ * never rejects a saved number.
+ */
+function normalizeCmMomo(raw: string): string | null {
+  let digits = String(raw ?? '').replace(/\D/g, '');
+  if (digits.startsWith('00237')) digits = digits.slice(2);
+  if (digits.length === 9) digits = `237${digits}`;
+  return /^2376\d{8}$/.test(digits) ? digits : null;
+}
+
+function isValidCmMomo(raw: string): boolean {
+  return normalizeCmMomo(raw) !== null;
+}
+
 function hydrateProducerFormData(source: any, user?: { email?: string; phone?: string } | null): ProducerFormData {
   const { niuCertificateUrl, businessRegistrationUrl, legacy } = splitProducerDocuments(source?.certifications);
   const producerUser = source?.user;
@@ -148,6 +165,18 @@ export const ProducerProfile: React.FC = () => {
         provider: z.enum(['ORANGE', 'MTN', 'BANK']),
         accountNumber: z.string().trim().min(3, 'Account number is required.'),
         accountName: z.string().trim().min(2, 'Account name is required.'),
+      }).superRefine((val, ctx) => {
+        // Mobile money must be a payable Cameroon number (237 + 9 digits starting
+        // with 6) or the payout is rejected by the provider. Bank IBANs are free-form.
+        if (val.provider === 'ORANGE' || val.provider === 'MTN') {
+          if (!isValidCmMomo(val.accountNumber)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['accountNumber'],
+              message: 'Enter a valid Cameroon number: 237 + 9 digits starting with 6 (e.g. 237670000000).',
+            });
+          }
+        }
       }).safeParse(values);
       if (parsed.success) return {};
       const errs: Record<string, string> = {};
@@ -157,16 +186,28 @@ export const ProducerProfile: React.FC = () => {
       }
       return errs;
     },
-    onSubmit: (values) => {
+    onSubmit: async (values, helpers) => {
       if (!user?.producerId) return;
-      saveProducerPaymentMethod(user.producerId, {
-        id: `pm-${Date.now()}`,
+      // id is empty → the store treats this as a create; the server assigns the
+      // real uuid. Only close the form once persistence succeeds.
+      // Store mobile-money numbers in canonical 237 + 9-digit form; leave bank
+      // account numbers exactly as typed.
+      const isMomo = values.provider === 'ORANGE' || values.provider === 'MTN';
+      const accountNumber = isMomo
+        ? (normalizeCmMomo(values.accountNumber) ?? values.accountNumber.trim())
+        : values.accountNumber.trim();
+      const res = await saveProducerPaymentMethod(user.producerId, {
+        id: '',
         provider: values.provider as any,
-        accountNumber: values.accountNumber.trim(),
+        accountNumber,
         accountName: values.accountName.trim(),
       });
-      setShowAddPayment(false);
-      paymentFormik.resetForm({ values: { provider: 'ORANGE', accountNumber: '', accountName: '' } });
+      if (res.success) {
+        setShowAddPayment(false);
+        paymentFormik.resetForm({ values: { provider: 'ORANGE', accountNumber: '', accountName: '' } });
+      } else {
+        helpers.setStatus(res.message ?? 'Could not save the payment method.');
+      }
     },
   });
 
@@ -1036,7 +1077,7 @@ export const ProducerProfile: React.FC = () => {
             <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
               <div className="flex flex-wrap gap-3 justify-between items-center mb-6"><h3 className="text-lg font-medium text-gray-900">{t('profile.payment.saved')}</h3><button onClick={() => setShowAddPayment(true)} className="flex items-center text-sm bg-primary-600 text-white px-3 py-2 rounded-md hover:bg-primary-700"><Plus className="h-4 w-4 mr-1" /> {t('form.add')}</button></div>
               <ul className="divide-y divide-gray-200 mb-6">{(!currentProducer?.paymentMethods || currentProducer.paymentMethods.length === 0) ? (<li className="py-4 text-gray-500 italic">{t('profile.payment.none')}</li>) : (currentProducer.paymentMethods.map(pm => (<li key={pm.id} className="py-4 flex justify-between items-center"><div className="flex items-center"><div className={`h-10 w-10 rounded-full flex items-center justify-center mr-3 ${pm.provider === 'ORANGE' ? 'bg-orange-100 text-orange-600' : pm.provider === 'MTN' ? 'bg-yellow-100 text-yellow-600' : 'bg-blue-100 text-blue-600'}`}><CreditCard className="h-5 w-5" /></div><div><p className="text-sm font-medium text-gray-900">{pm.provider} - {pm.accountNumber}</p><p className="text-xs text-gray-500">{pm.accountName}</p></div></div><button onClick={() => setPaymentToRemove({ id: pm.id, provider: pm.provider, accountNumber: pm.accountNumber })} className="text-red-600 hover:text-red-800 p-2" aria-label={t('payment.removeTitle')}><Trash2 className="h-5 w-5" /></button></li>)))}</ul>
-              {showAddPayment && (<div className="bg-gray-50 p-4 rounded-md border border-gray-200 animate-fade-in"><h4 className="text-sm font-bold text-gray-700 mb-3">{t('profile.payment.add')}</h4><form onSubmit={handleAddPayment} className="space-y-4"><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.provider')}</label><select name="provider" className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" value={paymentFormik.values.provider} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur}><option value="ORANGE">Orange Money</option><option value="MTN">MTN Mobile Money</option><option value="BANK">Bank Transfer</option></select></div><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.accNum')}</label><input type="text" name="accountNumber" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder={paymentFormik.values.provider === 'BANK' ? 'IBAN / Account No' : '6...'} value={paymentFormik.values.accountNumber} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur} />{paymentFormik.touched.accountNumber && paymentFormik.errors.accountNumber ? <p className="text-xs text-red-600 mt-1">{paymentFormik.errors.accountNumber}</p> : null}</div><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.accName')}</label><input type="text" name="accountName" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder="Full Name on Account" value={paymentFormik.values.accountName} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur} />{paymentFormik.touched.accountName && paymentFormik.errors.accountName ? <p className="text-xs text-red-600 mt-1">{paymentFormik.errors.accountName}</p> : null}</div><div className="flex justify-end space-x-3 mt-4"><button type="button" onClick={() => setShowAddPayment(false)} className="text-gray-600 text-sm hover:text-gray-800">{t('form.cancel')}</button><button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded-md text-sm hover:bg-primary-700">{t('form.save')}</button></div></form></div>)}
+              {showAddPayment && (<div className="bg-gray-50 p-4 rounded-md border border-gray-200 animate-fade-in"><h4 className="text-sm font-bold text-gray-700 mb-3">{t('profile.payment.add')}</h4><form onSubmit={handleAddPayment} className="space-y-4"><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.provider')}</label><select name="provider" className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" value={paymentFormik.values.provider} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur}><option value="ORANGE">Orange Money</option><option value="MTN">MTN Mobile Money</option><option value="BANK">Bank Transfer</option></select></div><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.accNum')}</label><input type="text" name="accountNumber" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder={paymentFormik.values.provider === 'BANK' ? 'IBAN / Account No' : 'e.g. 237670000000'} value={paymentFormik.values.accountNumber} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur} />{paymentFormik.touched.accountNumber && paymentFormik.errors.accountNumber ? <p className="text-xs text-red-600 mt-1">{paymentFormik.errors.accountNumber}</p> : null}</div><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.accName')}</label><input type="text" name="accountName" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder="Full Name on Account" value={paymentFormik.values.accountName} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur} />{paymentFormik.touched.accountName && paymentFormik.errors.accountName ? <p className="text-xs text-red-600 mt-1">{paymentFormik.errors.accountName}</p> : null}</div><div className="flex justify-end space-x-3 mt-4"><button type="button" onClick={() => setShowAddPayment(false)} className="text-gray-600 text-sm hover:text-gray-800">{t('form.cancel')}</button><button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded-md text-sm hover:bg-primary-700">{t('form.save')}</button></div></form></div>)}
             </div>
           )}
 

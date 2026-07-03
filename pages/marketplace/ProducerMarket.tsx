@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { MarketType, UserRole } from '../../types';
-import { Tractor, Search, MapPin, ArrowLeft, MessageCircle, Truck, Heart, Star, Layers } from 'lucide-react';
+import { Tractor, Search, MapPin, ArrowLeft, MessageCircle, Truck, Heart, Star, Layers, Share2 } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { SEO_PAGE_META } from '../../services/seo/seoConfig';
 import {
@@ -262,6 +262,25 @@ export const ProducerMarket: React.FC = () => {
             title={t('compare.select')}
           >
             <Layers className="h-5 w-5" />
+          </button>
+
+          {/* Share Button — share the offer (native share sheet / copy link) */}
+          <button
+            onClick={async (e) => {
+              e.preventDefault();
+              const url = `${window.location.origin}/#/offer/${offer.id}`;
+              const data = { title: offer.title, text: `${offer.title} — ATI AgriMarket`, url };
+              try {
+                if (typeof navigator !== 'undefined' && navigator.share) await navigator.share(data);
+                else if (typeof navigator !== 'undefined' && navigator.clipboard) await navigator.clipboard.writeText(url);
+              } catch {
+                /* share sheet dismissed / clipboard blocked — no action needed */
+              }
+            }}
+            className="p-1.5 rounded-full bg-white/80 hover:bg-white shadow-sm transition-colors text-gray-400 hover:text-primary-600"
+            title={t('product.share')}
+          >
+            <Share2 className="h-5 w-5" />
           </button>
         </div>
 

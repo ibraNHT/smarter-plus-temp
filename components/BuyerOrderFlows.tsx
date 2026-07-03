@@ -27,6 +27,7 @@ import { offerImageInBox } from '../utils/offerImageDisplay';
 import { PAYMENTS_ENABLED } from '../utils/featureFlags';
 import { orderHasService, orderIsServiceOnly, serviceLineCount } from '../utils/orderLabels';
 import {
+  canCancelDirectly,
   canLeaveReview,
   canReportProblem,
   canRequestCancellation,
@@ -305,6 +306,15 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
               className={`bg-green-600 text-white ${btnBold} rounded-md font-bold hover:bg-green-700 shadow-sm flex items-center gap-1`}
             >
               <CheckCircle className={iconSm} /> {t('order.completeOrder')}
+            </button>
+          )}
+          {canCancelDirectly(order) && (
+            <button
+              type="button"
+              onClick={wrap(() => setCancelOrderId(order.id))}
+              className={`text-red-600 hover:bg-red-50 ${btn} rounded-md font-medium border border-red-100`}
+            >
+              {t('order.cancel')}
             </button>
           )}
           {canRequestCancellation(order) &&

@@ -38,6 +38,11 @@ export const API_ENDPOINTS = {
     availability: (id: string) => `/api/producers/${id}/availability`,
     availabilityByDate: (id: string, date: string, durationHours: number) =>
       `/api/producers/${id}/availability?date=${encodeURIComponent(date)}&durationHours=${encodeURIComponent(String(durationHours))}`,
+    /** Producer's saved payout methods (list / create). */
+    paymentMethods: (id: string) => `/api/producers/${id}/payment-methods`,
+    /** A single saved payout method (update / delete). */
+    paymentMethod: (id: string, methodId: string) =>
+      `/api/producers/${id}/payment-methods/${methodId}`,
   },
   clients: {
     list: "/api/clients",

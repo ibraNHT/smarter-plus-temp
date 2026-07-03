@@ -340,8 +340,8 @@ interface StoreContextType {
   updateClientProfile: (client: ClientProfile) => Promise<boolean>;
   upgradeClientToProducer: (clientId: string, producerDetails: Partial<ProducerProfile>) => Promise<boolean>;
   validateProducer: (id: string, status: ProducerStatus) => Promise<void>;
-  saveProducerPaymentMethod: (producerId: string, method: PaymentMethod) => void;
-  deleteProducerPaymentMethod: (producerId: string, methodId: string) => void;
+  saveProducerPaymentMethod: (producerId: string, method: PaymentMethod) => Promise<{ success: boolean; message?: string }>;
+  deleteProducerPaymentMethod: (producerId: string, methodId: string) => Promise<{ success: boolean; message?: string }>;
   createOffer: (offer: Omit<Offer, 'id' | 'createdAt' | 'producerId'>) => Promise<{ success: boolean; error?: string }>;
   updateOffer: (offer: Offer) => Promise<{ success: boolean; error?: string }>;
   deleteOffer: (offerId: string) => Promise<{ success: boolean; error?: string }>;
@@ -371,7 +371,7 @@ interface StoreContextType {
   requestOrderCancellation: (orderId: string, reason?: string) => Promise<void>;
   updateAppointment: (orderId: string, bookingDate: string) => Promise<boolean>;
   reportProblem: (orderId: string, reason: string, files: File[]) => Promise<void>;
-  addDisputeEvidence: (orderId: string, files: File[]) => void;
+  addDisputeEvidence: (orderId: string, files: File[]) => Promise<void>;
   revealContactInfo: (orderId: string) => Promise<void>;
   submitReview: (review: Omit<Review, 'id' | 'createdAt'>) => Promise<void>;
   getAverageRating: (targetId: string) => number;
@@ -2393,14 +2393,55 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const saveProducerPaymentMethod = (producerId: string, method: PaymentMethod) => {
-    setProducers(prev => prev.map(p => p.id === producerId ? { ...p, paymentMethods: p.paymentMethods.some(pm => pm.id === method.id) ? p.paymentMethods.map(pm => pm.id === method.id ? method : pm) : [...p.paymentMethods, method] } : p));
-    bustCache(QK.producers());
+  const saveProducerPaymentMethod = async (
+    producerId: string,
+    method: PaymentMethod,
+  ): Promise<{ success: boolean; message?: string }> => {
+    // A method persisted by the server has a real uuid; the add-form passes an
+    // empty (or temporary `pm-…`) id, which means "create". Persist to the API
+    // first, then reconcile local state with the server row so it survives the
+    // next `/api/producers` refetch (the previous version only mutated state and
+    // silently lost the method).
+    const isExisting = Boolean(method.id) && !method.id.startsWith('pm-');
+    const payload = {
+      provider: method.provider,
+      accountNumber: method.accountNumber,
+      accountName: method.accountName,
+    };
+    try {
+      const saved = await apiFetch<PaymentMethod>(
+        isExisting
+          ? API_ENDPOINTS.producers.paymentMethod(producerId, method.id)
+          : API_ENDPOINTS.producers.paymentMethods(producerId),
+        {
+          method: isExisting ? 'PATCH' : 'POST',
+          body: JSON.stringify(payload),
+        },
+      );
+      setProducers(prev => prev.map(p => p.id === producerId ? { ...p, paymentMethods: p.paymentMethods.some(pm => pm.id === saved.id) ? p.paymentMethods.map(pm => pm.id === saved.id ? saved : pm) : [...p.paymentMethods, saved] } : p));
+      bustCache(QK.producers());
+      return { success: true };
+    } catch (error) {
+      logApiFailure('Failed to save payment method', error);
+      return { success: false, message: 'Could not save the payment method. Please try again.' };
+    }
   };
 
-  const deleteProducerPaymentMethod = (producerId: string, methodId: string) => {
-    setProducers(prev => prev.map(p => p.id === producerId ? { ...p, paymentMethods: p.paymentMethods.filter(pm => pm.id !== methodId) } : p));
-    bustCache(QK.producers());
+  const deleteProducerPaymentMethod = async (
+    producerId: string,
+    methodId: string,
+  ): Promise<{ success: boolean; message?: string }> => {
+    try {
+      await apiFetch(API_ENDPOINTS.producers.paymentMethod(producerId, methodId), {
+        method: 'DELETE',
+      });
+      setProducers(prev => prev.map(p => p.id === producerId ? { ...p, paymentMethods: p.paymentMethods.filter(pm => pm.id !== methodId) } : p));
+      bustCache(QK.producers());
+      return { success: true };
+    } catch (error) {
+      logApiFailure('Failed to delete payment method', error);
+      return { success: false, message: 'Could not delete the payment method. Please try again.' };
+    }
   };
 
   // ─── CLIENT PROFILE ──────────────────────────────────────────────────────────
@@ -2892,11 +2933,24 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const addDisputeEvidence = (orderId: string, files: File[]) => {
-    if (!user) return;
-    const newEvidence: DisputeEvidence[] = files.map(f => ({ id: `ev-${Date.now()}-${Math.random()}`, uploaderId: user.id, fileName: f.name, fileUrl: URL.createObjectURL(f), fileType: f.type.includes('image') ? 'IMAGE' as const : 'DOCUMENT' as const, uploadedAt: new Date().toISOString() }));
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, disputeEvidence: [...(o.disputeEvidence || []), ...newEvidence] } : o));
-    addNotification(user.id, 'Evidence uploaded successfully', 'SUCCESS');
+  const addDisputeEvidence = async (orderId: string, files: File[]) => {
+    if (!user || files.length === 0) return;
+    // Append evidence to an already-open dispute (used by the producer, and by
+    // the buyer to add more). Persists via the same endpoint as reportProblem,
+    // just without a reason. Previously this only mutated local state, so the
+    // admin never received the producer's evidence.
+    const formData = new FormData();
+    files.forEach(f => formData.append('files', f));
+    try {
+      const result = await apiUpload<DisputeEvidence[] | { evidence: DisputeEvidence[] }>(API_ENDPOINTS.orders.dispute(orderId), formData);
+      const evidence = Array.isArray(result) ? result : (result?.evidence ?? []);
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, disputeEvidence: [...(o.disputeEvidence || []), ...evidence] } : o));
+      bustCache(['orders']);
+      addNotification(user.id, 'Evidence uploaded successfully', 'SUCCESS');
+    } catch (error) {
+      logApiFailure('Failed to upload evidence', error);
+      addNotification(user.id, 'Failed to upload evidence. Please try again.', 'ERROR');
+    }
   };
 
   const revealContactInfo = async (id: string) => {

@@ -81,6 +81,8 @@ export enum TransactionType {
   RECEIVED = 'RECEIVED', // Getting paid for goods
   WITHDRAWAL = 'WITHDRAWAL', // Mobile Money Out
   REFUND = 'REFUND',
+  REVERSED = 'REVERSED', // Escrow/held funds reversed (e.g. cancellation, dispute, refund)
+  ADJUSTMENT = 'ADJUSTMENT', // Reconciliation adjustment (e.g. un-recovered dispute reversal)
   PENDING = 'PENDING', // Funds held pending order settlement
   FEE = 'FEE' // Service fees
 }
@@ -88,7 +90,10 @@ export enum TransactionType {
 export enum WithdrawalStatus {
   PENDING = 'PENDING',
   APPROVED = 'APPROVED',
-  PROCESSED = 'PROCESSED',
+  PROCESSING = 'PROCESSING', // Payout initiated at the provider, awaiting confirmation
+  TRANSFERRED = 'TRANSFERRED', // Paid out to the producer's method
+  PROCESSED = 'PROCESSED', // Legacy alias for a completed payout
+  FAILED = 'FAILED', // Payout failed; held funds returned to wallet
   REJECTED = 'REJECTED'
 }
 

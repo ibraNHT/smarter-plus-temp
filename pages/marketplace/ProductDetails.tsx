@@ -300,6 +300,9 @@ export const ProductDetails: React.FC = () => {
 
   const isProducerMarket = offer.marketType === MarketType.PRODUCER;
   const isNegotiationAllowed = isProducerMarket && offer.isNegotiable && !offer.reservedClientId;
+  // Every producer-market offer should let the buyer contact the seller, even
+  // when the offer isn't negotiable — the chat session is created the same way.
+  const canContactSeller = isProducerMarket && !!producer && !offer.reservedClientId;
   const maxOrder = offer.maxQuantity && offer.maxQuantity > 0 ? Math.min(offer.maxQuantity, offer.quantity) : offer.quantity;
   const minOrder = offer.minQuantity || 1;
   const productReviews = isProducerMarket ? producerReviews : offerReviews;
@@ -626,8 +629,39 @@ export const ProductDetails: React.FC = () => {
                         })
                       )}
                     </div>
+                    {/* Number of slots to book — like a product quantity, so the
+                        buyer can book more than the minimum. */}
+                    <div className="mt-4">
+                      <label className="block text-xs font-bold text-gray-500 mb-1">Number of slots</label>
+                      <div className="flex items-center w-40 border-2 border-gray-200 rounded-lg bg-white">
+                        <button
+                          type="button"
+                          onClick={() => handleQuantityChange(-1)}
+                          disabled={quantity <= minOrder}
+                          className="p-3 hover:bg-gray-100 text-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <Minus className="h-4 w-4" />
+                        </button>
+                        <input
+                          type="text"
+                          readOnly
+                          className="w-full text-center border-none focus:ring-0 p-1 text-gray-900 font-bold text-lg bg-transparent"
+                          value={quantity}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleQuantityChange(1)}
+                          disabled={quantity >= maxOrder}
+                          className="p-3 hover:bg-gray-100 text-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      </div>
+                      {minOrder > 1 && <p className="text-xs text-orange-600 mt-1 font-medium">Minimum booking is {minOrder} slots.</p>}
+                    </div>
                     <p className="text-xs text-gray-500 mt-3 flex items-center">
-                      <Clock className="h-3 w-3 mr-1" /> Duration: {offer.serviceDuration} hours per slot
+                      <Clock className="h-3 w-3 mr-1" /> {quantity} slot{quantity > 1 ? 's' : ''} × {offer.serviceDuration}h =
+                      <strong className="ml-1">{quantity * (offer.serviceDuration || 1)} hours total</strong>
                     </p>
                   </div>
                 ) : (
@@ -756,7 +790,7 @@ export const ProductDetails: React.FC = () => {
                   <p className="text-xs text-gray-600 text-center px-1 leading-relaxed">{t('product.bookNowHint')}</p>
                 )}
 
-                {isNegotiationAllowed && (
+                {canContactSeller && (
                   <button
                     type="button"
                     disabled={negotiateLoading}
@@ -764,7 +798,7 @@ export const ProductDetails: React.FC = () => {
                     className="flex items-center justify-center bg-white text-primary-600 border-2 border-primary-600 px-6 py-3 rounded-xl font-bold hover:bg-primary-50 transition-colors disabled:opacity-60"
                   >
                     {negotiateLoading ? <Spinner className="h-5 w-5 mr-2" label="Opening chat" /> : <MessageCircle className="h-5 w-5 mr-2" />}
-                    {negotiateLoading ? 'Opening…' : `Chat / ${t('product.negotiate')}`}
+                    {negotiateLoading ? 'Opening…' : isNegotiationAllowed ? `Chat / ${t('product.negotiate')}` : 'Chat with seller'}
                   </button>
                 )}
               </div>
@@ -904,7 +938,7 @@ export const ProductDetails: React.FC = () => {
         open={showLoginPrompt}
         tone="info"
         title="Sign in required"
-        description="You need to be signed in to negotiate prices with this producer."
+        description="You need to be signed in to contact this producer."
         confirmLabel="Sign in"
         onClose={() => setShowLoginPrompt(false)}
         onConfirm={() => {

@@ -197,6 +197,8 @@ export const WalletDashboard: React.FC = () => {
         return <ArrowDownLeft className="h-5 w-5 text-green-600" />;
       case TransactionType.PAYMENT:
       case TransactionType.WITHDRAWAL:
+      case TransactionType.REVERSED:
+      case TransactionType.ADJUSTMENT:
         return <ArrowUpRight className="h-5 w-5 text-red-500" />;
       case TransactionType.PENDING:
         return <Clock className="h-5 w-5 text-amber-500" />;
@@ -209,8 +211,12 @@ export const WalletDashboard: React.FC = () => {
     switch (status) {
       case WithdrawalStatus.PENDING: return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800"><Clock className="w-3 h-3 mr-1" /> Pending</span>;
       case WithdrawalStatus.APPROVED: return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"><CheckCircle className="w-3 h-3 mr-1" /> Approved</span>;
-      case WithdrawalStatus.PROCESSED: return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" /> Processed</span>;
+      case WithdrawalStatus.PROCESSING: return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800"><Clock className="w-3 h-3 mr-1" /> Processing</span>;
+      case WithdrawalStatus.TRANSFERRED:
+      case WithdrawalStatus.PROCESSED: return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" /> Transferred</span>;
+      case WithdrawalStatus.FAILED: return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800"><XCircle className="w-3 h-3 mr-1" /> Failed</span>;
       case WithdrawalStatus.REJECTED: return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800"><XCircle className="w-3 h-3 mr-1" /> Rejected</span>;
+      default: return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">{String(status)}</span>;
     }
   };
 
@@ -370,7 +376,7 @@ export const WalletDashboard: React.FC = () => {
                     <div className="text-right flex-shrink-0">
                       <p className={`text-sm font-bold whitespace-nowrap ${tx.type === TransactionType.DEPOSIT || tx.type === TransactionType.RECEIVED || tx.type === TransactionType.REFUND ? 'text-green-700' : 'text-gray-900'}`}>
                         {tx.type === TransactionType.DEPOSIT || tx.type === TransactionType.RECEIVED || tx.type === TransactionType.REFUND ? '+' : '-'}
-                        {tx.amount.toLocaleString()} XAF
+                        {Math.abs(tx.amount).toLocaleString()} XAF
                       </p>
                       <p className="text-xs text-gray-400 capitalize">{tx.type.toLowerCase()}</p>
                     </div>

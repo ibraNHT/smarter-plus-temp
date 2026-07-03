@@ -498,7 +498,7 @@ export const ShoppingCart: React.FC = () => {
                         )}
                         {item.type === OfferType.SERVICE && item.serviceDuration != null && item.serviceDuration > 0 && (
                           <p className="text-xs text-gray-500 mt-1">
-                            {item.serviceDuration} {t('service.perSlotHours')}
+                            {item.cartQuantity} × {item.serviceDuration}h = {item.cartQuantity * item.serviceDuration} hours total
                           </p>
                         )}
                       </div>
@@ -901,7 +901,7 @@ export const ShoppingCart: React.FC = () => {
                             )}
                             {item.serviceDuration != null && item.serviceDuration > 0 && (
                               <p>
-                                <span className="font-semibold">{t('service.perSlotHours')}:</span> {item.serviceDuration}
+                                <span className="font-semibold">Total duration:</span> {item.cartQuantity} × {item.serviceDuration}h = {item.cartQuantity * item.serviceDuration} hours
                               </p>
                             )}
                             <p>

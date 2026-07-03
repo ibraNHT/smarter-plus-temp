@@ -34,16 +34,25 @@ export function isTerminalOrderStatus(status: OrderStatus): boolean {
 }
 
 /**
- * Request cancellation from order placed until it goes in transit (admin approval).
- * Once in transit, use "Report a problem" instead.
+ * Before payment the buyer can cancel FREELY (no admin approval). Applies while
+ * the order is still awaiting payment.
  */
-export function canRequestCancellation(order: Order): boolean {
+export function canCancelDirectly(order: Order): boolean {
   if (isTerminalOrderStatus(order.status)) return false;
   return [
     OrderStatus.PENDING_VALIDATION,
     OrderStatus.CONFIRMED_AWAITING_PAYMENT,
-    OrderStatus.PAID_IN_PREPARATION,
   ].includes(order.status);
+}
+
+/**
+ * Once the order is PAID (in preparation, before it ships) the buyer can only
+ * REQUEST a cancellation for an admin to validate or reject. After it ships, use
+ * "Report a problem" instead.
+ */
+export function canRequestCancellation(order: Order): boolean {
+  if (isTerminalOrderStatus(order.status)) return false;
+  return order.status === OrderStatus.PAID_IN_PREPARATION;
 }
 
 /**

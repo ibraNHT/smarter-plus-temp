@@ -7,6 +7,7 @@ import { OfferType, UnitOfMeasure, MarketType, Offer } from '../../types';
 import { generateProductDescription } from '../../services/geminiService';
 import { uploadOfferImage } from '../../services/uploadService';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
+import NumberStepper from '../../components/NumberStepper';
 import { Sparkles, Loader2, Camera, MapPin, Clock, X, AlertTriangle } from 'lucide-react';
 import { isProducerPendingApproval } from '../../utils/producerAccountStatus';
 import { z } from 'zod';
@@ -500,8 +501,8 @@ export const CreateOffer: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                      <div>
                        <label className="block text-xs font-medium text-gray-700">Duration per Slot (Hours)</label>
-                       <input type="number" min="1" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900"
-                          value={formData.serviceDuration} onChange={e => setFormData({...formData, serviceDuration: Number(e.target.value)})}
+                       <NumberStepper min={1} required value={formData.serviceDuration}
+                          onChange={n => setFormData({...formData, serviceDuration: n})}
                        />
                        {fieldErrors.serviceDuration && <p className="mt-1 text-xs text-red-600">{fieldErrors.serviceDuration}</p>}
                      </div>
@@ -514,16 +515,16 @@ export const CreateOffer: React.FC = () => {
 
              <div className="sm:col-span-2">
                <label className="block text-sm font-medium text-gray-700">{t('form.price')} (XAF)</label>
-               <input type="number" required min="0" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900"
-                 value={formData.price} onChange={e => setFormData({...formData, price: Number(e.target.value)})}
+               <NumberStepper min={0} required value={formData.price}
+                 onChange={n => setFormData({...formData, price: n})}
                />
               {fieldErrors.price && <p className="mt-1 text-xs text-red-600">{fieldErrors.price}</p>}
              </div>
 
              <div className="sm:col-span-2">
                <label className="block text-sm font-medium text-gray-700">{formData.type === OfferType.SERVICE ? 'Available Slots/Capacity' : t('form.quantity')}</label>
-               <input type="number" required min="1" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900"
-                  value={formData.quantity} onChange={e => setFormData({...formData, quantity: Number(e.target.value)})}
+               <NumberStepper min={1} required value={formData.quantity}
+                  onChange={n => setFormData({...formData, quantity: n})}
                />
                {fieldErrors.quantity && <p className="mt-1 text-xs text-red-600">{fieldErrors.quantity}</p>}
              </div>
@@ -546,18 +547,16 @@ export const CreateOffer: React.FC = () => {
              {/* Order Limits */}
              <div className="sm:col-span-3">
                 <label className="block text-sm font-medium text-gray-700">{t('form.minOrder')}</label>
-                <input type="number" min="1" required
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900"
-                  value={formData.minQuantity} onChange={e => setFormData({...formData, minQuantity: Number(e.target.value)})}
+                <NumberStepper min={1} required value={formData.minQuantity}
+                  onChange={n => setFormData({...formData, minQuantity: n})}
                 />
                 <p className="mt-1 text-xs text-gray-500">Minimum amount a client can buy.</p>
                 {fieldErrors.minQuantity && <p className="mt-1 text-xs text-red-600">{fieldErrors.minQuantity}</p>}
              </div>
              <div className="sm:col-span-3">
                 <label className="block text-sm font-medium text-gray-700">{t('form.maxOrder')}</label>
-                <input type="number" min="0"
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900"
-                  value={formData.maxQuantity} onChange={e => setFormData({...formData, maxQuantity: Number(e.target.value)})}
+                <NumberStepper min={0} value={formData.maxQuantity}
+                  onChange={n => setFormData({...formData, maxQuantity: n})}
                 />
                 <p className="mt-1 text-xs text-gray-500">Maximum amount per client (0 = Unlimited).</p>
                 {fieldErrors.maxQuantity && <p className="mt-1 text-xs text-red-600">{fieldErrors.maxQuantity}</p>}
