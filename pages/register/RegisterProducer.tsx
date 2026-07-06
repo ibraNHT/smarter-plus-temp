@@ -51,7 +51,7 @@ const AFRICA_COUNTRY_CODES = [
   { code: '+252', country: 'Somalia' },
 ];
 
-const PRODUCTION_TYPES = ['Agriculture', 'Livestock', 'Vegetables', 'Processed Goods', 'Equipment', 'Service'];
+const PRODUCTION_TYPES = ['Agriculture', 'Livestock', 'Vegetables', 'Processed Goods', 'Plant Protection Products', 'Fertilizer', 'Equipment', 'Service'];
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
 
 export const RegisterProducer: React.FC = () => {

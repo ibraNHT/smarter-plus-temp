@@ -102,6 +102,8 @@ export const CreateOffer: React.FC = () => {
             'Fish Farming',
             'Vegetables',
             'Processed foods',
+            'Plant Protection Products',
+            'Fertilizer',
             'Equipment',
             'Service',
           ],

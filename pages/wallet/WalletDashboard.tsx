@@ -14,6 +14,9 @@ import { z } from 'zod';
 import { showAppToast, dismissAppToast } from '../../services/appToast';
 import { PAYMENTS_ENABLED } from '../../utils/featureFlags';
 
+// Tranzak transaction fee added on top of a withdrawal (kept in sync with the API).
+const WITHDRAWAL_FEE_RATE = 0.015;
+
 export const WalletDashboard: React.FC = () => {
   const { user, getWallet, initiateTopUp, checkTopUpStatus, requestWithdrawal, requestOtp, verifyOtp, producers, withdrawalRequests, refreshWallet, refreshWithdrawals } = useStore();
   const { t } = useTranslation();
@@ -155,7 +158,11 @@ export const WalletDashboard: React.FC = () => {
         if (key && !nextErrors[key]) nextErrors[key] = issue.message;
       }
       const asNumber = Number(values.amount);
-      if (asNumber > availableBalance) nextErrors.amount = `Amount cannot exceed ${availableBalance.toLocaleString()} XAF.`;
+      // A 1.5% Tranzak fee is added on top; the wallet is debited amount + fee.
+      const totalDebit = Math.round(asNumber * (1 + WITHDRAWAL_FEE_RATE) * 100) / 100;
+      if (totalDebit > availableBalance) {
+        nextErrors.amount = `Amount + 1.5% fee (${totalDebit.toLocaleString()} XAF) cannot exceed your balance of ${availableBalance.toLocaleString()} XAF.`;
+      }
       return nextErrors;
     },
     onSubmit: async (values) => {
@@ -457,6 +464,13 @@ export const WalletDashboard: React.FC = () => {
                           </div>
                         </div>
                         <p className="mt-1 text-xs text-gray-500">Max available: {availableBalance.toLocaleString()} XAF</p>
+                        {Number(withdrawFormik.values.amount) >= 100 ? (
+                          <div className="mt-2 rounded-md bg-gray-50 border border-gray-200 p-2 text-xs text-gray-600 space-y-0.5">
+                            <div className="flex justify-between"><span>You receive</span><span className="tabular-nums">{Number(withdrawFormik.values.amount).toLocaleString()} XAF</span></div>
+                            <div className="flex justify-between"><span>Tranzak fee (1.5%)</span><span className="tabular-nums">{(Math.round(Number(withdrawFormik.values.amount) * WITHDRAWAL_FEE_RATE * 100) / 100).toLocaleString()} XAF</span></div>
+                            <div className="flex justify-between font-semibold text-gray-900 border-t border-gray-200 pt-0.5"><span>Deducted from wallet</span><span className="tabular-nums">{(Math.round(Number(withdrawFormik.values.amount) * (1 + WITHDRAWAL_FEE_RATE) * 100) / 100).toLocaleString()} XAF</span></div>
+                          </div>
+                        ) : null}
                         {withdrawFormik.touched.amount && withdrawFormik.errors.amount ? <p className="mt-1 text-xs text-red-600">{withdrawFormik.errors.amount}</p> : null}
                       </div>
 
