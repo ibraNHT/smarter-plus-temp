@@ -34,6 +34,19 @@ export const WalletDashboard: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
+  // Withdrawal status changes on the SERVER (admin approves → payout → transferred),
+  // so poll every 20s while this page is open to keep the status fresh without a
+  // manual refresh. Pauses when the tab is hidden.
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState !== 'visible') return;
+      void refreshWithdrawals();
+      void refreshWallet();
+    };
+    const id = window.setInterval(tick, 20000);
+    return () => window.clearInterval(id);
+  }, []);
+
   // Reconcile a pending top-up on mount. Tranzak strips the hash fragment from
   // the return URL (so we can't rely on ?payment=return surviving in a HashRouter
   // app), but we stashed the merchantRef in sessionStorage before redirecting.
@@ -320,8 +333,12 @@ export const WalletDashboard: React.FC = () => {
         {/* Producer Withdrawal History */}
         {isProducer && (
           <div className="bg-white shadow rounded-lg overflow-hidden mb-6 sm:mb-8">
-            <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200 flex justify-between items-center">
+            <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200">
               <h3 className="text-base sm:text-lg font-medium leading-6 text-gray-900">{t('wallet.requests')}</h3>
+              <p className="mt-1 flex items-start gap-1 text-xs text-gray-500">
+                <Clock className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                <span>After an admin approves your request, the payout is sent to your mobile-money account — usually within a few minutes. This list refreshes automatically.</span>
+              </p>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">

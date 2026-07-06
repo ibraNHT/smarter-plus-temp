@@ -41,7 +41,9 @@ function normalizeCmMomo(raw: string): string | null {
   let digits = String(raw ?? '').replace(/\D/g, '');
   if (digits.startsWith('00237')) digits = digits.slice(2);
   if (digits.length === 9) digits = `237${digits}`;
-  return /^2376\d{8}$/.test(digits) ? digits : null;
+  // Cameroon mobile: 237 + 6 + [5-9] + 7 digits (prefixes 65–69). Reject invalid
+  // prefixes (60-64) which the payout provider (Tranzak) rejects.
+  return /^2376[5-9]\d{7}$/.test(digits) ? digits : null;
 }
 
 function isValidCmMomo(raw: string): boolean {
@@ -173,7 +175,7 @@ export const ProducerProfile: React.FC = () => {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
               path: ['accountNumber'],
-              message: 'Enter a valid Cameroon number: 237 + 9 digits starting with 6 (e.g. 237670000000).',
+              message: 'Enter a valid Cameroon number: 237 + 9 digits starting with 65–69 (e.g. 237670000000).',
             });
           }
         }
