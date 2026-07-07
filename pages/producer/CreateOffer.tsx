@@ -93,20 +93,23 @@ export const CreateOffer: React.FC = () => {
   const producerProductionTypes = currentProducer?.productionTypes || [];
   // If producer has specific types, use them. Otherwise default to a broad list.
   const allAvailableCategories = useMemo(
-    () =>
-      producerProductionTypes.length > 0
-        ? producerProductionTypes
-        : [
-            'Agriculture',
-            'Livestock farming',
-            'Fish Farming',
-            'Vegetables',
-            'Processed foods',
-            'Plant Protection Products',
-            'Fertilizer',
-            'Equipment',
-            'Service',
-          ],
+    () => {
+      const canonical = [
+        'Agriculture',
+        'Livestock farming',
+        'Fish Farming',
+        'Vegetables',
+        'Processed foods',
+        'Plant Protection Products',
+        'Fertilizer',
+        'Equipment',
+        'Service',
+      ];
+      // Union the producer's own registered types with the canonical list so newly
+      // added categories (e.g. Plant Protection Products, Fertilizer) always appear,
+      // even for producers who registered before those categories existed.
+      return Array.from(new Set([...producerProductionTypes, ...canonical]));
+    },
     [producerProductionTypes],
   );
   const productCategories = useMemo(

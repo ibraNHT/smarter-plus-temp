@@ -132,7 +132,7 @@ export const ShoppingCart: React.FC = () => {
   const checkoutSectionRef = useRef<HTMLElement | null>(null);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
-  const serviceFee = subtotal * 0.05;
+  const serviceFee = subtotal * 0.165; // 16.5% buyer commission (kept in sync with API create-order use-case)
   const totalAmount = Math.max(0, subtotal + serviceFee - discountAmount);
   const isServiceCart = cartHasService(cart);
 

@@ -430,7 +430,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
                 <span className="font-medium">{payOrder.subtotal.toLocaleString()} XAF</span>
               </div>
               <div className="flex justify-between text-gray-600">
-                <span>{t('cart.serviceFee')} (5%)</span>
+                <span>{t('cart.serviceFee')}</span>
                 <span className="font-medium">{payOrder.serviceFee.toLocaleString()} XAF</span>
               </div>
               {(payOrder.discountAmount ?? 0) > 0 && (

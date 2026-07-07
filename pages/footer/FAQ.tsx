@@ -29,7 +29,7 @@ export const FAQ: React.FC = () => {
     },
     {
       q: "Are there fees for using the platform?",
-      a: "Clients pay a 5% service fee on each order. Producers are charged a 15% commission on successful sales, which is deducted automatically from their earnings before withdrawal."
+      a: "Clients pay a 16.5% service fee on each order. Producers are charged a 5% commission on successful sales, which is deducted automatically from their earnings before withdrawal."
     }
   ];
 

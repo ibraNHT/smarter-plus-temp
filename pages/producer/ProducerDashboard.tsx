@@ -424,15 +424,18 @@ export const ProducerDashboard: React.FC = () => {
    };
 
    const formatProducerOrderSubtitle = (order: Order) => {
+      // Producers see their sale value (subtotal) — NOT the buyer's total, which
+      // includes the 16.5% buyer service fee the platform keeps. Buyer views use totalAmount.
+      const producerValue = (order.subtotal ?? order.totalAmount).toLocaleString();
       if (orderIsServiceOnly(order)) {
          const lc = serviceLineCount(order);
          const st = serviceSlotTotal(order);
-         return `${lc} ${lc === 1 ? t('service.lineSingular') : t('service.linePlural')} · ${st} ${st === 1 ? t('service.slotSingular') : t('service.slotPlural')} · ${order.totalAmount.toLocaleString()} XAF`;
+         return `${lc} ${lc === 1 ? t('service.lineSingular') : t('service.linePlural')} · ${st} ${st === 1 ? t('service.slotSingular') : t('service.slotPlural')} · ${producerValue} XAF`;
       }
       if (orderHasService(order)) {
-         return `${order.items.length} ${t('dash.itemsProduct')} · ${t('dash.mixedOrderHint')} · ${order.totalAmount.toLocaleString()} XAF`;
+         return `${order.items.length} ${t('dash.itemsProduct')} · ${t('dash.mixedOrderHint')} · ${producerValue} XAF`;
       }
-      return `${order.items.length} ${t('dash.itemsProduct')} · ${order.totalAmount.toLocaleString()} XAF`;
+      return `${order.items.length} ${t('dash.itemsProduct')} · ${producerValue} XAF`;
    };
 
    const managingAsAccountManager = isManagerSession(user);
@@ -1228,9 +1231,21 @@ export const ProducerDashboard: React.FC = () => {
                      </div>
 
                      <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
-                        <span className="text-base font-medium text-gray-900">Total</span>
-                        <span className="text-xl font-bold text-primary-600">{selectedOrderLive.totalAmount.toLocaleString()} XAF</span>
+                        <span className="text-base font-medium text-gray-900">
+                           {isSelectedOrderAsBuyer ? 'Total' : t('dash.orderValue')}
+                        </span>
+                        <span className="text-xl font-bold text-primary-600">
+                           {(isSelectedOrderAsBuyer
+                              ? selectedOrderLive.totalAmount
+                              : (selectedOrderLive.subtotal ?? selectedOrderLive.totalAmount)
+                           ).toLocaleString()} XAF
+                        </span>
                      </div>
+                     {!isSelectedOrderAsBuyer && (
+                        <p className="mt-1 text-xs text-gray-500 text-right">
+                           {t('dash.producerPayoutHint')}
+                        </p>
+                     )}
 
                      {isSelectedOrderAsBuyer && (
                         <>

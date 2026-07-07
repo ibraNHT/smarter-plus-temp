@@ -343,10 +343,10 @@ export interface Order {
 
   // Financials
   subtotal: number; // Items * Price
-  serviceFee: number; // 5% of Subtotal
+  serviceFee: number; // 16.5% buyer commission of Subtotal
   discountAmount?: number; // Amount deducted by coupon
-  totalAmount: number; // Subtotal + ServiceFee - Discount
-  platformCommission?: number; // 15% of Subtotal (Deducted from Producer)
+  totalAmount: number; // Subtotal + ServiceFee - Discount (what the buyer pays)
+  platformCommission?: number; // 5% of Subtotal (Deducted from Producer)
 
   // Coupons
   appliedCoupon?: string;
