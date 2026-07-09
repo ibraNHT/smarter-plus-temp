@@ -321,7 +321,7 @@ export const TermsAndConditionsEn: React.FC<Props> = ({ title, meta }) => (
             <>A 16.5% service charge applies to all orders placed on the main marketplace (where applicable);</>,
             <>A 3% service charge applies to all orders placed in the shop (where applicable).</>,
             <> 1.5% withdrawal fee applies. These fees are charged to us by Tranzak for processing your payment.</>,
-            <>allet top-up fee: This is the commission we collect on each order successfully sold by a producer before the funds are deposited into their wallet. We deduct 5% of this amount.</>,
+            <>wallet top-up fee: This is the commission we collect on each order successfully sold by a producer before the funds are deposited into their wallet. We deduct 5% of this amount.</>,
             <>delivery or pickup handling fees (where applicable); and</>,
             <>wallet top-up fee: 0%. All wallet top-up transactions are free.</>,
             <>taxes or legally required charges, if any.</>,
