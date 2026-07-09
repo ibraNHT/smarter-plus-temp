@@ -344,11 +344,11 @@ export const TermsAndConditionsFr: React.FC<Props> = ({ title, meta }) => (
 
       <LegalSection title="9. Tarification, Frais, Taxes">
         <LegalParagraph>
-          Les prix sont affichés dans la devise prise en charge par la Plateforme et peuvent être soumis à :
+          Toutes les commandes passées sur la plateforme sont soumises à des frais et à des frais de service. Les prix sont affichés dans la devise prise en charge par la Plateforme et peuvent être soumis à :
         </LegalParagraph>
         <LegalList
           items={[
-            <>des frais de service (le cas échéant) ;</>,
+            <>Frais de service de 16,5 % pour toute commande passée sur la place de marché principale (le cas échéant);</>,
             <>des frais de livraison ou de retrait (le cas échéant) ; et</>,
             <>des taxes ou charges légalement exigées, le cas échéant.</>,
           ]}
