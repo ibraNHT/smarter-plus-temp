@@ -225,7 +225,7 @@ const translations: Record<string, Record<Language, string>> = {
   'unit.KG': { en: 'Kilogram (kg)', fr: 'Kilogramme (kg)' },
   'unit.TON': { en: 'Ton', fr: 'Tonne' },
   'unit.CRATE': { en: 'Crate', fr: 'Cajette' },
-  'unit.BUNDLE': { en: 'Bundle', fr: 'Botte' },
+  'unit.BUNDLE': { en: 'Bundle', fr: 'Paquet' },
   'unit.LITER': { en: 'Liter', fr: 'Litre' },
   'unit.UNIT': { en: 'Unit', fr: 'Unité' },
   'unit.HOUR': { en: 'Hour', fr: 'Heure' },
