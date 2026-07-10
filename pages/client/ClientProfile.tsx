@@ -35,7 +35,9 @@ import { z } from 'zod';
 import { showAppToast } from '../../services/appToast';
 import { ServiceAppointmentPicker } from '../../components/ServiceAppointmentPicker';
 
-const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
+import { MARKETPLACE_CATEGORIES } from '../../data/categories';
+
+const PRODUCTION_TYPES = MARKETPLACE_CATEGORIES;
 
 function normalizeClientLocations(raw: unknown): Location[] {
    if (!Array.isArray(raw)) return [];

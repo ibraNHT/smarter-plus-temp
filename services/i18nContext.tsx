@@ -220,6 +220,18 @@ const translations: Record<string, Record<Language, string>> = {
   'category.Canned Goods': { en: 'Canned Goods', fr: 'Conserves' },
   'category.Spices': { en: 'Spices', fr: 'Épices' },
   'category.Retail': { en: 'Retail', fr: 'Détail' },
+  // Canonical marketplace categories (keep in sync with data/categories.ts)
+  'category.Livestock Farming': { en: 'Livestock Farming', fr: 'Élevage' },
+  'category.Process Goods': { en: 'Process Goods', fr: 'Produits transformés' },
+  'category.Equipment & Machinery': { en: 'Equipment & Machinery', fr: 'Équipement et machines' },
+  'category.General Services': { en: 'General Services', fr: 'Services généraux' },
+  'category.Plants Protection Products': { en: 'Plants Protection Products', fr: 'Produits phytosanitaires' },
+  'category.Seeds': { en: 'Seeds', fr: 'Semences' },
+  'category.Nurseries': { en: 'Nurseries', fr: 'Pépinières' },
+  'category.Animal Feeds': { en: 'Animal Feeds', fr: 'Aliments pour animaux' },
+  'category.General laborer': { en: 'General laborer', fr: 'Main-d’œuvre générale' },
+  'category.Transit & warehouse': { en: 'Transit & warehouse', fr: 'Transit et entreposage' },
+  'category.Equipment & Machinery Rentals': { en: 'Equipment & Machinery Rentals', fr: 'Location d’équipement et de machines' },
 
   // Units of Measure
   'unit.KG': { en: 'Kilogram (kg)', fr: 'Kilogramme (kg)' },
@@ -542,6 +554,7 @@ const translations: Record<string, Record<Language, string>> = {
   'order.cancel': { en: 'Cancel Order', fr: 'Annuler Commande' },
   'order.cannotCancelPaid': { en: 'Paid orders cannot be cancelled by user. Contact support.', fr: 'Impossible d\'annuler une commande payée. Contactez le support.' },
   'order.uploadFiles': { en: 'Upload Evidence (JPG, PNG, PDF)', fr: 'Preuves (JPG, PNG, PDF)' },
+  'order.uploadFilesHint': { en: 'You can attach up to 3 files.', fr: 'Vous pouvez joindre jusqu’à 3 fichiers.' },
   'order.disputeFileRequired': { en: 'Please attach at least one file as evidence.', fr: 'Veuillez joindre au moins un fichier comme preuve.' },
   'order.files': { en: 'Files', fr: 'Fichiers' },
   'order.reason': { en: 'Reason', fr: 'Raison' },

@@ -1322,11 +1322,11 @@ export const ProducerDashboard: React.FC = () => {
                                           multiple
                                           accept=".jpg,.jpeg,.png,.pdf"
                                           className="sr-only"
-                                          onChange={(e) => e.target.files && setEvidenceFiles(Array.from(e.target.files))}
+                                          onChange={(e) => e.target.files && setEvidenceFiles(Array.from(e.target.files).slice(0, 3))}
                                        />
                                     </label>
                                  </div>
-                                 <p className="text-xs text-gray-500">JPG, PNG, PDF up to 10MB</p>
+                                 <p className="text-xs text-gray-500">JPG, PNG, PDF up to 10MB — up to 3 files</p>
                               </div>
                            </div>
                            {evidenceFiles.length > 0 && (

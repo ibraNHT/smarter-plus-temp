@@ -917,7 +917,7 @@ export const ShoppingCart: React.FC = () => {
                     <span>{subtotal.toLocaleString()} XAF</span>
                   </div>
                   <div className="flex justify-between text-sm text-gray-600 mb-1">
-                    <span>Service Fee (5%)</span>
+                    <span>{t('cart.serviceFee')}</span>
                     <span>{serviceFee.toLocaleString()} XAF</span>
                   </div>
                   {appliedCoupon && (

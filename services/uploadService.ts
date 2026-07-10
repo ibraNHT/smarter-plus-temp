@@ -17,6 +17,21 @@ import {
  * Either way, what the database stores is the resulting absolute URL.
  */
 
+/**
+ * Top-level Cloudinary folder for browser (direct) uploads. Defaults to
+ * "agrimarket"; set VITE_CLOUDINARY_FOLDER_PREFIX per environment
+ * (e.g. "agrimarket/staging", "agrimarket/prod") so browser uploads land in the
+ * same environment-namespaced folder as the API's server-side uploads
+ * (CLOUDINARY_FOLDER_PREFIX). Leading/trailing slashes are stripped.
+ */
+const FOLDER_PREFIX = (
+  (import.meta.env.VITE_CLOUDINARY_FOLDER_PREFIX as string | undefined) ||
+  'agrimarket'
+).replace(/^\/+|\/+$/g, '');
+
+/** Build a fully-qualified Cloudinary folder under the environment prefix. */
+const folderFor = (subfolder: string): string => `${FOLDER_PREFIX}/${subfolder}`;
+
 interface UploadOptions {
   folder?: string;
   resourceType?: CloudinaryResource;
@@ -54,20 +69,20 @@ async function uploadAsset(file: File, options: UploadOptions): Promise<string> 
 
 /** User avatars / profile pictures (producer + client). */
 export const uploadAvatar = (file: File): Promise<string> =>
-  uploadAsset(file, { folder: 'agrimarket/avatars', backendPath: API_ENDPOINTS.upload.avatar });
+  uploadAsset(file, { folder: folderFor('avatars'), backendPath: API_ENDPOINTS.upload.avatar });
 
 /** Offer (product/service) hero images. */
 export const uploadOfferImage = (file: File): Promise<string> =>
-  uploadAsset(file, { folder: 'agrimarket/offers', backendPath: API_ENDPOINTS.upload.offerImage });
+  uploadAsset(file, { folder: folderFor('offers'), backendPath: API_ENDPOINTS.upload.offerImage });
 
 /** Producer portfolio images (gallery). */
 export const uploadPortfolioImage = (file: File): Promise<string> =>
-  uploadAsset(file, { folder: 'agrimarket/portfolio', backendPath: API_ENDPOINTS.upload.portfolioImage });
+  uploadAsset(file, { folder: folderFor('portfolio'), backendPath: API_ENDPOINTS.upload.portfolioImage });
 
 /** Producer portfolio videos. */
 export const uploadPortfolioVideo = (file: File): Promise<string> =>
   uploadAsset(file, {
-    folder: 'agrimarket/portfolio',
+    folder: folderFor('portfolio'),
     resourceType: 'video',
     backendPath: API_ENDPOINTS.upload.portfolioVideo,
   });
@@ -80,7 +95,7 @@ export const uploadPortfolioVideo = (file: File): Promise<string> =>
 export const uploadDocument = (file: File): Promise<string> => {
   const isImage = file.type.startsWith('image/');
   return uploadAsset(file, {
-    folder: 'agrimarket/documents',
+    folder: folderFor('documents'),
     resourceType: isImage ? 'image' : 'raw',
     backendPath: API_ENDPOINTS.upload.evidence,
   });
