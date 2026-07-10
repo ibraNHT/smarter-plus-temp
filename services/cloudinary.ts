@@ -67,7 +67,14 @@ export async function uploadToCloudinary(
   const form = new FormData();
   form.append("file", file);
   form.append("upload_preset", UPLOAD_PRESET);
-  if (options.folder) form.append("folder", options.folder);
+  if (options.folder) {
+    // `folder` = fixed-folder mode; `asset_folder` = dynamic-folder mode (the
+    // default for newer Cloudinary accounts, where `folder` alone does NOT set
+    // the Media Library folder). Send both so the asset nests in its subfolder
+    // (e.g. agrimarket/staging/avatars) instead of the environment root.
+    form.append("folder", options.folder);
+    form.append("asset_folder", options.folder);
+  }
   if (options.tags) form.append("tags", options.tags);
 
   // Use XHR when a progress callback is provided; otherwise fetch is fine.
