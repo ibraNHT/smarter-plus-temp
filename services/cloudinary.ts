@@ -67,6 +67,11 @@ export async function uploadToCloudinary(
   const form = new FormData();
   form.append("file", file);
   form.append("upload_preset", UPLOAD_PRESET);
+  // With the unsigned preset's "Asset folder" cleared, `folder` alone nests the
+  // asset — this account is in dynamic-folder mode, where Cloudinary maps the
+  // `folder` value to the Media Library asset_folder. Sending `asset_folder`
+  // explicitly on top of it pushes the asset to the root here, so send only
+  // `folder` (e.g. agrimarketstaging/avatars).
   if (options.folder) form.append("folder", options.folder);
   if (options.tags) form.append("tags", options.tags);
 

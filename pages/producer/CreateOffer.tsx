@@ -10,9 +10,9 @@ import { offerImageInBox } from '../../utils/offerImageDisplay';
 import NumberStepper from '../../components/NumberStepper';
 import { Sparkles, Loader2, Camera, MapPin, Clock, X, AlertTriangle } from 'lucide-react';
 import { isProducerPendingApproval } from '../../utils/producerAccountStatus';
+import { MARKETPLACE_CATEGORIES, isServiceCategory } from '../../data/categories';
 import { z } from 'zod';
 
-const SERVICE_ONLY_CATEGORIES = new Set(['Service']);
 const SERVICE_UNITS = new Set<UnitOfMeasure>([
   UnitOfMeasure.HOUR,
   UnitOfMeasure.DAY,
@@ -61,7 +61,7 @@ const normalizeOfferType = (
     return typeValue as OfferType;
   }
   const hasServiceUnit = SERVICE_UNITS.has(rawUnit as UnitOfMeasure);
-  const hasServiceCategory = SERVICE_ONLY_CATEGORIES.has(String(rawCategory ?? '').trim());
+  const hasServiceCategory = isServiceCategory(String(rawCategory ?? '').trim());
   const serviceDuration = Number(rawServiceDuration ?? 0);
   if (hasServiceUnit || hasServiceCategory || serviceDuration > 0) {
     return OfferType.SERVICE;
@@ -94,34 +94,25 @@ export const CreateOffer: React.FC = () => {
   // If producer has specific types, use them. Otherwise default to a broad list.
   const allAvailableCategories = useMemo(
     () => {
-      const canonical = [
-        'Agriculture',
-        'Livestock farming',
-        'Fish Farming',
-        'Vegetables',
-        'Processed foods',
-        'Plant Protection Products',
-        'Fertilizer',
-        'Equipment',
-        'Service',
-      ];
       // Union the producer's own registered types with the canonical list so newly
-      // added categories (e.g. Plant Protection Products, Fertilizer) always appear,
-      // even for producers who registered before those categories existed.
-      return Array.from(new Set([...producerProductionTypes, ...canonical]));
+      // added categories always appear, even for producers who registered before
+      // those categories existed.
+      return Array.from(
+        new Set([...producerProductionTypes, ...MARKETPLACE_CATEGORIES]),
+      );
     },
     [producerProductionTypes],
   );
   const productCategories = useMemo(
-    () => allAvailableCategories.filter(cat => !SERVICE_ONLY_CATEGORIES.has(cat)),
+    () => allAvailableCategories.filter(cat => !isServiceCategory(cat)),
     [allAvailableCategories],
   );
   const serviceCategories = useMemo(
-    () => allAvailableCategories.filter(cat => SERVICE_ONLY_CATEGORIES.has(cat)),
+    () => allAvailableCategories.filter(cat => isServiceCategory(cat)),
     [allAvailableCategories],
   );
   const fallbackProductCategory = productCategories[0] || 'Agriculture';
-  const fallbackServiceCategory = serviceCategories[0] || 'Service';
+  const fallbackServiceCategory = serviceCategories[0] || 'General Services';
   const selectableProductCategories = productCategories.length > 0 ? productCategories : [fallbackProductCategory];
   const selectableServiceCategories = serviceCategories.length > 0 ? serviceCategories : [fallbackServiceCategory];
   const hasInitializedEditForm = useRef(false);

@@ -55,6 +55,7 @@ jobs:
             VITE_PAYMENTS_ENABLED=${{ vars.VITE_PAYMENTS_ENABLED }}
             VITE_CLOUDINARY_CLOUD_NAME=${{ vars.VITE_CLOUDINARY_CLOUD_NAME }}
             VITE_CLOUDINARY_UPLOAD_PRESET=${{ vars.VITE_CLOUDINARY_UPLOAD_PRESET }}
+            VITE_CLOUDINARY_FOLDER_PREFIX=${{ vars.VITE_CLOUDINARY_FOLDER_PREFIX }}
             VITE_GOOGLE_MAPS_API_KEY=${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -77,8 +78,10 @@ jobs:
             set -euo pipefail
             echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
             cd "${DEPLOY_PATH}"
-            docker compose pull
-            docker compose up -d
+            # Only pull/recreate this repo's own service so simultaneous api + web
+            # staging deploys don't collide on the shared compose project.
+            docker compose pull web
+            docker compose up -d --no-deps web
             docker image prune -f
         env:
           GHCR_USER: ${{ github.actor }}

@@ -53,7 +53,9 @@ const AFRICA_COUNTRY_CODES = [
   { code: '+252', country: 'Somalia' },
 ];
 
-const PRODUCTION_TYPES = ['Agriculture', 'Livestock', 'Vegetables', 'Processed Goods', 'Plant Protection Products', 'Fertilizer', 'Equipment', 'Service'];
+import { MARKETPLACE_CATEGORIES } from '../../data/categories';
+
+const PRODUCTION_TYPES = MARKETPLACE_CATEGORIES;
 
 export const RegisterProducer: React.FC = () => {
   const { registerProducer } = useStore();

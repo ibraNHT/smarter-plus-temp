@@ -568,8 +568,9 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
               multiple
               accept="image/*,application/pdf"
               className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
-              onChange={(e) => e.target.files && setDisputeFiles(Array.from(e.target.files))}
+              onChange={(e) => e.target.files && setDisputeFiles(Array.from(e.target.files).slice(0, 3))}
             />
+            <p className="text-xs text-gray-400 mt-1">{t('order.uploadFilesHint')}</p>
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <button type="button" onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">

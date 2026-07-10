@@ -82,7 +82,9 @@ function hydrateProducerFormData(source: any, user?: { email?: string; phone?: s
   };
 }
 
-const PRODUCTION_TYPES = ['Agriculture', 'Livestock farming', 'Fish Farming', 'Vegetables', 'Processed foods', 'Equipment', 'Service'];
+import { MARKETPLACE_CATEGORIES } from '../../data/categories';
+
+const PRODUCTION_TYPES = MARKETPLACE_CATEGORIES;
 
 function portfolioCategoryLabel(category: string, translate: (key: string) => string): string {
   const raw = String(category ?? '').trim();

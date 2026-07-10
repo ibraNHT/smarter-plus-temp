@@ -329,10 +329,10 @@ export const ProducerMarket: React.FC = () => {
               />
             </div>
 
-            <div className="min-h-[2.5rem] mb-2 md:mb-3 hidden sm:block shrink-0">
+            <div className="min-h-[1.25rem] mb-2 md:mb-3 hidden sm:block shrink-0">
               <ClampText
                 text={offer.description}
-                lines={2}
+                lines={1}
                 className="text-gray-600 text-xs md:text-sm leading-5"
               />
             </div>
