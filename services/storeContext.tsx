@@ -723,7 +723,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setRealtimeConnected(false);
       return;
     }
-    const apiBase = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '' : (typeof window !== 'undefined' ? window.location.origin : ''))).replace(/\/$/, '');
+    const configuredBase = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '' : (typeof window !== 'undefined' ? window.location.origin : ''))).replace(/\/$/, '');
+    // In local DEV, if API is a remote origin (e.g. staging), connect socket same-origin
+    // so Vite can proxy /socket.io and avoid browser CORS blocks.
+    const crossOriginRemoteApi =
+      Boolean(import.meta.env.DEV) &&
+      Boolean(configuredBase) &&
+      typeof window !== 'undefined' &&
+      !configuredBase.startsWith(window.location.origin);
+    const apiBase = crossOriginRemoteApi ? '' : configuredBase;
     const socket = io(`${apiBase}/notifications`, {
       path: '/socket.io',
       auth: { token },
@@ -2530,6 +2538,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         unit: offerData.unit,
         quantity: offerData.quantity,
         price: offerData.price,
+        listingCurrency: offerData.listingCurrency,
+        listingPrice: offerData.listingPrice ?? offerData.price,
         imageUrl: offerData.imageUrl,
         imageUrls: offerData.imageUrls ?? [],
         isNegotiable: offerData.isNegotiable,
@@ -2567,6 +2577,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         unit: updatedOffer.unit,
         quantity: updatedOffer.quantity,
         price: updatedOffer.price,
+        listingCurrency: updatedOffer.listingCurrency,
+        listingPrice: updatedOffer.listingPrice ?? updatedOffer.price,
         imageUrl: updatedOffer.imageUrl,
         imageUrls: updatedOffer.imageUrls ?? [],
         isNegotiable: updatedOffer.isNegotiable,
@@ -3797,7 +3809,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }
       return sendMessage(
         chatId,
-        `Counter-offer: ${qty} units @ ${price?.toLocaleString()} XAF each`,
+        `Counter-offer: ${qty} units @ ${price?.toLocaleString()} each (XAF)`,
         {
           offerId: original?.proposal?.offerId,
           pricePerUnit: price,

@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
+import { CurrencyPreferenceCard } from '../../components/CurrencyPreferenceCard';
 import { ProducerStatus, ProducerProfile as ProducerProfileType, Location, Portfolio } from '../../types';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { User, Wallet, Shield, Tractor, CreditCard, Trash2, Plus, Camera, MapPin, X, LogOut, Image as ImageIcon, Video, Eye, Edit, CheckCircle, Heart, ArrowLeft, Search, Users, Copy, Loader2 } from 'lucide-react';
@@ -25,6 +27,7 @@ import { findProducerForUser } from '../../utils/producerAccountStatus';
 import { useFormik } from 'formik';
 import { z } from 'zod';
 import { showAppToast } from '../../services/appToast';
+import { buildProducerReferralLink } from '../../utils/referralLink';
 
 type ProducerFormData = ProducerProfileType & {
   niuCertificateUrl?: string;
@@ -106,6 +109,7 @@ export const ProducerProfile: React.FC = () => {
   const personalFieldsLocked = managingAsAccountManager;
   const updateProducerMutation = useUpdateProducerProfileMutation();
   const { t } = useTranslation();
+  const { formatXaf } = useCurrency();
   const navigate = useNavigate();
   const { tab } = useParams<{ tab?: string }>();
   type ProducerProfileTab = 'info' | 'security' | 'payment' | 'portfolio' | 'favorites' | 'referrals';
@@ -470,7 +474,8 @@ export const ProducerProfile: React.FC = () => {
   };
   const copyReferralLink = () => {
     if (!referralCodeDisplay) return;
-    const link = `${window.location.origin}/#/register?ref=${referralCodeDisplay}`;
+    const link = buildProducerReferralLink(referralCodeDisplay);
+    void navigator.clipboard.writeText(link);
     void navigator.clipboard.writeText(link);
     showAppToast('Referral link copied!', 'SUCCESS');
   };
@@ -1038,10 +1043,28 @@ export const ProducerProfile: React.FC = () => {
 
           {!isProducerHydrating && activeTab === 'referrals' && currentProducer && (
             <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center"><Users className="h-5 w-5 mr-2 text-primary-600" /> Referrals</h3>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6"><p className="text-sm text-blue-800 mb-2 font-bold">Your Referral Link</p><div className="flex flex-col sm:flex-row gap-2"><input type="text" readOnly value={`${window.location.origin}/#/register?ref=${referralCodeDisplay}`} className="block w-full min-w-0 border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-700" /><button type="button" onClick={copyReferralLink} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center justify-center flex-shrink-0"><Copy className="h-4 w-4 mr-2" /> Copy</button></div><p className="text-xs text-blue-600 mt-2">Share this link with friends to invite them to the platform.</p></div>
+              <div className="border-b border-gray-200 pb-4 mb-4 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h3 className="font-display text-lg font-semibold text-gray-900 flex items-center"><Users className="h-5 w-5 mr-2 text-primary-600" /> Referrals</h3>
+                  <p className="text-sm text-gray-500 mt-0.5">Invite friends and earn when they complete their first order.</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-3xl font-display font-bold text-primary-700 leading-none">{referralCount}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-primary-600 mt-1">Referrals</p>
+                </div>
+              </div>
+              <div className="bg-primary-50 border border-primary-200 rounded-xl p-5 mb-6">
+                <p className="text-sm text-primary-900 mb-1 font-bold">Your invite code</p>
+                <p className="font-display text-2xl sm:text-3xl font-bold tracking-wide text-primary-800 mb-4">{referralCodeDisplay || '—'}</p>
+                <p className="text-sm text-primary-800 mb-2 font-medium">Your referral link</p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input type="text" readOnly value={buildProducerReferralLink(referralCodeDisplay)} className="block w-full min-w-0 border-primary-200 rounded-md shadow-sm p-2.5 text-sm bg-white text-gray-700" />
+                  <button type="button" onClick={copyReferralLink} className="agm-btn-primary bg-primary-600 text-white px-4 py-2.5 rounded-md text-sm font-medium hover:bg-primary-700 flex items-center justify-center flex-shrink-0"><Copy className="h-4 w-4 mr-2" /> Copy link</button>
+                </div>
+                <p className="text-xs text-primary-700 mt-3">Share this link with friends. Rewards apply when their first order is marked Completed (no prior cancellation).</p>
+              </div>
               {myReferrals?.activeProgram ? (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6">
                   <h4 className="text-sm font-bold text-gray-900">{myReferrals.activeProgram.name}</h4>
                   {myReferrals.activeProgram.description ? (
                     <p className="text-sm text-gray-600 mt-1">{myReferrals.activeProgram.description}</p>
@@ -1058,7 +1081,30 @@ export const ProducerProfile: React.FC = () => {
                   ) : null}
                 </div>
               ) : null}
-              <div className="border-t border-gray-200 pt-4"><div className="flex items-center justify-between mb-4"><h4 className="text-sm font-bold text-gray-900">Your Impact</h4><span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">{referralCount} Referrals</span></div>{referralCount === 0 ? (<div className="text-center py-8 text-gray-500"><Users className="h-12 w-12 mx-auto text-gray-300 mb-2" /><p>You haven&apos;t referred anyone yet.</p></div>) : (<div className="space-y-3"><p className="text-sm text-gray-600">You have successfully referred {referralCount} user{referralCount === 1 ? '' : 's'}.</p>{referredPeople.length > 0 ? (<ul className="divide-y divide-gray-200 border border-gray-200 rounded-md bg-white">{referredPeople.map((u) => (<li key={u.id} className="px-3 py-2 flex justify-between text-sm"><span className="font-medium text-gray-900">{u.displayName || 'User'}</span><span className="text-gray-500">{u.joinedDate ? new Date(u.joinedDate).toLocaleDateString() : ''}</span></li>))}</ul>) : null}</div>)}</div>
+              <div className="border-t border-gray-200 pt-4">
+                <h4 className="text-sm font-bold text-gray-900 mb-4">People you invited</h4>
+                {referralCount === 0 ? (
+                  <div className="text-center py-10 agm-empty-wash rounded-xl border border-primary-100">
+                    <Users className="h-12 w-12 mx-auto text-primary-300 mb-2" />
+                    <p className="text-gray-600 font-medium">You haven&apos;t referred anyone yet.</p>
+                    <p className="text-sm text-gray-500 mt-1">Copy your link above and share it to get started.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-sm text-gray-600">You have successfully referred {referralCount} user{referralCount === 1 ? '' : 's'}.</p>
+                    {referredPeople.length > 0 ? (
+                      <ul className="divide-y divide-gray-200 border border-gray-200 rounded-md bg-white">
+                        {referredPeople.map((u) => (
+                          <li key={u.id} className="px-3 py-2 flex justify-between text-sm">
+                            <span className="font-medium text-gray-900">{u.displayName || 'User'}</span>
+                            <span className="text-gray-500">{u.joinedDate ? new Date(u.joinedDate).toLocaleDateString() : ''}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1073,15 +1119,18 @@ export const ProducerProfile: React.FC = () => {
             <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
               <div className="border-b border-gray-200 pb-4 mb-4"><h3 className="text-lg font-medium text-gray-900">{t('profile.tabs.favorites')}</h3></div>
               {unavailableFavoriteIds && unavailableFavoriteIds.length > 0 && (<div className="mb-6 bg-yellow-50 p-4 rounded-md border border-yellow-100"><h4 className="text-sm font-bold text-yellow-800 mb-2">Unavailable Items</h4><ul className="space-y-2">{unavailableFavoriteIds.map(id => (<li key={id} className="flex items-center justify-between text-sm text-yellow-700"><span>Item #{id} is no longer available.</span><div className="flex items-center gap-2"><button onClick={() => setFavoriteToRemove({ id, title: `Item #${id}` })} className="text-xs text-red-600 hover:underline">{t('cart.remove')}</button><Link to="/market/producers" className="text-xs bg-yellow-200 px-2 py-1 rounded hover:bg-yellow-300 flex items-center"><Search className="w-3 h-3 mr-1" /> {t('profile.findSimilar')}</Link></div></li>))}</ul></div>)}
-              {tabLoading && (!favoriteOffers || favoriteOffers.length === 0) ? (<ListSkeleton rows={3} />) : (!favoriteOffers || favoriteOffers.length === 0) ? (<div className="text-center py-12 text-gray-500"><Heart className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('profile.favorites.empty')}</p></div>) : (<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{favoriteOffers.map((offer: any) => (<div key={offer.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow flex items-center"><div className="mr-4 h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100"><img src={offer.imageUrl} alt="" className={offerImageInBox} /></div><div className="flex-1 min-w-0"><h4 className="font-bold text-gray-900 truncate">{offer.title}</h4><p className="text-sm text-gray-500">{offer.price} XAF / {offer.unit}</p></div><div className="flex flex-col gap-2 ml-2"><Link to={`/offer/${offer.id}`} className="text-primary-600 hover:bg-primary-50 p-2 rounded-full"><ArrowLeft className="h-5 w-5 rotate-180" /></Link><button onClick={() => setFavoriteToRemove({ id: offer.id, title: offer.title })} className="text-red-500 hover:bg-red-50 p-2 rounded-full" aria-label={t('favorites.removeTitle')}><Trash2 className="h-5 w-5" /></button></div></div>))}</div>)}
+              {tabLoading && (!favoriteOffers || favoriteOffers.length === 0) ? (<ListSkeleton rows={3} />) : (!favoriteOffers || favoriteOffers.length === 0) ? (<div className="text-center py-12 text-gray-500"><Heart className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('profile.favorites.empty')}</p></div>) : (<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{favoriteOffers.map((offer: any) => (<div key={offer.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow flex items-center"><div className="mr-4 h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100"><img src={offer.imageUrl} alt="" className={offerImageInBox} /></div><div className="flex-1 min-w-0"><h4 className="font-bold text-gray-900 truncate">{offer.title}</h4><p className="text-sm text-gray-500">{formatXaf(offer.price)} / {offer.unit}</p></div><div className="flex flex-col gap-2 ml-2"><Link to={`/offer/${offer.id}`} className="text-primary-600 hover:bg-primary-50 p-2 rounded-full"><ArrowLeft className="h-5 w-5 rotate-180" /></Link><button onClick={() => setFavoriteToRemove({ id: offer.id, title: offer.title })} className="text-red-500 hover:bg-red-50 p-2 rounded-full" aria-label={t('favorites.removeTitle')}><Trash2 className="h-5 w-5" /></button></div></div>))}</div>)}
             </div>
           )}
 
           {!isProducerHydrating && activeTab === 'payment' && (
-            <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
+            <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6 space-y-6">
+              <CurrencyPreferenceCard />
+              <div>
               <div className="flex flex-wrap gap-3 justify-between items-center mb-6"><h3 className="text-lg font-medium text-gray-900">{t('profile.payment.saved')}</h3><button onClick={() => setShowAddPayment(true)} className="flex items-center text-sm bg-primary-600 text-white px-3 py-2 rounded-md hover:bg-primary-700"><Plus className="h-4 w-4 mr-1" /> {t('form.add')}</button></div>
               <ul className="divide-y divide-gray-200 mb-6">{(!currentProducer?.paymentMethods || currentProducer.paymentMethods.length === 0) ? (<li className="py-4 text-gray-500 italic">{t('profile.payment.none')}</li>) : (currentProducer.paymentMethods.map(pm => (<li key={pm.id} className="py-4 flex justify-between items-center"><div className="flex items-center"><div className={`h-10 w-10 rounded-full flex items-center justify-center mr-3 ${pm.provider === 'ORANGE' ? 'bg-orange-100 text-orange-600' : pm.provider === 'MTN' ? 'bg-yellow-100 text-yellow-600' : 'bg-blue-100 text-blue-600'}`}><CreditCard className="h-5 w-5" /></div><div><p className="text-sm font-medium text-gray-900">{pm.provider} - {pm.accountNumber}</p><p className="text-xs text-gray-500">{pm.accountName}</p></div></div><button onClick={() => setPaymentToRemove({ id: pm.id, provider: pm.provider, accountNumber: pm.accountNumber })} className="text-red-600 hover:text-red-800 p-2" aria-label={t('payment.removeTitle')}><Trash2 className="h-5 w-5" /></button></li>)))}</ul>
               {showAddPayment && (<div className="bg-gray-50 p-4 rounded-md border border-gray-200 animate-fade-in"><h4 className="text-sm font-bold text-gray-700 mb-3">{t('profile.payment.add')}</h4><form onSubmit={handleAddPayment} className="space-y-4"><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.provider')}</label><select name="provider" className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" value={paymentFormik.values.provider} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur}><option value="ORANGE">Orange Money</option><option value="MTN">MTN Mobile Money</option><option value="BANK">Bank Transfer</option></select></div><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.accNum')}</label><input type="text" name="accountNumber" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder={paymentFormik.values.provider === 'BANK' ? 'IBAN / Account No' : 'e.g. 237670000000'} value={paymentFormik.values.accountNumber} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur} />{paymentFormik.touched.accountNumber && paymentFormik.errors.accountNumber ? <p className="text-xs text-red-600 mt-1">{paymentFormik.errors.accountNumber}</p> : null}</div><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.accName')}</label><input type="text" name="accountName" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder="Full Name on Account" value={paymentFormik.values.accountName} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur} />{paymentFormik.touched.accountName && paymentFormik.errors.accountName ? <p className="text-xs text-red-600 mt-1">{paymentFormik.errors.accountName}</p> : null}</div><div className="flex justify-end space-x-3 mt-4"><button type="button" onClick={() => setShowAddPayment(false)} className="text-gray-600 text-sm hover:text-gray-800">{t('form.cancel')}</button><button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded-md text-sm hover:bg-primary-700">{t('form.save')}</button></div></form></div>)}
+              </div>
             </div>
           )}
 

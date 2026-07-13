@@ -24,6 +24,9 @@ interface SEOProps {
   canonicalUrl?: string;
   schema?: Record<string, unknown> | Array<Record<string, unknown> | undefined>;
   locale?: 'en' | 'fr';
+  /** Product offer price for Open Graph product meta. */
+  priceAmount?: number | null;
+  priceCurrency?: string;
 }
 
 export const SEO: React.FC<SEOProps> = ({
@@ -37,6 +40,8 @@ export const SEO: React.FC<SEOProps> = ({
   canonicalUrl,
   schema,
   locale = 'en',
+  priceAmount,
+  priceCurrency = 'XAF',
 }) => {
   const fullTitle = buildPageTitle(title);
   const fullUrl = url ? absoluteUrl(url) : absoluteUrl('/');
@@ -57,6 +62,9 @@ export const SEO: React.FC<SEOProps> = ({
         (entry): entry is Record<string, unknown> => entry != null,
       )
     : [];
+
+  const hasProductPrice =
+    type === 'product' && priceAmount != null && Number.isFinite(Number(priceAmount));
 
   return (
     <Helmet>
@@ -82,6 +90,14 @@ export const SEO: React.FC<SEOProps> = ({
       <meta property="og:site_name" content={SEO_BRAND} />
       <meta property="og:locale" content={ogLocale} />
       <meta property="og:locale:alternate" content={ogLocaleAlternate} />
+      {hasProductPrice && (
+        <>
+          <meta property="product:price:amount" content={String(priceAmount)} />
+          <meta property="product:price:currency" content={priceCurrency} />
+          <meta property="og:price:amount" content={String(priceAmount)} />
+          <meta property="og:price:currency" content={priceCurrency} />
+        </>
+      )}
 
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:url" content={fullUrl} />

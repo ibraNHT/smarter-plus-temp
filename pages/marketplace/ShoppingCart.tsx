@@ -57,10 +57,12 @@ import { cartHasService } from '../../utils/orderLabels';
 import { showAppToast } from '../../services/appToast';
 import { useFormik } from 'formik';
 import { z } from 'zod';
+import { useCurrency } from '../../contexts/CurrencyContext';
 
 export const ShoppingCart: React.FC = () => {
   const { cart, removeFromCart, placeOrder, user, clearCart, clients, producers, moveToFavorites, validateCoupon, pickupPoints, guestEmail, setGuestEmail, refreshOffers, refreshProducers, refreshPickupPoints, refreshCart, refreshClients } = useStore();
   const { t } = useTranslation();
+  const { formatXaf } = useCurrency();
 
   // Cart page hydrates everything it actually renders: offers (item details),
   // producers (delivery options), pickup points (PICKUP method), clients
@@ -414,14 +416,19 @@ export const ShoppingCart: React.FC = () => {
 
   if (cart.length === 0) {
     return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center bg-gray-50 px-4">
-        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md w-full">
-          <ShoppingBag className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+      <div className="min-h-[60vh] flex flex-col items-center justify-center agm-empty-wash px-4">
+        <div className="bg-white/90 p-8 rounded-xl shadow-lg text-center max-w-md w-full border border-primary-100">
+          <ShoppingBag className="h-16 w-16 text-primary-300 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">{t('cart.empty')}</h2>
           <p className="text-gray-500 mb-6">{t('cart.emptyDesc')}</p>
-          <Link to="/market/producers" className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 w-full">
-            {t('cart.start')}
-          </Link>
+          <div className="flex flex-col gap-3">
+            <Link to="/market/producers" className="agm-btn-primary inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 w-full">
+              {t('cart.start')}
+            </Link>
+            <Link to="/market/ati" className="agm-btn-secondary inline-flex items-center justify-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 w-full">
+              {t('cart.browseAti')}
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -482,7 +489,7 @@ export const ShoppingCart: React.FC = () => {
                           <h3 className="min-w-0 break-words">
                             <Link to={`/offer/${item.id}`} className="hover:text-primary-600 line-clamp-2 sm:line-clamp-none">{item.title}</Link>
                           </h3>
-                          <p className="whitespace-nowrap flex-shrink-0">{(item.price * item.cartQuantity).toLocaleString()} XAF</p>
+                          <p className="whitespace-nowrap flex-shrink-0">{formatXaf(item.price * item.cartQuantity)}</p>
                         </div>
                         <p className="mt-1 text-xs sm:text-sm text-gray-500">{item.category}</p>
 
@@ -790,11 +797,11 @@ export const ShoppingCart: React.FC = () => {
                 <dl className="-my-4 text-sm divide-y divide-gray-200">
                   <div className="py-4 flex items-center justify-between">
                     <dt className="text-gray-600">{t('cart.subtotal')}</dt>
-                    <dd className="font-medium text-gray-900">{subtotal.toLocaleString()} XAF</dd>
+                    <dd className="font-medium text-gray-900">{formatXaf(subtotal)}</dd>
                   </div>
                   <div className="py-4 flex items-center justify-between">
                     <dt className="text-gray-600">{t('cart.serviceFee')}</dt>
-                    <dd className="font-medium text-gray-900">{serviceFee.toLocaleString()} XAF</dd>
+                    <dd className="font-medium text-gray-900">{formatXaf(serviceFee)}</dd>
                   </div>
 
                   {/* Coupon Section */}
@@ -826,7 +833,7 @@ export const ShoppingCart: React.FC = () => {
                           <Tag className="h-4 w-4 mr-1" /> {appliedCoupon}
                         </span>
                         <div className="flex items-center">
-                          <span className="text-green-700 font-bold mr-2">- {discountAmount.toLocaleString()} XAF</span>
+                          <span className="text-green-700 font-bold mr-2">- {formatXaf(discountAmount)}</span>
                           <button onClick={removeCoupon} className="text-gray-400 hover:text-red-500"><X className="h-4 w-4" /></button>
                         </div>
                       </div>
@@ -835,7 +842,7 @@ export const ShoppingCart: React.FC = () => {
 
                   <div className="py-4 flex items-center justify-between border-t border-gray-200">
                     <dt className="text-base font-bold text-gray-900">{t('cart.total')}</dt>
-                    <dd className="text-base font-bold text-primary-600">{totalAmount.toLocaleString()} XAF</dd>
+                    <dd className="text-base font-bold text-primary-600">{formatXaf(totalAmount)}</dd>
                   </div>
                 </dl>
               </div>
@@ -853,7 +860,7 @@ export const ShoppingCart: React.FC = () => {
                   type="button"
                   onClick={() => void handleInitialPlaceOrder()}
                   disabled={!canPlaceOrder || !legalAccepted}
-                  className="w-full bg-primary-600 border border-transparent rounded-md shadow-sm py-3 px-4 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="agm-btn-primary w-full bg-primary-600 border border-transparent rounded-md shadow-sm py-3 px-4 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <CheckCircle className="h-5 w-5 mr-2" />
                   {t('cart.placeOrder')}
@@ -885,7 +892,7 @@ export const ShoppingCart: React.FC = () => {
                       <li key={item.id} className="text-sm">
                         <div className="flex justify-between">
                           <span className="text-gray-800">{item.cartQuantity}x {item.title}</span>
-                          <span className="font-medium">{(item.price * item.cartQuantity).toLocaleString()} XAF</span>
+                          <span className="font-medium">{formatXaf(item.price * item.cartQuantity)}</span>
                         </div>
                         {item.type === OfferType.SERVICE && (
                           <div className="mt-1 text-xs text-gray-600">
@@ -914,21 +921,21 @@ export const ShoppingCart: React.FC = () => {
                   </ul>
                   <div className="flex justify-between text-sm text-gray-600 mb-1">
                     <span>Subtotal</span>
-                    <span>{subtotal.toLocaleString()} XAF</span>
+                    <span>{formatXaf(subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-sm text-gray-600 mb-1">
                     <span>{t('cart.serviceFee')}</span>
-                    <span>{serviceFee.toLocaleString()} XAF</span>
+                    <span>{formatXaf(serviceFee)}</span>
                   </div>
                   {appliedCoupon && (
                     <div className="flex justify-between text-sm text-green-600 mb-1 font-bold">
                       <span>Discount ({appliedCoupon})</span>
-                      <span>- {discountAmount.toLocaleString()} XAF</span>
+                      <span>- {formatXaf(discountAmount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between mt-2 pt-2 border-t border-gray-200 font-bold text-gray-900 text-lg">
                     <span>Total</span>
-                    <span className="text-primary-600">{totalAmount.toLocaleString()} XAF</span>
+                    <span className="text-primary-600">{formatXaf(totalAmount)}</span>
                   </div>
                 </div>
 

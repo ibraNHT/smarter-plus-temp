@@ -3,6 +3,7 @@ import React, { useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
+import { readReferralCodeFromLocation } from '../../utils/referralLink';
 import { User, Mail, Phone, MapPin, Camera, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { useFormik } from 'formik';
@@ -57,7 +58,7 @@ export const RegisterClient: React.FC = () => {
   const { t, language } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const refCode = searchParams.get('ref');
+  const refCode = readReferralCodeFromLocation(searchParams);
 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);

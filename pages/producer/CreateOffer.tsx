@@ -11,6 +11,8 @@ import NumberStepper from '../../components/NumberStepper';
 import { Sparkles, Loader2, Camera, MapPin, Clock, X, AlertTriangle } from 'lucide-react';
 import { isProducerPendingApproval } from '../../utils/producerAccountStatus';
 import { MARKETPLACE_CATEGORIES, isServiceCategory } from '../../data/categories';
+import { useCurrency } from '../../contexts/CurrencyContext';
+import { BASE_CURRENCY, SUPPORTED_CURRENCIES, currencyLabel } from '../../utils/formatMoney';
 import { z } from 'zod';
 
 const SERVICE_UNITS = new Set<UnitOfMeasure>([
@@ -72,6 +74,7 @@ const normalizeOfferType = (
 export const CreateOffer: React.FC = () => {
   const { createOffer, updateOffer, getOfferById, user, producers } = useStore();
   const { t } = useTranslation();
+  const { toXaf, rates, currency: preferredCurrency } = useCurrency();
   const navigate = useNavigate();
   const { offerId } = useParams<{ offerId: string }>();
   
@@ -128,6 +131,7 @@ export const CreateOffer: React.FC = () => {
     minQuantity: 1,
     maxQuantity: 0, // 0 means unlimited (up to total stock)
     price: 0,
+    listingCurrency: preferredCurrency || BASE_CURRENCY,
     features: '', // Used for AI prompt
     offerLocation: registeredLocation,
     isNegotiable: false,
@@ -135,6 +139,10 @@ export const CreateOffer: React.FC = () => {
     serviceDuration: 1 // Default 1 hour
   });
 
+  const estimatedXaf = useMemo(
+    () => toXaf(Number(formData.price) || 0, formData.listingCurrency),
+    [formData.price, formData.listingCurrency, toXaf, rates],
+  );
   useEffect(() => {
     // Ensure location is set when producer data loads
     if (!formData.offerLocation && registeredLocation) {
@@ -187,7 +195,8 @@ export const CreateOffer: React.FC = () => {
           quantity: offer.quantity,
           minQuantity: offer.minQuantity || 1,
           maxQuantity: offer.maxQuantity || 0,
-          price: offer.price,
+          price: offer.listingPrice ?? offer.price,
+          listingCurrency: offer.listingCurrency || BASE_CURRENCY,
           features: '',
           offerLocation: offer.offerLocation || registeredLocation,
           isNegotiable: offer.isNegotiable,
@@ -266,6 +275,8 @@ export const CreateOffer: React.FC = () => {
     const offerLocation =
       String(formData.offerLocation ?? registeredLocation ?? '').trim() || 'Location not set';
 
+    const listingPrice = Number(formData.price);
+    const listingCurrency = formData.listingCurrency || BASE_CURRENCY;
     const offerData = {
       title: formData.title,
       description: formData.description,
@@ -275,7 +286,9 @@ export const CreateOffer: React.FC = () => {
       quantity: Number(formData.quantity),
       minQuantity: Number(formData.minQuantity),
       maxQuantity: maxQ,
-      price: Number(formData.price),
+      price: toXaf(listingPrice, listingCurrency),
+      listingCurrency,
+      listingPrice,
       offerLocation,
       isNegotiable: formData.isNegotiable,
       isDeliveryAvailable: formData.isDeliveryAvailable,
@@ -509,12 +522,41 @@ export const CreateOffer: React.FC = () => {
                </div>
              )}
 
-             <div className="sm:col-span-2">
-               <label className="block text-sm font-medium text-gray-700">{t('form.price')} (XAF)</label>
-               <NumberStepper min={0} required value={formData.price}
-                 onChange={n => setFormData({...formData, price: n})}
-               />
-              {fieldErrors.price && <p className="mt-1 text-xs text-red-600">{fieldErrors.price}</p>}
+             <div className="sm:col-span-2 space-y-3">
+               <div>
+                 <label className="block text-sm font-medium text-gray-700">Listing currency</label>
+                 <select
+                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
+                   value={formData.listingCurrency}
+                   onChange={e => setFormData({ ...formData, listingCurrency: e.target.value })}
+                   aria-label="Listing currency"
+                 >
+                   {SUPPORTED_CURRENCIES.map((code) => (
+                     <option key={code} value={code}>
+                       {code === 'XAF' || code === 'XOF' ? `${code} — ${currencyLabel(code)}` : `${code}`}
+                     </option>
+                   ))}
+                 </select>
+               </div>
+               <div>
+                 <label className="block text-sm font-medium text-gray-700">
+                   {t('form.price')} ({formData.listingCurrency})
+                 </label>
+                 <NumberStepper
+                   min={0}
+                   required
+                   value={formData.price}
+                   placeholder={`Enter price in ${formData.listingCurrency}`}
+                   ariaLabel={`Price in ${formData.listingCurrency}`}
+                   onChange={n => setFormData({...formData, price: n})}
+                 />
+                 {formData.listingCurrency !== BASE_CURRENCY && Number(formData.price) > 0 && (
+                   <p className="mt-1 text-xs text-gray-500">
+                     ≈ {estimatedXaf.toLocaleString()} {currencyLabel(BASE_CURRENCY)} (platform settlement)
+                   </p>
+                 )}
+                 {fieldErrors.price && <p className="mt-1 text-xs text-red-600">{fieldErrors.price}</p>}
+               </div>
              </div>
 
              <div className="sm:col-span-2">

@@ -27,15 +27,28 @@ RUN yarn install --frozen-lockfile
 COPY . .
 RUN yarn build
 
-# ── Runtime stage (static files served by Nginx) ──────────────────────────────
-FROM nginx:1.27-alpine AS production
+# ── Runtime stage (Node static server + social OG for /offer/:id) ─────────────
+FROM node:20-alpine AS production
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /app/dist /usr/share/nginx/html
+WORKDIR /app
+
+RUN apk add --no-cache wget
+
+# Runtime API base for Open Graph crawler fetches (staging vs prod).
+ARG OG_API_BASE_URL
+ARG SITE_ORIGIN=https://acheteici.com
+ENV OG_API_BASE_URL=${OG_API_BASE_URL} \
+    SITE_ORIGIN=${SITE_ORIGIN} \
+    PORT=80 \
+    HOST=0.0.0.0 \
+    NODE_ENV=production
+
+COPY --from=builder /app/dist ./dist
+COPY server ./server
 
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1/healthz >/dev/null 2>&1 || exit 1
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["node", "server/staticServer.mjs"]

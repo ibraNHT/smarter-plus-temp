@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useStore } from "../../services/storeContext";
 import { useTranslation } from "../../services/i18nContext";
+import { useCurrency } from "../../contexts/CurrencyContext";
 import { ProducerStatus, Review } from "../../types";
 import {
   User,
@@ -60,6 +61,7 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
     refreshOffers,
   } = useStore();
   const { t, language } = useTranslation();
+  const { formatXaf } = useCurrency();
 
   // Public profile needs the producers/clients/offers catalogs. `pageLoading`
   // scopes the full-page skeleton to this page so it falls when (cached)
@@ -396,7 +398,7 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
                               {offer.title}
                             </p>
                             <p className="text-xs text-gray-500">
-                              {offer.price} XAF / {t(`unit.${offer.unit}`)}
+                              {formatXaf(offer.price)} / {t(`unit.${offer.unit}`)}
                             </p>
                           </div>
                         </div>

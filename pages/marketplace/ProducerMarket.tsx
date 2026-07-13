@@ -12,36 +12,64 @@ import {
   buildCollectionPageSchema,
 } from '../../services/seo/schemaBuilders';
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
+import { CategoryAvatarScroller } from '../../components/CategoryAvatarScroller';
 import { ClampText } from '../../components/ClampText';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { displayNameTruncateClass, resolveProducerDisplayName } from '../../utils/displayName';
 import { isProducerDashboardUser } from '../../services/producerSession';
 import { findProducerForUser } from '../../utils/producerAccountStatus';
+import { usePwaInstall } from '../../contexts/PwaInstallContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
+import { showAppToast } from '../../services/appToast';
+import { buildOfferShareText, buildOfferShareUrl } from '../../utils/offerShare';
 
 export const ProducerMarket: React.FC = () => {
   const { offers, producers, user, clients, trackUserSearch, toggleFavorite, getRecommendedOffers, getAverageRating, reviews, compareList, addToCompare, removeFromCompare, refreshOffers, refreshProducers, refreshAllReviews } = useStore();
   const { t } = useTranslation();
+  const { formatXaf } = useCurrency();
   const navigate = useNavigate();
+  const { nudgeInstall } = usePwaInstall();
 
   // Show cached catalog instantly on return visits; React Query dedupes refetches
   // within staleTime so repeat navigation does not hit the network or flash skeletons.
   const hasCachedCatalog =
     offers.some((o) => o.marketType === MarketType.PRODUCER) && producers.length > 0;
   const [pageLoading, setPageLoading] = useState(!hasCachedCatalog);
+  const [showFreshness, setShowFreshness] = useState(false);
+  const [resultsKey, setResultsKey] = useState(0);
   useEffect(() => {
     let cancelled = false;
     if (!hasCachedCatalog) setPageLoading(true);
     Promise.all([refreshOffers(), refreshProducers(), refreshAllReviews()]).finally(() => {
-      if (!cancelled) setPageLoading(false);
+      if (!cancelled) {
+        setPageLoading(false);
+        setShowFreshness(true);
+        window.setTimeout(() => setShowFreshness(false), 3200);
+      }
     });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    try {
+      const key = 'agm_market_visits';
+      const n = Number(sessionStorage.getItem(key) || '0') + 1;
+      sessionStorage.setItem(key, String(n));
+      if (n >= 2) nudgeInstall('return');
+    } catch { /* ignore */ }
+  }, [nudgeInstall]);
 
   // State for filters
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [locationQuery, setLocationQuery] = useState('');
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+
+  const handleSelectCategory = (cat: string) => {
+    setSelectedCategory(cat);
+    setExpandedCategory(null);
+    setResultsKey((k) => k + 1);
+  };
 
   // Autocomplete State
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
@@ -219,8 +247,6 @@ export const ProducerMarket: React.FC = () => {
   };
 
   // Get all unique categories from the ENTIRE dataset for the filter dropdown
-  const allAvailableCategories = Array.from(new Set(producerOffers.map(o => o.category))).sort();
-
   const renderOfferCard = (offer: any, inCarousel = false) => {
     const producer = getProducer(offer.producerId);
     const isLocal = clientRegion && producer?.locations.some(l => l.region === clientRegion);
@@ -233,8 +259,13 @@ export const ProducerMarket: React.FC = () => {
 
     const handleCompareToggle = (e: React.MouseEvent) => {
       e.preventDefault();
-      if (isComparing) removeFromCompare(offer.id);
-      else addToCompare(offer.id);
+      if (isComparing) {
+        removeFromCompare(offer.id);
+        showAppToast(t('product.removedCompare'), 'INFO');
+      } else {
+        addToCompare(offer.id);
+        showAppToast(t('product.addedCompare'), 'SUCCESS');
+      }
     };
 
     return (
@@ -247,7 +278,13 @@ export const ProducerMarket: React.FC = () => {
           {/* Favorite Button (Visible for Client AND Producer) */}
           {(user?.role === UserRole.CLIENT || isProducerDashboardUser(user)) && (
             <button
-              onClick={(e) => { e.preventDefault(); toggleFavorite(offer.id); }}
+              onClick={(e) => {
+                e.preventDefault();
+                const willAdd = !favorites.includes(offer.id);
+                toggleFavorite(offer.id);
+                showAppToast(willAdd ? t('product.addedFavorite') : t('product.removedFavorite'), willAdd ? 'SUCCESS' : 'INFO');
+                if (willAdd) nudgeInstall('favorite');
+              }}
               className="p-1.5 rounded-full bg-white/80 hover:bg-white shadow-sm transition-colors"
               title="Save for later"
             >
@@ -268,11 +305,18 @@ export const ProducerMarket: React.FC = () => {
           <button
             onClick={async (e) => {
               e.preventDefault();
-              const url = `${window.location.origin}/#/offer/${offer.id}`;
-              const data = { title: offer.title, text: `${offer.title} — ATI AgriMarket`, url };
+              const url = buildOfferShareUrl(offer.id);
+              const text = buildOfferShareText({
+                title: offer.title,
+                price: offer.price,
+                location: offer.offerLocation,
+                rating: rating > 0 ? rating : null,
+                producerName: producer ? getProducerName(producer) : null,
+              });
+              const data = { title: offer.title, text, url };
               try {
                 if (typeof navigator !== 'undefined' && navigator.share) await navigator.share(data);
-                else if (typeof navigator !== 'undefined' && navigator.clipboard) await navigator.clipboard.writeText(url);
+                else if (typeof navigator !== 'undefined' && navigator.clipboard) await navigator.clipboard.writeText(`${text}\n${url}`);
               } catch {
                 /* share sheet dismissed / clipboard blocked — no action needed */
               }
@@ -288,25 +332,16 @@ export const ProducerMarket: React.FC = () => {
           <div className="relative bg-gray-100 h-40 sm:h-44 md:h-44">
             <img src={offer.imageUrl} alt={offer.title} className={offerImageInBox} />
 
-            {/* Badges Overlay */}
-            <div className="absolute top-2 right-10 flex flex-col gap-1 items-end w-full pr-6 pointer-events-none">
-              {offer.type === 'SERVICE' && (
-                <span className="bg-purple-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide shadow-sm">
-                  Service
-                </span>
-              )}
-              {offer.isNegotiable && (
-                <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide shadow-sm flex items-center">
-                  <MessageCircle className="h-3 w-3 mr-1" /> Negotiable
-                </span>
-              )}
-            </div>
-
-            {isLocal && (
+            {/* Single image accent: Nearby > Service */}
+            {isLocal ? (
               <div className="absolute top-2 left-2 bg-green-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide shadow-sm flex items-center">
                 <MapPin className="h-3 w-3 mr-1" /> Nearby
               </div>
-            )}
+            ) : offer.type === 'SERVICE' ? (
+              <span className="absolute top-2 left-2 bg-purple-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide shadow-sm">
+                Service
+              </span>
+            ) : null}
           </div>
 
           <div className="flex flex-col flex-1 min-h-0 p-3 md:p-4">
@@ -337,21 +372,28 @@ export const ProducerMarket: React.FC = () => {
               />
             </div>
 
-            {/* Delivery Status */}
-            {offer.isDeliveryAvailable ? (
-              <div className="flex items-center text-xs text-green-600 font-medium mb-3 shrink-0">
-                <Truck className="h-3 w-3 mr-1 shrink-0" /> Delivery Available
-              </div>
-            ) : (
-              <div className="flex items-center text-xs text-gray-400 font-medium mb-3 shrink-0">
-                <MapPin className="h-3 w-3 mr-1 shrink-0" /> Pickup Only
-              </div>
-            )}
+            {/* Meta row: delivery + negotiable */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mb-3 shrink-0">
+              {offer.isDeliveryAvailable ? (
+                <span className="inline-flex items-center text-green-600 font-medium">
+                  <Truck className="h-3 w-3 mr-1 shrink-0" /> Delivery
+                </span>
+              ) : (
+                <span className="inline-flex items-center text-gray-400 font-medium">
+                  <MapPin className="h-3 w-3 mr-1 shrink-0" /> Pickup
+                </span>
+              )}
+              {offer.isNegotiable && (
+                <span className="inline-flex items-center text-blue-600 font-medium">
+                  <MessageCircle className="h-3 w-3 mr-1 shrink-0" /> Negotiable
+                </span>
+              )}
+            </div>
 
             <div className="mt-auto flex items-end justify-between pt-2 md:pt-3 border-t border-gray-100 gap-2 shrink-0">
               <div className="min-w-0">
                 <p className="text-[10px] md:text-xs text-gray-400">{t('market.per')} {t(`unit.${offer.unit}`)}</p>
-                <p className="text-base md:text-lg font-bold text-primary-700 leading-tight">{offer.price.toLocaleString()} XAF</p>
+                <p className="text-base md:text-lg font-bold text-primary-700 leading-tight">{formatXaf(offer.price)}</p>
               </div>
               <div className="text-right shrink-0">
                 <p className="text-[10px] md:text-xs text-gray-400">{t('market.available')}</p>
@@ -417,7 +459,7 @@ export const ProducerMarket: React.FC = () => {
 
       {/* Search & Filter Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8">
-        <div className="bg-white rounded-lg shadow-lg p-4 flex flex-col md:flex-row gap-4 items-center border border-gray-100 relative z-20">
+        <div className="bg-white rounded-2xl shadow-lg p-4 flex flex-col md:flex-row gap-4 items-center border border-gray-100 relative z-20">
           <div className="relative flex-1 w-full">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
             <input
@@ -455,23 +497,33 @@ export const ProducerMarket: React.FC = () => {
             )}
           </div>
 
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <select
-              className="px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-primary-500 w-full"
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-            >
-              <option value="All">{t('market.allCategories')}</option>
-              {allAvailableCategories.map(cat => (
-                <option key={cat} value={cat}>{t(`category.${cat}`)}</option>
-              ))}
-            </select>
-          </div>
+        </div>
+
+        <div className="mt-4 bg-white rounded-2xl shadow-lg p-3 sm:p-4 border border-primary-50 relative z-10">
+          <CategoryAvatarScroller
+            selected={selectedCategory}
+            onSelect={handleSelectCategory}
+            sticky
+          />
         </div>
       </div>
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {!pageLoading && (
+          <div className="flex flex-wrap items-center gap-2 mb-6 min-h-[1.75rem]">
+            <span className="inline-flex items-center rounded-full bg-primary-50 text-primary-800 text-xs font-semibold px-3 py-1">
+              {filteredOffers.length === 1
+                ? t('market.offerCountOne')
+                : t('market.offerCount').replace('{count}', String(filteredOffers.length))}
+            </span>
+            {showFreshness && (
+              <span className="inline-flex items-center rounded-full bg-green-50 text-green-700 text-xs font-medium px-3 py-1 animate-fade-in">
+                {t('market.updatedJustNow')}
+              </span>
+            )}
+          </div>
+        )}
 
         {pageLoading ? (
           <div className="space-y-12">
@@ -485,7 +537,7 @@ export const ProducerMarket: React.FC = () => {
             </div>
           </div>
         ) : (
-          <>
+          <div key={resultsKey} className="agm-results-in">
             {/* Recommended Section */}
             {recommendedOffers.length > 0 && searchQuery === '' && selectedCategory === 'All' && (
               <div className="mb-12">
@@ -501,15 +553,25 @@ export const ProducerMarket: React.FC = () => {
 
             {/* Results */}
             {filteredOffers.length === 0 ? (
-              <div className="text-center py-12 bg-white rounded-lg shadow">
-                <Tractor className="mx-auto h-12 w-12 text-gray-300 mb-4" />
-                <p className="text-gray-500 text-lg">{t('market.noResults')}</p>
-                <button
-                  onClick={() => { setSearchQuery(''); setSelectedCategory('All'); setLocationQuery(''); }}
-                  className="mt-4 text-primary-600 font-medium hover:underline"
-                >
-                  {t('market.clear')}
-                </button>
+              <div className="text-center py-12 agm-empty-wash rounded-xl border border-primary-100 px-4 shadow-sm">
+                <Tractor className="mx-auto h-12 w-12 text-primary-300 mb-4" />
+                <p className="text-gray-700 text-lg font-medium">{t('market.noResults')}</p>
+                <p className="text-gray-500 text-sm mt-1 mb-5">{t('market.emptyHint')}</p>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <button
+                    type="button"
+                    onClick={() => { setSearchQuery(''); setSelectedCategory('All'); setLocationQuery(''); setResultsKey((k) => k + 1); }}
+                    className="agm-btn-primary inline-flex justify-center px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700"
+                  >
+                    {t('market.browseAll')}
+                  </button>
+                  <Link
+                    to="/market/ati"
+                    className="inline-flex justify-center px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-semibold hover:bg-gray-50"
+                  >
+                    {t('market.tryAti')}
+                  </Link>
+                </div>
               </div>
             ) : (
               <div className="space-y-12">
@@ -572,7 +634,7 @@ export const ProducerMarket: React.FC = () => {
                 })}
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>

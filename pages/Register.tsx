@@ -5,11 +5,12 @@ import { useTranslation } from '../services/i18nContext';
 import { Tractor, ShoppingBag } from 'lucide-react';
 import { SEO } from '../components/SEO';
 import { SEO_PAGE_META } from '../services/seo/seoConfig';
+import { readReferralCodeFromLocation } from '../utils/referralLink';
 
 export const Register: React.FC = () => {
   const { t, language } = useTranslation();
   const [searchParams] = useSearchParams();
-  const refCode = searchParams.get('ref');
+  const refCode = readReferralCodeFromLocation(searchParams);
 
   // Build links preserving the ref param if present
   const producerLink = refCode ? `/register/producer?ref=${refCode}` : '/register/producer';

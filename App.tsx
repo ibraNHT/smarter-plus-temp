@@ -1,6 +1,6 @@
 
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useSearchParams, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { ToastContainer } from './components/ToastContainer';
@@ -38,6 +38,7 @@ import { StoreProvider, useStore, useStoreOptional } from './services/storeConte
 import { I18nProvider } from './services/i18nContext';
 import { PublicRoute } from './components/PublicRoute';
 import { PwaInstallProvider } from './contexts/PwaInstallContext';
+import { CurrencyProvider } from './contexts/CurrencyContext';
 import { InstallAppBanner } from './components/InstallAppBanner';
 import { ProducerPendingBanner } from './components/ProducerPendingBanner';
 import { getToken } from './services/apiService';
@@ -135,6 +136,44 @@ const SupportDeepLinkHandler: React.FC = () => {
   return null;
 };
 
+/**
+ * Old referral/share links used HashRouter (`/#/register?ref=CODE`).
+ * BrowserRouter ignores the hash path, so friends landed on `/` with no `ref`.
+ * Rewrite legacy hash routes to real path routes once on load / hashchange.
+ */
+const LegacyHashRouteRedirect: React.FC = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const rewrite = () => {
+      const raw = window.location.hash || '';
+      if (!raw.startsWith('#/')) return;
+      const withoutHash = raw.slice(1); // /register/client?ref=CODE
+      const qIndex = withoutHash.indexOf('?');
+      const pathPart = qIndex >= 0 ? withoutHash.slice(0, qIndex) : withoutHash;
+      const queryPart = qIndex >= 0 ? withoutHash.slice(qIndex) : '';
+      if (!pathPart.startsWith('/')) return;
+      // Only rewrite known app paths (avoid fighting unrelated hashes)
+      if (
+        !pathPart.startsWith('/register') &&
+        !pathPart.startsWith('/login') &&
+        !pathPart.startsWith('/offer/') &&
+        !pathPart.startsWith('/market/')
+      ) {
+        return;
+      }
+      const target = `${pathPart}${queryPart}`;
+      window.history.replaceState(null, '', target);
+      navigate(target, { replace: true });
+    };
+    rewrite();
+    window.addEventListener('hashchange', rewrite);
+    return () => window.removeEventListener('hashchange', rewrite);
+  }, [navigate]);
+
+  return null;
+};
+
 const AppShell: React.FC = () => {
   const location = useLocation();
   const hideFooter = FOOTER_HIDDEN_PREFIXES.some((p) => location.pathname.startsWith(p));
@@ -150,6 +189,7 @@ const AppShell: React.FC = () => {
       {!authFullscreen && <SupportChatWidget />}
       {!authFullscreen && <CompareWidget />}
       <SupportDeepLinkHandler />
+      <LegacyHashRouteRedirect />
       <RoleScopeBoundary>
         <main className="flex-grow w-full min-w-0">
           <div key={location.key} className="agm-page-in">
@@ -215,11 +255,13 @@ const App: React.FC = () => {
   return (
     <I18nProvider>
       <StoreProvider>
-        <PwaInstallProvider>
-          <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <AppShell />
-          </Router>
-        </PwaInstallProvider>
+        <CurrencyProvider>
+          <PwaInstallProvider>
+            <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <AppShell />
+            </Router>
+          </PwaInstallProvider>
+        </CurrencyProvider>
       </StoreProvider>
     </I18nProvider>
   );

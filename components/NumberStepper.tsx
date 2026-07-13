@@ -12,6 +12,8 @@ interface NumberStepperProps {
   /** Extra classes for the inner <input>. */
   className?: string;
   ariaLabel?: string;
+  /** Shown when value is 0 (useful for price entry). */
+  placeholder?: string;
 }
 
 /**
@@ -29,6 +31,7 @@ const NumberStepper: React.FC<NumberStepperProps> = ({
   id,
   className = '',
   ariaLabel,
+  placeholder,
 }) => {
   const clamp = (n: number): number => {
     if (Number.isNaN(n)) n = min ?? 0;
@@ -40,6 +43,7 @@ const NumberStepper: React.FC<NumberStepperProps> = ({
   const current = Number(value) || 0;
   const atMin = min != null && current <= min;
   const atMax = max != null && current >= max;
+  const displayValue = placeholder && current === 0 ? '' : value;
 
   return (
     <div className="mt-1 flex items-stretch">
@@ -55,15 +59,23 @@ const NumberStepper: React.FC<NumberStepperProps> = ({
       <input
         id={id}
         type="number"
-        inputMode="numeric"
+        inputMode="decimal"
         aria-label={ariaLabel}
         required={required}
         min={min}
         max={max}
         step={step}
-        value={value}
-        onChange={(e) => onChange(clamp(Number(e.target.value)))}
-        className={`block w-full min-w-0 border-y border-gray-300 p-2 text-center focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900 ${className}`}
+        placeholder={placeholder}
+        value={displayValue}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (raw === '') {
+            onChange(min != null && min > 0 ? min : 0);
+            return;
+          }
+          onChange(clamp(Number(raw)));
+        }}
+        className={`block w-full min-w-0 border-y border-gray-300 p-2 text-center focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900 placeholder:text-gray-400 ${className}`}
       />
       <button
         type="button"
