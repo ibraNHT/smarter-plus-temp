@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
 import { ProducerStatus, OrderStatus, Order, OfferType, Review } from '../../types';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2, ShoppingBag } from 'lucide-react';
@@ -23,6 +24,7 @@ import { isProducerDashboardUser, isManagerSession, producerAccountUserId } from
 export const ProducerDashboard: React.FC = () => {
    const { user, getProducerOffers, deleteOffer, producers, clients, orders, offers, confirmOrder, rejectOrder, startDelivery, markOrderDelivered, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating, pickupPoints, refreshOrders, refreshOffers, refreshProducers, refreshClients } = useStore();
    const { t } = useTranslation();
+  const { formatXaf } = useCurrency();
    const navigate = useNavigate();
    const [searchParams, setSearchParams] = useSearchParams();
    const showWelcomePending = searchParams.get('welcome') === 'pending';
@@ -430,12 +432,12 @@ export const ProducerDashboard: React.FC = () => {
       if (orderIsServiceOnly(order)) {
          const lc = serviceLineCount(order);
          const st = serviceSlotTotal(order);
-         return `${lc} ${lc === 1 ? t('service.lineSingular') : t('service.linePlural')} · ${st} ${st === 1 ? t('service.slotSingular') : t('service.slotPlural')} · ${producerValue} XAF`;
+         return `${lc} ${lc === 1 ? t('service.lineSingular') : t('service.linePlural')} · ${st} ${st === 1 ? t('service.slotSingular') : t('service.slotPlural')} · ${formatXaf(producerValue)}`;
       }
       if (orderHasService(order)) {
-         return `${order.items.length} ${t('dash.itemsProduct')} · ${t('dash.mixedOrderHint')} · ${producerValue} XAF`;
+         return `${order.items.length} ${t('dash.itemsProduct')} · ${t('dash.mixedOrderHint')} · ${formatXaf(producerValue)}`;
       }
-      return `${order.items.length} ${t('dash.itemsProduct')} · ${producerValue} XAF`;
+      return `${order.items.length} ${t('dash.itemsProduct')} · ${formatXaf(producerValue)}`;
    };
 
    const managingAsAccountManager = isManagerSession(user);
@@ -922,7 +924,7 @@ export const ProducerDashboard: React.FC = () => {
                                     <div className="mt-2 flex">
                                        <div className="flex items-center text-sm text-gray-500">
                                           <p>
-                                             {offer.quantity} {offer.unit} @ {offer.price} XAF / {offer.unit}
+                                             {offer.quantity} {offer.unit} @ {formatXaf(offer.price)} / {offer.unit}
                                           </p>
                                        </div>
                                     </div>
@@ -1205,7 +1207,7 @@ export const ProducerDashboard: React.FC = () => {
                                        {item.type === OfferType.SERVICE ? (
                                           <>
                                              <p className="text-xs text-gray-600 mt-1">
-                                                {t('service.bookedQty')}: {item.cartQuantity} {t(`unit.${item.unit}`)} · {item.price.toLocaleString()} XAF / {t(`unit.${item.unit}`)}
+                                                {t('service.bookedQty')}: {item.cartQuantity} {t(`unit.${item.unit}`)} · {formatXaf(item.price)} / {t(`unit.${item.unit}`)}
                                              </p>
                                              {item.bookingDate && (
                                                 <p className="text-xs text-purple-800 font-semibold mt-1 flex items-center gap-1">
@@ -1224,7 +1226,7 @@ export const ProducerDashboard: React.FC = () => {
                                        )}
                                     </div>
                                  </div>
-                                 <p className="text-sm font-bold text-gray-900 shrink-0">{(item.price * item.cartQuantity).toLocaleString()} XAF</p>
+                                 <p className="text-sm font-bold text-gray-900 shrink-0">{formatXaf(item.price * item.cartQuantity)}</p>
                               </li>
                            ))}
                         </ul>
@@ -1235,10 +1237,11 @@ export const ProducerDashboard: React.FC = () => {
                            {isSelectedOrderAsBuyer ? 'Total' : t('dash.orderValue')}
                         </span>
                         <span className="text-xl font-bold text-primary-600">
-                           {(isSelectedOrderAsBuyer
-                              ? selectedOrderLive.totalAmount
-                              : (selectedOrderLive.subtotal ?? selectedOrderLive.totalAmount)
-                           ).toLocaleString()} XAF
+                           {formatXaf(
+                              isSelectedOrderAsBuyer
+                                 ? selectedOrderLive.totalAmount
+                                 : (selectedOrderLive.subtotal ?? selectedOrderLive.totalAmount),
+                           )}
                         </span>
                      </div>
                      {!isSelectedOrderAsBuyer && (

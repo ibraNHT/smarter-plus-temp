@@ -3,6 +3,8 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useStore } from '../../services/storeContext';
 import { clientProfileMatchesSession } from '../../services/clientProfileMatcher';
 import { useTranslation } from '../../services/i18nContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
+import { CurrencyPreferenceCard } from '../../components/CurrencyPreferenceCard';
 import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order, Review, OfferType } from '../../types';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle, Loader2, Calendar, Phone, Mail } from 'lucide-react';
@@ -33,6 +35,7 @@ import {
 import { useFormik } from 'formik';
 import { z } from 'zod';
 import { showAppToast } from '../../services/appToast';
+import { buildClientReferralLink } from '../../utils/referralLink';
 import { ServiceAppointmentPicker } from '../../components/ServiceAppointmentPicker';
 
 import { MARKETPLACE_CATEGORIES } from '../../data/categories';
@@ -65,6 +68,7 @@ export const ClientProfile: React.FC = () => {
    const { user, orders, payForOrder, completeOrder, confirmReceipt, requestOrderCancellation, updateAppointment, reportProblem, clients, producers, upgradeClientToProducer, logout, submitReview, offers, toggleFavorite, cancelOrder, getWallet, reviews, getAverageRating, myReferrals, refreshMyReferrals, pickupPoints, revealContactInfo, refreshClients, refreshOrders, refreshOffers, refreshProducers, refreshAllReviews, refreshMyReviews, refreshWallet } = useStore();
    const updateClientMutation = useUpdateClientProfileMutation();
    const { t } = useTranslation();
+   const { formatXaf } = useCurrency();
    const navigate = useNavigate();
 
    const [searchParams, setSearchParams] = useSearchParams();
@@ -459,7 +463,7 @@ export const ClientProfile: React.FC = () => {
 
    const copyReferralLink = () => {
       if (!referralCodeDisplay) return;
-      const link = `${window.location.origin}/#/register/client?ref=${referralCodeDisplay}`;
+      const link = buildClientReferralLink(referralCodeDisplay);
       void navigator.clipboard.writeText(link);
       showAppToast('Referral link copied!', 'SUCCESS');
    };
@@ -928,7 +932,7 @@ export const ClientProfile: React.FC = () => {
                            )}
                         </div>
                         <div className="w-full sm:w-auto sm:text-right" onClick={e => e.stopPropagation()}>
-                           <p className="text-sm font-bold text-gray-900 mb-2">{order.totalAmount?.toLocaleString?.() ?? order.totalAmount} XAF</p>
+                           <p className="text-sm font-bold text-gray-900 mb-2">{formatXaf(Number(order.totalAmount ?? 0))}</p>
                            <div className="flex gap-2 flex-wrap sm:justify-end">
                               {renderOrderActions(order)}
                            </div>
@@ -1003,6 +1007,7 @@ export const ClientProfile: React.FC = () => {
                         <CreditCard className="h-5 w-5 text-primary-600 mr-2" />
                         <h3 className="text-lg font-medium text-gray-900">Payment &amp; reload</h3>
                      </div>
+                     <CurrencyPreferenceCard />
                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
                         <p className="text-sm text-gray-500">Wallet balance</p>
                         <p className="text-2xl font-extrabold text-gray-900">{(wallet?.balance ?? 0).toLocaleString()} XAF</p>
@@ -1305,7 +1310,7 @@ export const ClientProfile: React.FC = () => {
                                     </p>
                                     <div className="agm-dash-all-order-item__foot">
                                        <span className="text-sm font-bold text-gray-900 tabular-nums">
-                                          {(order.totalAmount ?? 0).toLocaleString()} XAF
+                                          {formatXaf(order.totalAmount ?? 0)}
                                        </span>
                                        <span className="text-xs font-medium text-primary-600 flex items-center gap-0.5 shrink-0">
                                           <Eye className="h-3.5 w-3.5" />
@@ -1368,7 +1373,7 @@ export const ClientProfile: React.FC = () => {
                                  <div className="h-14 w-14 sm:h-16 sm:w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
                                     <img src={offer.imageUrl} alt="" className={offerImageInBox} />
                                  </div>
-                                 <div className="flex-1 min-w-0"><h4 className="font-bold text-gray-900 truncate">{offer.title}</h4><p className="text-sm text-gray-500">{offer.price} XAF / {offer.unit}</p></div>
+                                 <div className="flex-1 min-w-0"><h4 className="font-bold text-gray-900 truncate">{offer.title}</h4><p className="text-sm text-gray-500">{formatXaf(offer.price)} / {offer.unit}</p></div>
                                  <div className="flex flex-col gap-1 sm:gap-2 flex-shrink-0">
                                     <Link to={`/offer/${offer.id}`} className="text-primary-600 hover:bg-primary-50 p-1.5 sm:p-2 rounded-full"><ArrowLeft className="h-5 w-5 rotate-180" /></Link>
                                     <button onClick={() => setFavoriteToRemove({ id: offer.id, title: offer.title })} className="text-red-500 hover:bg-red-50 p-1.5 sm:p-2 rounded-full" aria-label={t('favorites.removeTitle')}><Trash2 className="h-5 w-5" /></button>
@@ -1428,21 +1433,32 @@ export const ClientProfile: React.FC = () => {
                )}
                {activeTab === 'referrals' && currentClient && (
                   <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
-                     <div className="border-b border-gray-200 pb-4 mb-4">
-                        <h3 className="text-lg font-medium text-gray-900">Referrals</h3>
+                     <div className="border-b border-gray-200 pb-4 mb-4 flex flex-wrap items-end justify-between gap-3">
+                        <div>
+                           <h3 className="font-display text-lg font-semibold text-gray-900">Referrals</h3>
+                           <p className="text-sm text-gray-500 mt-0.5">Invite friends and earn when they complete their first order.</p>
+                        </div>
+                        <div className="text-right">
+                           <p className="text-3xl font-display font-bold text-primary-700 leading-none">{referralCount}</p>
+                           <p className="text-xs font-semibold uppercase tracking-wide text-primary-600 mt-1">Referrals</p>
+                        </div>
                      </div>
-                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                        <p className="text-sm text-blue-800 mb-2 font-bold">Your Referral Link</p>
+                     <div className="bg-primary-50 border border-primary-200 rounded-xl p-5 mb-6">
+                        <p className="text-sm text-primary-900 mb-1 font-bold">Your invite code</p>
+                        <p className="font-display text-2xl sm:text-3xl font-bold tracking-wide text-primary-800 mb-4">
+                           {referralCodeDisplay || '—'}
+                        </p>
+                        <p className="text-sm text-primary-800 mb-2 font-medium">Your referral link</p>
                         <div className="flex flex-col sm:flex-row gap-2">
-                           <input type="text" readOnly value={`${window.location.origin}/#/register/client?ref=${referralCodeDisplay}`} className="block w-full min-w-0 border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-700" />
-                           <button type="button" onClick={copyReferralLink} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center justify-center flex-shrink-0">
-                              Copy
+                           <input type="text" readOnly value={buildClientReferralLink(referralCodeDisplay)} className="block w-full min-w-0 border-primary-200 rounded-md shadow-sm p-2.5 text-sm bg-white text-gray-700" />
+                           <button type="button" onClick={copyReferralLink} className="agm-btn-primary bg-primary-600 text-white px-4 py-2.5 rounded-md text-sm font-medium hover:bg-primary-700 flex items-center justify-center flex-shrink-0">
+                              Copy link
                            </button>
                         </div>
-                        <p className="text-xs text-blue-600 mt-2">Share this link with friends to invite them to the platform.</p>
+                        <p className="text-xs text-primary-700 mt-3">Share this link with friends. Rewards apply when their first order is marked Completed (no prior cancellation).</p>
                      </div>
                      {myReferrals?.activeProgram ? (
-                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+                        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6">
                            <h4 className="text-sm font-bold text-gray-900">{myReferrals.activeProgram.name}</h4>
                            {myReferrals.activeProgram.description ? (
                               <p className="text-sm text-gray-600 mt-1">{myReferrals.activeProgram.description}</p>
@@ -1460,14 +1476,12 @@ export const ClientProfile: React.FC = () => {
                         </div>
                      ) : null}
                      <div className="border-t border-gray-200 pt-4">
-                        <div className="flex items-center justify-between mb-4">
-                           <h4 className="text-sm font-bold text-gray-900">Your Impact</h4>
-                           <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">{referralCount} Referrals</span>
-                        </div>
+                        <h4 className="text-sm font-bold text-gray-900 mb-4">People you invited</h4>
                         {referralCount === 0 ? (
-                           <div className="text-center py-8 text-gray-500">
-                              <Users className="h-12 w-12 mx-auto text-gray-300 mb-2" />
-                              <p>You haven&apos;t referred anyone yet.</p>
+                           <div className="text-center py-10 agm-empty-wash rounded-xl border border-primary-100">
+                              <Users className="h-12 w-12 mx-auto text-primary-300 mb-2" />
+                              <p className="text-gray-600 font-medium">You haven&apos;t referred anyone yet.</p>
+                              <p className="text-sm text-gray-500 mt-1">Copy your link above and share it to get started.</p>
                            </div>
                         ) : (
                            <div className="space-y-3">
@@ -1570,7 +1584,7 @@ export const ClientProfile: React.FC = () => {
                                     <div className="flex-1 min-w-0">
                                        <p className="text-sm font-medium text-gray-900 truncate">{item.title || item.description || 'Item'}</p>
                                        <p className="text-xs text-gray-500">
-                                          {item.cartQuantity ?? item.quantity ?? 1} {item.unit || 'units'} × {(item.price ?? 0).toLocaleString()} XAF
+                                          {item.cartQuantity ?? item.quantity ?? 1} {item.unit || 'units'} × {formatXaf(item.price ?? 0)}
                                        </p>
                                        {(String(item.type ?? '').toUpperCase() === 'SERVICE' || !!item.bookingDate) && item.bookingDate && (
                                           <p className="text-xs text-purple-800 font-semibold mt-1 flex items-center gap-1">
@@ -1580,7 +1594,7 @@ export const ClientProfile: React.FC = () => {
                                        )}
                                     </div>
                                     <span className="text-sm font-bold text-gray-900 flex-shrink-0">
-                                       {((item.price ?? 0) * (item.cartQuantity ?? item.quantity ?? 1)).toLocaleString()} XAF
+                                       {formatXaf((item.price ?? 0) * (item.cartQuantity ?? item.quantity ?? 1))}
                                     </span>
                                  </div>
                               ))}
@@ -1591,21 +1605,21 @@ export const ClientProfile: React.FC = () => {
                         <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 mb-4 space-y-2 text-sm">
                            <div className="flex justify-between text-gray-600">
                               <span>{t('cart.subtotal')}</span>
-                              <span className="font-medium">{payOrder.subtotal.toLocaleString()} XAF</span>
+                              <span className="font-medium">{formatXaf(payOrder.subtotal)}</span>
                            </div>
                            <div className="flex justify-between text-gray-600">
                               <span>{t('cart.serviceFee')}</span>
-                              <span className="font-medium">{payOrder.serviceFee.toLocaleString()} XAF</span>
+                              <span className="font-medium">{formatXaf(payOrder.serviceFee)}</span>
                            </div>
                            {(payOrder.discountAmount ?? 0) > 0 && (
                               <div className="flex justify-between text-green-600 font-medium">
                                  <span>Discount Applied</span>
-                                 <span>- {(payOrder.discountAmount ?? 0).toLocaleString()} XAF</span>
+                                 <span>- {formatXaf(payOrder.discountAmount ?? 0)}</span>
                               </div>
                            )}
                            <div className="flex justify-between font-bold text-gray-900 border-t border-gray-200 pt-2 mt-1">
                               <span>{t('cart.total')}</span>
-                              <span className="text-primary-600 text-base">{payOrder.totalAmount.toLocaleString()} XAF</span>
+                              <span className="text-primary-600 text-base">{formatXaf(payOrder.totalAmount)}</span>
                            </div>
                         </div>
 
@@ -1645,7 +1659,7 @@ export const ClientProfile: React.FC = () => {
                               className="w-full bg-primary-600 text-white rounded-lg py-3 font-bold hover:bg-primary-700 shadow-md transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                            >
                               {paymentProcessing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CreditCard className="h-4 w-4" />}
-                              {paymentProcessing ? t('wallet.processing') : `${t('order.confirmPayment')} — ${payOrder.totalAmount.toLocaleString()} XAF`}
+                              {paymentProcessing ? t('wallet.processing') : `${t('order.confirmPayment')} — ${formatXaf(payOrder.totalAmount)}`}
                            </button>
                            <button onClick={() => setShowPaymentRecap(false)} className="w-full text-gray-500 text-sm hover:underline py-1">
                               {t('form.cancel')}
@@ -1744,7 +1758,7 @@ export const ClientProfile: React.FC = () => {
                                        {item.type === OfferType.SERVICE ? (
                                           <>
                                              <p className="text-xs text-gray-600 mt-1">
-                                                {t('service.bookedQty')}: {item.cartQuantity ?? item.quantity ?? 1} {t(`unit.${item.unit}`)} · {(item.price ?? 0).toLocaleString()} XAF / {t(`unit.${item.unit}`)}
+                                                {t('service.bookedQty')}: {item.cartQuantity ?? item.quantity ?? 1} {t(`unit.${item.unit}`)} · {formatXaf(item.price ?? 0)} / {t(`unit.${item.unit}`)}
                                              </p>
                                              {item.bookingDate && (
                                                 <p className="text-xs text-purple-800 font-semibold mt-1 flex items-center gap-1">
@@ -1757,11 +1771,11 @@ export const ClientProfile: React.FC = () => {
                                              )}
                                           </>
                                        ) : (
-                                          <p className="text-xs text-gray-500">{(item.cartQuantity ?? item.quantity ?? 1)} {item.unit} × {(item.price ?? 0).toLocaleString()} XAF</p>
+                                          <p className="text-xs text-gray-500">{(item.cartQuantity ?? item.quantity ?? 1)} {item.unit} × {formatXaf(item.price ?? 0)}</p>
                                        )}
                                     </div>
                                  </div>
-                                 <p className="text-sm font-bold text-gray-900 flex-shrink-0 ml-2">{((item.price ?? 0) * (item.cartQuantity ?? item.quantity ?? 1)).toLocaleString()} XAF</p>
+                                 <p className="text-sm font-bold text-gray-900 flex-shrink-0 ml-2">{formatXaf((item.price ?? 0) * (item.cartQuantity ?? item.quantity ?? 1))}</p>
                               </li>
                            ))}
                         </ul>
@@ -1769,7 +1783,7 @@ export const ClientProfile: React.FC = () => {
 
                      <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
                         <span className="text-base font-medium text-gray-900">Total</span>
-                        <span className="text-xl font-bold text-primary-600">{(selectedOrderLive.totalAmount ?? 0).toLocaleString()} XAF</span>
+                        <span className="text-xl font-bold text-primary-600">{formatXaf(selectedOrderLive.totalAmount ?? 0)}</span>
                      </div>
 
                      {/* Shipping / Delivery address */}

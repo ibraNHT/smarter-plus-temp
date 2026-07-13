@@ -22,13 +22,13 @@ Coupon validation is enforced server-side during checkout.
 
 ## Referral program basics
 
-Referral behavior can include:
+Referral rewards apply when:
 
-- referral code at registration
-- rewards tied to eligible conditions (often first eligible order)
-- budget controls and anti-abuse checks
+- the new user registered with a valid referral code
+- their **chronologically first order** is marked **Completed**
+- **no cancellation** happened on an earlier order before that completion
 
-Referral programs may be changed, paused, or replaced over time.
+Rewards are credited to wallets by the server at that moment (subject to the active program’s amounts and budget). Programs may be changed, paused, or replaced over time.
 
 ## If coupon/referral is not applied
 

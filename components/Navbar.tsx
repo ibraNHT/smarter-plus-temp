@@ -17,7 +17,7 @@ const marketplaceVisible = (user: { role?: UserRole } | null) =>
   !user || user.role === UserRole.CLIENT || isProducerDashboardUser(user);
 
 export const Navbar: React.FC = () => {
-  const { user, producers, clients, logout, cart, notifications, markNotificationsAsRead, markNotificationAsRead, deleteNotification, clearNotifications, chats } = useStore();
+  const { user, producers, clients, logout, cart, notifications, markNotificationsAsRead, markNotificationAsRead, deleteNotification, clearNotifications, chats, realtimeConnected } = useStore();
   const token = typeof window !== 'undefined' ? getToken() : null;
   const staffWrongApp = isWebAppSessionBlocked(token, user);
   const { t, language, setLanguage } = useTranslation();
@@ -31,8 +31,12 @@ export const Navbar: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showClearNotifsConfirm, setShowClearNotifsConfirm] = useState(false);
   const [notifToDelete, setNotifToDelete] = useState<string | null>(null);
+  const [landingNavSolid, setLandingNavSolid] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  const isLandingHeroNav = location.pathname === '/' && !user && !staffWrongApp;
+  const landingOverlay = isLandingHeroNav && !landingNavSolid && !mobileMenuOpen;
 
   // Close mobile menu when route changes.
   useEffect(() => {
@@ -40,6 +44,17 @@ export const Navbar: React.FC = () => {
     setShowNotifications(false);
     setProfileMenuOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!isLandingHeroNav) {
+      setLandingNavSolid(false);
+      return;
+    }
+    const onScroll = () => setLandingNavSolid(window.scrollY > 48);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [isLandingHeroNav]);
 
   const performLogout = async () => {
     await logout();
@@ -151,8 +166,27 @@ export const Navbar: React.FC = () => {
     }, 0);
   }, [chats, user?.id]);
 
-  const isActive = (path: string) => location.pathname === path ? 'text-primary-600 font-semibold border-b-2 border-primary-600' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50';
+  const isActive = (path: string) => {
+    const active = location.pathname === path;
+    if (landingOverlay) {
+      return active
+        ? 'text-white font-semibold border-b-2 border-green-300'
+        : 'text-white/80 hover:text-white hover:bg-white/10';
+    }
+    return active
+      ? 'text-primary-600 font-semibold border-b-2 border-primary-600'
+      : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50';
+  };
   const linkClass = (path: string) => `px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150 ${isActive(path)}`;
+
+  const navChrome = landingOverlay
+    ? 'bg-primary-950/40 border-b border-white/10 backdrop-blur-md text-white shadow-none'
+    : 'bg-white border-b border-gray-200 shadow-sm';
+  const brandTextClass = landingOverlay ? 'text-white' : 'text-gray-900';
+  const sproutClass = landingOverlay ? 'text-green-300' : 'text-primary-600';
+  const iconBtnClass = landingOverlay
+    ? 'text-white/85 hover:text-white hover:bg-white/10'
+    : 'text-gray-500 hover:text-primary-600 hover:bg-gray-50';
 
   const getHomeLink = () => {
     if (staffWrongApp) return '/';
@@ -191,13 +225,13 @@ export const Navbar: React.FC = () => {
 
   return (
     <>
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+    <nav className={`${navChrome} sticky top-0 z-50 transition-colors duration-200`}>
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16 gap-2">
           <div className="flex items-center min-w-0">
             <Link to={getHomeLink()} className="flex-shrink-0 flex items-center cursor-pointer min-w-0">
-              <Sprout className="h-7 w-7 sm:h-8 sm:w-8 text-primary-600 flex-shrink-0 agm-logo-hover" />
-              <span className="ml-2 text-base sm:text-lg lg:text-xl font-bold text-gray-900 truncate">
+              <Sprout className={`h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0 agm-logo-hover ${sproutClass}`} />
+              <span className={`ml-2 text-base sm:text-lg lg:text-xl font-bold truncate ${brandTextClass}`}>
                 <span className="sm:hidden">AgriMarket</span>
                 <span className="hidden sm:inline">AgriMarket Connect</span>
               </span>
@@ -223,7 +257,7 @@ export const Navbar: React.FC = () => {
             {/* Language Toggle - hidden on xs to save space; available in mobile menu */}
             <button
               onClick={toggleLanguage}
-              className="hidden sm:flex items-center text-gray-500 hover:text-primary-600 px-2 py-1 rounded-md transition-colors"
+              className={`hidden sm:flex items-center px-2 py-1 rounded-md transition-colors ${iconBtnClass}`}
               aria-label={`Switch language. Current: ${language.toUpperCase()}`}
             >
               <Globe className="h-5 w-5 mr-1" />
@@ -232,7 +266,7 @@ export const Navbar: React.FC = () => {
 
             {/* Shopping Cart Icon - Visible to Clients/Producers (Hide for Guests until they add something, or keep visible to prompt login) */}
             {(marketplaceVisible(user)) && (
-              <Link to="/cart" className="relative p-2 text-gray-400 hover:text-primary-600 transition-colors agm-nav-icon" aria-label="Shopping cart">
+              <Link to="/cart" className={`relative p-2 transition-colors agm-nav-icon ${iconBtnClass}`} aria-label="Shopping cart">
                 <ShoppingCart className="h-6 w-6" />
                 {cartItemCount > 0 && (
                   <span className="absolute top-0 right-0 inline-flex items-center justify-center min-h-[1.125rem] min-w-[1.125rem] px-1.5 text-[10px] font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-600 rounded-full">
@@ -267,9 +301,15 @@ export const Navbar: React.FC = () => {
                 <div className="relative" ref={notifRef}>
                   <button
                     onClick={toggleNotifications}
-                    className="relative p-2 text-gray-600 hover:text-primary-600 focus:outline-none agm-nav-icon"
+                    className={`relative p-2 text-gray-600 hover:text-primary-600 focus:outline-none agm-nav-icon ${
+                      realtimeConnected ? 'rounded-full agm-live-pulse' : ''
+                    }`}
+                    title={realtimeConnected ? 'Live updates connected' : undefined}
                   >
                     <Bell className="h-6 w-6" />
+                    {realtimeConnected && (
+                      <span className="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-green-500 ring-2 ring-white" aria-hidden />
+                    )}
                     {unreadCount > 0 && (
                       <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-500 rounded-full">
                         {unreadCount}
@@ -454,7 +494,7 @@ export const Navbar: React.FC = () => {
               </div>
             ) : (
               <div className="hidden sm:flex items-center space-x-2">
-                <Link to="/login" className="text-gray-600 hover:text-gray-900 px-2 sm:px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap">
+                <Link to="/login" className={`px-2 sm:px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap ${landingOverlay ? 'text-white/90 hover:text-white' : 'text-gray-600 hover:text-gray-900'}`}>
                   {t('nav.login')}
                 </Link>
                 <Link to="/register" className="bg-primary-600 text-white hover:bg-primary-700 px-3 sm:px-4 py-2 rounded-md text-sm font-medium shadow-sm whitespace-nowrap agm-btn-primary">
@@ -467,7 +507,7 @@ export const Navbar: React.FC = () => {
             <button
               type="button"
               onClick={() => setMobileMenuOpen((o) => !o)}
-              className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-600 hover:text-primary-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className={`md:hidden inline-flex items-center justify-center p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 ${iconBtnClass}`}
               aria-expanded={mobileMenuOpen}
               aria-label="Toggle menu"
             >

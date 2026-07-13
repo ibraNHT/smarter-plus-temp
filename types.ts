@@ -290,7 +290,12 @@ export interface Offer {
   marketType: MarketType; // New field to distinguish marketplaces
   unit: UnitOfMeasure;
   quantity: number;
+  /** Canonical unit price in XAF (ledger / settlement). */
   price: number;
+  /** Currency the seller entered the price in (display/audit). */
+  listingCurrency?: string;
+  /** Amount the seller entered in listingCurrency. */
+  listingPrice?: number;
   imageUrl: string;
   imageUrls?: string[];
   isNegotiable: boolean; // Sprint 6
@@ -455,6 +460,7 @@ export interface UserSession {
   email?: string;
   phone?: string;
   profileImageUrl?: string;
+  preferredCurrency?: string;
   producerId?: string; // PRODUCER owner or MANAGER acting for assigned producer
   clientId?: string;   // If role is CLIENT
   managedProducerUserId?: string;

@@ -22,13 +22,13 @@ La validation est appliquée côté serveur au checkout.
 
 ## Programme de parrainage
 
-Le parrainage peut inclure :
+La récompense s’applique lorsque :
 
-- code de parrainage à l’inscription
-- récompenses liées à des conditions (souvent première commande éligible)
-- contrôles budget/cap et anti-abus
+- le nouvel utilisateur s’est inscrit avec un code de parrainage valide
+- sa **première commande** (par date de création) est marquée **Terminée (Completed)**
+- **aucune annulation** n’a eu lieu sur une commande antérieure avant cette finalisation
 
-Le programme peut être modifié, suspendu ou remplacé.
+Les montants sont crédités sur les portefeuilles par le serveur à ce moment (sous réserve du programme actif et du budget). Le programme peut être modifié, suspendu ou remplacé.
 
 ## Si le coupon/parrainage ne s’applique pas
 
