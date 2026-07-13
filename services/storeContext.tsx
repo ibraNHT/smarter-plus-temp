@@ -2073,10 +2073,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         method: 'POST',
         body: JSON.stringify({
           type: data.type || "BUSINESS",
-          firstName: data.name || "Farm",
-          lastName: "Owner",
-          gender: "OTHER",
-          dateOfBirth: new Date().toISOString(),
+          // Individual producers supply real identity details; business producers
+          // don't have them, so fall back to the farm name / placeholders.
+          firstName: data.firstName || data.name || "Producer",
+          lastName: data.lastName || "Owner",
+          gender: data.gender || "OTHER",
+          dateOfBirth: toIsoDateOfBirthSafe(data.dateOfBirth),
           description: String(data.description ?? '').trim() || 'Producer',
           certifications: data.certifications || [],
           productionTypes: data.productionTypes || [],
@@ -2097,8 +2099,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           id: producerProfile.id,
           userId: session.user.id,
           name: data.name || 'Producer',
-          firstName: data.name || 'Farm',
-          lastName: 'Owner',
+          firstName: data.firstName || data.name || 'Producer',
+          lastName: data.lastName || 'Owner',
           description: data.description,
           locations: data.locations,
           productionTypes: data.productionTypes,

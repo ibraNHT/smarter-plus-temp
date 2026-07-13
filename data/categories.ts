@@ -17,7 +17,7 @@ export const SERVICE_CATEGORIES = [
   'General Services',
   'General laborer',
   'Transit & warehouse',
-  'Equipment & Machinery',
+  'Equipment & Machinery Rentals',
 ] as const;
 
 /**
