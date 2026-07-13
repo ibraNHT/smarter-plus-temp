@@ -905,7 +905,7 @@ export const ClientProfile: React.FC = () => {
                               </p>
                            )}
                            {order.deliveryMethod === 'PICKUP' && (
-                              <p className="text-xs text-gray-500 mt-0.5">📦 Pickup delivery</p>
+                              <p className="text-xs text-gray-500 mt-0.5">📦 {t('order.pickupDelivery')}</p>
                            )}
                         </div>
                         <div className="shrink-0">{getStatusBadge(order.status)}</div>
@@ -944,7 +944,7 @@ export const ClientProfile: React.FC = () => {
          <SEO title="Client Profile" noindex={true} />
          <div className="mb-4 sm:mb-6">
             <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 hover:text-primary-600 transition-colors font-medium text-sm sm:text-base">
-               <ArrowLeft className="h-5 w-5 mr-2" /> Back
+               <ArrowLeft className="h-5 w-5 mr-2" /> {t('profile.tabs.back')}
             </button>
          </div>
 
@@ -961,13 +961,13 @@ export const ClientProfile: React.FC = () => {
                      <Heart className={`${activeTab === 'favorites' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.favorites')}</span>
                   </button>
                   <button onClick={() => setActiveTab('payment')} className={`${activeTab === 'payment' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
-                     <CreditCard className={`${activeTab === 'payment' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">Payment</span>
+                     <CreditCard className={`${activeTab === 'payment' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.payment2')}</span>
                   </button>
                   <button onClick={() => setActiveTab('reputation')} className={`${activeTab === 'reputation' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
                      <ThumbsUp className={`${activeTab === 'reputation' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.reputation')}</span>
                   </button>
                   <button onClick={() => setActiveTab('referrals')} className={`${activeTab === 'referrals' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
-                     <Users className={`${activeTab === 'referrals' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">Referrals</span>
+                     <Users className={`${activeTab === 'referrals' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.referrals')}</span>
                   </button>
                   <Link to="/wallet" className="bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50 group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors">
                      <Wallet className="text-gray-400 group-hover:text-gray-500 flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6" /> <span className="truncate">{t('nav.wallet')}</span>
@@ -999,20 +999,18 @@ export const ClientProfile: React.FC = () => {
                   <div className="shadow sm:rounded-md bg-white p-4 sm:p-6 space-y-4">
                      <div className="flex items-center">
                         <CreditCard className="h-5 w-5 text-primary-600 mr-2" />
-                        <h3 className="text-lg font-medium text-gray-900">Payment &amp; reload</h3>
+                        <h3 className="text-lg font-medium text-gray-900">{t('profile.tabs.payment_reload')}</h3>
                      </div>
                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                        <p className="text-sm text-gray-500">Wallet balance</p>
+                        <p className="text-sm text-gray-500">{t('order.walletBalance')}</p>
                         <p className="text-2xl font-extrabold text-gray-900">{(wallet?.balance ?? 0).toLocaleString()} XAF</p>
                      </div>
                      <p className="text-sm text-gray-600 leading-relaxed">
-                        Add money to your wallet to pay for orders. You pay securely through the
-                        hosted payment page — no card details are stored here. Wallet funds are for
-                        purchases only and can&apos;t be withdrawn.
+                        {t('profile.tabs.walletDescription')}
                      </p>
                      {PAYMENTS_ENABLED ? (
                         <Link to="/wallet" className="inline-flex items-center justify-center bg-primary-600 text-white px-5 py-2.5 rounded-md font-bold hover:bg-primary-700 shadow-sm">
-                           <Plus className="h-5 w-5 mr-1" /> Reload wallet
+                           <Plus className="h-5 w-5 mr-1" /> {t('profile.tabs.walleReload')}
                         </Link>
                      ) : (
                         <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-md p-3">
@@ -1344,11 +1342,11 @@ export const ClientProfile: React.FC = () => {
                      </div>
                      {unavailableFavoriteIds && unavailableFavoriteIds.length > 0 && (
                         <div className="mb-6 bg-yellow-50 p-4 rounded-md border border-yellow-100">
-                           <h4 className="text-sm font-bold text-yellow-800 mb-2">Unavailable Items</h4>
+                           <h4 className="text-sm font-bold text-yellow-800 mb-2">{t('favorites.unavailableTitle')}</h4>
                            <ul className="space-y-2">
                               {unavailableFavoriteIds.map(id => (
                                  <li key={id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-yellow-700">
-                                    <span>Item #{id} is no longer available.</span>
+                                    <span>{t('favorites.itemUnavailable', { id })}</span>
                                     <div className="flex items-center gap-2 flex-shrink-0"><button onClick={() => setFavoriteToRemove({ id, title: `Item #${id}` })} className="text-xs text-red-600 hover:underline">{t('cart.remove')}</button><Link to="/market/producers" className="text-xs bg-yellow-200 px-2 py-1 rounded hover:bg-yellow-300 flex items-center"><Search className="w-3 h-3 mr-1" /> {t('profile.findSimilar')}</Link></div>
                                  </li>
                               ))}
@@ -1427,7 +1425,7 @@ export const ClientProfile: React.FC = () => {
                {activeTab === 'referrals' && currentClient && (
                   <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
                      <div className="border-b border-gray-200 pb-4 mb-4">
-                        <h3 className="text-lg font-medium text-gray-900">Referrals</h3>
+                        <h3 className="text-lg font-medium text-gray-900">{t('profile.tabs.referrals')}</h3>
                      </div>
                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                         <p className="text-sm text-blue-800 mb-2 font-bold">Your Referral Link</p>
@@ -1503,21 +1501,21 @@ export const ClientProfile: React.FC = () => {
                      <h3 className="text-lg font-medium text-gray-900 mb-4">{t('profile.upgrade')}</h3>
                      <form onSubmit={upgradeFormik.handleSubmit} className="space-y-4">
                         <div>
-                           <label className="block text-sm font-medium text-gray-700 mb-2">Producer Type</label>
+                           <label className="block text-sm font-medium text-gray-700 mb-2">{t('profile.producerType')}</label>
                            <div className="flex space-x-4">
-                              <label className="flex items-center"><input type="radio" name="type" value="INDIVIDUAL" checked={upgradeFormik.values.type === 'INDIVIDUAL'} onChange={upgradeFormik.handleChange} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">Individual</span></label>
-                              <label className="flex items-center"><input type="radio" name="type" value="BUSINESS" checked={upgradeFormik.values.type === 'BUSINESS'} onChange={upgradeFormik.handleChange} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">Business</span></label>
+                              <label className="flex items-center"><input type="radio" name="type" value="INDIVIDUAL" checked={upgradeFormik.values.type === 'INDIVIDUAL'} onChange={upgradeFormik.handleChange} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">{t('profile.individual')}</span></label>
+                              <label className="flex items-center"><input type="radio" name="type" value="BUSINESS" checked={upgradeFormik.values.type === 'BUSINESS'} onChange={upgradeFormik.handleChange} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">{t('profile.business')}</span></label>
                            </div>
                         </div>
-                        {upgradeFormik.values.type === 'BUSINESS' && (<div><label className="block text-sm font-medium text-gray-700">Farm/Business Name <span className="text-red-500">*</span></label><input type="text" name="farmName" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.farmName} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.farmName && upgradeFormik.errors.farmName ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.farmName}</p> : null}</div>)}
+                        {upgradeFormik.values.type === 'BUSINESS' && (<div><label className="block text-sm font-medium text-gray-700">{t('profile.producerType')}<span className="text-red-500">*</span></label><input type="text" name="farmName" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.farmName} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.farmName && upgradeFormik.errors.farmName ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.farmName}</p> : null}</div>)}
                         <div>
-                           <label className="block text-sm font-medium text-gray-700">NIU / Tax ID <span className="text-red-500">*</span></label>
+                           <label className="block text-sm font-medium text-gray-700">{t('profile.niuTaxId')} <span className="text-red-500">*</span></label>
                            <input type="text" name="taxIdentificationNumber" required placeholder="Enter your NIU" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.taxIdentificationNumber} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />
                            {upgradeFormik.touched.taxIdentificationNumber && upgradeFormik.errors.taxIdentificationNumber ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.taxIdentificationNumber as string}</p> : null}
                         </div>
-                        <div><label className="block text-sm font-medium text-gray-700">Description <span className="text-red-500">*</span></label><textarea name="description" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" rows={3} value={upgradeFormik.values.description} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.description && upgradeFormik.errors.description ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.description}</p> : null}</div>
-                        <div><label className="block text-sm font-medium text-gray-700 mb-2">Categories (Click to select)</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded bg-white">{PRODUCTION_TYPES.map(cat => (<button key={cat} type="button" onClick={() => toggleUpgradeCategory(cat)} className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${upgradeFormik.values.productionTypes.includes(cat) ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}</button>))}</div></div>
-                        <div className="mt-5 sm:mt-6 flex justify-end gap-3"><button type="button" onClick={() => setShowUpgradeModal(false)} className="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:text-sm">Cancel</button><button type="submit" className="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 sm:text-sm">Upgrade Account</button></div>
+                        <div><label className="block text-sm font-medium text-gray-700">{t('form.description')}<span className="text-red-500">*</span></label><textarea name="description" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" rows={3} value={upgradeFormik.values.description} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.description && upgradeFormik.errors.description ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.description}</p> : null}</div>
+                        <div><label className="block text-sm font-medium text-gray-700 mb-2">{t('profile.categoriesClick')}</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded bg-white">{PRODUCTION_TYPES.map(cat => (<button key={cat} type="button" onClick={() => toggleUpgradeCategory(cat)} className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${upgradeFormik.values.productionTypes.includes(cat) ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}</button>))}</div></div>
+                        <div className="mt-5 sm:mt-6 flex justify-end gap-3"><button type="button" onClick={() => setShowUpgradeModal(false)} className="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:text-sm">Cancel</button><button type="submit" className="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 sm:text-sm">{t('profile.upgradeAccount')}</button></div>
                      </form>
          </Modal>
 
@@ -1549,7 +1547,7 @@ export const ClientProfile: React.FC = () => {
                               <Package className="h-4 w-4 text-primary-700" />
                            </div>
                            <div>
-                              <p className="text-xs text-gray-500">Sold by</p>
+                              <p className="text-xs text-gray-500">{t('order.soldBy')}</p>
                               <p className="text-sm font-bold text-gray-900">{producerName}</p>
                            </div>
                         </div>
@@ -1597,7 +1595,7 @@ export const ClientProfile: React.FC = () => {
                            </div>
                            {(payOrder.discountAmount ?? 0) > 0 && (
                               <div className="flex justify-between text-green-600 font-medium">
-                                 <span>Discount Applied</span>
+                                 <span>{t('cart.discount')}</span>
                                  <span>- {(payOrder.discountAmount ?? 0).toLocaleString()} XAF</span>
                               </div>
                            )}
@@ -1618,7 +1616,7 @@ export const ClientProfile: React.FC = () => {
                               <span className="font-medium">- {payOrder.totalAmount.toLocaleString()} XAF</span>
                            </div>
                            <div className={`flex justify-between font-bold border-t pt-2 ${hasSufficientFunds ? 'border-blue-200 text-blue-800' : 'border-red-200 text-red-700'}`}>
-                              <span>Balance After Payment</span>
+                              <span>{t('order.balanceAfterPayment')}</span>
                               <span>{newBalance.toLocaleString()} XAF</span>
                            </div>
                         </div>
@@ -1629,7 +1627,7 @@ export const ClientProfile: React.FC = () => {
                               <div>
                                  <p className="text-xs font-bold text-red-700">{t('order.insufficient')}</p>
                                  <p className="text-xs text-red-600 mt-0.5">You need {(payOrder.totalAmount - walletBalance).toLocaleString()} XAF more.</p>
-                                 <Link to="/wallet" className="text-xs text-red-700 underline font-medium mt-1 inline-block" onClick={() => setShowPaymentRecap(false)}>Top up wallet →</Link>
+                                 <Link to="/wallet" className="text-xs text-red-700 underline font-medium mt-1 inline-block" onClick={() => setShowPaymentRecap(false)}>{t('wallet.topup')} →</Link>
                               </div>
                            </div>
                         )}
@@ -1773,7 +1771,7 @@ export const ClientProfile: React.FC = () => {
                      {/* Shipping / Delivery address */}
                      {selectedOrderLive.deliveryMethod === 'HOME' && selectedOrderLive.shippingAddress && typeof selectedOrderLive.shippingAddress === 'object' && (
                         <div className="mt-3 p-3 bg-gray-50 rounded-md border border-gray-200 text-sm">
-                           <p className="font-medium text-gray-700 mb-1">Shipping Address:</p>
+                           <p className="font-medium text-gray-700 mb-1">{t('order.shippingAddressLabel')}</p>
                            <p className="text-gray-600">
                               {[
                                  (selectedOrderLive.shippingAddress as any).address,
@@ -1785,7 +1783,7 @@ export const ClientProfile: React.FC = () => {
                      )}
                      {selectedOrderLive.deliveryMethod === 'PICKUP' && selectedOrderLive.pickupPointId && (
                         <div className="mt-3 p-3 bg-gray-50 rounded-md border border-gray-200 text-sm">
-                           <p className="font-medium text-gray-700 mb-1">Pickup Point:</p>
+                           <p className="font-medium text-gray-700 mb-1">{t('order.pickupPointLabel')}</p>
                            <p className="text-gray-600">
                               {(() => { const pp = pickupPoints.find(p => p.id === selectedOrderLive.pickupPointId); return pp ? `${pp.name} — ${pp.address}, ${pp.city}` : selectedOrderLive.pickupPointId; })()}
                            </p>
@@ -1808,7 +1806,7 @@ export const ClientProfile: React.FC = () => {
                                           <p className="flex items-center gap-1"><Mail className="h-3.5 w-3.5 shrink-0" /> {contact.email}</p>
                                        ) : null}
                                        {!contact.phone && !contact.email ? (
-                                          <p>Contact not available</p>
+                                          <p>{t('order.contactNotAvailable')}</p>
                                        ) : null}
                                     </div>
                                  );

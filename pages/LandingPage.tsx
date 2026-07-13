@@ -83,28 +83,28 @@ export const LandingPage: React.FC = () => {
         <div className="relative max-w-xl mx-auto px-4 sm:px-6 lg:px-8 lg:max-w-7xl">
           <div className="relative">
             <h2 className="text-center text-2xl sm:text-3xl lg:text-4xl leading-8 font-extrabold tracking-tight text-gray-900">
-              Platform Features
+              {t('landing.featuresTitle')}
             </h2>
             <p className="mt-3 sm:mt-4 max-w-3xl mx-auto text-center text-base sm:text-xl text-gray-500">
-              Connecting you to the source, however you choose to buy.
+              {t('landing.subTitle')}
             </p>
           </div>
 
           <div className="relative mt-8 sm:mt-12 lg:mt-24 grid gap-8 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8">
             {[
               {
-                name: 'Verified Sources',
-                description: 'Both independent producers and ATI store items are vetted for quality assurance.',
+                name: {en: 'Verified Sources', fr: 'Sources Vérifiées'}[language],
+                description: {en: 'Both independent producers and ATI store items are vetted for quality assurance.', fr: 'Les producteurs indépendants et les articles de la boutique ATI sont vérifiés pour garantir la qualité.'}[language],
                 icon: CheckCircle,
               },
               {
-                name: 'Flexible Logistics',
-                description: 'Choose from home delivery or pickup from authorized focal points.',
+                name: {en: 'Flexible Logistics', fr: 'Logistique Flexible'}[language],
+                description: {en: 'Choose from home delivery or pickup from authorized focal points.', fr: 'Choisissez entre livraison à domicile ou retrait chez des points focaux autorisés.'}[language],
                 icon: Truck,
               },
               {
-                name: 'Secure Payments',
-                description: 'All transactions are protected via escrow until delivery is confirmed.',
+                name: {en: 'Secure Payments', fr: 'Paiements Sécurisés'}[language],
+                description: {en: 'All transactions are protected via escrow until delivery is confirmed.', fr: 'Toutes les transactions sont protégées via un compte en consigne jusqu’à confirmation de la livraison.'}[language],
                 icon: BarChart3,
               },
             ].map((item) => (

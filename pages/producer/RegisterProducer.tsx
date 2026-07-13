@@ -113,6 +113,7 @@ export const RegisterProducer: React.FC = () => {
       ctx.addIssue({ code: 'custom', path: ['taxIdentificationNumber'], message: 'NIU / Tax ID is required.' });
     }
   });
+  console.log('🔄 RegisterProducer rendered with translations:', t('form.security'));
 
   const formik = useFormik({
     initialValues: {

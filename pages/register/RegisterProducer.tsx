@@ -56,7 +56,7 @@ const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
 
 export const RegisterProducer: React.FC = () => {
   const { registerProducer } = useStore();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -206,9 +206,14 @@ export const RegisterProducer: React.FC = () => {
             <label htmlFor="tin" className="block text-sm font-medium text-gray-700">
               NIU / Tax ID <span className="text-red-500">*</span>
             </label>
+            {language === 'en' &&
             <p className="text-xs text-gray-500 mt-0.5">
               {formData.type === 'BUSINESS' ? 'Required for business accounts; validated by the platform.' : 'National Identification Number — required for all producers.'}
-            </p>
+            </p>}
+            {language === 'fr' &&
+            <p className="text-xs text-gray-500 mt-0.5">
+              {formData.type === 'BUSINESS' ? 'Requis pour les comptes professionnels ; validé par la plateforme.' : 'Numéro d\'identification nationale — requis pour tous les producteurs.'}
+            </p>}
             <input
               id="tin"
               type="text"
@@ -260,11 +265,11 @@ export const RegisterProducer: React.FC = () => {
           {/* Password Section */}
           <div className="sm:col-span-6 border-t border-gray-200 pt-4">
             <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center">
-              <Lock className="h-4 w-4 mr-1 text-primary-600" /> Security
+              <Lock className="h-4 w-4 mr-1 text-primary-600" /> {t('form.security')}
             </h3>
             <div className="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Password</label>
+                <label className="block text-sm font-medium text-gray-700">{t('form.password')}</label>
                 <div className="relative mt-1">
                   <input type={showPassword ? 'text' : 'password'} required minLength={4}
                     className="block w-full border border-gray-300 rounded-md shadow-sm p-2 pr-10 focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white text-gray-900"
@@ -280,10 +285,11 @@ export const RegisterProducer: React.FC = () => {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Min 4 chars: 1 letter, 1 number, 1 special</p>
+                <p className="text-xs text-gray-500 mt-1">{t('form.passwordRequirements')}
+                </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Confirm Password</label>
+                <label className="block text-sm font-medium text-gray-700">{t('form.confirmPassword')}</label>
                 <div className="relative mt-1">
                   <input type={showConfirmPassword ? 'text' : 'password'} required
                     className="block w-full border border-gray-300 rounded-md shadow-sm p-2 pr-10 focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white text-gray-900"
@@ -318,7 +324,7 @@ export const RegisterProducer: React.FC = () => {
 
         {/* Categories (Chips) */}
         <div className="border-t border-gray-200 pt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">{t('form.category')} (Multi-select)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{t('form.category')} ({t('register.multiSelect')})</label>
           <div className="flex flex-wrap gap-2 mb-3">
             {PRODUCTION_TYPES.map(cat => {
               const isSelected = formData.productionTypes.includes(cat);
@@ -343,7 +349,7 @@ export const RegisterProducer: React.FC = () => {
         {/* Location Manager */}
         <div className="border-t border-gray-200 pt-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-            <MapPin className="h-5 w-5 mr-2 text-primary-600" /> Operating Locations
+            <MapPin className="h-5 w-5 mr-2 text-primary-600" /> {t('register.operatingLocation')}
           </h3>
 
           {/* Add Location Form */}
@@ -355,7 +361,7 @@ export const RegisterProducer: React.FC = () => {
                   value={currentLoc.region}
                   onChange={e => setCurrentLoc({ ...currentLoc, region: e.target.value, city: CAMEROON_LOCATIONS[e.target.value]?.[0] || '' })}
                 >
-                  <option value="">Select Region</option>
+                  <option value="">{t('register.formRegion')}</option>
                   {Object.keys(CAMEROON_LOCATIONS).map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
@@ -366,7 +372,7 @@ export const RegisterProducer: React.FC = () => {
                   onChange={e => setCurrentLoc({ ...currentLoc, city: e.target.value })}
                   disabled={!currentLoc.region}
                 >
-                  <option value="">Select City</option>
+                  <option value="">{t('register.formCity')}</option>
                   {currentLoc.region && CAMEROON_LOCATIONS[currentLoc.region]?.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
@@ -406,7 +412,7 @@ export const RegisterProducer: React.FC = () => {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-red-500 italic">At least one location is required.</p>
+            <p className="text-sm text-red-500 italic">At least one location is required to continue.</p>
           )}
         </div>
 

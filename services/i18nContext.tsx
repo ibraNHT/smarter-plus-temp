@@ -55,6 +55,7 @@ const translations: Record<string, Record<Language, string>> = {
   // Static Pages Content
   'blog.title': { en: 'AgriMarket Insights', fr: 'Actualités AgriMarket' },
   'blog.subtitle': { en: 'Latest news, tips for farmers, and market trends.', fr: 'Dernières nouvelles, conseils pour les agriculteurs et tendances du marché.' },
+  'blog.readArticle': { en: 'Read Article', fr: 'Lire l\'article' },
   'jobs.title': { en: 'Join Our Team', fr: 'Rejoignez Notre Équipe' },
   'jobs.subtitle': { en: 'Help us revolutionize agriculture in Africa.', fr: 'Aidez-nous à révolutionner l\'agriculture en Afrique.' },
   'partners.title': { en: 'Our Strategic Partners', fr: 'Nos Partenaires Stratégiques' },
@@ -109,6 +110,8 @@ const translations: Record<string, Record<Language, string>> = {
   'landing.hero.subtitle': { en: 'Whether you are a business looking for bulk produce or a family needing daily groceries, AgriMarket Connect has you covered.', fr: 'Que vous soyez une entreprise cherchant du vrac ou une famille ayant besoin de courses quotidiennes, AgriMarket Connect est là pour vous.' },
   'landing.card.wholesale': { en: 'Wholesale', fr: 'Gros' },
   'landing.card.retail': { en: 'Retail', fr: 'Détail' },
+  'landing.featuresTitle': { en: 'Platform features', fr: 'Fonctionnalites de la plateforme' },
+  'landing.subTitle': { en: 'Connecting you to the source, however you choose to buy.', fr: 'Vous connecter a la source, comme vous souhaitez l\'acheter.' },
   'landing.producerMarket.title': { en: 'Producer Market', fr: 'Marché Producteurs' },
   'landing.producerMarket.desc': { en: 'Buy in bulk directly from independent farmers. Negotiable prices, large quantities.', fr: 'Achetez en gros directement aux agriculteurs indépendants. Prix négociables, grandes quantités.' },
   'landing.atiStore.title': { en: 'ATI Store', fr: 'Boutique ATI' },
@@ -119,12 +122,16 @@ const translations: Record<string, Record<Language, string>> = {
   'landing.createAccount': { en: 'Create Account', fr: 'Créer un Compte' },
 
   // Login
+  'login.bridging': { en: 'Bridging the gap between producers and consumers.', fr: 'Comblez le gap entre les producteurs et les consommateurs.' },
   'login.title': { en: 'Sign in to your account', fr: 'Connectez-vous à votre compte' },
   'login.subtitle': { en: 'Access the AgriMarket platform securely.', fr: 'Accédez à la plateforme AgriMarket en toute sécurité.' },
   'login.emailPlaceholder': { en: 'Enter your email', fr: 'Entrez votre email' },
   'login.passwordPlaceholder': { en: 'Enter your password', fr: 'Entrez votre mot de passe' },
   'login.forgotPassword': { en: 'Forgot password?', fr: 'Mot de passe oublié ?' },
   'login.signIn': { en: 'Sign In', fr: 'Se Connecter' },
+  'login.phone': { en: 'Phone', fr: 'Téléphone' },
+  'login.noAccount': { en: 'Don\'t have an account ', fr: 'Pas de compte' },
+  'login.registerHere': { en: 'Register here', fr: 'Inscrivez-vous ici' },
   'login.demo': { en: 'Demo Accounts (Quick Access)', fr: 'Comptes de Démo (Accès Rapide)' },
   'login.resetTitle': { en: 'Reset Password', fr: 'Réinitialiser le mot de passe' },
   'login.resetDesc': { en: 'Enter your registered phone or email. We will send a 6-digit verification code by SMS and/or email.', fr: 'Entrez votre téléphone ou e-mail enregistré. Nous enverrons un code à 6 chiffres par SMS et/ou e-mail.' },
@@ -147,6 +154,10 @@ const translations: Record<string, Record<Language, string>> = {
   'verify.label': { en: 'Verification Code', fr: 'Code de Vérification' },
   'verify.submit': { en: 'Verify & Activate', fr: 'Vérifier et Activer' },
   'verify.invalid': { en: 'Invalid code. Please try again.', fr: 'Code invalide. Veuillez réessayer.' },
+  
+  'verify.sent_to': { en: 'Sent to:', fr: 'Envoyé à:' },
+  
+  'verify.check': { en: 'Check your email for the verification code.', fr: 'Consultez votre e-mail pour le code de vérification.' },
 
   // Register
   'register.title': { en: 'Join AgriMarket Connect', fr: 'Rejoindre AgriMarket Connect' },
@@ -159,6 +170,15 @@ const translations: Record<string, Record<Language, string>> = {
   'register.client.btn': { en: 'Register as Client', fr: 'S\'inscrire comme Client' },
   'register.loginLink': { en: 'Already have an account?', fr: 'Vous avez déjà un compte ?' },
   'register.loginHere': { en: 'Log in here', fr: 'Connectez-vous ici' },
+  'register.security': { en: 'Security', fr: 'Sécurité' },
+  'register.multiSelect': { en: 'Multi-Select', fr: 'Sélection Multiple' },
+  'register.operatingLocation': { en: 'Operating Location', fr: 'Emplacement d\'Opération' },
+  'register.formRegion': { en: 'Region', fr: 'Région' },
+  'register.formCity': { en: 'City', fr: 'Ville' },
+  'register.formCountry': { en: 'Country', fr: 'Pays' },
+  'register.password': { en: 'Password', fr: 'Mot de passe' },
+  'register.confirmPassword': { en: 'Confirm Password', fr: 'Confirmer le mot de passe' },
+  'register.passwordRequirements': { en: 'Min 4 chars: 1 letter, 1 number, 1 special', fr: 'Min 4 caractères : 1 lettre, 1 chiffre, 1 caractère spécial' },
   'register.backToLogin': { en: 'Back to log in', fr: 'Retour à la connexion' },
   'register.backToChoice': { en: 'Back to account type', fr: 'Retour au type de compte' },
 
@@ -167,6 +187,10 @@ const translations: Record<string, Record<Language, string>> = {
   'form.farmName': { en: 'Business/Farm Name', fr: 'Nom de la Ferme/Entreprise' },
   'form.email': { en: 'Email', fr: 'Email' },
   'form.phone': { en: 'Phone', fr: 'Téléphone' },
+  'form.security': { en: 'Security', fr: 'Sécurité' },
+  'form.password': { en: 'Password', fr: 'Mot de passe' },
+  'form.confirmPassword': { en: 'Confirm Password', fr: 'Confirmer le mot de passe' },
+  'form.passwordRequirements': { en: 'Min 4 chars: 1 letter, 1 number, 1 special', fr: 'Min 4 caractères : 1 lettre, 1 chiffre, 1 caractère spécial' },
   'form.address': { en: 'Address', fr: 'Adresse' },
   'form.desc': { en: 'Description', fr: 'Description' },
   'form.category': { en: 'Category', fr: 'Catégorie' },
@@ -553,12 +577,18 @@ const translations: Record<string, Record<Language, string>> = {
   'order.confirmPayment': { en: 'Confirm Payment', fr: 'Confirmer Paiement' },
 
   // Profile
+  'profile.tabs.back': { en: 'Back', fr: 'Retour' },
   'profile.tabs.info': { en: 'Personal Info', fr: 'Infos Personnelles' },
   'profile.tabs.orders': { en: 'My Orders', fr: 'Mes Commandes' },
   'profile.tabs.security': { en: 'Security', fr: 'Sécurité' },
   'profile.tabs.payment': { en: 'Payment Settings', fr: 'Moyens de Paiement' },
   'profile.tabs.portfolio': { en: 'Portfolio', fr: 'Portfolio' },
   'profile.tabs.favorites': { en: 'Favorites', fr: 'Favoris' },
+  'profile.tabs.payment2': { en: 'Payment', fr: 'Paiement' },
+  'profile.tabs.referrals': { en: 'Referrals', fr: 'Parrainages' },
+  'profile.tabs.payment_reload': { en: 'Payment &amp; reload', fr: 'Paiement &amp; rechargement' },
+  'profile.tabs.walletDescription': { en: 'Add money to your wallet to pay for orders. You pay securely through the hosted payment page — no card details are stored here. Wallet funds are for purchases only and can&apos;t be withdrawn.', fr: 'Ajoutez de l’argent à votre portefeuille pour payer vos commandes. Vous payez en toute sécurité via la page de paiement hébergée — aucune information de carte n’est stockée ici. Les fonds du portefeuille sont uniquement destinés aux achats et ne peuvent pas être retirés.' },
+  'profile.tabs.walleReload': { en: 'Reload Wallet', fr: 'Actualiser le portefeuille'},
   'profile.tabs.reputation': { en: 'My Reputation', fr: 'Ma Réputation' },
   'profile.update': { en: 'Update Profile', fr: 'Mettre à jour' },
   'profile.password': { en: 'Change Password', fr: 'Changer le mot de passe' },
@@ -702,6 +732,116 @@ const translations: Record<string, Record<Language, string>> = {
   'compare.rating': { en: 'Rating', fr: 'Note' },
   'compare.producer': { en: 'Producer', fr: 'Producteur' },
   'compare.select': { en: 'Select to Compare', fr: 'Sélectionner pour comparer' },
+
+  // ── NEW KEYS ──────────────────────────────────────────────────────────────
+
+  // Blog
+  'blog.post.1.title': { en: 'The Future of Sustainable Farming in Cameroon', fr: "L'avenir de l'agriculture durable au Cameroun" },
+  'blog.post.1.excerpt': { en: 'Exploring how digital platforms are enabling farmers to reduce waste and increase profits through direct market access.', fr: "Explorer comment les plateformes numériques permettent aux agriculteurs de réduire les déchets et d'augmenter les profits grâce à un accès direct au marché." },
+  'blog.post.1.author': { en: 'Sarah M.', fr: 'Sarah M.' },
+  'blog.post.1.date': { en: 'Oct 15, 2023', fr: '15 oct. 2023' },
+  'blog.post.1.category': { en: 'Sustainability', fr: 'Durabilité' },
+  'blog.post.2.title': { en: 'Maximizing Yields: Tips for Tomato Growers', fr: 'Maximiser les rendements : conseils pour les producteurs de tomates' },
+  'blog.post.2.excerpt': { en: 'Expert advice on soil preparation, pest control, and harvesting techniques to get the best out of your tomato crop this season.', fr: "Conseils d'experts sur la préparation du sol, la lutte antiparasitaire et les techniques de récolte pour tirer le meilleur parti de votre récolte de tomates cette saison." },
+  'blog.post.2.author': { en: 'Dr. Jean-Paul K.', fr: 'Dr. Jean-Paul K.' },
+  'blog.post.2.date': { en: 'Nov 02, 2023', fr: '2 nov. 2023' },
+  'blog.post.2.category': { en: 'Agriculture', fr: 'Agriculture' },
+  'blog.post.3.title': { en: 'Understanding the Escrow Payment System', fr: "Comprendre le système de paiement sécurisé" },
+  'blog.post.3.excerpt': { en: 'A detailed guide on how AgriMarket Connect protects both buyers and sellers using our secure escrow technology.', fr: "Un guide détaillé sur la façon dont AgriMarket Connect protège les acheteurs et les vendeurs grâce à notre technologie de séquestre sécurisée." },
+  'blog.post.3.author': { en: 'AgriMarket Team', fr: "Équipe AgriMarket" },
+  'blog.post.3.date': { en: 'Dec 10, 2023', fr: '10 déc. 2023' },
+  'blog.post.3.category': { en: 'Platform Guide', fr: 'Guide de la plateforme' },
+
+  // Favorites
+  'favorites.unavailableTitle': { en: 'Unavailable Items', fr: 'Articles indisponibles' },
+  'favorites.itemUnavailable': { en: 'Item #{id} is no longer available.', fr: "L'article #{id} n'est plus disponible." },
+
+  // Gender
+  'gender.male': { en: 'Male', fr: 'Masculin' },
+  'gender.female': { en: 'Female', fr: 'Féminin' },
+
+  // Jobs
+  'jobs.job.1.title': { en: 'Logistics Coordinator', fr: 'Coordinateur Logistique' },
+  'jobs.job.1.desc': { en: 'Manage our network of focal points and delivery partners across Cameroon.', fr: 'Gérer notre réseau de points focaux et de partenaires de livraison à travers le Cameroun.' },
+  'jobs.job.2.title': { en: 'Community Manager', fr: 'Community Manager' },
+  'jobs.job.2.desc': { en: 'Engage with our producers and clients to build a thriving community.', fr: "Engager nos producteurs et clients pour construire une communauté florissante." },
+  'jobs.job.3.title': { en: 'Sales Representative', fr: 'Représentant Commercial' },
+  'jobs.job.3.desc': { en: 'Onboard new farmers and businesses to the AgriMarket platform.', fr: "Intégrer de nouveaux agriculteurs et entreprises sur la plateforme AgriMarket." },
+  'jobs.applyNow': { en: 'Apply Now', fr: 'Postuler maintenant' },
+  'jobs.becomePartner': { en: 'Become a Partner', fr: 'Devenir partenaire' },
+  'jobs.becomePartnerDesc': { en: 'Interested in integrating your logistics, financial, or agricultural services with AgriMarket Connect?', fr: "Intéressé par l'intégration de vos services logistiques, financiers ou agricoles avec AgriMarket Connect ?" },
+  'jobs.contactPartnerships': { en: 'Contact Partnerships', fr: 'Contacter les partenariats' },
+
+  // Location
+  'location.useMyLocation': { en: 'Use my current location', fr: 'Utiliser ma position actuelle' },
+  'location.gettingLocation': { en: 'Getting location…', fr: 'Obtention de la position…' },
+  'location.coordinates': { en: 'Coordinates: {lat}, {lng}', fr: 'Coordonnées : {lat}, {lng}' },
+  'location.searchAddress': { en: 'Search address', fr: 'Rechercher une adresse' },
+  'location.searchPlaceholder': { en: 'Type to search (OpenStreetMap)', fr: 'Tapez pour rechercher (OpenStreetMap)' },
+  'location.findingNearby': { en: 'Finding nearby locations...', fr: 'Recherche des lieux à proximité...' },
+
+  // Order
+  'order.label': { en: 'Order', fr: 'Commande' },
+  'order.pickupDelivery': { en: '📦 Pickup delivery', fr: '📦 Livraison par retrait' },
+  // 'order.soldBy': { en: 'Sold by', fr: 'Vendu par' },
+  'order.shippingAddressLabel': { en: 'Shipping Address:', fr: 'Adresse de livraison :' },
+  'order.pickupPointLabel': { en: 'Pickup Point:', fr: 'Point de retrait :' },
+  'order.reasonLabel': { en: 'Reason', fr: 'Raison' },
+  'order.uploadEvidence': { en: 'Upload Evidence (JPG, PNG, PDF)', fr: 'Télécharger des preuves (JPG, PNG, PDF)' },
+
+  // Payment
+  'payment.balanceAfter': { en: 'Balance After Payment', fr: 'Solde après paiement' },
+  'wallet.topUpLink': { en: 'Top up wallet →', fr: 'Recharger le portefeuille →' },
+
+  // Profile (info tab)
+  'profile.myLocations': { en: 'My Locations', fr: 'Mes adresses' },
+  'profile.addOrUpdateAddress': { en: 'Add or update an address', fr: 'Ajouter ou modifier une adresse' },
+  'profile.newAddressKeep': { en: 'New address (keep existing)', fr: 'Nouvelle adresse (garder existante)' },
+  'profile.addAnotherAddress': { en: 'Add another address', fr: 'Ajouter une autre adresse' },
+  'profile.mapPinHint': { en: 'Drag the pin or tap the map to set coordinates. Address fields update from the pin when possible.', fr: 'Faites glisser le marqueur ou appuyez sur la carte pour définir les coordonnées. Les champs d\'adresse se mettent à jour à partir du marqueur lorsque c\'est possible.' },
+  // 'profile.city': { en: 'City', fr: 'Ville' },
+  'profile.regionState': { en: 'Region / State', fr: 'Région / État' },
+  'profile.fullAddress': { en: 'Full address', fr: 'Adresse complète' },
+  'profile.addToList': { en: 'Add to list', fr: 'Ajouter à la liste' },
+  'profile.updateLocation': { en: 'Update location', fr: 'Mettre à jour l\'adresse' },
+  'profile.addAsNewAddress': { en: 'Add as new address (keep fields below)', fr: 'Ajouter comme nouvelle adresse (garder les champs ci-dessous)' },
+
+  // Profile (upgrade modal)
+  'profile.producerType': { en: 'Producer Type', fr: 'Type de producteur' },
+  'profile.farmBusinessName': { en: 'Farm/Business Name', fr: 'Nom de la ferme/entreprise' },
+  'profile.niuTaxId': { en: 'NIU / Tax ID', fr: 'NIU / N° fiscal' },
+  'profile.categoriesClick': { en: 'Categories (Click to select)', fr: 'Catégories (Cliquez pour sélectionner)' },
+  'profile.upgradeAccount': { en: 'Upgrade Account', fr: 'Mettre à niveau le compte' },
+
+  // Referrals
+  'referrals.yourLink': { en: 'Your Referral Link', fr: 'Votre lien de parrainage' },
+  'referrals.copy': { en: 'Copy', fr: 'Copier' },
+  'referrals.shareHint': { en: 'Share this link with friends to invite them to the platform.', fr: 'Partagez ce lien avec vos amis pour les inviter sur la plateforme.' },
+  'referrals.yourImpact': { en: 'Your Impact', fr: 'Votre impact' },
+  'referrals.referredCount': { en: 'You have successfully referred {count} user(s).', fr: 'Vous avez parrainé {count} utilisateur(s) avec succès.' },
+  'referrals.noReferrals': { en: "You haven't referred anyone yet.", fr: "Vous n'avez encore parrainé personne." },
+
+  // Register
+  'register.selectGender': { en: 'Select Gender', fr: 'Sélectionnez le genre' },
+  // 'register.security': { en: 'Security', fr: 'Sécurité' },
+  'register.locationDetails': { en: 'Location Details', fr: 'Détails de localisation' },
+  'register.locationHint': { en: 'Use your device location (browser permission). We do not load Google Places on signup. You can edit the address fields below.', fr: 'Utilisez la localisation de votre appareil (autorisation du navigateur). Nous ne chargeons pas Google Places lors de l\'inscription. Vous pouvez modifier les champs d\'adresse ci-dessous.' },
+  'register.addressPlaceholder': { en: 'Street, area, or full address', fr: 'Rue, quartier ou adresse complète' },
+
+  // FAQ
+  'faq.q1': { en: 'How does the Escrow payment work?', fr: 'Comment fonctionne le paiement sécurisé ?' },
+  'faq.a1': { en: 'When you make a payment, the funds are held securely by AgriMarket Connect and are not immediately sent to the producer. The money is released to the producer only after you confirm the delivery of your order or after 4 days if no dispute is raised.', fr: 'Lorsque vous effectuez un paiement, les fonds sont conservés en toute sécurité par AgriMarket Connect et ne sont pas immédiatement envoyés au producteur. L\'argent est libéré au producteur uniquement après que vous ayez confirmé la livraison de votre commande ou après 4 jours si aucun litige n\'est soulevé.' },
+  'faq.q2': { en: 'Can I return products if they are damaged?', fr: 'Puis-je retourner des produits s\'ils sont endommagés ?' },
+  'faq.a2': { en: 'Yes. If your order arrives damaged or does not match the description, you can click "Report a Problem" on your order page. This opens a dispute, freezes the funds, and allows you to upload evidence for our admin team to review.', fr: 'Oui. Si votre commande arrive endommagée ou ne correspond pas à la description, vous pouvez cliquer sur "Signaler un problème" sur la page de votre commande. Cela ouvre un litige, bloque les fonds et vous permet de télécharger des preuves pour que notre équipe administrative les examine.' },
+  'faq.q3': { en: 'What are the delivery fees?', fr: 'Quels sont les frais de livraison ?' },
+  'faq.a3': { en: 'Delivery fees vary depending on the producer\'s location and your chosen delivery method (Home Delivery vs. Focal Point Pickup). The total cost is calculated before you confirm your order.', fr: 'Les frais de livraison varient en fonction de l\'emplacement du producteur et de votre méthode de livraison choisie (livraison à domicile ou retrait en point focal). Le coût total est calculé avant que vous ne confirmiez votre commande.' },
+  'faq.q4': { en: 'How do I become a verified producer?', fr: 'Comment devenir un producteur vérifié ?' },
+  'faq.a4': { en: 'To become a verified producer, sign up for a producer account and upload the required documents (Business License or ID, and any relevant certificates) in your profile. Our team will review your documents and verify your status within 48 hours.', fr: 'Pour devenir producteur vérifié, inscrivez-vous pour un compte producteur et téléchargez les documents requis (licence commerciale ou pièce d\'identité, et tout certificat pertinent) dans votre profil. Notre équipe examinera vos documents et vérifiera votre statut dans les 48 heures.' },
+  'faq.q5': { en: 'Are there fees for using the platform?', fr: 'Y a-t-il des frais pour utiliser la plateforme ?' },
+  'faq.a5': { en: 'Clients pay a 16.5% service fee on each order. Producers are charged a 5% commission on successful sales, which is deducted automatically from their earnings before withdrawal.', fr: 'Les clients paient des frais de service de 16,5 % sur chaque commande. Les producteurs paient une commission de 5 % sur les ventes réussies, qui est déduite automatiquement de leurs gains avant le retrait.' },
+
+  // More order (for all-orders list)
+  // 'order.label': { en: 'Order', fr: 'Commande' }, // Already defined above? We can combine.
 };
 
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
@@ -709,15 +849,30 @@ const I18nContext = createContext<I18nContextType | undefined>(undefined);
 export const I18nProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [language, setLanguage] = useState<Language>('en');
 
-  const t = (key: string): string => {
-    const entry = translations[key];
-    if (!entry) {
-        // Simple fallback if key looks like 'category.Value'
-        if (key.startsWith('category.')) return key.split('.')[1];
-        return key;
-    }
-    return entry[language];
-  };
+  // const t = (key: string): string => {
+  //   const entry = translations[key];
+  //   if (!entry) {
+  //       // Simple fallback if key looks like 'category.Value'
+  //       if (key.startsWith('category.')) return key.split('.')[1];
+  //       return key;
+  //   }
+  //   return entry[language];
+  // };
+  const t = (key: string, replacements?: Record<string, string | number>): string => {
+  const entry = translations[key];
+  if (!entry) {
+    if (key.startsWith('category.')) return key.split('.')[1];
+    return key;
+  }
+  let text = entry[language];
+  if (replacements) {
+    text = text.replace(/{(\w+)}/g, (_, placeholder) =>
+      String(replacements[placeholder] ?? `{${placeholder}}`)
+    );
+  }
+  console.log(translations[key], language, text); // Debugging line
+  return text;
+};
 
   return (
     <I18nContext.Provider value={{ language, setLanguage, t }}>

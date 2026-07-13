@@ -346,7 +346,7 @@ export const LoginPage: React.FC = () => {
         <div className="relative z-10 text-center text-white">
           <Sprout className="h-16 w-16 lg:h-20 lg:w-20 mx-auto mb-6" />
           <h1 className="text-3xl lg:text-4xl font-extrabold mb-4">AgriMarket Connect</h1>
-          <p className="text-lg lg:text-xl text-primary-200">Bridging the gap between producers and consumers.</p>
+          <p className="text-lg lg:text-xl text-primary-200">{t('login.bridging')}</p>
         </div>
       </div>
 
@@ -371,7 +371,7 @@ export const LoginPage: React.FC = () => {
                 onClick={() => handleLoginMethodChange('phone')}
                 className={`flex-1 py-2 text-sm font-medium rounded-md flex justify-center items-center transition-colors ${loginMethod === 'phone' ? 'bg-white shadow text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
               >
-                <Phone className="w-4 h-4 mr-2 shrink-0" /> Phone
+                <Phone className="w-4 h-4 mr-2 shrink-0" /> {t('login.phone')}
               </button>
               <button
                 type="button"
@@ -509,7 +509,7 @@ export const LoginPage: React.FC = () => {
 
           <div className="text-center mt-4">
             <p className="text-sm text-gray-600">
-              Don't have an account? <Link to="/register" className="font-bold text-primary-600 hover:underline">Register here</Link>
+              {t('login.noAccount')} ? <Link to="/register" className="font-bold text-primary-600 hover:underline">{t('login.registerHere')}</Link>
             </p>
           </div>
         </div>

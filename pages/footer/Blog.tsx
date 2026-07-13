@@ -88,7 +88,7 @@ export const Blog: React.FC = () => {
                 </div>
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <button className="text-primary-600 hover:text-primary-700 font-medium flex items-center">
-                    Read Article <ArrowRight className="ml-2 h-4 w-4" />
+                    {t('blog.readArticle')} <ArrowRight className="ml-2 h-4 w-4" />
                   </button>
                 </div>
               </div>

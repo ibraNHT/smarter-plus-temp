@@ -60,7 +60,7 @@ export const VerifyEmail: React.FC = () => {
             {t('verify.desc')}
           </p>
           <p className="mt-3 text-xs font-mono bg-gray-100 px-3 py-2 rounded-lg inline-block text-gray-500 break-all max-w-full">
-            Sent to: {pendingRegistration.email}
+            {t('verify.sent_to')} {pendingRegistration.email}
           </p>
         </div>
 
@@ -100,7 +100,7 @@ export const VerifyEmail: React.FC = () => {
         </form>
 
         <p className="text-center text-xs text-gray-500 leading-relaxed">
-          Check your email for the verification code.
+          {t('verify.check')}
         </p>
       </div>
     </AuthOnboardingLayout>
