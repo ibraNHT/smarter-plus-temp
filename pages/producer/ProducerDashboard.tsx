@@ -428,7 +428,7 @@ export const ProducerDashboard: React.FC = () => {
    const formatProducerOrderSubtitle = (order: Order) => {
       // Producers see their sale value (subtotal) — NOT the buyer's total, which
       // includes the 16.5% buyer service fee the platform keeps. Buyer views use totalAmount.
-      const producerValue = (order.subtotal ?? order.totalAmount).toLocaleString();
+      const producerValue = order.subtotal ?? order.totalAmount;
       if (orderIsServiceOnly(order)) {
          const lc = serviceLineCount(order);
          const st = serviceSlotTotal(order);

@@ -860,6 +860,7 @@ export function BuyerPurchaseOrdersSection({
   emptyMsg?: string;
 }) {
   const { t } = useTranslation();
+  const { formatXaf } = useCurrency();
   const { offers, producers } = useStore();
   const { renderActions } = useBuyerOrderFlows();
 
