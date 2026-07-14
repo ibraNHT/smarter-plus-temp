@@ -2417,6 +2417,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       provider: method.provider,
       accountNumber: method.accountNumber,
       accountName: method.accountName,
+      // Bank name is only sent for BANK methods (undefined for mobile money).
+      bankName: method.bankName,
     };
     try {
       const saved = await apiFetch<PaymentMethod>(
