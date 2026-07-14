@@ -28,7 +28,7 @@ Le serveur recalcule les remises et totaux au checkout.
 Causes fréquentes : mauvais canal, expiration, minimum non atteint, quota utilisateur atteint.
 
 ### 8) Quand la récompense de parrainage s’applique-t-elle ?
-Selon les conditions du programme actif (souvent première commande éligible), sous réserve des règles/budget.
+Lorsque la première commande du filleul est marquée Terminée (Completed), sans annulation antérieure. Les montants suivent le programme actif et le budget.
 
 ## Paiements, portefeuille, retraits
 

@@ -555,6 +555,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     useSessionStore.getState().setUser(user);
     const savedGuestEmail = localStorage.getItem('guestEmail');
     if (savedGuestEmail) setGuestEmail(savedGuestEmail);
+    // Restore a GUEST support session across reloads so agent-reply polling resumes
+    // (guests have no socket; the 5s poll needs the sessionId + handed-over flag).
+    if (!getToken()) {
+      const savedSupportSessionId = localStorage.getItem('supportSessionId');
+      if (savedSupportSessionId) {
+        setSupportSessionId(savedSupportSessionId);
+        setIsHandedOver(true);
+      }
+    }
 
     let cancelled = false;
     (async () => {
@@ -622,6 +631,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     window.addEventListener('agm:session-expired', onSessionExpired);
     return () => window.removeEventListener('agm:session-expired', onSessionExpired);
   }, []);
+
+  // Persist the guest support session id so a page reload resumes agent-reply polling.
+  useEffect(() => {
+    if (!user && supportSessionId) localStorage.setItem('supportSessionId', supportSessionId);
+    else if (!supportSessionId) localStorage.removeItem('supportSessionId');
+  }, [user, supportSessionId]);
 
   // ─── DEBOUNCED CART SYNC ───────────────────────────────────────────────────
   useEffect(() => {
@@ -723,7 +738,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setRealtimeConnected(false);
       return;
     }
-    const apiBase = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '' : (typeof window !== 'undefined' ? window.location.origin : ''))).replace(/\/$/, '');
+    const configuredBase = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '' : (typeof window !== 'undefined' ? window.location.origin : ''))).replace(/\/$/, '');
+    // In local DEV, if API is a remote origin (e.g. staging), connect socket same-origin
+    // so Vite can proxy /socket.io and avoid browser CORS blocks.
+    const crossOriginRemoteApi =
+      Boolean(import.meta.env.DEV) &&
+      Boolean(configuredBase) &&
+      typeof window !== 'undefined' &&
+      !configuredBase.startsWith(window.location.origin);
+    const apiBase = crossOriginRemoteApi ? '' : configuredBase;
     const socket = io(`${apiBase}/notifications`, {
       path: '/socket.io',
       auth: { token },
@@ -2065,10 +2088,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         method: 'POST',
         body: JSON.stringify({
           type: data.type || "BUSINESS",
-          firstName: data.name || "Farm",
-          lastName: "Owner",
-          gender: "OTHER",
-          dateOfBirth: new Date().toISOString(),
+          // Individual producers supply real identity details; business producers
+          // don't have them, so fall back to the farm name / placeholders.
+          firstName: data.firstName || data.name || "Producer",
+          lastName: data.lastName || "Owner",
+          gender: data.gender || "OTHER",
+          dateOfBirth: toIsoDateOfBirthSafe(data.dateOfBirth),
           description: String(data.description ?? '').trim() || 'Producer',
           certifications: data.certifications || [],
           productionTypes: data.productionTypes || [],
@@ -2089,8 +2114,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           id: producerProfile.id,
           userId: session.user.id,
           name: data.name || 'Producer',
-          firstName: data.name || 'Farm',
-          lastName: 'Owner',
+          firstName: data.firstName || data.name || 'Producer',
+          lastName: data.lastName || 'Owner',
           description: data.description,
           locations: data.locations,
           productionTypes: data.productionTypes,
@@ -2407,6 +2432,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       provider: method.provider,
       accountNumber: method.accountNumber,
       accountName: method.accountName,
+      // Bank name is only sent for BANK methods (undefined for mobile money).
+      bankName: method.bankName,
     };
     try {
       const saved = await apiFetch<PaymentMethod>(
@@ -2530,6 +2557,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         unit: offerData.unit,
         quantity: offerData.quantity,
         price: offerData.price,
+        listingCurrency: offerData.listingCurrency,
+        listingPrice: offerData.listingPrice ?? offerData.price,
         imageUrl: offerData.imageUrl,
         imageUrls: offerData.imageUrls ?? [],
         isNegotiable: offerData.isNegotiable,
@@ -2567,6 +2596,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         unit: updatedOffer.unit,
         quantity: updatedOffer.quantity,
         price: updatedOffer.price,
+        listingCurrency: updatedOffer.listingCurrency,
+        listingPrice: updatedOffer.listingPrice ?? updatedOffer.price,
         imageUrl: updatedOffer.imageUrl,
         imageUrls: updatedOffer.imageUrls ?? [],
         isNegotiable: updatedOffer.isNegotiable,
@@ -3797,7 +3828,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }
       return sendMessage(
         chatId,
-        `Counter-offer: ${qty} units @ ${price?.toLocaleString()} XAF each`,
+        `Counter-offer: ${qty} units @ ${price?.toLocaleString()} each (XAF)`,
         {
           offerId: original?.proposal?.offerId,
           pricePerUnit: price,

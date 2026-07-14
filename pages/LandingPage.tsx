@@ -1,13 +1,57 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowRight, CheckCircle, ShieldCheck, Truck, ShoppingBasket, Tractor } from 'lucide-react';
 import { useTranslation } from '../services/i18nContext';
-import { ArrowRight, CheckCircle, BarChart3, Truck, ShoppingBasket, Tractor } from 'lucide-react';
+import { useStore } from '../services/storeContext';
 import { SEO } from '../components/SEO';
 import { SEO_PAGE_META } from '../services/seo/seoConfig';
 import { buildOrganizationSchema, buildWebSiteSchema } from '../services/seo/schemaBuilders';
+import { offerImageInBox } from '../utils/offerImageDisplay';
+import { MarketType } from '../types';
+import { getCategoryAvatar, CATEGORY_SCROLLER_ITEMS } from '../data/categoryVisuals';
+import { useCurrency } from '../contexts/CurrencyContext';
+
+const FEATURE_ICONS = [ShieldCheck, Truck, CheckCircle] as const;
 
 export const LandingPage: React.FC = () => {
   const { t, language } = useTranslation();
+  const { offers, refreshOffers } = useStore();
+  const { formatXaf } = useCurrency();
+  const [catalogReady, setCatalogReady] = useState(offers.length > 0);
+
+  useEffect(() => {
+    let cancelled = false;
+    refreshOffers().finally(() => {
+      if (!cancelled) setCatalogReady(true);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only catalog warm
+  }, []);
+
+  const liveOffers = useMemo(() => {
+    const published = offers.filter((o) => o.quantity > 0);
+    const producers = published.filter((o) => o.marketType === MarketType.PRODUCER);
+    const ati = published.filter((o) => o.marketType === MarketType.ATI);
+    const mixed: typeof published = [];
+    for (let i = 0; i < 6; i++) {
+      if (producers[i]) mixed.push(producers[i]);
+      if (mixed.length >= 6) break;
+      if (ati[i]) mixed.push(ati[i]);
+      if (mixed.length >= 6) break;
+    }
+    return mixed.slice(0, 6);
+  }, [offers]);
+
+  const categoryRibbon = useMemo(
+    () => CATEGORY_SCROLLER_ITEMS.filter((c) => c !== 'All').slice(0, 8),
+    [],
+  );
+
+  const features = [
+    { nameKey: 'landing.features.verified', descKey: 'landing.features.verifiedDesc', icon: FEATURE_ICONS[0] },
+    { nameKey: 'landing.features.logistics', descKey: 'landing.features.logisticsDesc', icon: FEATURE_ICONS[1] },
+    { nameKey: 'landing.features.escrow', descKey: 'landing.features.escrowDesc', icon: FEATURE_ICONS[2] },
+  ] as const;
 
   return (
     <div className="bg-white">
@@ -18,109 +62,166 @@ export const LandingPage: React.FC = () => {
         locale={language}
         schema={[buildOrganizationSchema(), buildWebSiteSchema()]}
       />
-      {/* Hero Section */}
-      <div className="relative bg-primary-900">
+
+      {/* Brand-first full-bleed hero */}
+      <div className="relative min-h-[78vh] sm:min-h-[85vh] flex items-end sm:items-center bg-primary-950 overflow-hidden">
         <div className="absolute inset-0">
           <img
-            className="w-full h-full object-cover opacity-20"
-            src="https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80"
-            alt="Farm fields"
+            className="agm-hero-kenburns w-full h-full object-cover"
+            src="/landing-hero.jpg"
+            alt=""
           />
+          <div className="absolute inset-0 bg-gradient-to-t from-primary-950 via-primary-950/75 to-primary-900/40" />
         </div>
-        <div className="relative max-w-7xl mx-auto py-14 sm:py-24 lg:py-32 px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white">
+
+        <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-14 pt-28 sm:py-24 lg:py-28">
+          <p className="agm-page-in font-display text-green-300 text-sm sm:text-base font-semibold tracking-[0.2em] uppercase mb-3 sm:mb-4">
+            {t('landing.brand')}
+          </p>
+          <h1 className="agm-page-in agm-stagger-1 font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white max-w-3xl leading-[1.1]">
             {t('landing.hero.title')}
           </h1>
-          <p className="mt-4 sm:mt-6 text-base sm:text-xl text-primary-100 max-w-3xl mx-auto px-2">
+          <p className="agm-page-in agm-stagger-2 mt-4 sm:mt-5 text-base sm:text-lg text-primary-100 max-w-2xl">
             {t('landing.hero.subtitle')}
           </p>
 
-          <div className="mt-8 sm:mt-12 grid grid-cols-1 gap-4 sm:gap-8 sm:grid-cols-2 max-w-4xl mx-auto">
-            {/* Producer Market Option */}
-            <div className="bg-white rounded-xl p-5 sm:p-6 shadow-xl transform transition hover:scale-[1.02] sm:hover:scale-105 text-left border-l-4 border-green-500">
-              <div className="flex items-center justify-between mb-4 gap-2">
-                <div className="p-2 sm:p-3 bg-green-100 rounded-full flex-shrink-0">
-                  <Tractor className="h-7 w-7 sm:h-8 sm:w-8 text-green-700" />
-                </div>
-                <span className="text-[10px] sm:text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded uppercase tracking-wide">{t('landing.card.wholesale')}</span>
-              </div>
-              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">{t('landing.producerMarket.title')}</h3>
-              <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">{t('landing.producerMarket.desc')}</p>
-              <Link to="/market/producers" className="inline-flex items-center text-green-600 font-semibold hover:text-green-800 agm-link-underline">
-                {t('landing.cta.browse')} <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </div>
-
-            {/* ATI Store Option */}
-            <div className="bg-white rounded-xl p-5 sm:p-6 shadow-xl transform transition hover:scale-[1.02] sm:hover:scale-105 text-left border-l-4 border-blue-500">
-              <div className="flex items-center justify-between mb-4 gap-2">
-                <div className="p-2 sm:p-3 bg-blue-100 rounded-full flex-shrink-0">
-                  <ShoppingBasket className="h-7 w-7 sm:h-8 sm:w-8 text-blue-700" />
-                </div>
-                <span className="text-[10px] sm:text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded uppercase tracking-wide">{t('landing.card.retail')}</span>
-              </div>
-              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">{t('landing.atiStore.title')}</h3>
-              <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">{t('landing.atiStore.desc')}</p>
-              <Link to="/market/ati" className="inline-flex items-center text-blue-600 font-semibold hover:text-blue-800 agm-link-underline">
-                {t('landing.cta.shop')} <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </div>
-          </div>
-
-          <div className="mt-8 sm:mt-12">
-            <p className="text-primary-200 text-xs sm:text-sm uppercase tracking-wider mb-3 sm:mb-4">{t('landing.new')}</p>
-            <div className="flex justify-center gap-4">
-              <Link to="/register" className="bg-white text-primary-900 px-5 sm:px-6 py-3 rounded-md font-bold hover:bg-primary-50 transition text-sm sm:text-base agm-btn-secondary">
-                {t('landing.createAccount')}
-              </Link>
-            </div>
+          <div className="agm-page-in agm-stagger-3 mt-8 sm:mt-10 flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4">
+            <Link
+              to="/market/producers"
+              className="agm-btn-primary inline-flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-400 text-primary-950 px-6 py-3.5 rounded-lg font-bold text-sm sm:text-base shadow-lg"
+            >
+              <Tractor className="h-5 w-5" aria-hidden />
+              {t('landing.cta.browse')}
+            </Link>
+            <Link
+              to="/market/ati"
+              className="agm-btn-secondary inline-flex items-center justify-center gap-2 bg-white/15 hover:bg-white/25 text-white border border-white/30 px-6 py-3.5 rounded-lg font-bold text-sm sm:text-base backdrop-blur-sm"
+            >
+              <ShoppingBasket className="h-5 w-5" aria-hidden />
+              {t('landing.cta.shop')}
+            </Link>
           </div>
         </div>
       </div>
 
-      {/* Feature Section */}
-      <div className="py-12 sm:py-16 bg-gray-50 overflow-hidden lg:py-24">
-        <div className="relative max-w-xl mx-auto px-4 sm:px-6 lg:px-8 lg:max-w-7xl">
-          <div className="relative">
-            <h2 className="text-center text-2xl sm:text-3xl lg:text-4xl leading-8 font-extrabold tracking-tight text-gray-900">
-              Platform Features
-            </h2>
-            <p className="mt-3 sm:mt-4 max-w-3xl mx-auto text-center text-base sm:text-xl text-gray-500">
-              Connecting you to the source, however you choose to buy.
-            </p>
-          </div>
-
-          <div className="relative mt-8 sm:mt-12 lg:mt-24 grid gap-8 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8">
-            {[
-              {
-                name: 'Verified Sources',
-                description: 'Both independent producers and ATI store items are vetted for quality assurance.',
-                icon: CheckCircle,
-              },
-              {
-                name: 'Flexible Logistics',
-                description: 'Choose from home delivery or pickup from authorized focal points.',
-                icon: Truck,
-              },
-              {
-                name: 'Secure Payments',
-                description: 'All transactions are protected via escrow until delivery is confirmed.',
-                icon: BarChart3,
-              },
-            ].map((item) => (
-              <div key={item.name} className="agm-card-lift p-6 rounded-xl bg-white shadow-sm border border-gray-100">
-                <div className="flex items-center justify-center h-12 w-12 rounded-md bg-primary-500 text-white">
-                  <item.icon className="h-6 w-6" aria-hidden="true" />
-                </div>
-                <div className="mt-4 sm:mt-5">
-                  <h3 className="text-lg leading-6 font-medium text-gray-900">{item.name}</h3>
-                  <p className="mt-2 text-base text-gray-500">{item.description}</p>
-                </div>
-              </div>
+      {/* Quiet category ribbon */}
+      <div className="bg-primary-50/80 border-b border-primary-100 py-4 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex gap-4 overflow-x-auto scrollbar-thin pb-1">
+            {categoryRibbon.map((cat) => (
+              <Link
+                key={cat}
+                to={`/market/producers?category=${encodeURIComponent(cat)}`}
+                className="flex-none flex flex-col items-center gap-1.5 w-16 group"
+              >
+                <img
+                  src={getCategoryAvatar(cat)}
+                  alt=""
+                  className="h-12 w-12 rounded-full object-cover ring-2 ring-white shadow-sm group-hover:ring-primary-400 transition-all"
+                />
+                <span className="text-[10px] font-medium text-primary-800 text-center line-clamp-2 leading-tight">
+                  {cat}
+                </span>
+              </Link>
             ))}
           </div>
         </div>
       </div>
+
+      {/* Live offers strip */}
+      <section className="py-12 sm:py-16 bg-gradient-to-b from-white to-primary-50/30 border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
+            <div>
+              <h2 className="font-display text-2xl sm:text-3xl font-bold text-gray-900">{t('landing.freshNearYou')}</h2>
+              <p className="mt-1 text-sm sm:text-base text-gray-500">{t('landing.freshNearYouDesc')}</p>
+            </div>
+            <Link to="/market/producers" className="text-sm font-semibold text-primary-700 hover:text-primary-900 inline-flex items-center gap-1 agm-link-underline">
+              {t('landing.seeAllOffers')} <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+
+          {!catalogReady && liveOffers.length === 0 ? (
+            <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="flex-none w-56 h-64 rounded-xl agm-shimmer" />
+              ))}
+            </div>
+          ) : liveOffers.length === 0 ? (
+            <p className="text-gray-500 text-center py-10">{t('landing.noLiveOffers')}</p>
+          ) : (
+            <div className="flex gap-4 overflow-x-auto pb-3 snap-x snap-mandatory scrollbar-thin">
+              {liveOffers.map((offer) => (
+                <Link
+                  key={offer.id}
+                  to={`/offer/${offer.id}`}
+                  className="agm-card-lift flex-none snap-start w-56 sm:w-60 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+                >
+                  <div className="h-36 bg-gray-100 relative">
+                    <img src={offer.imageUrl} alt="" className={offerImageInBox} />
+                    <span className={`absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded ${
+                      offer.marketType === MarketType.ATI ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'
+                    }`}>
+                      {offer.marketType === MarketType.ATI ? t('landing.card.retail') : t('landing.card.wholesale')}
+                    </span>
+                  </div>
+                  <div className="p-3">
+                    <p className="text-sm font-bold text-gray-900 line-clamp-2 min-h-[2.5rem]">{offer.title}</p>
+                    <p className="mt-2 text-primary-700 font-bold">{formatXaf(offer.price)}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Features band — tinted, not generic white cards */}
+      <section className="py-14 sm:py-20 bg-primary-950 text-white overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-2xl">
+            <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight">
+              {t('landing.features.title')}
+            </h2>
+            <p className="mt-3 text-primary-200 text-base sm:text-lg">
+              {t('landing.features.subtitle')}
+            </p>
+          </div>
+
+          <div className="mt-10 sm:mt-14 grid gap-8 sm:grid-cols-3">
+            {features.map((item) => (
+              <div key={item.nameKey} className="agm-page-in border-t border-primary-800 pt-6">
+                <div className="flex items-center justify-center h-11 w-11 rounded-lg bg-primary-800 text-green-300">
+                  <item.icon className="h-5 w-5" aria-hidden="true" />
+                </div>
+                <h3 className="mt-4 font-display text-lg font-semibold text-white">{t(item.nameKey)}</h3>
+                <p className="mt-2 text-sm sm:text-base text-primary-200 leading-relaxed">{t(item.descKey)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Closing CTA */}
+      <section className="relative py-14 sm:py-16 bg-primary-800 overflow-hidden">
+        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'url(/categories/agriculture.webp)', backgroundSize: 'cover', backgroundPosition: 'center' }} />
+        <div className="absolute inset-0 bg-primary-800/85" />
+        <div className="relative max-w-3xl mx-auto px-4 text-center">
+          <h2 className="font-display text-2xl sm:text-3xl font-bold text-white">
+            {t('landing.closing.title')}
+          </h2>
+          <p className="mt-3 text-primary-100 text-sm sm:text-base">
+            {t('landing.closing.subtitle')}
+          </p>
+          <Link
+            to="/register"
+            className="agm-btn-primary mt-8 inline-flex items-center justify-center gap-2 bg-white text-primary-900 px-6 py-3.5 rounded-lg font-bold text-sm sm:text-base shadow-lg hover:bg-primary-50"
+          >
+            {t('landing.createAccount')}
+            <ArrowRight className="h-4 w-4" aria-hidden />
+          </Link>
+        </div>
+      </section>
     </div>
   );
 };

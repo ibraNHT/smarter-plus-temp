@@ -21,6 +21,10 @@ export const API_ENDPOINTS = {
   },
   users: {
     myReferrals: "/api/users/me/referrals",
+    update: (id: string) => `/api/users/${id}`,
+  },
+  exchangeRates: {
+    list: "/api/exchange-rates",
   },
   referralPrograms: {
     active: "/api/referral-programs/active",

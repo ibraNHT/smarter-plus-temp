@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { MarketType, UserRole } from '../../types';
-import { ShoppingBasket, Search, Star, Filter, Heart, Layers, ArrowLeft } from 'lucide-react';
+import { ShoppingBasket, Search, Star, Heart, Layers, ArrowLeft } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { SEO_PAGE_META } from '../../services/seo/seoConfig';
 import {
@@ -12,13 +12,19 @@ import {
   buildCollectionPageSchema,
 } from '../../services/seo/schemaBuilders';
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
+import { CategoryAvatarScroller } from '../../components/CategoryAvatarScroller';
+import { MARKETPLACE_CATEGORIES } from '../../data/categories';
 import { offerImageInBox, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
 import { isProducerDashboardUser } from '../../services/producerSession';
 import { findProducerForUser } from '../../utils/producerAccountStatus';
 import { getAverageRatingFromReviews, getReviewsForOffer } from '../../utils/offerReviews';
+import { usePwaInstall } from '../../contexts/PwaInstallContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
 
 export const AtiStore: React.FC = () => {
   const { offers, toggleFavorite, user, clients, producers, compareList, addToCompare, removeFromCompare, reviews, orders, refreshOffers, refreshProducers, refreshAllReviews } = useStore();
+  const { formatXaf } = useCurrency();
+  const { nudgeInstall } = usePwaInstall();
 
   const getOfferReviewStats = (offerId: string) => {
     const offerReviews = getReviewsForOffer(offerId, reviews, orders);
@@ -31,14 +37,30 @@ export const AtiStore: React.FC = () => {
 
   const hasCachedCatalog = offers.length > 0 && producers.length > 0;
   const [pageLoading, setPageLoading] = useState(!hasCachedCatalog);
+  const [showFreshness, setShowFreshness] = useState(false);
+  const [resultsKey, setResultsKey] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
     if (!hasCachedCatalog) setPageLoading(true);
     Promise.all([refreshOffers(), refreshProducers(), refreshAllReviews()]).finally(() => {
-      if (!cancelled) setPageLoading(false);
+      if (!cancelled) {
+        setPageLoading(false);
+        setShowFreshness(true);
+        window.setTimeout(() => setShowFreshness(false), 3200);
+      }
     });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    try {
+      const key = 'agm_market_visits';
+      const n = Number(sessionStorage.getItem(key) || '0') + 1;
+      sessionStorage.setItem(key, String(n));
+      if (n >= 2) nudgeInstall('return');
+    } catch { /* ignore */ }
+  }, [nudgeInstall]);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,7 +74,7 @@ export const AtiStore: React.FC = () => {
       .then((r) => (r.ok ? r.json() : { categories: [] }))
       .then((data) => {
         if (!cancelled && Array.isArray(data.categories) && data.categories.length) {
-          setStoreCategories(data.categories);
+          setStoreCategories(data.categories.filter((c: string) => c && c !== 'All'));
         }
       })
       .catch(() => {});
@@ -92,7 +114,30 @@ export const AtiStore: React.FC = () => {
 
   const sortedCategories = Object.keys(groupedOffers).sort();
 
-  const categories = ['All', ...(storeCategories.length ? storeCategories : sortedCategories)];
+  const scrollerCategories =
+    storeCategories.length > 0
+      ? storeCategories
+      : (Array.from(new Set(atiOffers.map((o) => o.category))).filter(Boolean).length
+          ? Array.from(new Set(atiOffers.map((o) => o.category))).filter(Boolean)
+          : [...MARKETPLACE_CATEGORIES]);
+
+  const handleSelectCategory = (cat: string) => {
+    setSelectedCategory(cat);
+    setExpandedCategory(null);
+    setResultsKey((k) => k + 1);
+  };
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setSelectedCategory('All');
+    setExpandedCategory(null);
+    setResultsKey((k) => k + 1);
+  };
+
+  const offerCountLabel =
+    filteredOffers.length === 1
+      ? t('market.offerCountOne')
+      : t('market.offerCount').replace('{count}', String(filteredOffers.length));
 
   return (
     <div className="min-h-screen bg-white">
@@ -117,7 +162,9 @@ export const AtiStore: React.FC = () => {
       <div className="bg-blue-800 text-white py-6 sm:py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <ShoppingBasket className="h-7 w-7 sm:h-8 sm:w-8 text-blue-300 flex-shrink-0" />
+            <div className="p-2 bg-blue-700 rounded-lg flex-shrink-0">
+              <ShoppingBasket className="h-7 w-7 sm:h-8 sm:w-8 text-blue-200" />
+            </div>
             <div className="min-w-0">
               <h1 className="text-xl sm:text-2xl font-bold truncate">{t('landing.atiStore.title')}</h1>
               <p className="text-blue-100 text-xs sm:text-sm line-clamp-2">{t('landing.atiStore.desc')}</p>
@@ -131,47 +178,40 @@ export const AtiStore: React.FC = () => {
 
       {/* Store Container */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="flex flex-col md:flex-row gap-6 md:gap-8">
-          {/* Sidebar Filters */}
-          <div className="w-full md:w-64 flex-shrink-0 space-y-6">
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <h3 className="font-bold text-gray-900 mb-3 flex items-center">
-                <Filter className="w-4 h-4 mr-2" /> {t('form.category')}
-              </h3>
-              <div className="space-y-2">
-                {categories.map(cat => (
-                  <label key={cat} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded transition">
-                    <input
-                      type="radio"
-                      name="category"
-                      checked={selectedCategory === cat}
-                      onChange={() => setSelectedCategory(cat)}
-                      className="text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className={`text-sm ${selectedCategory === cat ? 'font-bold text-blue-700' : 'text-gray-700'}`}>
-                      {cat === 'All' ? t('market.allCategories') : t(`category.${cat}`)}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
+        <div className="mb-4 relative">
+          <input
+            type="text"
+            placeholder={t('market.searchPlaceholder')}
+            className="w-full pl-4 pr-10 py-3 border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setResultsKey((k) => k + 1); }}
+          />
+          <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+        </div>
 
-          {/* Main Content — min-w-0 prevents horizontal carousels from overflowing the flex row */}
-          <div className="flex-1 min-w-0">
-            {/* Search Bar */}
-            <div className="mb-8 relative">
-              <input
-                type="text"
-                placeholder={t('market.searchPlaceholder')}
-                className="w-full pl-4 pr-10 py-3 border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-            </div>
+        <div className="mb-3 bg-white rounded-lg shadow-sm p-3 sm:p-4 border border-gray-100">
+          <CategoryAvatarScroller
+            selected={selectedCategory}
+            onSelect={handleSelectCategory}
+            categories={scrollerCategories}
+            sticky
+          />
+        </div>
 
-            {/* Horizontal Categories */}
+        <div className="flex flex-wrap items-center gap-2 mb-6 min-h-[1.75rem]">
+          {!pageLoading && (
+            <span className="inline-flex items-center rounded-full bg-blue-50 text-blue-800 text-xs font-semibold px-3 py-1">
+              {offerCountLabel}
+            </span>
+          )}
+          {showFreshness && (
+            <span className="inline-flex items-center rounded-full bg-green-50 text-green-700 text-xs font-medium px-3 py-1 animate-fade-in">
+              {t('market.updatedJustNow')}
+            </span>
+          )}
+        </div>
+
+        <div className="min-w-0">
             {pageLoading ? (
               <div className="space-y-10 w-full min-w-0">
                 <div className="w-full min-w-0">
@@ -184,12 +224,28 @@ export const AtiStore: React.FC = () => {
                 </div>
               </div>
             ) : filteredOffers.length === 0 ? (
-              <div className="col-span-full text-center py-12">
-                <ShoppingBasket className="mx-auto h-12 w-12 text-gray-300 mb-4" />
-                <p className="text-gray-500">{t('market.noResults')}</p>
+              <div className="text-center py-12 agm-empty-wash-ati rounded-xl border border-blue-100 px-4 shadow-sm">
+                <ShoppingBasket className="mx-auto h-12 w-12 text-blue-300 mb-4" />
+                <p className="text-gray-700 font-medium">{t('market.noResults')}</p>
+                <p className="text-gray-500 text-sm mt-1 mb-5">{t('market.emptyHint')}</p>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="agm-btn-primary inline-flex justify-center px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
+                  >
+                    {t('market.browseAll')}
+                  </button>
+                  <Link
+                    to="/market/producers"
+                    className="inline-flex justify-center px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-semibold hover:bg-gray-50"
+                  >
+                    {t('market.tryProducers')}
+                  </Link>
+                </div>
               </div>
             ) : (
-              <div className="space-y-10">
+              <div key={resultsKey} className="space-y-10 agm-results-in">
                 {(expandedCategory ? [expandedCategory].filter(c => groupedOffers[c]) : sortedCategories).map(category => {
                   const categoryOffers = groupedOffers[category];
                   const isExpanded = expandedCategory === category;
@@ -257,7 +313,7 @@ export const AtiStore: React.FC = () => {
                                     <Layers className="h-4 w-4" />
                                   </button>
                                 </div>
-                                <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-200 rounded-lg flex flex-col overflow-hidden hover:shadow-lg transition-all h-full agm-card-lift">
+                                <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-100 rounded-xl shadow-md flex flex-col overflow-hidden hover:shadow-xl transition-all h-full agm-card-lift">
                                   <div className="bg-gray-100 h-40 relative">
                                     <img src={resolveOfferImageSrc(offer.imageUrl)} alt={offer.title} className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`} />
                                     <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">ATI Choice</div>
@@ -276,12 +332,9 @@ export const AtiStore: React.FC = () => {
                                       </span>
                                     </div>
                                     <div className="flex flex-col pt-2 border-t border-gray-100 mt-auto">
-                                      <span className="text-lg font-bold text-gray-900">{offer.price.toLocaleString()} XAF</span>
+                                      <span className="text-lg font-bold text-blue-700">{formatXaf(offer.price)}</span>
                                       <span className="text-xs text-gray-500">{t('market.per')} {offer.unit}</span>
                                     </div>
-                                    <button className="w-full mt-2 bg-blue-600 text-white py-2 rounded-md text-xs font-bold uppercase tracking-wide hover:bg-blue-700 transition-colors">
-                                      {t('market.view')}
-                                    </button>
                                   </div>
                                 </Link>
                               </div>
@@ -320,7 +373,7 @@ export const AtiStore: React.FC = () => {
                                   </button>
                                 </div>
 
-                                <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-200 rounded-lg flex flex-col overflow-hidden hover:shadow-lg transition-all h-full agm-card-lift">
+                                <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-100 rounded-xl shadow-md flex flex-col overflow-hidden hover:shadow-xl transition-all h-full agm-card-lift">
                                   <div className="aspect-w-1 aspect-h-1 bg-gray-100 h-36 relative">
                                     <img
                                       src={resolveOfferImageSrc(offer.imageUrl)}
@@ -345,12 +398,9 @@ export const AtiStore: React.FC = () => {
                                       </span>
                                     </div>
                                     <div className="flex flex-col pt-2 border-t border-gray-100 mt-auto">
-                                      <span className="text-lg font-bold text-gray-900">{offer.price.toLocaleString()} XAF</span>
+                                      <span className="text-lg font-bold text-blue-700">{formatXaf(offer.price)}</span>
                                       <span className="text-xs text-gray-500">{t('market.per')} {offer.unit}</span>
                                     </div>
-                                    <button className="w-full mt-2 bg-blue-600 text-white py-2 rounded-md text-xs font-bold uppercase tracking-wide hover:bg-blue-700 transition-colors">
-                                      {t('market.view')}
-                                    </button>
                                   </div>
                                 </Link>
                               </div>
@@ -364,7 +414,6 @@ export const AtiStore: React.FC = () => {
                 })}
               </div>
             )}
-          </div>
         </div>
       </div>
     </div>

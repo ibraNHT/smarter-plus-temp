@@ -28,7 +28,7 @@ Coupon/discount and totals are recalculated server-side; preview values can diff
 Typical reasons: wrong channel (retail vs marketplace), expiry, minimum amount not met, or per-user cap reached.
 
 ### 8) When do referral rewards apply?
-Referral rewards are tied to program conditions (commonly first eligible order) and may also depend on active program rules/budget.
+When the referred user’s first order is marked Completed, and no cancellation occurred before that. Amounts follow the active program rules and budget.
 
 ## Payments, Wallet, Withdrawals
 

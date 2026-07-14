@@ -19,6 +19,14 @@ import { isProducerDashboardUser } from '../../services/producerSession';
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 import { showAppToast } from '../../services/appToast';
+import { usePwaInstall } from '../../contexts/PwaInstallContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
+import {
+  absoluteOfferImageUrl,
+  buildOfferSeoDescription,
+  buildOfferShareText,
+  buildOfferShareUrl,
+} from '../../utils/offerShare';
 
 /** Parse `YYYY-MM-DD` from `<input type="date">` as a local calendar day (avoids UTC weekday shifts). */
 function parseLocalYmd(ymd: string): Date {
@@ -29,9 +37,11 @@ function parseLocalYmd(ymd: string): Date {
 
 export const ProductDetails: React.FC = () => {
   const { offerId } = useParams<{ offerId: string }>();
-  const { getOfferById, producers, addToCart, clearCart, startNegotiation, user, getAverageRating, getProducerPortfolios, toggleFavorite, clients, reviews, compareList, addToCompare, removeFromCompare, orders, cart, refreshOffers, refreshProducers, refreshAllReviews, refreshMyPortfolios, refreshClients, refreshOrders } = useStore();
+  const { getOfferById, producers, offers, addToCart, clearCart, startNegotiation, user, getAverageRating, getProducerPortfolios, toggleFavorite, clients, reviews, compareList, addToCompare, removeFromCompare, orders, cart, refreshOffers, refreshProducers, refreshAllReviews, refreshMyPortfolios, refreshClients, refreshOrders } = useStore();
   const { t } = useTranslation();
+  const { formatXaf } = useCurrency();
   const navigate = useNavigate();
+  const { nudgeInstall } = usePwaInstall();
 
   // Page-mount fetch — offers + producers + reviews are all shown on this
   // page. `pageLoading` keeps the skeleton scoped to this page.
@@ -336,6 +346,7 @@ export const ProductDetails: React.FC = () => {
       showAppToast('This exact service slot is already booked or already in your cart.', 'WARNING');
       return;
     }
+    nudgeInstall('cart');
     navigate(offer.type === OfferType.SERVICE ? '/cart?booking=1' : '/cart');
   };
 
@@ -356,27 +367,20 @@ export const ProductDetails: React.FC = () => {
   };
 
   const handleCompareToggle = () => {
-    if (isComparing) removeFromCompare(offer.id);
-    else addToCompare(offer.id);
+    if (isComparing) {
+      removeFromCompare(offer.id);
+      showAppToast(t('product.removedCompare'), 'INFO');
+    } else {
+      addToCompare(offer.id);
+      showAppToast(t('product.addedCompare'), 'SUCCESS');
+    }
   };
 
-  const handleShare = async () => {
-    const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
-    const shareData = {
-      title: offer.title,
-      text: `${offer.title} — ATI AgriMarket`,
-      url: shareUrl,
-    };
-    try {
-      if (typeof navigator !== 'undefined' && navigator.share) {
-        await navigator.share(shareData);
-      } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(shareUrl);
-        showAppToast(t('product.linkCopied'), 'SUCCESS');
-      }
-    } catch {
-      // User dismissed the share sheet or clipboard was blocked — no action needed.
-    }
+  const handleFavoriteToggle = () => {
+    const willAdd = !isFav;
+    toggleFavorite(offer.id);
+    showAppToast(willAdd ? t('product.addedFavorite') : t('product.removedFavorite'), willAdd ? 'SUCCESS' : 'INFO');
+    if (willAdd) nudgeInstall('favorite');
   };
 
   const producerDisplayName = !isProducerMarket
@@ -384,11 +388,37 @@ export const ProductDetails: React.FC = () => {
     : resolveProducerDisplayName(producer);
   const producerAvatarUrl = isProducerMarket ? resolveProfileImageUrl(producer) : undefined;
 
+  const handleShare = async () => {
+    const shareUrl = buildOfferShareUrl(offer.id);
+    const text = buildOfferShareText({
+      title: offer.title,
+      price: offer.price,
+      location: offer.offerLocation,
+      rating: productRating > 0 ? productRating : null,
+      producerName: producerDisplayName,
+    });
+    const shareData = {
+      title: offer.title,
+      text,
+      url: shareUrl,
+    };
+    try {
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share(shareData);
+      } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(`${text}\n${shareUrl}`);
+        showAppToast(t('product.linkCopied'), 'SUCCESS');
+      }
+    } catch {
+      // User dismissed the share sheet or clipboard was blocked — no action needed.
+    }
+  };
+
   const productSchema = offer ? {
     "@context": "https://schema.org/",
     "@type": "Product",
     "name": offer.title,
-    "image": offer.imageUrl,
+    "image": offer.imageUrl ? absoluteOfferImageUrl(offer.imageUrl) : undefined,
     "description": offer.description,
     "url": `https://acheteici.com/offer/${offer.id}`,
     "aggregateRating": productRating > 0 ? {
@@ -418,10 +448,19 @@ export const ProductDetails: React.FC = () => {
     <div className="min-h-screen bg-gray-50 py-8">
       <SEO
         title={offer ? `Buy ${offer.title} — Agriculture Africa` : 'Product'}
-        description={offer?.description ?? 'Agricultural product on AgriMarket Connect — Africa\'s trusted farming marketplace.'}
-        imageUrl={offer.imageUrl}
+        description={buildOfferSeoDescription({
+          title: offer.title,
+          description: offer.description,
+          price: offer.price,
+          location: offer.offerLocation,
+          rating: productRating > 0 ? productRating : null,
+          producerName: producerDisplayName,
+        })}
+        imageUrl={absoluteOfferImageUrl(offer.imageUrl)}
         type="product"
         url={`/offer/${offer.id}`}
+        priceAmount={offer.price}
+        priceCurrency="XAF"
         schema={seoSchema}
       />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -487,7 +526,7 @@ export const ProductDetails: React.FC = () => {
                     {/* Fav Button */}
                     {(user?.role === UserRole.CLIENT || isProducerDashboardUser(user)) && (
                       <button
-                        onClick={() => toggleFavorite(offer.id)}
+                        onClick={handleFavoriteToggle}
                         className="p-1.5 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
                         title={t('cart.saveForLater')}
                       >
@@ -533,7 +572,7 @@ export const ProductDetails: React.FC = () => {
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mt-2 mb-4 leading-tight break-words">{offer.title}</h1>
 
                 <div className="flex items-baseline flex-wrap mb-6 pb-6 border-b border-gray-100 gap-x-2">
-                  <span className="text-3xl sm:text-4xl font-bold text-primary-600 break-words">{offer.price.toLocaleString()} XAF</span>
+                  <span className="text-3xl sm:text-4xl font-bold text-primary-600 break-words">{formatXaf(offer.price)}</span>
                   <span className="text-gray-500 font-medium">/ {t(`unit.${offer.unit}`)}</span>
                 </div>
 
@@ -774,17 +813,17 @@ export const ProductDetails: React.FC = () => {
               </div>
 
               {/* Actions */}
-              <div className="flex flex-col gap-3 mt-6">
+              <div className="hidden md:flex flex-col gap-3 mt-6">
                 <button
                   onClick={handleAddToCart}
-                  className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 bg-primary-600 text-white px-4 sm:px-6 py-3.5 sm:py-4 rounded-xl font-bold hover:bg-primary-700 transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 text-sm sm:text-base"
+                  className="agm-btn-primary flex flex-wrap items-center justify-center gap-x-2 gap-y-1 bg-primary-600 text-white px-4 sm:px-6 py-3.5 sm:py-4 rounded-xl font-bold hover:bg-primary-700 text-sm sm:text-base"
                 >
                   {offer.type === OfferType.SERVICE ? (
                     <span className="inline-flex items-center"><Calendar className="h-5 w-5 mr-2" /> {t('product.bookNow')}</span>
                   ) : (
                     <span className="inline-flex items-center"><ShoppingCart className="h-5 w-5 mr-2" /> {t('product.addToCart')}</span>
                   )}
-                  <span className="whitespace-nowrap">- {(offer.price * quantity).toLocaleString()} XAF</span>
+                  <span className="whitespace-nowrap">- {formatXaf(offer.price * quantity)}</span>
                 </button>
                 {offer.type === OfferType.SERVICE && (
                   <p className="text-xs text-gray-600 text-center px-1 leading-relaxed">{t('product.bookNowHint')}</p>
@@ -805,6 +844,42 @@ export const ProductDetails: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Related offers */}
+        {(() => {
+          const related = offers
+            .filter(
+              (o) =>
+                o.id !== offer.id &&
+                o.category === offer.category &&
+                o.marketType === offer.marketType &&
+                o.quantity > 0,
+            )
+            .slice(0, 8);
+          if (related.length === 0) return null;
+          return (
+            <div className="mt-12">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4">{t('product.related')}</h2>
+              <div className="flex overflow-x-auto gap-4 pb-4 snap-x snap-mandatory scrollbar-thin">
+                {related.map((rel) => (
+                  <Link
+                    key={rel.id}
+                    to={`/offer/${rel.id}`}
+                    className="agm-card-lift flex-none snap-start w-44 sm:w-52 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden"
+                  >
+                    <div className="h-28 bg-gray-100">
+                      <img src={rel.imageUrl} alt="" className={offerImageInBox} />
+                    </div>
+                    <div className="p-3">
+                      <p className="text-sm font-semibold text-gray-900 line-clamp-2 min-h-[2.5rem]">{rel.title}</p>
+                      <p className="mt-1 text-primary-700 font-bold text-sm">{formatXaf(rel.price)}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* PORTFOLIO SECTION */}
         {isProducerMarket && relevantPortfolios.length > 0 && (
@@ -929,6 +1004,7 @@ export const ProductDetails: React.FC = () => {
           const second = addToCart(offer, quantity, selectedSlot || undefined);
           setShowClearCartConfirm(false);
           if (second.success) {
+            nudgeInstall('cart');
             navigate(offer.type === OfferType.SERVICE ? '/cart?booking=1' : '/cart');
           }
         }}
@@ -946,6 +1022,33 @@ export const ProductDetails: React.FC = () => {
           navigate('/login');
         }}
       />
+
+      {/* Sticky mobile CTA */}
+      <div
+        className="md:hidden fixed left-0 right-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur-sm px-3 py-2.5 flex gap-2 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]"
+        style={{ bottom: 'env(safe-area-inset-bottom)' }}
+      >
+        {canContactSeller && (
+          <button
+            type="button"
+            disabled={negotiateLoading}
+            onClick={() => void handleNegotiate()}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 border-2 border-primary-600 text-primary-700 font-bold rounded-xl py-3 text-sm disabled:opacity-60"
+          >
+            <MessageCircle className="h-4 w-4" />
+            {isNegotiationAllowed ? t('product.negotiate') : 'Chat'}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={handleAddToCart}
+          className="agm-btn-primary flex-[1.4] inline-flex items-center justify-center gap-1.5 bg-primary-600 text-white font-bold rounded-xl py-3 text-sm shadow-md"
+        >
+          {offer.type === OfferType.SERVICE ? <Calendar className="h-4 w-4" /> : <ShoppingCart className="h-4 w-4" />}
+          {offer.type === OfferType.SERVICE ? t('product.bookNow') : t('product.addToCart')}
+        </button>
+      </div>
+      <div className="md:hidden h-20" aria-hidden />
     </div>
   );
 };

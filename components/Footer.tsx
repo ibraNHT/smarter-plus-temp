@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from '../services/i18nContext';
-import { Sprout, Facebook, Twitter, Instagram, Linkedin } from 'lucide-react';
+import { Sprout, BookOpen, LifeBuoy } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   const { t } = useTranslation();
@@ -21,19 +20,21 @@ export const Footer: React.FC = () => {
             <p className="text-primary-200 text-sm">
               {t('footer.tagline')}
             </p>
-            <div className="flex space-x-4 pt-2">
-              <a href="#" className="text-primary-300 hover:text-white transition-colors">
-                <Facebook className="h-5 w-5" />
-              </a>
-              <a href="#" className="text-primary-300 hover:text-white transition-colors">
-                <Twitter className="h-5 w-5" />
-              </a>
-              <a href="#" className="text-primary-300 hover:text-white transition-colors">
-                <Instagram className="h-5 w-5" />
-              </a>
-              <a href="#" className="text-primary-300 hover:text-white transition-colors">
-                <Linkedin className="h-5 w-5" />
-              </a>
+            <div className="flex flex-col gap-2 pt-1">
+              <Link
+                to="/help"
+                className="inline-flex items-center gap-2 text-sm text-green-300 hover:text-white transition-colors font-medium"
+              >
+                <LifeBuoy className="h-4 w-4" />
+                {t('footer.exploreHelp')} — {t('footer.link.helpCenter')}
+              </Link>
+              <Link
+                to="/blog"
+                className="inline-flex items-center gap-2 text-sm text-green-300 hover:text-white transition-colors font-medium"
+              >
+                <BookOpen className="h-4 w-4" />
+                {t('footer.exploreBlog')}
+              </Link>
             </div>
           </div>
 

@@ -1,6 +1,6 @@
-# Deploy file for the VPS. Runs the prebuilt Nginx+SPA image pulled from GHCR.
-# The image already has the right VITE_* values baked in at build time, so the
-# only per-environment differences are the image tag, host port and project name.
+# Deploy file for the VPS. Runs the prebuilt Node+SPA image pulled from GHCR.
+# The image has VITE_* values baked in at build time. OG_API_BASE_URL can also
+# be set at runtime so social crawlers fetch offer data from the right API.
 #
 #   ~/agrimarket/staging-web/{docker-compose.yml,.env} -> docker compose -p agrimarket-web-staging up -d
 #   ~/agrimarket/prod-web/{docker-compose.yml,.env}    -> docker compose -p agrimarket-web-prod    up -d
@@ -10,6 +10,11 @@ services:
   web:
     image: ${WEB_IMAGE:-ghcr.io/ati-organisation/webapp-agrimarket-connect:latest}
     restart: unless-stopped
+    environment:
+      OG_API_BASE_URL: ${OG_API_BASE_URL:-}
+      SITE_ORIGIN: ${SITE_ORIGIN:-https://acheteici.com}
+      PORT: "80"
+      HOST: 0.0.0.0
     ports:
       # localhost only — host Nginx terminates TLS and proxies here.
       - "127.0.0.1:${WEB_HOST_PORT:-8080}:80"

@@ -13,6 +13,8 @@ import { useFormik } from 'formik';
 import { z } from 'zod';
 import { showAppToast, dismissAppToast } from '../../services/appToast';
 import { PAYMENTS_ENABLED } from '../../utils/featureFlags';
+import { useCurrency } from '../../contexts/CurrencyContext';
+import { BASE_CURRENCY } from '../../utils/formatMoney';
 
 // Tranzak transaction fee added on top of a withdrawal (kept in sync with the API).
 const WITHDRAWAL_FEE_RATE = 0.015;
@@ -20,6 +22,7 @@ const WITHDRAWAL_FEE_RATE = 0.015;
 export const WalletDashboard: React.FC = () => {
   const { user, getWallet, initiateTopUp, checkTopUpStatus, requestWithdrawal, requestOtp, verifyOtp, producers, withdrawalRequests, refreshWallet, refreshWithdrawals } = useStore();
   const { t } = useTranslation();
+  const { formatXaf, currency } = useCurrency();
   const navigate = useNavigate();
 
   // Lazy fetch on mount with a per-page loading flag so the table/list shows
@@ -287,6 +290,9 @@ export const WalletDashboard: React.FC = () => {
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">{t('wallet.available')}</p>
                 <p className="text-lg sm:text-xl font-bold mt-0.5 tabular-nums text-gray-900 break-words">{availableBalance.toLocaleString()} XAF</p>
+                {currency !== BASE_CURRENCY && (
+                  <p className="text-xs text-gray-500 mt-0.5">≈ {formatXaf(availableBalance)}</p>
+                )}
               </div>
               {(wallet.pendingBalance ?? 0) > 0 && (
                 <div>

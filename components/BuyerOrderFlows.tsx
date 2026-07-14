@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../services/storeContext';
 import { useTranslation } from '../services/i18nContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { showAppToast } from '../services/appToast';
 import { Modal } from './Modal';
 import { ConfirmModal } from './ConfirmModal';
@@ -78,6 +79,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
     refreshWallet,
   } = useStore();
   const { t } = useTranslation();
+  const { formatXaf } = useCurrency();
 
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewOrderId, setReviewOrderId] = useState<string | null>(null);
@@ -413,11 +415,11 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{item.title || item.description || 'Item'}</p>
                       <p className="text-xs text-gray-500">
-                        {item.cartQuantity ?? item.quantity ?? 1} {item.unit || 'units'} × {(item.price ?? 0).toLocaleString()} XAF
+                        {item.cartQuantity ?? item.quantity ?? 1} {item.unit || 'units'} × {formatXaf(item.price ?? 0)}
                       </p>
                     </div>
                     <span className="text-sm font-bold text-gray-900 flex-shrink-0">
-                      {((item.price ?? 0) * (item.cartQuantity ?? item.quantity ?? 1)).toLocaleString()} XAF
+                      {formatXaf((item.price ?? 0) * (item.cartQuantity ?? item.quantity ?? 1))}
                     </span>
                   </div>
                 ))}
@@ -427,21 +429,21 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
             <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 mb-4 space-y-2 text-sm">
               <div className="flex justify-between text-gray-600">
                 <span>{t('cart.subtotal')}</span>
-                <span className="font-medium">{payOrder.subtotal.toLocaleString()} XAF</span>
+                <span className="font-medium">{formatXaf(payOrder.subtotal)}</span>
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>{t('cart.serviceFee')}</span>
-                <span className="font-medium">{payOrder.serviceFee.toLocaleString()} XAF</span>
+                <span className="font-medium">{formatXaf(payOrder.serviceFee)}</span>
               </div>
               {(payOrder.discountAmount ?? 0) > 0 && (
                 <div className="flex justify-between text-green-600 font-medium">
                   <span>Discount Applied</span>
-                  <span>- {(payOrder.discountAmount ?? 0).toLocaleString()} XAF</span>
+                  <span>- {formatXaf(payOrder.discountAmount ?? 0)}</span>
                 </div>
               )}
               <div className="flex justify-between font-bold text-gray-900 border-t border-gray-200 pt-2 mt-1">
                 <span>{t('cart.total')}</span>
-                <span className="text-primary-600 text-base">{payOrder.totalAmount.toLocaleString()} XAF</span>
+                <span className="text-primary-600 text-base">{formatXaf(payOrder.totalAmount)}</span>
               </div>
             </div>
 
@@ -496,7 +498,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
                 {paymentProcessing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CreditCard className="h-4 w-4" />}
                 {paymentProcessing
                   ? t('wallet.processing')
-                  : `${t('order.confirmPayment')} — ${payOrder.totalAmount.toLocaleString()} XAF`}
+                  : `${t('order.confirmPayment')} — ${formatXaf(payOrder.totalAmount)}`}
               </button>
               <button type="button" onClick={() => setShowPaymentRecap(false)} className="w-full text-gray-500 text-sm hover:underline py-1">
                 {t('form.cancel')}
@@ -858,6 +860,7 @@ export function BuyerPurchaseOrdersSection({
   emptyMsg?: string;
 }) {
   const { t } = useTranslation();
+  const { formatXaf } = useCurrency();
   const { offers, producers } = useStore();
   const { renderActions } = useBuyerOrderFlows();
 
@@ -939,7 +942,7 @@ export function BuyerPurchaseOrdersSection({
               </div>
             </div>
             <div className="w-full sm:w-auto sm:text-right shrink-0" onClick={(e) => e.stopPropagation()}>
-              <p className="text-sm font-bold text-gray-900 mb-2">{order.totalAmount?.toLocaleString?.() ?? order.totalAmount} XAF</p>
+              <p className="text-sm font-bold text-gray-900 mb-2">{formatXaf(Number(order.totalAmount ?? 0))}</p>
               <div className="flex gap-2 flex-wrap sm:justify-end">{renderActions(order)}</div>
             </div>
           </div>

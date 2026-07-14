@@ -100,8 +100,9 @@ export enum WithdrawalStatus {
 export interface PaymentMethod {
   id: string;
   provider: 'ORANGE' | 'MTN' | 'BANK';
-  accountNumber: string; // Phone or IBAN
-  accountName: string;
+  accountNumber: string; // Phone (mobile money) or IBAN/account number (bank)
+  accountName: string; // Account holder name
+  bankName?: string; // Bank name — set for BANK provider only
 }
 
 export interface WithdrawalRequest {
@@ -290,7 +291,12 @@ export interface Offer {
   marketType: MarketType; // New field to distinguish marketplaces
   unit: UnitOfMeasure;
   quantity: number;
+  /** Canonical unit price in XAF (ledger / settlement). */
   price: number;
+  /** Currency the seller entered the price in (display/audit). */
+  listingCurrency?: string;
+  /** Amount the seller entered in listingCurrency. */
+  listingPrice?: number;
   imageUrl: string;
   imageUrls?: string[];
   isNegotiable: boolean; // Sprint 6
@@ -455,6 +461,7 @@ export interface UserSession {
   email?: string;
   phone?: string;
   profileImageUrl?: string;
+  preferredCurrency?: string;
   producerId?: string; // PRODUCER owner or MANAGER acting for assigned producer
   clientId?: string;   // If role is CLIENT
   managedProducerUserId?: string;
