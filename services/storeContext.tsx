@@ -555,6 +555,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     useSessionStore.getState().setUser(user);
     const savedGuestEmail = localStorage.getItem('guestEmail');
     if (savedGuestEmail) setGuestEmail(savedGuestEmail);
+    // Restore a GUEST support session across reloads so agent-reply polling resumes
+    // (guests have no socket; the 5s poll needs the sessionId + handed-over flag).
+    if (!getToken()) {
+      const savedSupportSessionId = localStorage.getItem('supportSessionId');
+      if (savedSupportSessionId) {
+        setSupportSessionId(savedSupportSessionId);
+        setIsHandedOver(true);
+      }
+    }
 
     let cancelled = false;
     (async () => {
@@ -622,6 +631,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     window.addEventListener('agm:session-expired', onSessionExpired);
     return () => window.removeEventListener('agm:session-expired', onSessionExpired);
   }, []);
+
+  // Persist the guest support session id so a page reload resumes agent-reply polling.
+  useEffect(() => {
+    if (!user && supportSessionId) localStorage.setItem('supportSessionId', supportSessionId);
+    else if (!supportSessionId) localStorage.removeItem('supportSessionId');
+  }, [user, supportSessionId]);
 
   // ─── DEBOUNCED CART SYNC ───────────────────────────────────────────────────
   useEffect(() => {

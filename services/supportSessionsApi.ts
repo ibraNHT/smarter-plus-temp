@@ -97,10 +97,16 @@ export async function postGuestSupportMessage(
 
 export async function getGuestSupportMessages(sessionId: string, guestEmail: string): Promise<SupportMessageDto[]> {
   try {
-    return await apiGet<SupportMessageDto[]>(
+    // The guest endpoint returns `{ messages: [...] }` (an object), unlike the
+    // authenticated endpoint which returns a bare array. Unwrap it here so the
+    // caller always receives an array — otherwise the guest poll's
+    // `Array.isArray(data)` guard is false and every agent reply is silently dropped.
+    const res = await apiGet<SupportMessageDto[] | { messages: SupportMessageDto[] }>(
       API_ENDPOINTS.support.guestSessionMessages(sessionId, guestEmail),
       { silent401: true },
     );
+    if (Array.isArray(res)) return res;
+    return Array.isArray((res as any)?.messages) ? (res as any).messages : [];
   } catch {
     return [];
   }
