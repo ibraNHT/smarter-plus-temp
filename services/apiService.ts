@@ -10,13 +10,21 @@ export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DE
 const TOKEN_KEY = 'authToken';
 const REFRESH_TOKEN_KEY = 'refreshToken';
 
-export const getToken = (): string | null =>
-    localStorage.getItem(TOKEN_KEY) || localStorage.getItem('token') || localStorage.getItem('accessToken');
+// Read ONLY the canonical key. We used to fall back to legacy 'token'/'accessToken',
+// but nothing writes those anymore, so any value there is a stale/expired leftover.
+// Reading it after logout caused a spurious 401 → forceLogoutRedirect on the next
+// login (looked like a reload; needed a second login). clearToken() also purges them.
+export const getToken = (): string | null => localStorage.getItem(TOKEN_KEY);
 
 export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token);
 export const clearToken = () => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
+    // Purge legacy token keys too. They are never written anymore, so if present
+    // they are stale/expired leftovers; leaving them behind made logout incomplete
+    // and produced a 401 → forced re-login on the next attempt.
+    localStorage.removeItem('token');
+    localStorage.removeItem('accessToken');
     // Also drop cached session user — anything reading `currentUser` will see
     // the logged-out state immediately on next render.
     try { localStorage.removeItem('currentUser'); } catch { /* noop */ }
