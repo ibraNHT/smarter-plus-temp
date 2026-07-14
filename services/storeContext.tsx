@@ -555,6 +555,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     useSessionStore.getState().setUser(user);
     const savedGuestEmail = localStorage.getItem('guestEmail');
     if (savedGuestEmail) setGuestEmail(savedGuestEmail);
+    // Restore a GUEST support session across reloads so agent-reply polling resumes
+    // (guests have no socket; the 5s poll needs the sessionId + handed-over flag).
+    if (!getToken()) {
+      const savedSupportSessionId = localStorage.getItem('supportSessionId');
+      if (savedSupportSessionId) {
+        setSupportSessionId(savedSupportSessionId);
+        setIsHandedOver(true);
+      }
+    }
 
     let cancelled = false;
     (async () => {
@@ -622,6 +631,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     window.addEventListener('agm:session-expired', onSessionExpired);
     return () => window.removeEventListener('agm:session-expired', onSessionExpired);
   }, []);
+
+  // Persist the guest support session id so a page reload resumes agent-reply polling.
+  useEffect(() => {
+    if (!user && supportSessionId) localStorage.setItem('supportSessionId', supportSessionId);
+    else if (!supportSessionId) localStorage.removeItem('supportSessionId');
+  }, [user, supportSessionId]);
 
   // ─── DEBOUNCED CART SYNC ───────────────────────────────────────────────────
   useEffect(() => {
@@ -2073,10 +2088,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         method: 'POST',
         body: JSON.stringify({
           type: data.type || "BUSINESS",
-          firstName: data.name || "Farm",
-          lastName: "Owner",
-          gender: "OTHER",
-          dateOfBirth: new Date().toISOString(),
+          // Individual producers supply real identity details; business producers
+          // don't have them, so fall back to the farm name / placeholders.
+          firstName: data.firstName || data.name || "Producer",
+          lastName: data.lastName || "Owner",
+          gender: data.gender || "OTHER",
+          dateOfBirth: toIsoDateOfBirthSafe(data.dateOfBirth),
           description: String(data.description ?? '').trim() || 'Producer',
           certifications: data.certifications || [],
           productionTypes: data.productionTypes || [],
@@ -2097,8 +2114,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           id: producerProfile.id,
           userId: session.user.id,
           name: data.name || 'Producer',
-          firstName: data.name || 'Farm',
-          lastName: 'Owner',
+          firstName: data.firstName || data.name || 'Producer',
+          lastName: data.lastName || 'Owner',
           description: data.description,
           locations: data.locations,
           productionTypes: data.productionTypes,
@@ -2415,6 +2432,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       provider: method.provider,
       accountNumber: method.accountNumber,
       accountName: method.accountName,
+      // Bank name is only sent for BANK methods (undefined for mobile money).
+      bankName: method.bankName,
     };
     try {
       const saved = await apiFetch<PaymentMethod>(

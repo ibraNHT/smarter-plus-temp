@@ -614,6 +614,7 @@ const translations: Record<string, Record<Language, string>> = {
   'profile.payment.provider': { en: 'Provider', fr: 'Opérateur' },
   'profile.payment.accNum': { en: 'Account/Phone Number', fr: 'Numéro de compte/téléphone' },
   'profile.payment.accName': { en: 'Account Holder Name', fr: 'Nom du titulaire' },
+  'profile.payment.bankName': { en: 'Bank Name', fr: 'Nom de la banque' },
   'profile.payment.saved': { en: 'Saved Payment Methods', fr: 'Moyens de paiement enregistrés' },
   'profile.payment.none': { en: 'No payment methods saved yet.', fr: 'Aucun moyen de paiement enregistré.' },
   'profile.upgrade': { en: 'Become a Producer', fr: 'Devenir Producteur' },
