@@ -192,13 +192,18 @@ export const apiFetch = async <T = unknown>(
                 if (refreshed) {
                     return apiFetch<T>(path, { ...options, _isRetry: true });
                 }
+                // Refresh failed / on cooldown → the session itself is invalid.
+                // (attemptTokenRefresh already redirects when the refresh endpoint
+                // 401/403s.) Unless the caller opted into silent-401 (background
+                // polls), force the user out.
+                if (!silent401) {
+                    forceLogoutRedirect();
+                }
             }
-            // Refresh either failed or is on cooldown — the session is no longer
-            // valid. Unless the caller opted in to silent-401 (background polls),
-            // force the user out so they can't keep interacting with a broken UI.
-            if (!silent401) {
-                forceLogoutRedirect();
-            }
+            // _isRetry === true → we refreshed successfully and STILL got 401, so the
+            // session is valid and this 401 is a business rule (e.g. OTP / precondition
+            // required), NOT an auth failure. Do NOT log out — fall through and throw so
+            // the caller can handle the specific error (e.g. prompt for OTP).
         }
 
         let message = `API error ${response.status}`;

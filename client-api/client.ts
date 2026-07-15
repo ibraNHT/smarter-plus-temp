@@ -80,13 +80,16 @@ apiClient.interceptors.response.use(
     const silent401 = Boolean(original._silent401);
 
     if (original._isRetry) {
-      // Already retried once — give up and (unless silent) log out.
-      if (!silent401) forceLogoutRedirect();
+      // We already refreshed successfully and retried; a second 401 means the
+      // session is valid but this request is blocked by a business rule (e.g. OTP /
+      // precondition required), NOT an auth failure. Surface it — do NOT log out.
       return Promise.reject(error);
     }
 
     const refreshed = await attemptTokenRefresh();
     if (!refreshed) {
+      // Refresh failed → the session itself is dead. (attemptTokenRefresh already
+      // redirects when the refresh endpoint 401/403s.) Force out unless silent.
       if (!silent401) forceLogoutRedirect();
       return Promise.reject(error);
     }
@@ -98,14 +101,8 @@ apiClient.interceptors.response.use(
     if (newToken) {
       (retryConfig.headers as Record<string, string>).Authorization = `Bearer ${newToken}`;
     }
-    try {
-      return await apiClient.request(retryConfig as AxiosRequestConfig);
-    } catch (retryErr) {
-      const retryStatus = (retryErr as AxiosError)?.response?.status;
-      if (retryStatus === 401 && !silent401) {
-        forceLogoutRedirect();
-      }
-      return Promise.reject(retryErr);
-    }
+    // A 401 from this retry re-enters the interceptor and hits the `_isRetry` branch
+    // above (which no longer logs out), so let it propagate to the caller.
+    return apiClient.request(retryConfig as AxiosRequestConfig);
   },
 );
