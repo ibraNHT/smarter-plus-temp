@@ -253,7 +253,6 @@ const translations: Record<string, Record<Language, string>> = {
   'category.Animal Feeds': { en: 'Animal Feeds', fr: 'Aliments pour animaux' },
   'category.General laborer': { en: 'General laborer', fr: 'Main-d’œuvre générale' },
   'category.Transit & warehouse': { en: 'Transit & warehouse', fr: 'Transit et entreposage' },
-  'category.Equipment & Machinery Rentals': { en: 'Equipment & Machinery Rentals', fr: 'Location d’équipement et de machines' },
 
   // Units of Measure
   'unit.KG': { en: 'Kilogram (kg)', fr: 'Kilogramme (kg)' },
