@@ -22,6 +22,7 @@ import { API_ENDPOINTS } from "../../client-api/endpoints";
 import { PublicProfileSkeleton } from "../../components/skeletons/PublicProfileSkeleton";
 import { offerImageHero, offerImageInBox } from "../../utils/offerImageDisplay";
 import { displayNameTruncateClass } from "../../utils/displayName";
+import { canonicalizeCategoryList } from "../../data/categories";
 import { SEO } from "../../components/SEO";
 import { buildProducerProfileSchema } from "../../services/seo/schemaBuilders";
 
@@ -326,7 +327,11 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
                       Business Sector
                     </span>
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {profileData.productionTypes?.map((type: string) => (
+                      {/* Show only the producer's real, current categories:
+                          de-aliased, de-duplicated and filtered to selectable
+                          marketplace categories so stale/legacy/duplicate values
+                          don't render as extra chips. */}
+                      {canonicalizeCategoryList(profileData.productionTypes).map((type) => (
                         <span
                           key={type}
                           className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded"

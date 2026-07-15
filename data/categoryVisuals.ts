@@ -1,4 +1,4 @@
-import { MARKETPLACE_CATEGORIES } from './categories';
+import { MARKETPLACE_CATEGORIES, normalizeCategory } from './categories';
 
 /** Local avatar paths for marketplace category filter chips. */
 export const CATEGORY_AVATAR_ALL = '/categories/all.webp';
@@ -17,13 +17,13 @@ const CATEGORY_AVATAR_BY_NAME: Record<string, string> = {
   'Animal Feeds': '/categories/animal-feeds.webp',
   'General laborer': '/categories/general-laborer.webp',
   'Transit & warehouse': '/categories/transit-warehouse.webp',
-  'Equipment & Machinery Rentals': '/categories/equipment-rentals.webp',
 };
 
 /** Resolve the avatar image URL for a category name (or `All`). */
 export const getCategoryAvatar = (category: string): string => {
   if (category === 'All') return CATEGORY_AVATAR_ALL;
-  return CATEGORY_AVATAR_BY_NAME[category] ?? CATEGORY_AVATAR_ALL;
+  // Normalize so legacy stored labels (e.g. the old "…Rentals") still resolve.
+  return CATEGORY_AVATAR_BY_NAME[normalizeCategory(category)] ?? CATEGORY_AVATAR_ALL;
 };
 
 /** Canonical strip order: All, then every marketplace category. */

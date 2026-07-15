@@ -13,6 +13,7 @@ import {
 } from '../../services/seo/schemaBuilders';
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { CategoryAvatarScroller } from '../../components/CategoryAvatarScroller';
+import { normalizeCategory } from '../../data/categories';
 import { ClampText } from '../../components/ClampText';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { displayNameTruncateClass, resolveProducerDisplayName } from '../../utils/displayName';
@@ -181,8 +182,8 @@ export const ProducerMarket: React.FC = () => {
       offer.description.toLowerCase().includes(lowerQuery) ||
       producerName.toLowerCase().includes(lowerQuery);
 
-    // Category
-    const matchesCategory = selectedCategory === 'All' || offer.category === selectedCategory;
+    // Category — normalize so legacy stored labels fold into their canonical name.
+    const matchesCategory = selectedCategory === 'All' || normalizeCategory(offer.category) === selectedCategory;
 
     // Location (Producer Addresses or Specific Offer Location)
     let matchesLocation = false;
@@ -209,7 +210,7 @@ export const ProducerMarket: React.FC = () => {
 
   // Group by Category AND Sort within groups by Region Priority
   const groupedOffers = filteredOffers.reduce((groups, offer) => {
-    const category = offer.category;
+    const category = normalizeCategory(offer.category);
     if (!groups[category]) {
       groups[category] = [];
     }
