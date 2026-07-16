@@ -141,6 +141,10 @@ export const API_ENDPOINTS = {
     sessions: "/api/support/sessions",
     sessionMessages: (sessionId: string) =>
       `/api/support/sessions/${sessionId}/messages`,
+    requestAgent: (sessionId: string) =>
+      `/api/support/sessions/${sessionId}/request-agent`,
+    guestRequestAgent: (sessionId: string) =>
+      `/api/support/guest/sessions/${sessionId}/request-agent`,
     guestSessionMessagesPost: (sessionId: string) =>
       `/api/support/guest/sessions/${sessionId}/messages`,
     guestSessionMessages: (sessionId: string, guestEmail: string) =>
