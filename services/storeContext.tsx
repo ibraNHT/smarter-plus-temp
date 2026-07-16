@@ -7,11 +7,22 @@ import {
   getGuestSupportMessages,
   mapDtoToSupportMessage,
   mergeIncomingSupportMessages,
+  reconcileServerMessages,
   postGuestSupportMessage,
   postUserSupportMessage,
   listUserSupportSessions,
+  createOrGetSupportSession,
+  requestSupportAgent,
+  requestGuestSupportAgent,
   type SupportMessageDto,
 } from './supportSessionsApi';
+
+/** Mirror of the backend support session status lifecycle. */
+export type SupportSessionStatus =
+  | 'AI_HANDLING'
+  | 'WAITING_FOR_AGENT'
+  | 'AGENT_ACTIVE'
+  | 'CLOSED';
 import { apiFetch, apiUpload, setToken, clearToken, getToken, getRefreshToken, setRefreshToken, isRefreshOnCooldown, attemptTokenRefresh } from './apiService';
 import { normalizeRegisterPhoneFull } from '../utils/registerPhone';
 import { resolveOfferImageSrc } from '../utils/offerImageDisplay';
@@ -304,8 +315,14 @@ interface StoreContextType {
   supportAiTyping: boolean;
   /** True while a support message is being sent (disables composer). */
   supportChatSending: boolean;
-  /** True when the session has been handed over to a human agent. */
+  /** True when the session has been handed over to a human agent (waiting or active). */
   isHandedOver: boolean;
+  /** Actual backend session status — lets the UI show "waiting" vs "agent connected". */
+  supportSessionStatus: SupportSessionStatus;
+  /** True while requestHumanAgent() is in-flight. */
+  requestingAgent: boolean;
+  /** User explicitly asks to talk to a human agent (escalates to WAITING_FOR_AGENT). */
+  requestHumanAgent: () => Promise<void>;
   /** True while returnToAiMode() is in-flight. */
   returningToAi: boolean;
   /** User voluntarily switches back from agent mode to AI (AgriBot) mode. */
@@ -543,6 +560,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     { id: 'init-1', sender: 'AI', text: 'Hello! I am AgriBot, your automated assistant. How can I help you today?', timestamp: new Date().toISOString() }
   ]);
   const [isHandedOver, setIsHandedOver] = useState(false);
+  // Actual backend session status so the widget can distinguish "waiting for an
+  // agent" from "agent connected", instead of collapsing both into isHandedOver.
+  const [supportSessionStatus, setSupportSessionStatus] = useState<SupportSessionStatus>('AI_HANDLING');
+  const [requestingAgent, setRequestingAgent] = useState(false);
   const [returningToAi, setReturningToAi] = useState(false);
   const [showGuestForm, setShowGuestForm] = useState(false);
   const [guestEmailInput, setGuestEmailInput] = useState('');
@@ -865,7 +886,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (!sessionId || !message?.id) return;
       const current = supportSessionIdRef.current;
       if (current && current !== sessionId) return;
-      if (message.sender === 'AGENT') setIsHandedOver(true);
+      // A public AGENT message means a human agent is actively replying.
+      if (message.sender === 'AGENT' && !message.internal) {
+        setIsHandedOver(true);
+        setSupportSessionStatus('AGENT_ACTIVE');
+      }
       if (!current) setSupportSessionId(sessionId);
       const mapped = mapDtoToSupportMessage(message);
       setSupportMessages((prev) => {
@@ -901,19 +926,30 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       'support:session-update',
       (payload: { sessionId?: string; status?: string }) => {
         if (!payload?.sessionId) return;
+        const status = payload.status;
         if (
-          payload.status === 'AGENT_ACTIVE' ||
-          payload.status === 'WAITING_FOR_AGENT'
+          status === 'AI_HANDLING' ||
+          status === 'WAITING_FOR_AGENT' ||
+          status === 'AGENT_ACTIVE' ||
+          status === 'CLOSED'
         ) {
+          setSupportSessionStatus(status);
+        }
+        if (status === 'AGENT_ACTIVE' || status === 'WAITING_FOR_AGENT') {
           setSupportSessionId((prev) => prev ?? payload.sessionId ?? null);
           setIsHandedOver(true);
           const sid = supportSessionIdRef.current ?? payload.sessionId;
           if (sid) {
             void getSupportMessages(sid).then((data) => {
-              if (!Array.isArray(data)) return;
-              setSupportMessages(data.map((msg) => mapDtoToSupportMessage(msg)));
+              // Guard against an empty/failed fetch so we never wipe the thread.
+              if (!Array.isArray(data) || data.length === 0) return;
+              const server = data.map((msg) => mapDtoToSupportMessage(msg));
+              setSupportMessages((prev) => reconcileServerMessages(prev, server));
             });
           }
+        } else if (status === 'AI_HANDLING') {
+          // Admin/user sent the session back to the bot.
+          setIsHandedOver(false);
         }
       },
     );
@@ -3414,6 +3450,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
       // Always store the session ID so subsequent sends can reuse it.
       setSupportSessionId(active.sessionId);
+      setSupportSessionStatus(active.status as SupportSessionStatus);
 
       if (!agentReady) {
         // Session is back to AI_HANDLING — make sure the frontend is NOT stuck
@@ -3427,7 +3464,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const data = await getSupportMessages(active.sessionId);
       if (!Array.isArray(data) || data.length === 0) return;
       const backendMessages = data.map((msg) => mapDtoToSupportMessage(msg));
-      setSupportMessages(backendMessages);
+      setSupportMessages((prev) => reconcileServerMessages(prev, backendMessages));
     } catch (e) {
       logApiFailure('Support inbox sync failed', e);
     }
@@ -3612,6 +3649,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const { returnSessionToAi } = await import('./supportSessionsApi');
       await returnSessionToAi(supportSessionId);
       setIsHandedOver(false);
+      setSupportSessionStatus('AI_HANDLING');
       setSupportMessages((prev) => [
         ...prev,
         {
@@ -3625,6 +3663,47 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       logApiFailure('Failed to return to AI mode', e);
     } finally {
       setReturningToAi(false);
+    }
+  };
+
+  // User explicitly asks to speak with a human agent. Puts the session into
+  // WAITING_FOR_AGENT (creating one first for a logged-in user if needed) and
+  // notifies the support inbox live so an agent can pick it up.
+  const requestHumanAgent = async () => {
+    if (requestingAgent) return;
+    setRequestingAgent(true);
+    try {
+      let sessionId = supportSessionIdRef.current ?? supportSessionId;
+      if (user) {
+        if (!sessionId) {
+          const created = await createOrGetSupportSession();
+          sessionId = created.sessionId;
+          setSupportSessionId(sessionId);
+        }
+        await requestSupportAgent(sessionId);
+      } else if (guestEmail && sessionId) {
+        await requestGuestSupportAgent(sessionId, guestEmail);
+      } else {
+        // Guest hasn't started a chat yet — collect their details first.
+        setShowGuestForm(true);
+        return;
+      }
+      setIsHandedOver(true);
+      setSupportSessionStatus('WAITING_FOR_AGENT');
+      setSupportMessages((prev) => [
+        ...prev,
+        {
+          id: `s-${Date.now()}`,
+          sender: 'AGENT',
+          text: 'Connecting you with a support agent… They will reply right here shortly.',
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    } catch (e) {
+      logApiFailure('Failed to request a human agent', e);
+      if (user) addNotification(user.id, 'Could not reach an agent. Please try again.', 'ERROR');
+    } finally {
+      setRequestingAgent(false);
     }
   };
 
@@ -3644,7 +3723,17 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               timestamp: msg.timestamp,
             })
           );
-          setSupportMessages((prev) => mergeIncomingSupportMessages(prev, backendMessages));
+          // Server history is authoritative — reconcile (not append) so a guest's
+          // optimistic AI-mode bubbles (temp ids) don't duplicate against their
+          // persisted server copies. Guard empty so an errored poll can't wipe it.
+          if (backendMessages.length > 0) {
+            setSupportMessages((prev) => reconcileServerMessages(prev, backendMessages));
+          }
+          // Guests have no socket — infer "agent connected" from a real agent reply
+          // so the widget stops showing "waiting for an agent".
+          if (backendMessages.some((m) => m.sender === 'AGENT' && !m.internal)) {
+            setSupportSessionStatus('AGENT_ACTIVE');
+          }
         }
       } catch (err) {
         logApiFailure('Error polling support messages:', err);
@@ -3666,6 +3755,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         if (!Array.isArray(data)) return;
         const backendMessages = data.map((msg) => mapDtoToSupportMessage(msg));
         setSupportMessages((prev) => mergeIncomingSupportMessages(prev, backendMessages));
+        // Fallback if a WS status event was missed: a real agent reply means active.
+        if (backendMessages.some((m) => m.sender === 'AGENT' && !m.internal)) {
+          setSupportSessionStatus('AGENT_ACTIVE');
+        }
       } catch (err) {
         logApiFailure('Error polling support messages (auth):', err);
       }
@@ -4133,7 +4226,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,
     trackUserSearch, toggleFavorite, moveToFavorites, getRecommendedOffers,
     compareList, addToCompare, removeFromCompare, clearCompare,
-    supportMessages, isSupportChatOpen, supportAiTyping, supportChatSending, isHandedOver, returningToAi, returnToAiMode, toggleSupportChat, openSupportChat, syncSupportInbox, sendSupportMessage, retrySupportMessage, showGuestForm, setShowGuestForm, guestEmailInput, setGuestEmailInput, guestNameInput, setGuestNameInput, guestName, setGuestName, submitGuestForm, supportSessionId, setSupportSessionId,
+    supportMessages, isSupportChatOpen, supportAiTyping, supportChatSending, isHandedOver, supportSessionStatus, requestingAgent, requestHumanAgent, returningToAi, returnToAiMode, toggleSupportChat, openSupportChat, syncSupportInbox, sendSupportMessage, retrySupportMessage, showGuestForm, setShowGuestForm, guestEmailInput, setGuestEmailInput, guestNameInput, setGuestNameInput, guestName, setGuestName, submitGuestForm, supportSessionId, setSupportSessionId,
     validateCoupon,
     addPickupPoint, deletePickupPoint,
     changePassword,
