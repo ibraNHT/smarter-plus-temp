@@ -149,7 +149,14 @@ export const SupportChatWidget: React.FC = () => {
   const compareCount = store?.compareList?.length ?? 0;
 
   const user = store?.user ?? null;
+  const supportSessionId = store?.supportSessionId ?? null;
   const isHandedOver = store?.isHandedOver ?? false;
+  const supportSessionStatus = store?.supportSessionStatus ?? 'AI_HANDLING';
+  const requestingAgent = store?.requestingAgent ?? false;
+  const requestHumanAgent = store?.requestHumanAgent ?? (async () => {});
+  // AGENT_ACTIVE = an agent is actively replying; WAITING_FOR_AGENT = queued.
+  const agentActive = supportSessionStatus === 'AGENT_ACTIVE';
+  const waitingForAgent = isHandedOver && !agentActive;
   const returningToAi = store?.returningToAi ?? false;
   const returnToAiMode = store?.returnToAiMode ?? (async () => {});
   const showGuestForm = store?.showGuestForm ?? false;
@@ -284,9 +291,11 @@ export const SupportChatWidget: React.FC = () => {
     ? { label: 'AgriBot is typing…', dot: 'bg-amber-300 animate-pulse' }
     : supportChatSending
       ? { label: 'Sending…', dot: 'bg-blue-300 animate-pulse' }
-      : isHandedOver
-        ? { label: 'Waiting for agent…', dot: 'bg-yellow-400 animate-pulse' }
-        : { label: 'Online', dot: 'bg-green-400 animate-pulse' };
+      : agentActive
+        ? { label: 'Agent connected', dot: 'bg-green-400' }
+        : waitingForAgent
+          ? { label: 'Waiting for an agent…', dot: 'bg-yellow-400 animate-pulse' }
+          : { label: 'Online', dot: 'bg-green-400 animate-pulse' };
 
   if (!store) return null;
 
@@ -497,19 +506,32 @@ export const SupportChatWidget: React.FC = () => {
 
           {/* Agent-mode banner with Back to AgriBot option */}
           {isHandedOver && (
-            <div className="sticky bottom-0 mx-1 mb-1 rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2.5 text-xs text-yellow-800 shadow-sm agm-chat-bubble-in">
+            <div
+              className={`sticky bottom-0 mx-1 mb-1 rounded-xl border px-3 py-2.5 text-xs shadow-sm agm-chat-bubble-in ${
+                agentActive
+                  ? 'border-green-200 bg-green-50 text-green-800'
+                  : 'border-yellow-200 bg-yellow-50 text-yellow-800'
+              }`}
+            >
               <div className="flex items-start gap-2">
-                <Headphones className="h-4 w-4 shrink-0 mt-0.5 text-yellow-600" aria-hidden />
+                <Headphones
+                  className={`h-4 w-4 shrink-0 mt-0.5 ${agentActive ? 'text-green-600' : 'text-yellow-600'}`}
+                  aria-hidden
+                />
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium leading-snug">Waiting for a human agent</p>
-                  <p className="text-yellow-700 mt-0.5 leading-snug">
-                    An agent will reply here shortly. No response yet?
+                  <p className="font-medium leading-snug">
+                    {agentActive ? 'Connected with a support agent' : 'Waiting for a human agent'}
+                  </p>
+                  <p className={`mt-0.5 leading-snug ${agentActive ? 'text-green-700' : 'text-yellow-700'}`}>
+                    {agentActive
+                      ? 'An agent is with you — send your message below.'
+                      : 'An agent will reply here shortly. No response yet?'}
                   </p>
                   <button
                     type="button"
                     onClick={() => void returnToAiMode()}
                     disabled={returningToAi}
-                    className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-white border border-yellow-300 px-2.5 py-1 text-xs font-medium text-yellow-800 hover:bg-yellow-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-white border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {returningToAi ? (
                       <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
@@ -520,6 +542,27 @@ export const SupportChatWidget: React.FC = () => {
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* AI mode: let the user escalate to a human agent directly. Only once a
+              session exists (logged-in users always; guests after their first message)
+              so we never dead-end a guest who has no session yet. */}
+          {!isHandedOver && !showGuestForm && (!!user || !!supportSessionId) && (
+            <div className="sticky bottom-0 mx-1 mb-1 flex justify-center">
+              <button
+                type="button"
+                onClick={() => void requestHumanAgent()}
+                disabled={requestingAgent}
+                className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+              >
+                {requestingAgent ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <Headphones className="h-3.5 w-3.5" aria-hidden />
+                )}
+                {requestingAgent ? 'Connecting…' : 'Talk to a human agent'}
+              </button>
             </div>
           )}
 
