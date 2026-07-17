@@ -286,7 +286,7 @@ export const ProducerMarket: React.FC = () => {
                 if (willAdd) nudgeInstall('favorite');
               }}
               className="p-1.5 rounded-full bg-white/80 hover:bg-white shadow-sm transition-colors"
-              title="Save for later"
+              title={t('market.saveForLater')}
             >
               <Heart className={`h-5 w-5 ${isFav ? 'fill-red-500 text-red-500' : 'text-gray-400 hover:text-red-500'}`} />
             </button>
@@ -335,11 +335,11 @@ export const ProducerMarket: React.FC = () => {
             {/* Single image accent: Nearby > Service */}
             {isLocal ? (
               <div className="absolute top-2 left-2 bg-green-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide shadow-sm flex items-center">
-                <MapPin className="h-3 w-3 mr-1" /> Nearby
+                <MapPin className="h-3 w-3 mr-1" /> {t('market.nearby')}
               </div>
             ) : offer.type === 'SERVICE' ? (
               <span className="absolute top-2 left-2 bg-purple-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide shadow-sm">
-                Service
+                {t('market.service')}
               </span>
             ) : null}
           </div>
@@ -348,7 +348,7 @@ export const ProducerMarket: React.FC = () => {
             <div className="mb-1.5 md:mb-2 shrink-0">
               <p className="text-[10px] md:text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5 md:mb-1 flex items-center justify-between gap-1 min-w-0">
                 <span className={`${displayNameTruncateClass} flex-1`} title={producer ? getProducerName(producer) : ''}>
-                  {producer ? getProducerName(producer) : 'Unknown Producer'}
+                  {producer ? getProducerName(producer) : t('market.unknownProducer')}
                 </span>
                 {rating > 0 && (
                   <span className="flex items-center text-yellow-600 font-bold text-xs shrink-0">
@@ -376,16 +376,16 @@ export const ProducerMarket: React.FC = () => {
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mb-3 shrink-0">
               {offer.isDeliveryAvailable ? (
                 <span className="inline-flex items-center text-green-600 font-medium">
-                  <Truck className="h-3 w-3 mr-1 shrink-0" /> Delivery
+                  <Truck className="h-3 w-3 mr-1 shrink-0" /> {t('market.delivery')}
                 </span>
               ) : (
                 <span className="inline-flex items-center text-gray-400 font-medium">
-                  <MapPin className="h-3 w-3 mr-1 shrink-0" /> Pickup
+                  <MapPin className="h-3 w-3 mr-1 shrink-0" /> {t('market.pickup')}
                 </span>
               )}
               {offer.isNegotiable && (
                 <span className="inline-flex items-center text-blue-600 font-medium">
-                  <MessageCircle className="h-3 w-3 mr-1 shrink-0" /> Negotiable
+                  <MessageCircle className="h-3 w-3 mr-1 shrink-0" /> {t('market.negotiable')}
                 </span>
               )}
             </div>
@@ -420,8 +420,8 @@ export const ProducerMarket: React.FC = () => {
             path: '/market/producers',
           }),
           buildBreadcrumbSchema([
-            { name: 'Home', path: '/' },
-            { name: 'Producer Market', path: '/market/producers' },
+            { name: t('nav.home'), path: '/' },
+            { name: t('nav.producerMarket'), path: '/market/producers' },
           ]),
         ]}
       />
@@ -435,7 +435,7 @@ export const ProducerMarket: React.FC = () => {
             }}
             className="inline-flex items-center text-primary-200 hover:text-white transition-colors text-sm sm:text-base"
           >
-            <ArrowLeft className="h-5 w-5 mr-1" /> Back
+            <ArrowLeft className="h-5 w-5 mr-1" /> {t('profile.tabs.back')}
           </button>
 
           <div className="mt-4 sm:mt-6">
@@ -450,7 +450,7 @@ export const ProducerMarket: React.FC = () => {
             </p>
             {clientRegion && (
               <div className="mt-3 sm:mt-4 sm:ml-14 inline-flex items-center px-3 py-1 rounded-full bg-green-800 border border-green-600 text-xs sm:text-sm text-green-100">
-                <MapPin className="h-4 w-4 mr-1" /> Prioritizing offers in: <strong className="ml-1">{clientRegion}</strong>
+                <MapPin className="h-4 w-4 mr-1" /> {t('market.prioritizing')} <strong className="ml-1">{clientRegion}</strong>
               </div>
             )}
           </div>
@@ -464,7 +464,7 @@ export const ProducerMarket: React.FC = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
             <input
               type="text"
-              placeholder="Search products or producers..."
+              placeholder={t('market.searchProducers')}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-gray-900"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -593,14 +593,14 @@ export const ProducerMarket: React.FC = () => {
                           </span>
                         </h2>
                         <div className="flex items-center gap-3">
-                          <span className="text-sm text-gray-500">{sortedCategoryOffers.length} results</span>
+                          <span className="text-sm text-gray-500">{sortedCategoryOffers.length} {t('market.results')}</span>
                           {!isExpanded && (
                             <button
                               type="button"
                               onClick={() => { setExpandedCategory(category); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                               className="text-sm font-medium text-primary-600 hover:text-primary-800 transition-colors whitespace-nowrap"
                             >
-                              See All &rarr;
+                              {t('market.seeAll')} &rarr;
                             </button>
                           )}
                           {isExpanded && (
@@ -609,7 +609,7 @@ export const ProducerMarket: React.FC = () => {
                               onClick={() => setExpandedCategory(null)}
                               className="text-sm font-medium text-primary-600 hover:text-primary-800 transition-colors whitespace-nowrap"
                             >
-                              &larr; All Categories
+                              &larr; {t('market.allCategoriesBack')}
                             </button>
                           )}
                         </div>

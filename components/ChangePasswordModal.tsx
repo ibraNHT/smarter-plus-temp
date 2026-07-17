@@ -7,7 +7,6 @@ import { useFormik } from 'formik';
 import { z } from 'zod';
 
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
-const PASSWORD_RULE_MESSAGE = 'Password must be at least 4 characters with 1 letter, 1 number, and 1 special character.';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
@@ -41,16 +40,16 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
 
   const schema = z
     .object({
-      currentPassword: z.string().min(1, 'Current password is required.'),
-      newPassword: z.string().regex(PASSWORD_RULE, PASSWORD_RULE_MESSAGE),
-      confirmPassword: z.string().min(1, 'Confirm your new password.'),
+      currentPassword: z.string().min(1, t('validation.currentPasswordRequired')),
+      newPassword: z.string().regex(PASSWORD_RULE, t('validation.passwordRule')),
+      confirmPassword: z.string().min(1, t('validation.confirmPasswordRequired')),
     })
     .refine((v) => v.newPassword === v.confirmPassword, {
-      message: 'New passwords do not match.',
+      message: t('validation.passwordsMatch'),
       path: ['confirmPassword'],
     })
     .refine((v) => v.currentPassword !== v.newPassword, {
-      message: 'New password cannot be the same as the old password.',
+      message: t('validation.passwordSameAsOld'),
       path: ['newPassword'],
     });
 
@@ -88,7 +87,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
       try {
         const verifyRes = await verifyCurrentPassword(values.currentPassword);
         if (!verifyRes.success) {
-          const msg = verifyRes.message || 'Current password is incorrect.';
+          const msg = verifyRes.message || t('validation.currentPasswordIncorrect');
           formik.setFieldError('currentPassword', msg);
           setError(msg);
           return;
@@ -96,13 +95,13 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
 
         const otpRes = await requestOtp('PASSWORD_CHANGE');
         if (!otpRes.success) {
-          setError(otpRes.message || 'Could not send verification code.');
+          setError(otpRes.message || t('registerOtp.sendFailed'));
           return;
         }
         setPendingPasswords({ current: values.currentPassword, next: values.newPassword });
         setStep('otp');
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : 'Could not continue. Please try again.');
+        setError(e instanceof Error ? e.message : t('auth.unexpectedError'));
       } finally {
         setLoading(false);
       }
@@ -114,7 +113,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
     void formik.setTouched(passwordFields, true);
     void formik.validateForm().then((errors) => {
       if (Object.keys(errors).length > 0) {
-        setError('Please fix the errors below before continuing.');
+        setError(t('validation.fixErrors'));
         return;
       }
       void formik.submitForm();
@@ -128,7 +127,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
     if (!pendingPasswords) return;
     const code = otpCode.trim();
     if (!/^\d{6}$/.test(code)) {
-      setError('Enter the 6-digit code from your phone or email.');
+      setError(t('profile.otpCodeRequired'));
       return;
     }
     setError('');
@@ -136,7 +135,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
     try {
       const verifyRes = await verifyOtp('PASSWORD_CHANGE', code);
       if (!verifyRes.success || !verifyRes.token) {
-        setError(verifyRes.message || 'Invalid or expired code.');
+        setError(verifyRes.message || t('registerOtp.invalidOrExpired'));
         return;
       }
       const result = await changePassword(
@@ -161,7 +160,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
         }
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Verification failed.');
+      setError(e instanceof Error ? e.message : t('registerOtp.verificationFailed'));
     } finally {
       setLoading(false);
     }
@@ -187,7 +186,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
             className="absolute top-3 right-3 z-20 rounded-md p-1 text-gray-400 hover:text-gray-500 hover:bg-gray-100"
             onClick={handleClose}
           >
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t('common.close')}</span>
             <X className="h-5 w-5 sm:h-6 sm:w-6" />
           </button>
 
@@ -212,10 +211,10 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
               {step === 'password' ? (
                 <form onSubmit={handlePasswordStepSubmit} className="mt-4 space-y-4" noValidate>
                   <p className="text-sm text-gray-500">
-                    We will verify your current password first, then send a code to your phone and email.
+                    {t('profile.passwordVerificationHint')}
                   </p>
                   <div className="relative">
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Current Password</label>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">{t('profile.currentPassword')}</label>
                     <input
                       name="currentPassword"
                       type={showCurrentPassword ? 'text' : 'password'}
@@ -235,7 +234,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                     ) : null}
                   </div>
                   <div className="relative">
-                    <label className="block text-xs font-bold text-gray-700 mb-1">New Password</label>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">{t('profile.newPassword')}</label>
                     <input
                       name="newPassword"
                       type={showNewPassword ? 'text' : 'password'}
@@ -255,7 +254,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                     ) : null}
                   </div>
                   <div className="relative">
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Confirm New Password</label>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">{t('profile.confirmNewPassword')}</label>
                     <input
                       name="confirmPassword"
                       type={showConfirmPassword ? 'text' : 'password'}
@@ -279,20 +278,20 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                       {t('form.cancel')}
                     </button>
                     <button type="submit" disabled={loading} className="w-full sm:w-auto px-4 py-2 bg-primary-600 text-white rounded-md text-sm disabled:opacity-50 agm-btn-primary">
-                      {loading ? 'Checking…' : 'Continue'}
+                      {loading ? t('profile.checking') : t('profile.continue')}
                     </button>
                   </div>
                 </form>
               ) : (
                 <div className="mt-4 space-y-4">
                   <p className="text-sm text-gray-500">
-                    Enter the 6-digit code sent to your registered phone and email.
+                    {t('profile.otpVerificationHint')}
                   </p>
                   <input
                     type="text"
                     inputMode="numeric"
                     maxLength={6}
-                    placeholder="000000"
+                    placeholder={t('profile.otpCodePlaceholder')}
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     className="w-full border border-gray-300 rounded-md p-2 text-center text-lg tracking-widest"
@@ -309,7 +308,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                       }}
                       className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-md text-sm"
                     >
-                      Back
+                      {t('form.back')}
                     </button>
                     <button
                       type="button"
@@ -317,7 +316,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                       onClick={() => void handleVerifyAndChange()}
                       className="w-full sm:w-auto px-4 py-2 bg-primary-600 text-white rounded-md text-sm disabled:opacity-50 agm-btn-primary"
                     >
-                      {loading ? 'Updating…' : 'Change Password'}
+                      {loading ? t('profile.updating') : t('profile.password')}
                     </button>
                   </div>
                 </div>

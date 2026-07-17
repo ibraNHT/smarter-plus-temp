@@ -182,7 +182,7 @@ export const ProducerProfile: React.FC = () => {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
               path: ['accountNumber'],
-              message: 'Enter a valid Cameroon number: 237 + 9 digits starting with 65–69 (e.g. 237670000000).',
+              message: t('profile.invalidCameroonNumber'),
             });
           }
         }
@@ -224,7 +224,7 @@ export const ProducerProfile: React.FC = () => {
         setShowAddPayment(false);
         paymentFormik.resetForm({ values: { provider: 'ORANGE', accountNumber: '', accountName: '', bankName: '' } });
       } else {
-        helpers.setStatus(res.message ?? 'Could not save the payment method.');
+        helpers.setStatus(res.message ?? t('profile.paymentSaveFailed'));
       }
     },
   });
@@ -395,12 +395,12 @@ export const ProducerProfile: React.FC = () => {
     const file = e.target.files[0];
     const maxBytes = 2 * 1024 * 1024;
     if (file.size > maxBytes) {
-      showAppToast('Image must be 2 MB or less.', 'WARNING');
+      showAppToast(t('profile.imageSizeLimit'), 'WARNING');
       return;
     }
     const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
-      showAppToast('Only PNG, JPG, and WebP are allowed for profile photos.', 'WARNING');
+      showAppToast(t('profile.imageTypeInvalid'), 'WARNING');
       return;
     }
     setAvatarUploading(true);
@@ -408,7 +408,7 @@ export const ProducerProfile: React.FC = () => {
       const url = await uploadAvatar(file);
       setFormData({ ...formData, profileImageUrl: url });
     } catch (err: unknown) {
-      showAppToast(err instanceof Error ? err.message : 'Upload failed.', 'ERROR');
+      showAppToast(err instanceof Error ? err.message : t('profile.uploadFailed'), 'ERROR');
     } finally {
       setAvatarUploading(false);
     }
@@ -418,9 +418,9 @@ export const ProducerProfile: React.FC = () => {
     if (!formData) return;
     const parsed = z.object({
       type: z.enum(['BUSINESS', 'INDIVIDUAL']),
-      description: z.string().trim().min(2, 'Description is required.'),
-      phone: z.string().trim().min(6, 'Phone is required.'),
-      email: z.string().trim().email('Valid email is required.'),
+      description: z.string().trim().min(2, t('profile.descriptionRequired')),
+      phone: z.string().trim().min(6, t('profile.phoneRequired')),
+      email: z.string().trim().email(t('profile.emailInvalid')),
     }).safeParse({
       type: formData.type,
       description: formData.description ?? '',
@@ -428,19 +428,19 @@ export const ProducerProfile: React.FC = () => {
       email: formData.email ?? '',
     });
     if (!parsed.success) {
-      showAppToast(parsed.error.issues[0]?.message || 'Please fix profile form errors.', 'WARNING');
+      showAppToast(parsed.error.issues[0]?.message || t('profile.fixFormErrors'), 'WARNING');
       return;
     }
     if (!String(formData.taxIdentificationNumber ?? '').trim()) {
-      showAppToast('NIU / Tax identification number is required.', 'WARNING');
+      showAppToast(t('validation.taxIdRequired'), 'WARNING');
       return;
     }
     if (!String(formData.niuCertificateUrl ?? '').trim()) {
-      showAppToast('NIU certificate upload is required.', 'WARNING');
+      showAppToast(t('profile.niuCertificateHint'), 'WARNING');
       return;
     }
     if (!String(formData.taxClearanceCertificateUrl ?? '').trim()) {
-      showAppToast('Tax compliance certificate (ACF) is required.', 'WARNING');
+      showAppToast(t('profile.taxComplianceRequired'), 'WARNING');
       return;
     }
     let displayName = formData.name;
@@ -487,7 +487,7 @@ export const ProducerProfile: React.FC = () => {
     const link = buildProducerReferralLink(referralCodeDisplay);
     void navigator.clipboard.writeText(link);
     void navigator.clipboard.writeText(link);
-    showAppToast('Referral link copied!', 'SUCCESS');
+    showAppToast(t('profile.referralCopied'), 'SUCCESS');
   };
   useEffect(() => {
     const query = String(locationSearch ?? '').trim();
@@ -612,7 +612,7 @@ export const ProducerProfile: React.FC = () => {
       });
       setLocationSearch(rev?.address || '');
     } catch {
-      showAppToast('Could not read your location. Allow permission or set the pin on the map.', 'WARNING');
+      showAppToast(t('client.locationError'), 'WARNING');
     } finally {
       setGeoLoading(false);
     }
@@ -625,17 +625,17 @@ export const ProducerProfile: React.FC = () => {
     e.target.value = '';
     if (files.length === 0) return;
     if ((portfolioForm.imageUrls?.length || 0) + files.length > 10) {
-      showAppToast('Maximum 10 images allowed.', 'WARNING');
+      showAppToast(t('profile.maxImages'), 'WARNING');
       return;
     }
     const validFiles: File[] = [];
     for (const file of files) {
       if (file.size > 5 * 1024 * 1024) {
-        showAppToast(`File ${file.name} is too large. Max 5MB.`, 'WARNING');
+        showAppToast(t('portfolio.fileTooLarge', { name: file.name }), 'WARNING');
         continue;
       }
       if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-        showAppToast(`File ${file.name} is invalid format. PNG, JPG, or WebP only.`, 'WARNING');
+        showAppToast(t('portfolio.fileTypeInvalid', { name: file.name }), 'WARNING');
         continue;
       }
       validFiles.push(file);
@@ -646,7 +646,7 @@ export const ProducerProfile: React.FC = () => {
       const uploaded = await Promise.all(validFiles.map((f) => uploadPortfolioImage(f)));
       setPortfolioForm(prev => ({ ...prev, imageUrls: [...(prev.imageUrls || []), ...uploaded] }));
     } catch (err) {
-      showAppToast(err instanceof Error ? err.message : 'Portfolio image upload failed.', 'ERROR');
+      showAppToast(err instanceof Error ? err.message : t('portfolio.imageUploadFailed'), 'ERROR');
     } finally {
       setPortfolioImageUploading(false);
     }
@@ -656,7 +656,7 @@ export const ProducerProfile: React.FC = () => {
     e.target.value = '';
     if (!file) return;
     if (file.size > 50 * 1024 * 1024) {
-      showAppToast('Video file too large. Max 50MB.', 'WARNING');
+      showAppToast(t('profile.videoSizeLimit'), 'WARNING');
       return;
     }
     setPortfolioVideoUploading(true);
@@ -664,7 +664,7 @@ export const ProducerProfile: React.FC = () => {
       const url = await uploadPortfolioVideo(file);
       setPortfolioForm(prev => ({ ...prev, videoUrl: url }));
     } catch (err) {
-      showAppToast(err instanceof Error ? err.message : 'Video upload failed.', 'ERROR');
+      showAppToast(err instanceof Error ? err.message : t('portfolio.videoUploadFailed'), 'ERROR');
     } finally {
       setPortfolioVideoUploading(false);
     }
@@ -674,26 +674,26 @@ export const ProducerProfile: React.FC = () => {
     e.preventDefault();
     if (!user?.producerId) return;
     const parsed = z.object({
-      title: z.string().trim().min(2, 'Title is required.'),
-      category: z.string().trim().min(1, 'Category is required.'),
-      description: z.string().trim().min(5, 'Description is required.'),
+      title: z.string().trim().min(2, t('portfolio.titleRequired')),
+      category: z.string().trim().min(1, t('portfolio.categoryRequired')),
+      description: z.string().trim().min(5, t('portfolio.descriptionRequired')),
     }).safeParse({
       title: portfolioForm.title ?? '',
       category: portfolioForm.category ?? '',
       description: portfolioForm.description ?? '',
     });
     if (!parsed.success) {
-      showAppToast(parsed.error.issues[0]?.message || 'Please fix portfolio form errors.', 'WARNING');
+      showAppToast(parsed.error.issues[0]?.message || t('portfolio.fixFormErrors'), 'WARNING');
       return;
     }
     if (portfolioImageUploading || portfolioVideoUploading) {
-      showAppToast('Please wait for media uploads to finish.', 'INFO');
+      showAppToast(t('profile.waitMediaUploads'), 'INFO');
       return;
     }
     const chosenCategory = (portfolioForm.category ?? '').trim();
     if (!portfolioForm.id && myPortfolios.some(p => p.category === chosenCategory)) {
       showAppToast(
-        `You already have a portfolio for the "${portfolioCategoryLabel(chosenCategory, t)}" category. You can edit the existing one instead.`,
+        t('portfolio.categoryExists', { category: portfolioCategoryLabel(chosenCategory, t) }),
         'WARNING',
       );
       return;
@@ -727,7 +727,7 @@ export const ProducerProfile: React.FC = () => {
   };
 
   if (!isProducerDashboardUser(user)) {
-    return <div className="p-8 text-center">Access Denied</div>;
+    return <div className="p-8 text-center">{t('producer.accessDenied')}</div>;
   }
   /**
    * Note: we deliberately avoid blocking the full page with a "Loading your
@@ -739,7 +739,7 @@ export const ProducerProfile: React.FC = () => {
   if (!currentProducer && !tabLoading && !profileHydrating) {
     return (
       <div className="p-8 text-center text-gray-700">
-        No producer profile was found for your account.
+        {t('profile.missingProducer')}
       </div>
     );
   }
@@ -747,13 +747,13 @@ export const ProducerProfile: React.FC = () => {
   const managedProducerLabel =
     managedProducer?.name ||
     [managedProducer?.firstName, managedProducer?.lastName].filter(Boolean).join(' ') ||
-    'this producer';
+    t('profile.thisProducer');
 
   return (
     <div className="max-w-7xl mx-auto py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
       {managingAsAccountManager && (
         <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-          <p className="font-semibold">Account manager mode</p>
+          <p className="font-semibold">{t('profile.accountManagerMode')} </p>
           <p className="mt-1 text-sky-800">
             You are assisting <span className="font-medium">{managedProducerLabel}</span>. You can manage offers, orders, locations, documents, and wallet activity. Phone, email, and other personal identity fields cannot be changed.
           </p>
@@ -761,7 +761,7 @@ export const ProducerProfile: React.FC = () => {
       )}
       <div className="mb-4 sm:mb-6">
         <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 hover:text-primary-600 transition-colors font-medium text-sm sm:text-base">
-          <ArrowLeft className="h-5 w-5 mr-2" /> Back
+          <ArrowLeft className="h-5 w-5 mr-2" /> {t('profile.tabs.back')} 
         </button>
       </div>
 
@@ -820,9 +820,16 @@ export const ProducerProfile: React.FC = () => {
                 </p>
               </div>
               {/* Simplified view for brevity, functionality preserved */}
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6"><div className="relative flex-shrink-0"><div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">{formData.profileImageUrl ? (<img src={formData.profileImageUrl} alt="Profile" className="h-full w-full object-cover" />) : (<User className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400" />)}</div><label className={`absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white shadow-sm ${avatarUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-primary-700'}`}><Camera className="h-4 w-4" /><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={avatarUploading} onChange={(e) => void handleAvatarUpload(e)} /></label></div><div className="min-w-0"><p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p><p className="text-xs text-gray-500">{avatarUploading ? 'Uploading…' : 'JPG, PNG, or WebP. Max 2 MB.'}</p></div></div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6"><div className="relative flex-shrink-0"><div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">{formData.profileImageUrl ? (<img src={formData.profileImageUrl} alt="Profile" className="h-full w-full object-cover" />) : (<User className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400" />)}</div><label className={`absolute bottom-0 right-0 bg-primary-600 p-1.5 rounded-full text-white shadow-sm ${avatarUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:bg-primary-700'}`}><Camera className="h-4 w-4" /><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={avatarUploading} onChange={(e) => void handleAvatarUpload(e)} /></label></div><div className="min-w-0"><p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p><p className="text-xs text-gray-500">{avatarUploading ? t('profile.uploading') : t('profile.uploadHint')}</p></div></div>
               <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-                <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-2">{t('profile.type')}</label><div className="flex space-x-4"><span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-primary-100 text-primary-800">{formData.type === 'BUSINESS' ? t('profile.business') : t('profile.individual')}</span><span className="text-xs text-gray-400 self-center ml-2">Cannot be changed after registration</span></div></div>
+                <div className="sm:col-span-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">{t('profile.type')}</label>
+                  <div className="flex space-x-4">
+                    <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-primary-100 text-primary-800">
+                    {formData.type === 'BUSINESS' ? t('profile.business') : t('profile.individual')}</span>
+                    <span className="text-xs text-gray-400 self-center ml-2">{t('profile.fieldLocked')} </span>
+                  </div>
+                </div>
                 {formData.type === 'BUSINESS' ? (
                   <div className="sm:col-span-6">
                     <label className="block text-sm font-medium text-gray-700">{t('form.farmName')}</label>
@@ -841,9 +848,9 @@ export const ProducerProfile: React.FC = () => {
                     <div className="sm:col-span-3">
                       <label className="block text-sm font-medium text-gray-700">{t('profile.gender')}</label>
                       <select name="gender" value={formData.gender || ''} onChange={handleInfoChange} disabled={personalFieldsLocked} className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 text-gray-900 ${personalFieldsLocked ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}>
-                        <option value="">Select Gender</option>
-                        <option value="MALE">Male</option>
-                        <option value="FEMALE">Female</option>
+                        <option value="">{t('profile.selectGender')} </option>
+                        <option value="MALE">{t('profile.male')}</option>
+                        <option value="FEMALE">{t('profile.female')}</option>
                       </select>
                     </div>
                     <div className="sm:col-span-3">
@@ -864,10 +871,10 @@ export const ProducerProfile: React.FC = () => {
                 />
                 <div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('form.phone')}</label><input type="tel" name="phone" value={formData.phone ?? ''} onChange={handleInfoChange} readOnly={personalFieldsLocked} disabled={personalFieldsLocked} className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 text-gray-900 ${personalFieldsLocked ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`} /></div>
                 <div className="sm:col-span-3"><label className="block text-sm font-medium text-gray-700">{t('form.email')}</label><input type="email" name="email" value={formData.email ?? ''} onChange={handleInfoChange} readOnly={personalFieldsLocked} disabled={personalFieldsLocked} className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 text-gray-900 ${personalFieldsLocked ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`} /></div>
-                <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-2">{t('form.category')} (Multi-select)</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded-md bg-white">{PRODUCTION_TYPES.map(cat => { const isSelected = formData.productionTypes.includes(cat); return (<button key={cat} type="button" onClick={() => toggleCategory(cat)} className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${isSelected ? 'bg-primary-100 text-primary-800 ring-2 ring-primary-500 ring-offset-1' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}{isSelected && <X className="ml-1.5 h-3 w-3" />}</button>) })}</div></div>
+                <div className="sm:col-span-6"><label className="block text-sm font-medium text-gray-700 mb-2">{t('form.category')} ({t('register.multiSelect')})</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded-md bg-white">{PRODUCTION_TYPES.map(cat => { const isSelected = formData.productionTypes.includes(cat); return (<button key={cat} type="button" onClick={() => toggleCategory(cat)} className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${isSelected ? 'bg-primary-100 text-primary-800 ring-2 ring-primary-500 ring-offset-1' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}{isSelected && <X className="ml-1.5 h-3 w-3" />}</button>) })}</div></div>
                 <div className="sm:col-span-6 border-t border-gray-100 pt-4 mt-2">
                   <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center">
-                    <MapPin className="h-4 w-4 mr-1 text-primary-600" /> Operating Locations
+                     <MapPin className="h-4 w-4 mr-1 text-primary-600" /> {t('register.operatingLocation')}
                   </h4>
                   <div className="space-y-2 mb-4">
                     {formData.locations.map((loc, idx) => (
@@ -900,14 +907,14 @@ export const ProducerProfile: React.FC = () => {
                   </div>
                   <div className="bg-blue-50 p-3 rounded-md border border-blue-100 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs font-medium text-blue-700">Add or update an address</p>
+                      <p className="text-xs font-medium text-blue-700">{t('profile.addOrUpdateAddress')}</p>
                       {formData.locations.length > 0 && (
                         <button
                           type="button"
                           onClick={startNewLocationEntry}
                           className="text-xs font-semibold text-primary-700 hover:text-primary-900 underline"
                         >
-                          {editingLocationIndex != null ? 'New address (keep existing)' : 'Add another address'}
+                          {editingLocationIndex != null ? t('profile.newAddressKeep') : t('profile.addAnotherAddress')}
                         </button>
                       )}
                     </div>
@@ -918,7 +925,7 @@ export const ProducerProfile: React.FC = () => {
                         disabled={geoLoading}
                         className="text-sm px-3 py-1.5 rounded-md border border-primary-200 bg-white text-primary-700 hover:bg-primary-50 disabled:opacity-50"
                       >
-                        {geoLoading ? 'Getting location…' : 'Use my current location'}
+                        {geoLoading ? t('profile.gettingLocation') : t('profile.useMyLocation')}
                       </button>
                     </div>
                     <LocationMapPicker
@@ -927,13 +934,13 @@ export const ProducerProfile: React.FC = () => {
                       onPositionChange={handleProfileMapPositionChange}
                       height="min(240px, 45vh)"
                     />
-                    <p className="text-xs text-gray-500">Drag the pin or tap the map to set coordinates. Address fields update from the pin when possible.</p>
+                    <p className="text-xs text-gray-500">{t('profile.mapPinHint')}</p>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div className="sm:col-span-2">
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Search address</label>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{t('location.searchAddress')}</label>
                         <input
                           type="text"
-                          placeholder="Type to search (OpenStreetMap)"
+                          placeholder={t('location.searchPlaceholder')}
                           value={locationSearch}
                           onChange={e => {
                             const value = e.target.value;
@@ -974,10 +981,10 @@ export const ProducerProfile: React.FC = () => {
                         </div>
                       )}
                       {isNearbyLoading && (
-                        <p className="sm:col-span-2 text-xs text-gray-500">Finding nearby locations...</p>
+                        <p className="sm:col-span-2 text-xs text-gray-500">{t('location.findingNearby')}</p>
                       )}
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{t('location.city')}</label>
                         <input
                           type="text"
                           value={newLoc.city ?? ''}
@@ -986,7 +993,7 @@ export const ProducerProfile: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Region</label>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{t('location.region')}</label>
                         <input
                           type="text"
                           value={newLoc.region ?? ''}
@@ -995,7 +1002,7 @@ export const ProducerProfile: React.FC = () => {
                         />
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Full address</label>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{t('location.fullAddress')}</label>
                         <input
                           type="text"
                           value={newLoc.address ?? ''}
@@ -1016,7 +1023,7 @@ export const ProducerProfile: React.FC = () => {
                         className="inline-flex items-center gap-1 px-3 py-2 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-sm font-medium"
                       >
                         <Plus className="h-4 w-4" />
-                        {editingLocationIndex != null ? 'Update location' : 'Add to list'}
+                        {editingLocationIndex != null ? t('profile.updateLocation') : t('profile.addToList')}
                       </button>
                       {editingLocationIndex != null && (
                         <button
@@ -1024,7 +1031,7 @@ export const ProducerProfile: React.FC = () => {
                           onClick={addCurrentFieldsAsNewAddress}
                           className="text-sm text-gray-600 hover:text-gray-900 underline"
                         >
-                          Add as new address (keep fields below)
+                            {t('profile.addAsNewAddress')}
                         </button>
                       )}
                     </div>
@@ -1055,23 +1062,23 @@ export const ProducerProfile: React.FC = () => {
             <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
               <div className="border-b border-gray-200 pb-4 mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <h3 className="font-display text-lg font-semibold text-gray-900 flex items-center"><Users className="h-5 w-5 mr-2 text-primary-600" /> Referrals</h3>
-                  <p className="text-sm text-gray-500 mt-0.5">Invite friends and earn when they complete their first order.</p>
+                  <h3 className="font-display text-lg font-semibold text-gray-900 flex items-center"><Users className="h-5 w-5 mr-2 text-primary-600" /> {t('profile.tabs.referrals')}</h3>
+                  <p className="text-sm text-gray-500 mt-0.5">{t('referrals.inviteDesc')}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-3xl font-display font-bold text-primary-700 leading-none">{referralCount}</p>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-primary-600 mt-1">Referrals</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-primary-600 mt-1">{t('profile.tabs.referrals')}</p>
                 </div>
               </div>
               <div className="bg-primary-50 border border-primary-200 rounded-xl p-5 mb-6">
-                <p className="text-sm text-primary-900 mb-1 font-bold">Your invite code</p>
+                <p className="text-sm text-primary-900 mb-1 font-bold">{t('referrals.yourInviteCode')}</p>
                 <p className="font-display text-2xl sm:text-3xl font-bold tracking-wide text-primary-800 mb-4">{referralCodeDisplay || '—'}</p>
-                <p className="text-sm text-primary-800 mb-2 font-medium">Your referral link</p>
+                <p className="text-sm text-primary-800 mb-2 font-medium">{t('referrals.yourLink')}</p>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input type="text" readOnly value={buildProducerReferralLink(referralCodeDisplay)} className="block w-full min-w-0 border-primary-200 rounded-md shadow-sm p-2.5 text-sm bg-white text-gray-700" />
-                  <button type="button" onClick={copyReferralLink} className="agm-btn-primary bg-primary-600 text-white px-4 py-2.5 rounded-md text-sm font-medium hover:bg-primary-700 flex items-center justify-center flex-shrink-0"><Copy className="h-4 w-4 mr-2" /> Copy link</button>
+                  <button type="button" onClick={copyReferralLink} className="agm-btn-primary bg-primary-600 text-white px-4 py-2.5 rounded-md text-sm font-medium hover:bg-primary-700 flex items-center justify-center flex-shrink-0"><Copy className="h-4 w-4 mr-2" /> {t('referrals.copy')}</button>
                 </div>
-                <p className="text-xs text-primary-700 mt-3">Share this link with friends. Rewards apply when their first order is marked Completed (no prior cancellation).</p>
+                <p className="text-xs text-primary-700 mt-3">{t('referrals.rewardsApply')}</p>
               </div>
               {myReferrals?.activeProgram ? (
                 <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6">
@@ -1080,28 +1087,27 @@ export const ProducerProfile: React.FC = () => {
                     <p className="text-sm text-gray-600 mt-1">{myReferrals.activeProgram.description}</p>
                   ) : null}
                   <ul className="mt-3 text-sm text-gray-800 space-y-1 list-disc list-inside">
-                    <li>Referrer reward: {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.referrerRewardAmount).toFixed(2)}</li>
-                    <li>New user reward: {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.refereeRewardAmount).toFixed(2)}</li>
-                    <li>Minimum payout: {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.minimumPayoutThreshold).toFixed(2)}</li>
+                    <li>{t('referrals.referrerReward')} {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.referrerRewardAmount).toFixed(2)}</li>
+                    <li>{t('referrals.newUserReward')} {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.refereeRewardAmount).toFixed(2)}</li>
+                    <li>{t('referrals.minPayout')} {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.minimumPayoutThreshold).toFixed(2)}</li>
                   </ul>
                   {myReferrals.activeProgram.termsUrl ? (
                     <a href={myReferrals.activeProgram.termsUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 text-sm font-medium mt-3 inline-block hover:underline">
-                      Terms &amp; conditions
+                      {t('referrals.termsTitle')}
                     </a>
                   ) : null}
                 </div>
               ) : null}
               <div className="border-t border-gray-200 pt-4">
-                <h4 className="text-sm font-bold text-gray-900 mb-4">People you invited</h4>
+                <h4 className="text-sm font-bold text-gray-900 mb-4">{t('referrals.peopleInvited')}</h4>
                 {referralCount === 0 ? (
                   <div className="text-center py-10 agm-empty-wash rounded-xl border border-primary-100">
                     <Users className="h-12 w-12 mx-auto text-primary-300 mb-2" />
-                    <p className="text-gray-600 font-medium">You haven&apos;t referred anyone yet.</p>
-                    <p className="text-sm text-gray-500 mt-1">Copy your link above and share it to get started.</p>
+                    <p className="text-gray-600 font-medium">{t('referrals.noInvites')}</p>
+                    <p className="text-sm text-gray-500 mt-1">{t('referrals.inviteHint')}</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <p className="text-sm text-gray-600">You have successfully referred {referralCount} user{referralCount === 1 ? '' : 's'}.</p>
                     {referredPeople.length > 0 ? (
                       <ul className="divide-y divide-gray-200 border border-gray-200 rounded-md bg-white">
                         {referredPeople.map((u) => (
@@ -1128,7 +1134,7 @@ export const ProducerProfile: React.FC = () => {
           {!isProducerHydrating && activeTab === 'favorites' && (
             <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
               <div className="border-b border-gray-200 pb-4 mb-4"><h3 className="text-lg font-medium text-gray-900">{t('profile.tabs.favorites')}</h3></div>
-              {unavailableFavoriteIds && unavailableFavoriteIds.length > 0 && (<div className="mb-6 bg-yellow-50 p-4 rounded-md border border-yellow-100"><h4 className="text-sm font-bold text-yellow-800 mb-2">Unavailable Items</h4><ul className="space-y-2">{unavailableFavoriteIds.map(id => (<li key={id} className="flex items-center justify-between text-sm text-yellow-700"><span>Item #{id} is no longer available.</span><div className="flex items-center gap-2"><button onClick={() => setFavoriteToRemove({ id, title: `Item #${id}` })} className="text-xs text-red-600 hover:underline">{t('cart.remove')}</button><Link to="/market/producers" className="text-xs bg-yellow-200 px-2 py-1 rounded hover:bg-yellow-300 flex items-center"><Search className="w-3 h-3 mr-1" /> {t('profile.findSimilar')}</Link></div></li>))}</ul></div>)}
+              {unavailableFavoriteIds && unavailableFavoriteIds.length > 0 && (<div className="mb-6 bg-yellow-50 p-4 rounded-md border border-yellow-100"><h4 className="text-sm font-bold text-yellow-800 mb-2">{t('favorites.unavailableTitle')}</h4><ul className="space-y-2">{unavailableFavoriteIds.map(id => (<li key={id} className="flex items-center justify-between text-sm text-yellow-700"><span>{t('favorites.itemUnavailable', { id })}</span><div className="flex items-center gap-2"><button onClick={() => setFavoriteToRemove({ id, title: `Item #${id}` })} className="text-xs text-red-600 hover:underline">{t('cart.remove')}</button><Link to="/market/producers" className="text-xs bg-yellow-200 px-2 py-1 rounded hover:bg-yellow-300 flex items-center"><Search className="w-3 h-3 mr-1" /> {t('profile.findSimilar')}</Link></div></li>))}</ul></div>)}
               {tabLoading && (!favoriteOffers || favoriteOffers.length === 0) ? (<ListSkeleton rows={3} />) : (!favoriteOffers || favoriteOffers.length === 0) ? (<div className="text-center py-12 text-gray-500"><Heart className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p>{t('profile.favorites.empty')}</p></div>) : (<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{favoriteOffers.map((offer: any) => (<div key={offer.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow flex items-center"><div className="mr-4 h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100"><img src={offer.imageUrl} alt="" className={offerImageInBox} /></div><div className="flex-1 min-w-0"><h4 className="font-bold text-gray-900 truncate">{offer.title}</h4><p className="text-sm text-gray-500">{formatXaf(offer.price)} / {offer.unit}</p></div><div className="flex flex-col gap-2 ml-2"><Link to={`/offer/${offer.id}`} className="text-primary-600 hover:bg-primary-50 p-2 rounded-full"><ArrowLeft className="h-5 w-5 rotate-180" /></Link><button onClick={() => setFavoriteToRemove({ id: offer.id, title: offer.title })} className="text-red-500 hover:bg-red-50 p-2 rounded-full" aria-label={t('favorites.removeTitle')}><Trash2 className="h-5 w-5" /></button></div></div>))}</div>)}
             </div>
           )}
@@ -1138,8 +1144,8 @@ export const ProducerProfile: React.FC = () => {
               <CurrencyPreferenceCard />
               <div>
               <div className="flex flex-wrap gap-3 justify-between items-center mb-6"><h3 className="text-lg font-medium text-gray-900">{t('profile.payment.saved')}</h3><button onClick={() => setShowAddPayment(true)} className="flex items-center text-sm bg-primary-600 text-white px-3 py-2 rounded-md hover:bg-primary-700"><Plus className="h-4 w-4 mr-1" /> {t('form.add')}</button></div>
-              <ul className="divide-y divide-gray-200 mb-6">{(!currentProducer?.paymentMethods || currentProducer.paymentMethods.length === 0) ? (<li className="py-4 text-gray-500 italic">{t('profile.payment.none')}</li>) : (currentProducer.paymentMethods./* bank payouts hidden — Tranzak supports MTN/Orange Money only */filter(pm => pm.provider !== 'BANK').map(pm => (<li key={pm.id} className="py-4 flex justify-between items-center"><div className="flex items-center"><div className={`h-10 w-10 rounded-full flex items-center justify-center mr-3 ${pm.provider === 'ORANGE' ? 'bg-orange-100 text-orange-600' : pm.provider === 'MTN' ? 'bg-yellow-100 text-yellow-600' : 'bg-blue-100 text-blue-600'}`}><CreditCard className="h-5 w-5" /></div><div><p className="text-sm font-medium text-gray-900">{pm.provider}{pm.bankName ? ` · ${pm.bankName}` : ''} - {pm.accountNumber}</p><p className="text-xs text-gray-500">{pm.accountName}</p></div></div><button onClick={() => setPaymentToRemove({ id: pm.id, provider: pm.provider, accountNumber: pm.accountNumber })} className="text-red-600 hover:text-red-800 p-2" aria-label={t('payment.removeTitle')}><Trash2 className="h-5 w-5" /></button></li>)))}</ul>
-              {showAddPayment && (<div className="bg-gray-50 p-4 rounded-md border border-gray-200 animate-fade-in"><h4 className="text-sm font-bold text-gray-700 mb-3">{t('profile.payment.add')}</h4><form onSubmit={handleAddPayment} className="space-y-4"><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.provider')}</label><select name="provider" className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" value={paymentFormik.values.provider} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur}><option value="ORANGE">Orange Money</option><option value="MTN">MTN Mobile Money</option>{/* Bank Transfer removed — Tranzak disburses payouts to MTN/Orange Money only, not bank accounts */}</select></div>{/* Bank payout field removed with the BANK option (Tranzak = mobile money only) */ false && paymentFormik.values.provider === 'BANK' && (<div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.bankName')}</label><input type="text" name="bankName" className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder="e.g. Afriland First Bank" value={paymentFormik.values.bankName} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur} />{paymentFormik.touched.bankName && paymentFormik.errors.bankName ? <p className="text-xs text-red-600 mt-1">{paymentFormik.errors.bankName}</p> : null}</div>)}<div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.accNum')}</label><input type="text" name="accountNumber" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder={paymentFormik.values.provider === 'BANK' ? 'IBAN / Account No' : 'e.g. 237670000000'} value={paymentFormik.values.accountNumber} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur} />{paymentFormik.touched.accountNumber && paymentFormik.errors.accountNumber ? <p className="text-xs text-red-600 mt-1">{paymentFormik.errors.accountNumber}</p> : null}</div><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.accName')}</label><input type="text" name="accountName" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder="Full Name on Account" value={paymentFormik.values.accountName} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur} />{paymentFormik.touched.accountName && paymentFormik.errors.accountName ? <p className="text-xs text-red-600 mt-1">{paymentFormik.errors.accountName}</p> : null}</div><div className="flex justify-end space-x-3 mt-4"><button type="button" onClick={() => setShowAddPayment(false)} className="text-gray-600 text-sm hover:text-gray-800">{t('form.cancel')}</button><button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded-md text-sm hover:bg-primary-700">{t('form.save')}</button></div></form></div>)}
+              <ul className="divide-y divide-gray-200 mb-6">{(!currentProducer?.paymentMethods || currentProducer.paymentMethods.length === 0) ? (<li className="py-4 text-gray-500 italic">{t('profile.payment.none')}</li>) : (currentProducer.paymentMethods.map(pm => (<li key={pm.id} className="py-4 flex justify-between items-center"><div className="flex items-center"><div className={`h-10 w-10 rounded-full flex items-center justify-center mr-3 ${pm.provider === 'ORANGE' ? 'bg-orange-100 text-orange-600' : pm.provider === 'MTN' ? 'bg-yellow-100 text-yellow-600' : 'bg-blue-100 text-blue-600'}`}><CreditCard className="h-5 w-5" /></div><div><p className="text-sm font-medium text-gray-900">{pm.provider} - {pm.accountNumber}</p><p className="text-xs text-gray-500">{pm.accountName}</p></div></div><button onClick={() => setPaymentToRemove({ id: pm.id, provider: pm.provider, accountNumber: pm.accountNumber })} className="text-red-600 hover:text-red-800 p-2" aria-label={t('payment.removeTitle')}><Trash2 className="h-5 w-5" /></button></li>)))}</ul>
+              {showAddPayment && (<div className="bg-gray-50 p-4 rounded-md border border-gray-200 animate-fade-in"><h4 className="text-sm font-bold text-gray-700 mb-3">{t('profile.payment.add')}</h4><form onSubmit={handleAddPayment} className="space-y-4"><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.provider')}</label><select name="provider" className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" value={paymentFormik.values.provider} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur}><option value="ORANGE">Orange Money</option><option value="MTN">MTN Mobile Money</option><option value="BANK">Bank Transfer</option></select></div><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.accNum')}</label><input type="text" name="accountNumber" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder={paymentFormik.values.provider === 'BANK' ? 'IBAN / Account No' : 'e.g. 237670000000'} value={paymentFormik.values.accountNumber} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur} />{paymentFormik.touched.accountNumber && paymentFormik.errors.accountNumber ? <p className="text-xs text-red-600 mt-1">{paymentFormik.errors.accountNumber}</p> : null}</div><div><label className="block text-xs font-medium text-gray-500">{t('profile.payment.accName')}</label><input type="text" name="accountName" required className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" placeholder="Full Name on Account" value={paymentFormik.values.accountName} onChange={paymentFormik.handleChange} onBlur={paymentFormik.handleBlur} />{paymentFormik.touched.accountName && paymentFormik.errors.accountName ? <p className="text-xs text-red-600 mt-1">{paymentFormik.errors.accountName}</p> : null}</div><div className="flex justify-end space-x-3 mt-4"><button type="button" onClick={() => setShowAddPayment(false)} className="text-gray-600 text-sm hover:text-gray-800">{t('form.cancel')}</button><button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded-md text-sm hover:bg-primary-700">{t('form.save')}</button></div></form></div>)}
               </div>
             </div>
           )}
@@ -1182,7 +1188,7 @@ export const ProducerProfile: React.FC = () => {
       )}
 
       {/* Portfolio Edit/Add Modal (Omitted code block for brevity but functional logic is above) */}
-      <Modal open={showPortfolioModal} onClose={() => setShowPortfolioModal(false)} maxWidth="lg" zIndex={50} panelClassName="p-4 sm:p-6"><h3 className="text-lg font-medium text-gray-900 mb-4">{portfolioForm.id ? 'Edit' : 'Add'} Portfolio Item</h3><form onSubmit={savePortfolio} className="space-y-4"><div><label className="block text-sm font-medium text-gray-700">{t('form.title')}</label><input type="text" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.title} onChange={e => setPortfolioForm({ ...portfolioForm, title: e.target.value })} /></div><div><label className="block text-sm font-medium text-gray-700">{t('form.category')}</label><select required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.category} onChange={e => setPortfolioForm({ ...portfolioForm, category: e.target.value })}><option value="">Select Category</option>{currentProducer?.productionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select><p className="text-xs text-gray-500 mt-1">{t('portfolio.categoryTip')}</p></div><div><label className="block text-sm font-medium text-gray-700">{t('form.desc')}</label><textarea required rows={3} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.description} onChange={e => setPortfolioForm({ ...portfolioForm, description: e.target.value })} /></div><div className="bg-gray-50 p-3 rounded border border-gray-200"><label className="block text-sm font-medium text-gray-700 mb-2">Media</label><div className="mb-3"><label className={`flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 ${portfolioImageUploading ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}><ImageIcon className="h-4 w-4" /><span>{portfolioImageUploading ? 'Uploading…' : 'Add Images (Max 10)'}</span><input type="file" multiple accept="image/png,image/jpeg,image/webp" className="hidden" disabled={portfolioImageUploading} onChange={handlePortfolioImageUpload} /></label><div className="flex flex-wrap gap-2 mt-2">{portfolioForm.imageUrls?.map((url, idx) => (<div key={idx} className="relative w-16 h-16 border rounded overflow-hidden group bg-gray-100"><img src={url} alt="" className={offerImageInBox} /><button type="button" onClick={() => setPortfolioForm(prev => ({ ...prev, imageUrls: prev.imageUrls?.filter((_, i) => i !== idx) }))} className="absolute top-0 right-0 bg-red-500 text-white p-0.5 rounded-bl opacity-0 group-hover:opacity-100"><X className="h-3 w-3" /></button></div>))}</div><p className="text-xs text-gray-500 mt-1">{t('portfolio.maxImages')}</p></div><div><label className={`flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 ${portfolioVideoUploading ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}><Video className="h-4 w-4" /><span>{portfolioVideoUploading ? 'Uploading…' : (portfolioForm.videoUrl ? 'Replace Video' : 'Add Video')}</span><input type="file" accept="video/*" className="hidden" disabled={portfolioVideoUploading} onChange={handlePortfolioVideoUpload} /></label>{portfolioForm.videoUrl && (<div className="mt-2 text-xs text-green-600 flex items-center"><CheckCircle className="h-3 w-3 mr-1" /> Video attached<button type="button" onClick={() => setPortfolioForm(prev => ({ ...prev, videoUrl: undefined }))} className="ml-2 text-red-500 hover:underline">Remove</button></div>)}<p className="text-xs text-gray-500 mt-1">{t('portfolio.video')}</p></div></div><div className="flex items-center"><input type="checkbox" id="publish" className="h-4 w-4 text-primary-600 border-gray-300 rounded" checked={portfolioForm.isPublished} onChange={e => setPortfolioForm({ ...portfolioForm, isPublished: e.target.checked })} /><label htmlFor="publish" className="ml-2 block text-sm text-gray-900">{t('form.publish')}</label></div><div className="flex justify-end space-x-3"><button type="button" onClick={() => setShowPortfolioModal(false)} className="text-gray-600 hover:text-gray-900">{t('form.cancel')}</button><button type="submit" disabled={portfolioImageUploading || portfolioVideoUploading} className="bg-primary-600 text-white px-4 py-2 rounded hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed">{portfolioImageUploading || portfolioVideoUploading ? 'Uploading…' : t('form.save')}</button></div></form></Modal>
+      <Modal open={showPortfolioModal} onClose={() => setShowPortfolioModal(false)} maxWidth="lg" zIndex={50} panelClassName="p-4 sm:p-6"><h3 className="text-lg font-medium text-gray-900 mb-4">{portfolioForm.id ? t('portfolio.editItem') : t('portfolio.addItem')}</h3><form onSubmit={savePortfolio} className="space-y-4"><div><label className="block text-sm font-medium text-gray-700">{t('form.title')}</label><input type="text" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.title} onChange={e => setPortfolioForm({ ...portfolioForm, title: e.target.value })} /></div><div><label className="block text-sm font-medium text-gray-700">{t('form.category')}</label><select required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.category} onChange={e => setPortfolioForm({ ...portfolioForm, category: e.target.value })}><option value="">{t('portfolio.selectCategory')}</option>{currentProducer?.productionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select><p className="text-xs text-gray-500 mt-1">{t('portfolio.categoryTip')}</p></div><div><label className="block text-sm font-medium text-gray-700">{t('form.desc')}</label><textarea required rows={3} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" value={portfolioForm.description} onChange={e => setPortfolioForm({ ...portfolioForm, description: e.target.value })} /></div><div className="bg-gray-50 p-3 rounded border border-gray-200"><label className="block text-sm font-medium text-gray-700 mb-2">{t('portfolio.media')}</label><div className="mb-3"><label className={`flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 ${portfolioImageUploading ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}><ImageIcon className="h-4 w-4" /><span>{portfolioImageUploading ? t('profile.uploading') : t('portfolio.addImages')}</span><input type="file" multiple accept="image/png,image/jpeg,image/webp" className="hidden" disabled={portfolioImageUploading} onChange={handlePortfolioImageUpload} /></label><div className="flex flex-wrap gap-2 mt-2">{portfolioForm.imageUrls?.map((url, idx) => (<div key={idx} className="relative w-16 h-16 border rounded overflow-hidden group bg-gray-100"><img src={url} alt="" className={offerImageInBox} /><button type="button" onClick={() => setPortfolioForm(prev => ({ ...prev, imageUrls: prev.imageUrls?.filter((_, i) => i !== idx) }))} className="absolute top-0 right-0 bg-red-500 text-white p-0.5 rounded-bl opacity-0 group-hover:opacity-100"><X className="h-3 w-3" /></button></div>))}</div><p className="text-xs text-gray-500 mt-1">{t('portfolio.maxImages')}</p></div><div><label className={`flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 ${portfolioVideoUploading ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}><Video className="h-4 w-4" /><span>{portfolioVideoUploading ? t('profile.uploading') : (portfolioForm.videoUrl ? t('portfolio.replaceVideo') : t('portfolio.addVideo'))}</span><input type="file" accept="video/*" className="hidden" disabled={portfolioVideoUploading} onChange={handlePortfolioVideoUpload} /></label>{portfolioForm.videoUrl && (<div className="mt-2 text-xs text-green-600 flex items-center"><CheckCircle className="h-3 w-3 mr-1" /> {t('portfolio.videoAttached')}<button type="button" onClick={() => setPortfolioForm(prev => ({ ...prev, videoUrl: undefined }))} className="ml-2 text-red-500 hover:underline">{t('portfolio.remove')}</button></div>)}<p className="text-xs text-gray-500 mt-1">{t('portfolio.video')}</p></div></div><div className="flex items-center"><input type="checkbox" id="publish" className="h-4 w-4 text-primary-600 border-gray-300 rounded" checked={portfolioForm.isPublished} onChange={e => setPortfolioForm({ ...portfolioForm, isPublished: e.target.checked })} /><label htmlFor="publish" className="ml-2 block text-sm text-gray-900">{t('form.publish')}</label></div><div className="flex justify-end space-x-3"><button type="button" onClick={() => setShowPortfolioModal(false)} className="text-gray-600 hover:text-gray-900">{t('form.cancel')}</button><button type="submit" disabled={portfolioImageUploading || portfolioVideoUploading} className="bg-primary-600 text-white px-4 py-2 rounded hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed">{portfolioImageUploading || portfolioVideoUploading ? t('profile.uploading') : t('form.save')}</button></div></form></Modal>
 
       {/* Portfolio Preview Modal */}
       {showPortfolioPreview && (() => {
@@ -1196,7 +1202,7 @@ export const ProducerProfile: React.FC = () => {
             <button
               type="button"
               className="fixed inset-0 bg-gray-900/90 transition-opacity"
-              aria-label="Close preview"
+              aria-label={t('common.close')}
               onClick={() => setShowPortfolioPreview(null)}
             />
             <div
@@ -1209,7 +1215,7 @@ export const ProducerProfile: React.FC = () => {
                 type="button"
                 onClick={() => setShowPortfolioPreview(null)}
                 className="absolute right-3 top-3 z-20 rounded-full bg-black/55 p-2 text-white hover:bg-black/75"
-                aria-label="Close"
+                aria-label={t('common.close')}
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1253,14 +1259,14 @@ export const ProducerProfile: React.FC = () => {
                       </div>
                     ) : (
                       <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                        Video uses a temporary local URL and cannot be played here after reload. Edit this item and upload again, or use a public <code className="rounded bg-amber-100 px-1">https://</code> link.
+                        {t('profile.portfolioVideoWarning')}
                       </p>
                     )
                   ) : null}
                   {gallery.length > 0 ? (
                     <div className="mt-6">
                       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        {gallery.length === 1 ? '1 more image' : `${gallery.length} more images`}
+                        {gallery.length === 1 ? t('profile.oneMoreImage') : `${t('profile.moreImages', { count: gallery.length })}`}
                       </p>
                       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                         {gallery.map((url, idx) => (

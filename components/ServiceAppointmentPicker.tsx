@@ -71,7 +71,7 @@ export const ServiceAppointmentPicker: React.FC<ServiceAppointmentPickerProps> =
         } as any);
         if (!alive) return;
         if (res?.blocked) {
-          setSlotBlockReason(res.reason ? `Unavailable: ${res.reason}` : 'Unavailable');
+          setSlotBlockReason(res.reason ? t('service.unavailableReason', { reason: res.reason }) : t('service.unavailable'));
           setServiceSlotStates([]);
           return;
         }
@@ -110,21 +110,21 @@ export const ServiceAppointmentPicker: React.FC<ServiceAppointmentPickerProps> =
             return {
               time: new Date(s.time),
               status: 'BOOKED_BY_ME' as const,
-              reason: 'Already in your cart',
+              reason: t('service.alreadyInCart'),
             };
           }
           if (s.status === 'BOOKED' && myBookedStarts.has(iso)) {
             return {
               time: new Date(s.time),
               status: 'BOOKED_BY_ME' as const,
-              reason: 'You already booked this slot',
+              reason: t('service.alreadyBooked'),
             };
           }
           if (s.status === 'BOOKED') {
             return {
               time: new Date(s.time),
               status: 'BOOKED' as const,
-              reason: s.reason || 'Already busy',
+              reason: s.reason || t('service.alreadyBusy'),
             };
           }
           return { time: new Date(s.time), status: 'AVAILABLE' as const };
@@ -132,7 +132,7 @@ export const ServiceAppointmentPicker: React.FC<ServiceAppointmentPickerProps> =
         setServiceSlotStates(allSlots);
       } catch {
         if (!alive) return;
-        setSlotBlockReason('Availability check failed. Please try another date.');
+        setSlotBlockReason(t('service.availabilityFailed'));
         setServiceSlotStates([]);
       } finally {
         if (alive) setSlotsLoading(false);
@@ -157,7 +157,7 @@ export const ServiceAppointmentPicker: React.FC<ServiceAppointmentPickerProps> =
     <div className={className}>
       <div className="mb-4">
         <label className="flex items-center gap-1 text-xs font-bold text-gray-500 mb-1">
-          <Calendar className="h-3.5 w-3.5" /> Date
+          <Calendar className="h-3.5 w-3.5" /> {t('service.date')}
         </label>
         <input
           type="date"
@@ -176,10 +176,10 @@ export const ServiceAppointmentPicker: React.FC<ServiceAppointmentPickerProps> =
         ) : serviceSlotStates.length === 0 ? (
           <div className="col-span-3 space-y-2 py-2">
             <p className="text-sm text-gray-500 italic">
-              {slotBlockReason || 'No slots available for this date.'}
+              {slotBlockReason || t('service.noSlots')}
             </p>
             <p className="text-xs text-gray-600 leading-relaxed">
-              Pick a day when the producer is available and choose an open time slot.
+              {t('service.pickDayHint')}
             </p>
           </div>
         ) : (
@@ -212,12 +212,12 @@ export const ServiceAppointmentPicker: React.FC<ServiceAppointmentPickerProps> =
                 {displayTime}
                 {slot.status === 'BOOKED_BY_ME' && (
                   <span className="absolute -top-2 right-1 rounded bg-blue-600 px-1 py-0.5 text-[9px] text-white">
-                    Mine
+                    {t('service.mine')}
                   </span>
                 )}
                 {slot.status === 'BOOKED' && (
                   <span className="absolute -top-2 right-1 rounded bg-gray-500 px-1 py-0.5 text-[9px] text-white">
-                    Busy
+                    {t('service.busy')}
                   </span>
                 )}
               </button>
@@ -226,7 +226,7 @@ export const ServiceAppointmentPicker: React.FC<ServiceAppointmentPickerProps> =
         )}
       </div>
       <p className="text-xs text-gray-500 mt-3 flex items-center">
-        <Clock className="h-3 w-3 mr-1" /> Duration: {Math.max(1, durationHours || 1)} hours per slot
+        <Clock className="h-3 w-3 mr-1" /> {t('service.duration', { hours: Math.max(1, durationHours || 1) })}
       </p>
     </div>
   );

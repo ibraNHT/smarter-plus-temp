@@ -3,6 +3,7 @@ import React, { useState, useLayoutEffect, useRef } from 'react';
 import { useStoreOptional } from '../services/storeContext';
 import { Notification } from '../types';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
+import { useTranslation } from '../services/i18nContext';
 
 const getSeenToastStorageKey = (userId?: string) =>
   userId ? `seen_toast_notifications:${userId}` : null;
@@ -38,6 +39,7 @@ const persistSeenToastIds = (userId: string, ids: Set<string>) => {
 };
 
 export const ToastContainer: React.FC = () => {
+  const { t } = useTranslation();
   const store = useStoreOptional();
   const [visibleToasts, setVisibleToasts] = useState<Notification[]>([]);
   const seenNotifyIdsRef = useRef<Set<string>>(new Set());
@@ -160,7 +162,7 @@ export const ToastContainer: React.FC = () => {
             </div>
             <div className="ml-3 w-0 flex-1 pt-0.5">
               <p className="text-sm font-medium text-gray-900">
-                {isSuccess ? 'Success' : isError ? 'Error' : isWarning ? 'Attention' : 'Info'}
+                {isSuccess ? t('toast.success') : isError ? t('toast.error') : isWarning ? t('toast.attention') : t('toast.info')}
               </p>
               <p className="mt-1 text-sm text-gray-600">
                 {toast.message}
@@ -171,7 +173,7 @@ export const ToastContainer: React.FC = () => {
                 onClick={() => removeToast(toast.id)}
                 className="bg-transparent rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none"
               >
-                <span className="sr-only">Close</span>
+                <span className="sr-only">{t('common.close')}</span>
                 <X className="h-5 w-5" />
               </button>
             </div>
