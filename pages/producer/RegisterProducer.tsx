@@ -547,7 +547,7 @@ export const RegisterProducer: React.FC = () => {
                   value={formik.values.phone}
                   onChange={formik.handleChange}
                   onBlur={formik.handleBlur}
-                  placeholder="612 345 678"
+                  placeholder={t('register.phonePlaceholder')}
                 />
               </div>
             </div>

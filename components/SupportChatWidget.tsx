@@ -292,12 +292,12 @@ export const SupportChatWidget: React.FC = () => {
   const headerStatus = supportAiTyping
     ? { label: t('support.chatStatusTyping'), dot: 'bg-amber-300 animate-pulse' }
     : supportChatSending
-      ? { label: 'Sending…', dot: 'bg-blue-300 animate-pulse' }
+      ? { label: t('support.chatStatusSending'), dot: 'bg-blue-300 animate-pulse' }
       : agentActive
-        ? { label: 'Agent connected', dot: 'bg-green-400' }
+        ? { label: t('support.chatStatusAgentConnected'), dot: 'bg-green-400' }
         : waitingForAgent
-          ? { label: 'Waiting for an agent…', dot: 'bg-yellow-400 animate-pulse' }
-          : { label: 'Online', dot: 'bg-green-400 animate-pulse' };
+          ? { label: t('support.chatStatusWaitingForAgent'), dot: 'bg-yellow-400 animate-pulse' }
+          : { label: t('support.chatStatusOnline'), dot: 'bg-green-400 animate-pulse' };
 
   if (!store) return null;
 
@@ -490,9 +490,9 @@ export const SupportChatWidget: React.FC = () => {
                           <span className="underline underline-offset-2">{t('chat.retry')}</span>
                         </button>
                       ) : isSending ? (
-                        <Clock className="h-3 w-3 opacity-80 animate-pulse" aria-label="Sending" />
+                        <Clock className="h-3 w-3 opacity-80 animate-pulse" aria-label={t('support.sending')} />
                       ) : isSent ? (
-                        <Check className="h-3 w-3 opacity-90" aria-label="Sent" />
+                        <Check className="h-3 w-3 opacity-90" aria-label={t('support.sent')} />
                       ) : null
                     ) : null}
                   </div>
@@ -522,12 +522,12 @@ export const SupportChatWidget: React.FC = () => {
                 />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium leading-snug">
-                    {agentActive ? 'Connected with a support agent' : 'Waiting for a human agent'}
+                    {agentActive ? t('support.connectedAgent') : t('support.waitingHumanTitle')}
                   </p>
                   <p className={`mt-0.5 leading-snug ${agentActive ? 'text-green-700' : 'text-yellow-700'}`}>
                     {agentActive
-                      ? 'An agent is with you — send your message below.'
-                      : 'An agent will reply here shortly. No response yet?'}
+                      ? t('support.agentWithYou')
+                      : t('support.waitingHumanDesc')}
                   </p>
                   <button
                     type="button"
@@ -563,14 +563,14 @@ export const SupportChatWidget: React.FC = () => {
                 ) : (
                   <Headphones className="h-3.5 w-3.5" aria-hidden />
                 )}
-                {requestingAgent ? 'Connecting…' : 'Talk to a human agent'}
+                {requestingAgent ? t('support.connecting') : t('support.talkToHuman')}
               </button>
             </div>
           )}
 
           {/* AI typing indicator */}
           {supportAiTyping && (
-            <div className="flex justify-start agm-chat-bubble-in" aria-live="polite" aria-label="Typing">
+            <div className="flex justify-start agm-chat-bubble-in" aria-live="polite" aria-label={t('support.typing')}>
               <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white mr-2 flex-shrink-0 shadow-sm">
                 <Bot className="h-4 w-4" />
               </div>

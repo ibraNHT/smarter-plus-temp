@@ -224,7 +224,7 @@ export const CreateOffer: React.FC = () => {
       return;
     }
     if (allOfferImages.length >= 3) {
-      setImageError('Maximum 3 images per offer.');
+      setImageError(t('form.maxImagesPerOffer'));
       return;
     }
     setImageError(null);
@@ -237,7 +237,7 @@ export const CreateOffer: React.FC = () => {
         setImageUrls(prev => [...prev, url]);
       }
     } catch (err) {
-      setImageError(err instanceof Error ? err.message : 'Image upload failed.');
+      setImageError(err instanceof Error ? err.message : t('form.uploadFailed'));
     } finally {
       setImageUploading(false);
     }
@@ -334,7 +334,7 @@ export const CreateOffer: React.FC = () => {
           imageUrls,
         });
         if (!result.success) {
-          setSubmitError(result.error ?? 'Could not update the offer.');
+          setSubmitError(result.error ?? t('form.updateOfferFailed'));
           return;
         }
       } else {
@@ -345,7 +345,7 @@ export const CreateOffer: React.FC = () => {
           imageUrls,
         });
         if (!result.success) {
-          setSubmitError(result.error ?? 'Could not publish the offer.');
+          setSubmitError(result.error ?? t('form.publishOfferFailed'));
           return;
         }
       }
@@ -482,7 +482,7 @@ export const CreateOffer: React.FC = () => {
                <p className="text-xs text-blue-700 mb-3">{t('form.aiHint')}</p>
                <div className="flex flex-col sm:flex-row gap-2">
                  <input type="text" className="block w-full min-w-0 border border-blue-200 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" 
-                    placeholder="e.g. sweet, crunchy, grown without pesticides, harvest 2023"
+                    placeholder={t('form.featuresPlaceholder')}
                     value={formData.features} onChange={e => setFormData({...formData, features: e.target.value})}
                  />
                  <button type="button" onClick={handleGenerateDescription} disabled={loadingAI || !formData.features}
@@ -517,7 +517,7 @@ export const CreateOffer: React.FC = () => {
                        {fieldErrors.serviceDuration && <p className="mt-1 text-xs text-red-600">{fieldErrors.serviceDuration}</p>}
                      </div>
                      <div>
-                       <p className="text-xs text-gray-500 mt-5">Clients will book timeslots of this duration based on your Availability Calendar.</p>
+                       <p className="text-xs text-gray-500 mt-5">{t('form.durationHint')}</p>
                      </div>
                   </div>
                </div>
@@ -530,7 +530,7 @@ export const CreateOffer: React.FC = () => {
                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
                    value={formData.listingCurrency}
                    onChange={e => setFormData({ ...formData, listingCurrency: e.target.value })}
-                   aria-label="Listing currency"
+                   aria-label={t('form.listingCurrencyAria')}
                  >
                    {SUPPORTED_CURRENCIES.map((code) => (
                      <option key={code} value={code}>
@@ -669,7 +669,7 @@ export const CreateOffer: React.FC = () => {
                          type="button"
                          onClick={() => removeOfferImage(idx)}
                          className="absolute right-1 top-1 rounded-full bg-black/55 p-1 text-white hover:bg-black/75"
-                         aria-label="Remove image"
+                         aria-label={t('form.removeImageAria')}
                        >
                          <X className="h-3 w-3" />
                        </button>

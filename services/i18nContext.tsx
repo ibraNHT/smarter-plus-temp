@@ -916,6 +916,12 @@ const translations: Record<string, Record<Language, string>> = {
   'support.chatReplying': { en: 'AgriBot is replying…', fr: 'AgriBot répond…' },
   'support.chatComposerPlaceholder': { en: 'Ask about orders, payments, listings…', fr: 'Posez une question sur les commandes, paiements, annonces…' },
   'support.sendingMessageAria': { en: 'Sending message', fr: 'Envoi du message' },
+  'support.chatStatusAgentConnected': { en: 'Agent connected', fr: 'Agent connecté' },
+  'support.chatStatusWaitingForAgent': { en: 'Waiting for an agent…', fr: 'En attente d\'un agent…' },
+  'support.sending': { en: 'Sending', fr: 'Envoi' },
+  'support.sent': { en: 'Sent', fr: 'Envoyé' },
+  'support.typing': { en: 'Typing', fr: 'En train d\'écrire' },
+  'chat.sendCounter': { en: 'Send Counter-Offer', fr: 'Envoyer une contre-proposition' },
   'chat.select': { en: 'Select a conversation', fr: 'Sélectionnez une conversation' },
   'chat.loadingMessages': { en: 'Loading messages…', fr: 'Chargement des messages…' },
   'chat.loadingChats': { en: 'Loading conversations…', fr: 'Chargement des conversations…' },
@@ -1921,6 +1927,109 @@ const translations: Record<string, Record<Language, string>> = {
   'portfolio.videoUploadFailed': { en: 'Video upload failed.', fr: 'Le téléversement de la vidéo a échoué.' },
   'portfolio.categoryExists': { en: 'You already have a portfolio for the "{category}" category. You can edit the existing one instead.', fr: 'Vous avez déjà un portfolio pour la catégorie « {category} ». Vous pouvez modifier celui qui existe déjà.' },
   'profile.thisProducer': { en: 'this producer', fr: 'ce producteur' },
+  // ── SupportChatWidget ─────────────────────────────────────────────────
+'support.connectedAgent': {
+  en: 'Connected with a support agent',
+  fr: 'Connecté avec un agent d’assistance',
+},
+'support.agentWithYou': {
+  en: 'An agent is with you — send your message below.',
+  fr: 'Un agent est avec vous — envoyez votre message ci-dessous.',
+},
+'support.talkToHuman': {
+  en: 'Talk to a human agent',
+  fr: 'Parler à un agent humain',
+},
+'support.connecting': {
+  en: 'Connecting…',
+  fr: 'Connexion…',
+},
+
+// ── ChatPage ──────────────────────────────────────────────────────────
+'chat.newNegotiationContext': {
+  en: 'New negotiation context:',
+  fr: 'Nouveau contexte de négociation :',
+},
+'chat.selectOfferFirst': {
+  en: 'Select an offer first',
+  fr: 'Sélectionnez d’abord une offre',
+},
+'chat.onlyProducerProposal': {
+  en: 'Only producer can open a new proposal round',
+  fr: 'Seul le producteur peut ouvrir un nouveau tour de proposition',
+},
+'chat.counterLimitReached': {
+  en: 'Counter-offer limit reached (3 per round)',
+  fr: 'Limite de contre-offres atteinte (3 par tour)',
+},
+'chat.offerNotNegotiable': {
+  en: 'This offer is not open for negotiation',
+  fr: 'Cette offre n’est pas ouverte à la négociation',
+},
+'chat.pricePlaceholder': {
+  en: 'e.g. 2500',
+  fr: 'ex: 2500',
+},
+'chat.quantityPlaceholder': {
+  en: 'e.g. 10',
+  fr: 'ex: 10',
+},
+
+// ── CreateOffer ──────────────────────────────────────────────────────
+'form.maxImagesPerOffer': {
+  en: 'Maximum 3 images per offer.',
+  fr: 'Maximum 3 images par offre.',
+},
+'form.uploadFailed': {
+  en: 'Image upload failed.',
+  fr: 'Le téléversement de l’image a échoué.',
+},
+'form.updateOfferFailed': {
+  en: 'Could not update the offer.',
+  fr: 'Impossible de mettre à jour l’offre.',
+},
+'form.publishOfferFailed': {
+  en: 'Could not publish the offer.',
+  fr: 'Impossible de publier l’offre.',
+},
+
+// ── PublicProfile ────────────────────────────────────────────────────
+'profile.userNotFound': {
+  en: 'User not found',
+  fr: 'Utilisateur non trouvé',
+},
+'profile.about': {
+  en: 'About',
+  fr: 'À propos',
+},
+'profile.businessSector': {
+  en: 'Business Sector',
+  fr: 'Secteur d’activité',
+},
+'profile.noDescription': {
+  en: 'No description provided.',
+  fr: 'Aucune description fournie.',
+},
+'profile.activeOffers': {
+  en: 'Active Offers',
+  fr: 'Offres actives',
+},
+'profile.noActiveOffers': {
+  en: 'No active offers at the moment.',
+  fr: 'Aucune offre active pour le moment.',
+},
+'portfolio.noItems': {
+  en: 'No portfolio items published yet.',
+  fr: 'Aucun élément de portfolio publié pour le moment.',
+},
+'profile.reviewsAndNotes': {
+  en: 'Reviews & Notes',
+  fr: 'Avis et notes',
+},
+'profile.noReviews': {
+  en: 'No reviews yet.',
+  fr: 'Aucun avis pour le moment.',
+},
 };
 
 const I18nContext = createContext<I18nContextType | undefined>(undefined);

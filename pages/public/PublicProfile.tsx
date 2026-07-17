@@ -287,7 +287,7 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
                   {isVerified && (
                     <span
                       className="inline-flex items-center mt-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
-                      title="Verified Producer"
+                      title={t('profile.verifiedProducer')}
                     >
                       <ShieldCheck className="w-4 h-4 mr-1" /> Verified
                     </span>

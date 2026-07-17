@@ -940,7 +940,7 @@ export const ProducerProfile: React.FC = () => {
                         <label className="block text-xs font-medium text-gray-600 mb-1">{t('location.searchAddress')}</label>
                         <input
                           type="text"
-                          placeholder="Type to search (OpenStreetMap)"
+                          placeholder={t('location.searchPlaceholder')}
                           value={locationSearch}
                           onChange={e => {
                             const value = e.target.value;
@@ -1215,7 +1215,7 @@ export const ProducerProfile: React.FC = () => {
                 type="button"
                 onClick={() => setShowPortfolioPreview(null)}
                 className="absolute right-3 top-3 z-20 rounded-full bg-black/55 p-2 text-white hover:bg-black/75"
-                aria-label="Close"
+                aria-label={t('common.close')}
               >
                 <X className="h-5 w-5" />
               </button>

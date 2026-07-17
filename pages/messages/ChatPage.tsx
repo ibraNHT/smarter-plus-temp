@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
@@ -446,14 +445,14 @@ export const ChatPage: React.FC = () => {
    const getOtherParticipantName = (chat: typeof chats[number]) => {
       const participantIds = chat.participantIds || [];
       const otherId = participantIds.find(id => id !== user?.id);
-      if (!otherId) return 'Unknown';
+      if (!otherId) return t('chat.unknown');
       const fromParticipantsData = chat.participantsData?.find((p) => p.id === otherId)?.displayName;
       if (fromParticipantsData && fromParticipantsData.trim()) return fromParticipantsData.trim();
       const client = clients.find(c => c.id === otherId || c.userId === otherId);
       if (client) {
          if (client.name) return client.name;
          if (client.firstName) return `${client.firstName} ${client.lastName || ''}`.trim();
-         return 'Unknown Client';
+         return t('chat.unknownClient');
       }
       const producer = producers.find(p => p.id === otherId || p.userId === otherId);
       if (producer) {
@@ -521,7 +520,7 @@ export const ChatPage: React.FC = () => {
          return;
       }
       if (!offer.isNegotiable) {
-         setProposalModalError('This offer is not open for negotiation.');
+         setProposalModalError(t('chat.offerNotNegotiable'));
          return;
       }
 
@@ -771,7 +770,7 @@ export const ChatPage: React.FC = () => {
                         </div>
                      </div>
                      <button onClick={() => navigate(-1)} className="text-sm text-gray-500 hover:text-primary-600 hidden md:block">
-                        Close
+                        {t('common.close')}
                      </button>
                   </div>
 
@@ -784,7 +783,7 @@ export const ChatPage: React.FC = () => {
                      {activeChat.offerId ? (
                         <div className="flex justify-center">
                            <div className="bg-gray-200 text-gray-700 text-[11px] px-3 py-1 rounded-full">
-                              New negotiation context: {getOfferContextLabel(activeChat.offerId)}
+                              {t('chat.newNegotiationContext')} {getOfferContextLabel(activeChat.offerId)}
                            </div>
                         </div>
                      ) : null}
@@ -996,7 +995,7 @@ export const ChatPage: React.FC = () => {
                            }}
                            disabled={!activeChat?.offerId || !(getOfferById(activeChat?.offerId || '')?.isNegotiable ?? false) || !canSendMoreCounters || !canInitiateFirstProposal}
                            className="mb-1 p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                           title={!activeChat?.offerId ? 'Select an offer first' : (!canInitiateFirstProposal ? 'Only producer can open a new proposal round' : (!canSendMoreCounters ? 'Counter-offer limit reached (3 per round)' : (getOfferById(activeChat?.offerId || '')?.isNegotiable ? 'Make Proposal' : 'This offer is not open for negotiation')))}
+                           title={!activeChat?.offerId ? t('chat.selectOfferFirst') : (!canInitiateFirstProposal ? t('chat.onlyProducerProposal') : (!canSendMoreCounters ? t('chat.counterLimitReached') : (getOfferById(activeChat?.offerId || '')?.isNegotiable ? 'Make Proposal' : 'This offer is not open for negotiation')))}
                         >
                            <Gavel className="h-6 w-6 text-primary-600" />
                         </button>
@@ -1040,7 +1039,7 @@ export const ChatPage: React.FC = () => {
                <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
                   <MessageCircle className="h-16 w-16 mb-4 opacity-20" />
                   <p>{t('chat.select')}</p>
-                  <button onClick={() => navigate(-1)} className="mt-4 md:hidden text-primary-600">Go Back</button>
+                  <button onClick={() => navigate(-1)} className="mt-4 md:hidden text-primary-600">{t('profile.tabs.back')}</button>
                </div>
             )}
          </div>
@@ -1116,7 +1115,7 @@ export const ChatPage: React.FC = () => {
                                  ? String(Number(listingOffer.price || 0).toLocaleString())
                                  : maxPricePerUnit != null
                                     ? `${minPricePerUnit.toLocaleString()} - ${maxPricePerUnit.toLocaleString()}`
-                                    : 'e.g. 2500'
+                                    : t('chat.pricePlaceholder')
                            }
                            value={proposalPriceStr}
                            onChange={(e) => {
@@ -1139,7 +1138,7 @@ export const ChatPage: React.FC = () => {
                            type="text"
                            inputMode="decimal"
                            autoComplete="off"
-                           placeholder={isServiceListing ? '1' : 'e.g. 10'}
+                           placeholder={isServiceListing ? '1' : t('form.quantityPlaceholder')}
                            value={proposalQtyStr}
                            onChange={(e) => {
                               setProposalQtyStr(e.target.value.replace(/[^\d.,]/g, ''));
@@ -1182,7 +1181,7 @@ export const ChatPage: React.FC = () => {
                         className="px-4 py-2 bg-primary-600 text-white rounded-md text-sm font-bold hover:bg-primary-700 disabled:opacity-60 inline-flex items-center justify-center gap-2"
                      >
                         {proposalSending && <Spinner className="h-4 w-4" label="Sending proposal" />}
-                        {proposalSending ? 'Sending…' : t('chat.proposed')}
+                        {proposalSending ? t('support.chatStatusChanging') : t('chat.proposed')}
                      </button>
                   </div>
          </Modal>
@@ -1335,7 +1334,7 @@ export const ChatPage: React.FC = () => {
                         className="px-4 py-2 bg-yellow-500 text-white rounded-md text-sm font-bold hover:bg-yellow-600 disabled:opacity-60 inline-flex items-center justify-center gap-2"
                      >
                         {counterSending && <Spinner className="h-4 w-4" label="Sending counter-offer" />}
-                        {counterSending ? 'Sending…' : 'Send Counter-Offer'}
+                        {counterSending ? t('support.chatStatusSending') : t('chat.sendCounter')}
                      </button>
                   </div>
          </Modal>
