@@ -699,6 +699,19 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   userRef.current = user;
   const supportSessionIdRef = useRef<string | null>(supportSessionId);
   supportSessionIdRef.current = supportSessionId;
+  const supportSessionStatusRef = useRef<SupportSessionStatus>(supportSessionStatus);
+  supportSessionStatusRef.current = supportSessionStatus;
+
+  // Once a human agent is actually connected, drop the transient "Connecting you
+  // with a support agent…" placeholder — there's nothing to "connect" anymore.
+  useEffect(() => {
+    if (supportSessionStatus !== 'AGENT_ACTIVE') return;
+    setSupportMessages((prev) =>
+      prev.some((m) => m.id.startsWith('s-connecting-'))
+        ? prev.filter((m) => !m.id.startsWith('s-connecting-'))
+        : prev,
+    );
+  }, [supportSessionStatus]);
   // True while the /notifications socket is connected. The chat page reads
   // this via `useStore()` to decide whether to fall back to polling.
   const [realtimeConnected, setRealtimeConnected] = useState<boolean>(false);
@@ -3601,19 +3614,21 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       });
       if (res.handover) {
         setIsHandedOver(true);
-        setTimeout(
-          () =>
-            setSupportMessages((prev) => [
-              ...prev,
-              {
-                id: `s-${Date.now()}`,
-                sender: 'AGENT',
-                text: 'Connecting you with a support agent…',
-                timestamp: new Date().toISOString(),
-              },
-            ]),
-          1000,
-        );
+        setSupportSessionStatus('WAITING_FOR_AGENT');
+        setTimeout(() => {
+          // If an agent already picked up the session in the meantime, skip the
+          // "connecting…" placeholder entirely.
+          if (supportSessionStatusRef.current === 'AGENT_ACTIVE') return;
+          setSupportMessages((prev) => [
+            ...prev,
+            {
+              id: `s-connecting-${Date.now()}`,
+              sender: 'AGENT',
+              text: 'Connecting you with a support agent…',
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+        }, 1000);
       }
     } catch (e) {
       logApiFailure('Support AI chat failed', e);
@@ -3671,6 +3686,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // notifies the support inbox live so an agent can pick it up.
   const requestHumanAgent = async () => {
     if (requestingAgent) return;
+    // An agent is already connected — nothing to request and no "connecting" popup.
+    if (supportSessionStatusRef.current === 'AGENT_ACTIVE') return;
     setRequestingAgent(true);
     try {
       let sessionId = supportSessionIdRef.current ?? supportSessionId;
@@ -3693,7 +3710,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setSupportMessages((prev) => [
         ...prev,
         {
-          id: `s-${Date.now()}`,
+          id: `s-connecting-${Date.now()}`,
           sender: 'AGENT',
           text: 'Connecting you with a support agent… They will reply right here shortly.',
           timestamp: new Date().toISOString(),
