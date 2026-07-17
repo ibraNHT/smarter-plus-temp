@@ -242,8 +242,8 @@ export const ChatPage: React.FC = () => {
       const yesterday = new Date(today);
       yesterday.setDate(today.getDate() - 1);
       const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-      if (msgDay.getTime() === today.getTime()) return 'Today';
-      if (msgDay.getTime() === yesterday.getTime()) return 'Yesterday';
+      if (msgDay.getTime() === today.getTime()) return t('chat.today');
+      if (msgDay.getTime() === yesterday.getTime()) return t('chat.yesterday');
       return d.toLocaleDateString();
    };
 
@@ -254,8 +254,8 @@ export const ChatPage: React.FC = () => {
       const yesterday = new Date(today);
       yesterday.setDate(today.getDate() - 1);
       const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-      if (msgDay.getTime() === today.getTime()) return 'Today';
-      if (msgDay.getTime() === yesterday.getTime()) return 'Yesterday';
+      if (msgDay.getTime() === today.getTime()) return t('chat.today');
+      if (msgDay.getTime() === yesterday.getTime()) return t('chat.yesterday');
       return d.toLocaleDateString();
    };
 
@@ -459,16 +459,16 @@ export const ChatPage: React.FC = () => {
       if (producer) {
          if (producer.name) return producer.name;
          if (producer.firstName) return `${producer.firstName} ${producer.lastName || ''}`.trim();
-         return 'Unknown Producer';
+         return t('chat.unknownProducer');
       }
-      return 'User';
+      return t('chat.user');
    };
 
    const getOfferContextLabel = (offerId?: string) => {
       if (!offerId) return '';
       const offer = getOfferById(offerId);
-      if (!offer) return 'Offer';
-      const typeLabel = String(offer.type || '').toUpperCase() === 'SERVICE' ? 'Service' : 'Product';
+      if (!offer) return t('chat.offer');
+      const typeLabel = String(offer.type || '').toUpperCase() === 'SERVICE' ? t('chat.service') : t('chat.product');
       return `${typeLabel}: ${offer.title}`;
    };
 
