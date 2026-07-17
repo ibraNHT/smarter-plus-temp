@@ -80,7 +80,7 @@ export default defineConfig(({ mode }) => {
 
       react({
 
-        fastRefresh: true,
+        // fastRefresh: true,
 
       }),
 

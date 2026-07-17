@@ -515,7 +515,7 @@ export const WalletDashboard: React.FC = () => {
         <OtpVerificationModal
           open={showOtpModal}
           onClose={() => { setShowOtpModal(false); setPendingWithdraw(null); }}
-          action={t('wallet.withdrawal')}
+          action="WITHDRAWAL"
           onRequestOtp={requestOtp}
           onVerifyOtp={verifyOtp}
           onVerified={handleOtpVerifiedForWithdraw}
