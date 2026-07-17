@@ -122,7 +122,7 @@ export const LoginPage: React.FC = () => {
   const forgotEmailFormik = useFormik({
     initialValues: { forgotEmail: '' },
     validate: (values) => {
-      const parsed = z.object({ forgotEmail: z.string().trim().email('Please enter a valid email.') }).safeParse(values);
+      const parsed = z.object({ forgotEmail: z.string().trim().email(t('auth.emailRequired')) }).safeParse(values);
       if (parsed.success) return {};
       return { forgotEmail: parsed.error.issues[0]?.message || 'Invalid email' };
     },
@@ -233,14 +233,14 @@ export const LoginPage: React.FC = () => {
     z.object({
       email:
         method === 'email'
-          ? z.string().trim().email('Please enter a valid email.')
+          ? z.string().trim().email(t('auth.emailRequired'))
           : z.string(),
       phoneCode: z.string().min(1),
       phone:
         method === 'phone'
-          ? z.string().trim().min(1, 'Enter your phone number.').min(6, 'Enter a valid phone number (at least 6 digits).')
+          ? z.string().trim().min(1, t('validation.phoneRequired')).min(6, t('validation.phoneMin'))
           : z.string(),
-      password: z.string().trim().min(1, 'Enter your password.'),
+      password: z.string().trim().min(1, t('auth.passwordRequired')),
     });
   const loginFormik = useFormik<LoginFormValues>({
     initialValues: {
@@ -282,10 +282,10 @@ export const LoginPage: React.FC = () => {
           } catch { /* sessionStorage may be unavailable */ }
           navigate(redirectTo);
         } else {
-          setError(result.message || 'Login failed. Please check your credentials.');
+          setError(result.message || t('auth.loginFailed'));
         }
       } catch {
-        setError('An unexpected error occurred. Please try again.');
+        setError(t('auth.unexpectedError'));
       } finally {
         setIsLoading(false);
       }
@@ -468,7 +468,7 @@ export const LoginPage: React.FC = () => {
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
                     className="absolute inset-y-0 right-2 my-auto inline-flex h-8 w-8 items-center justify-center rounded text-gray-500 hover:text-gray-700 focus:outline-none"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-label={showPassword ? t('ui.hidePassword') : t('ui.showPassword')}
                   >
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>

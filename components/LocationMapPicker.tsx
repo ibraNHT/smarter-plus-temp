@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { loadGooglePlacesApi } from '../services/googlePlaces';
 import { DEFAULT_MAP_CENTER } from '../services/geolocation';
+import { useTranslation } from '../services/i18nContext';
 
 let leafletLoadPromise: Promise<void> | null = null;
 
@@ -44,6 +45,7 @@ export const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
   height = 'min(280px, 50vh)',
   className = '',
 }) => {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const googleMarkerRef = useRef<{ map: any; marker: any } | null>(null);
   const leafletRef = useRef<{ map: any; marker: any } | null>(null);
@@ -161,7 +163,7 @@ export const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
       className={`w-full rounded-lg border border-gray-200 overflow-hidden bg-gray-100 ${className}`}
       style={{ height }}
       role="application"
-      aria-label="Map: drag the pin or click to set your location"
+      aria-label={t('map.locationPickerAria')}
     />
   );
 };

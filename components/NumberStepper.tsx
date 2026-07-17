@@ -1,5 +1,6 @@
 import React from 'react';
 import { Minus, Plus } from 'lucide-react';
+import { useTranslation } from '../services/i18nContext';
 
 interface NumberStepperProps {
   value: number;
@@ -12,6 +13,8 @@ interface NumberStepperProps {
   /** Extra classes for the inner <input>. */
   className?: string;
   ariaLabel?: string;
+  /** Shown when value is 0 (useful for price entry). */
+  placeholder?: string;
 }
 
 /**
@@ -29,7 +32,9 @@ const NumberStepper: React.FC<NumberStepperProps> = ({
   id,
   className = '',
   ariaLabel,
+  placeholder,
 }) => {
+  const { t } = useTranslation();
   const clamp = (n: number): number => {
     if (Number.isNaN(n)) n = min ?? 0;
     if (min != null && n < min) n = min;
@@ -40,6 +45,7 @@ const NumberStepper: React.FC<NumberStepperProps> = ({
   const current = Number(value) || 0;
   const atMin = min != null && current <= min;
   const atMax = max != null && current >= max;
+  const displayValue = placeholder && current === 0 ? '' : value;
 
   return (
     <div className="mt-1 flex items-stretch">
@@ -47,7 +53,7 @@ const NumberStepper: React.FC<NumberStepperProps> = ({
         type="button"
         onClick={() => onChange(clamp(current - step))}
         disabled={atMin}
-        aria-label="Decrease"
+        aria-label={t('stepper.decrease')}
         className="flex items-center justify-center w-10 flex-shrink-0 border border-gray-300 rounded-l-md bg-gray-50 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <Minus className="h-4 w-4" />
@@ -55,21 +61,29 @@ const NumberStepper: React.FC<NumberStepperProps> = ({
       <input
         id={id}
         type="number"
-        inputMode="numeric"
+        inputMode="decimal"
         aria-label={ariaLabel}
         required={required}
         min={min}
         max={max}
         step={step}
-        value={value}
-        onChange={(e) => onChange(clamp(Number(e.target.value)))}
-        className={`block w-full min-w-0 border-y border-gray-300 p-2 text-center focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900 ${className}`}
+        placeholder={placeholder}
+        value={displayValue}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (raw === '') {
+            onChange(min != null && min > 0 ? min : 0);
+            return;
+          }
+          onChange(clamp(Number(raw)));
+        }}
+        className={`block w-full min-w-0 border-y border-gray-300 p-2 text-center focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900 placeholder:text-gray-400 ${className}`}
       />
       <button
         type="button"
         onClick={() => onChange(clamp(current + step))}
         disabled={atMax}
-        aria-label="Increase"
+        aria-label={t('stepper.increase')}
         className="flex items-center justify-center w-10 flex-shrink-0 border border-gray-300 rounded-r-md bg-gray-50 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <Plus className="h-4 w-4" />

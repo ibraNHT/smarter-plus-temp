@@ -10,12 +10,14 @@ import { Spinner } from '../../components/Spinner';
 import { ListSkeleton } from '../../components/Loaders';
 import { Modal } from '../../components/Modal';
 import { ServiceAppointmentPicker } from '../../components/ServiceAppointmentPicker';
+import { useCurrency } from '../../contexts/CurrencyContext';
 
 export const ChatPage: React.FC = () => {
    const { chatId } = useParams<{ chatId: string }>();
    const navigate = useNavigate();
    const { user, chats, messages, typingByChatId, realtimeConnected, sendMessage, retryMessage, emitTyping, respondToProposal, clients, producers, getOfferById, fetchChats, fetchMessages, refreshOffers, refreshProducers, refreshClients, orders, cart } = useStore();
    const { t } = useTranslation();
+   const { formatXaf, currencyLabel, toXaf, fromXaf } = useCurrency();
 
    const [inputText, setInputText] = useState('');
    const [showProposalModal, setShowProposalModal] = useState(false);
@@ -523,11 +525,11 @@ export const ChatPage: React.FC = () => {
          return;
       }
 
-      const price = parseFloat(String(proposalPriceStr).replace(',', '.').trim());
+      const priceDisplay = parseFloat(String(proposalPriceStr).replace(',', '.').trim());
       const qty = parseFloat(String(proposalQtyStr).replace(',', '.').trim());
       let hasFieldError = false;
       const serviceProposal = String(offer.type ?? '').toUpperCase() === OfferType.SERVICE;
-      if (!Number.isFinite(price) || price <= 0) {
+      if (!Number.isFinite(priceDisplay) || priceDisplay <= 0) {
          setProposalPriceError(serviceProposal ? 'Enter a valid service rate (greater than 0).' : 'Enter a valid price per unit (greater than 0).');
          hasFieldError = true;
       }
@@ -537,12 +539,13 @@ export const ChatPage: React.FC = () => {
       }
       if (hasFieldError) return;
 
+      const price = toXaf(priceDisplay);
       if (price < minPricePerUnit) {
-         setProposalPriceError(`Price must be at least ${minPricePerUnit.toLocaleString()} XAF.`);
+         setProposalPriceError(`Price must be at least ${formatXaf(minPricePerUnit)}.`);
          return;
       }
       if (maxPricePerUnit != null && price > maxPricePerUnit) {
-         setProposalPriceError(`Price cannot exceed ${maxPricePerUnit.toLocaleString()} XAF.`);
+         setProposalPriceError(`Price cannot exceed ${formatXaf(maxPricePerUnit)}.`);
          return;
       }
 
@@ -569,7 +572,7 @@ export const ChatPage: React.FC = () => {
       setCounterPriceError('');
       setCounterQtyError('');
       setCounterTargetMsgId(msgId);
-      setCounterPrice(Number(currentPrice) || 0);
+      setCounterPrice(fromXaf(Number(currentPrice) || 0));
       setCounterQty(Number(currentQty) || 0);
       setShowCounterModal(true);
    };
@@ -631,18 +634,19 @@ export const ChatPage: React.FC = () => {
       }
       if (hasFieldError) return;
 
-      if (counterPrice < minPricePerUnit) {
-         setCounterPriceError(`Price must be at least ${minPricePerUnit.toLocaleString()} XAF.`);
+      const priceXaf = toXaf(counterPrice);
+      if (priceXaf < minPricePerUnit) {
+         setCounterPriceError(`Price must be at least ${formatXaf(minPricePerUnit)}.`);
          return;
       }
-      if (maxPricePerUnit != null && counterPrice > maxPricePerUnit) {
-         setCounterPriceError(`Price cannot exceed ${maxPricePerUnit.toLocaleString()} XAF.`);
+      if (maxPricePerUnit != null && priceXaf > maxPricePerUnit) {
+         setCounterPriceError(`Price cannot exceed ${formatXaf(maxPricePerUnit)}.`);
          return;
       }
 
       setCounterSending(true);
       try {
-         const ok = await respondToProposal(chatId, counterTargetMsgId, 'COUNTER', counterPrice, counterQty);
+         const ok = await respondToProposal(chatId, counterTargetMsgId, 'COUNTER', priceXaf, counterQty);
          if (ok) {
             setCounterPriceError('');
             setCounterQtyError('');
@@ -688,7 +692,7 @@ export const ChatPage: React.FC = () => {
          const p = parseFloat(String(proposalPriceStr).replace(',', '.').trim());
          const q = parseFloat(String(proposalQtyStr).replace(',', '.').trim());
          if (!Number.isFinite(p) || !Number.isFinite(q)) return null;
-         return p * q;
+         return toXaf(p) * q;
       })();
 
    return (
@@ -864,7 +868,7 @@ export const ChatPage: React.FC = () => {
                                        <div className="space-y-1 text-sm">
                                           <div className="flex justify-between">
                                              <span>{isServiceProposal(msg) ? t('chat.serviceRate') : t('chat.pricePerUnit')}:</span>
-                                             <span className="font-mono font-bold">{msg.proposal.pricePerUnit} XAF</span>
+                                             <span className="font-mono font-bold">{formatXaf(msg.proposal.pricePerUnit)}</span>
                                           </div>
                                           <div className="flex justify-between">
                                              <span>{isServiceProposal(msg) ? t('chat.serviceSessions') : t('form.quantity')}:</span>
@@ -872,7 +876,7 @@ export const ChatPage: React.FC = () => {
                                           </div>
                                           <div className="flex justify-between pt-1 border-t border-white/20 mt-1">
                                              <span>{isServiceProposal(msg) ? t('chat.estimatedTotal') : t('chat.total')}:</span>
-                                             <span className="font-mono font-bold">{(msg.proposal.pricePerUnit * msg.proposal.quantity).toLocaleString()} XAF</span>
+                                             <span className="font-mono font-bold">{formatXaf(msg.proposal.pricePerUnit * msg.proposal.quantity)}</span>
                                           </div>
                                        </div>
 
@@ -924,11 +928,11 @@ export const ChatPage: React.FC = () => {
                                              type="button"
                                              onClick={() => void handleRetryMessage(msg.clientId)}
                                              className="inline-flex items-center gap-0.5 text-red-200 hover:text-white"
-                                             title="Failed to send — tap to retry"
-                                             aria-label="Retry sending message"
+                                             title={t('chat.failedToSend')}
+                                             aria-label={t('chat.retry')}
                                           >
                                              <AlertCircle className="h-3 w-3" />
-                                             <span className="underline underline-offset-2">retry</span>
+                                             <span className="underline underline-offset-2">{t('chat.retry')}</span>
                                           </button>
                                        ) : isSending ? (
                                           <Clock className="h-3 w-3 opacity-80" aria-label="Sending" />
@@ -946,7 +950,7 @@ export const ChatPage: React.FC = () => {
                      {otherTyping ? (
                         <div className="flex justify-start agm-chat-bubble-in" aria-live="polite">
                            <div className="bg-white text-gray-500 border border-gray-200 rounded-lg rounded-bl-none px-3 py-2 shadow-sm inline-flex items-center gap-2">
-                              <span className="text-xs">{getOtherParticipantName(activeChat)} is typing</span>
+                              <span className="text-xs">{getOtherParticipantName(activeChat)} {t('chat.isTyping')}</span>
                               <span className="agm-typing-dots" aria-hidden="true">
                                  <span className="agm-typing-dot" />
                                  <span className="agm-typing-dot" />
@@ -1021,7 +1025,7 @@ export const ChatPage: React.FC = () => {
                         <button
                            type="submit"
                            disabled={!inputText.trim()}
-                           aria-label="Send message"
+                           aria-label={t('chat.sendMessage')}
                            className="mb-1 p-2 bg-primary-600 text-white rounded-full hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 inline-flex items-center justify-center"
                         >
                            <Send className="h-5 w-5" />
@@ -1062,18 +1066,18 @@ export const ChatPage: React.FC = () => {
                      <div className="text-xs text-gray-500 mb-3 space-y-1">
                         <p>
                            {t('chat.serviceListedRate')
-                              .replace('{price}', Number(listingOffer.price || 0).toLocaleString())
+                              .replace('{price}', formatXaf(Number(listingOffer.price || 0)))
                               .replace('{unit}', listingUnitLabel)}
                         </p>
                         {maxPricePerUnit != null && (
                            <p>
                               {minPricePerUnit > 0
                                  ? t('chat.serviceRateRange')
-                                    .replace('{min}', minPricePerUnit.toLocaleString())
-                                    .replace('{max}', maxPricePerUnit.toLocaleString())
+                                    .replace('{min}', formatXaf(minPricePerUnit))
+                                    .replace('{max}', formatXaf(maxPricePerUnit))
                                     .replace('{unit}', listingUnitLabel)
                                  : t('chat.serviceRateUpTo')
-                                    .replace('{max}', maxPricePerUnit.toLocaleString())
+                                    .replace('{max}', formatXaf(maxPricePerUnit))
                                     .replace('{unit}', listingUnitLabel)}
                            </p>
                         )}
@@ -1085,9 +1089,9 @@ export const ChatPage: React.FC = () => {
                      <p className="text-xs text-gray-500 mb-3">
                         {minPricePerUnit > 0
                            ? t('chat.productRateRange')
-                              .replace('{min}', minPricePerUnit.toLocaleString())
-                              .replace('{max}', maxPricePerUnit.toLocaleString())
-                           : t('chat.productRateUpTo').replace('{max}', maxPricePerUnit.toLocaleString())}
+                              .replace('{min}', formatXaf(minPricePerUnit))
+                              .replace('{max}', formatXaf(maxPricePerUnit))
+                           : t('chat.productRateUpTo').replace('{max}', formatXaf(maxPricePerUnit))}
                      </p>
                   ) : null}
                   {proposalModalError ? (
@@ -1100,8 +1104,8 @@ export const ChatPage: React.FC = () => {
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                            {isServiceListing
-                              ? `${t('chat.serviceRate')} (${listingUnitLabel}) (XAF)`
-                              : `${t('chat.pricePerUnit')} (XAF)`}
+                              ? `${t('chat.serviceRate')} (${listingUnitLabel}) (${currencyLabel()})`
+                              : `${t('chat.pricePerUnit')} (${currencyLabel()})`}
                         </label>
                         <input
                            type="text"
@@ -1153,7 +1157,7 @@ export const ChatPage: React.FC = () => {
                         <div className="bg-gray-50 p-3 rounded text-sm">
                            <div className="flex justify-between font-bold text-gray-900">
                               <span>{isServiceListing ? t('chat.estimatedTotal') : t('chat.total')}:</span>
-                              <span>{Math.round(proposalTotalPreview).toLocaleString()} XAF</span>
+                              <span>{formatXaf(Math.round(proposalTotalPreview))}</span>
                            </div>
                         </div>
                      )}
@@ -1249,17 +1253,17 @@ export const ChatPage: React.FC = () => {
                         <> {isServiceListing
                            ? (minPricePerUnit > 0
                               ? t('chat.serviceRateRange')
-                                 .replace('{min}', minPricePerUnit.toLocaleString())
-                                 .replace('{max}', maxPricePerUnit.toLocaleString())
+                                 .replace('{min}', formatXaf(minPricePerUnit))
+                                 .replace('{max}', formatXaf(maxPricePerUnit))
                                  .replace('{unit}', listingUnitLabel)
                               : t('chat.serviceRateUpTo')
-                                 .replace('{max}', maxPricePerUnit.toLocaleString())
+                                 .replace('{max}', formatXaf(maxPricePerUnit))
                                  .replace('{unit}', listingUnitLabel))
                            : (minPricePerUnit > 0
                               ? t('chat.productRateRange')
-                                 .replace('{min}', minPricePerUnit.toLocaleString())
-                                 .replace('{max}', maxPricePerUnit.toLocaleString())
-                              : t('chat.productRateUpTo').replace('{max}', maxPricePerUnit.toLocaleString()))}
+                                 .replace('{min}', formatXaf(minPricePerUnit))
+                                 .replace('{max}', formatXaf(maxPricePerUnit))
+                              : t('chat.productRateUpTo').replace('{max}', formatXaf(maxPricePerUnit)))}
                         </>
                      )}
                   </p>
@@ -1267,8 +1271,8 @@ export const ChatPage: React.FC = () => {
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                            {isServiceListing
-                              ? `${t('chat.serviceRate')} (${listingUnitLabel}) (XAF)`
-                              : `${t('chat.pricePerUnit')} (XAF)`}
+                              ? `${t('chat.serviceRate')} (${listingUnitLabel}) (${currencyLabel()})`
+                              : `${t('chat.pricePerUnit')} (${currencyLabel()})`}
                         </label>
                         <input
                            type="number"
@@ -1308,7 +1312,7 @@ export const ChatPage: React.FC = () => {
                      <div className="bg-gray-50 p-3 rounded text-sm">
                         <div className="flex justify-between font-bold text-gray-900">
                            <span>{isServiceListing ? t('chat.estimatedTotal') : 'New Total'}:</span>
-                           <span>{(Number(counterPrice) * Number(counterQty)).toLocaleString()} XAF</span>
+                           <span>{formatXaf(toXaf(Number(counterPrice)) * Number(counterQty))}</span>
                         </div>
                      </div>
                   </div>

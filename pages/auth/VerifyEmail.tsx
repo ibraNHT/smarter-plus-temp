@@ -81,7 +81,7 @@ export const VerifyEmail: React.FC = () => {
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 text-lg border-gray-300 rounded-md p-3 text-center tracking-[0.35em] bg-white text-gray-900"
-                placeholder="123456"
+                placeholder={t('verify.placeholder')}
                 maxLength={6}
                 value={code}
                 onChange={(e) => { setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }}
@@ -95,7 +95,7 @@ export const VerifyEmail: React.FC = () => {
             disabled={isLoading || code.length < 6}
             className="w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 shadow-md transition-colors disabled:opacity-60 min-h-[44px]"
           >
-            {isLoading ? 'Verifying…' : t('verify.submit')}
+            {isLoading ? t('verify.verifying') : t('verify.submit')}
           </button>
         </form>
 

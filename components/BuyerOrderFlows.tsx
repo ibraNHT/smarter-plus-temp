@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../services/storeContext';
 import { useTranslation } from '../services/i18nContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { showAppToast } from '../services/appToast';
 import { Modal } from './Modal';
 import { ConfirmModal } from './ConfirmModal';
@@ -78,6 +79,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
     refreshWallet,
   } = useStore();
   const { t } = useTranslation();
+  const { formatXaf } = useCurrency();
 
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewOrderId, setReviewOrderId] = useState<string | null>(null);
@@ -121,7 +123,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
     validate: (values) => {
       const parsed = z
         .object({
-          comment: z.string().trim().min(2, 'Please add a short comment.'),
+          comment: z.string().trim().min(2, t('review.commentRequired')),
           rating: z.number().min(1).max(5),
         })
         .safeParse(values);
@@ -151,10 +153,10 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
     initialValues: { disputeReason: '' },
     validate: (values) => {
       const parsed = z
-        .object({ disputeReason: z.string().trim().min(5, 'Please describe the issue in at least 5 characters.') })
+        .object({ disputeReason: z.string().trim().min(5, t('order.disputeReasonRequired')) })
         .safeParse(values);
       if (parsed.success) return {};
-      return { disputeReason: parsed.error.issues[0]?.message || 'Invalid reason.' };
+      return { disputeReason: parsed.error.issues[0]?.message || t('order.invalidReason') };
     },
     onSubmit: (values, { setFieldError }) => {
       if (disputeOrderId) {
@@ -174,7 +176,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
       ? p.name ||
           (p as any).user?.displayName ||
           `${(p.firstName ?? '').trim()} ${(p.lastName ?? '').trim()}`.trim()
-      : 'Unknown Producer';
+      : t('market.unknownProducer');
   };
 
   const getProducerDisplayName = (order: Order) => order.producerDisplayName || getProducerName(order.producerId);
@@ -413,11 +415,11 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{item.title || item.description || 'Item'}</p>
                       <p className="text-xs text-gray-500">
-                        {item.cartQuantity ?? item.quantity ?? 1} {item.unit || 'units'} × {(item.price ?? 0).toLocaleString()} XAF
+                        {item.cartQuantity ?? item.quantity ?? 1} {item.unit || 'units'} × {formatXaf(item.price ?? 0)}
                       </p>
                     </div>
                     <span className="text-sm font-bold text-gray-900 flex-shrink-0">
-                      {((item.price ?? 0) * (item.cartQuantity ?? item.quantity ?? 1)).toLocaleString()} XAF
+                      {formatXaf((item.price ?? 0) * (item.cartQuantity ?? item.quantity ?? 1))}
                     </span>
                   </div>
                 ))}
@@ -427,21 +429,21 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
             <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 mb-4 space-y-2 text-sm">
               <div className="flex justify-between text-gray-600">
                 <span>{t('cart.subtotal')}</span>
-                <span className="font-medium">{payOrder.subtotal.toLocaleString()} XAF</span>
+                <span className="font-medium">{formatXaf(payOrder.subtotal)}</span>
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>{t('cart.serviceFee')}</span>
-                <span className="font-medium">{payOrder.serviceFee.toLocaleString()} XAF</span>
+                <span className="font-medium">{formatXaf(payOrder.serviceFee)}</span>
               </div>
               {(payOrder.discountAmount ?? 0) > 0 && (
                 <div className="flex justify-between text-green-600 font-medium">
                   <span>Discount Applied</span>
-                  <span>- {(payOrder.discountAmount ?? 0).toLocaleString()} XAF</span>
+                  <span>- {formatXaf(payOrder.discountAmount ?? 0)}</span>
                 </div>
               )}
               <div className="flex justify-between font-bold text-gray-900 border-t border-gray-200 pt-2 mt-1">
                 <span>{t('cart.total')}</span>
-                <span className="text-primary-600 text-base">{payOrder.totalAmount.toLocaleString()} XAF</span>
+                <span className="text-primary-600 text-base">{formatXaf(payOrder.totalAmount)}</span>
               </div>
             </div>
 
@@ -496,7 +498,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
                 {paymentProcessing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CreditCard className="h-4 w-4" />}
                 {paymentProcessing
                   ? t('wallet.processing')
-                  : `${t('order.confirmPayment')} — ${payOrder.totalAmount.toLocaleString()} XAF`}
+                  : `${t('order.confirmPayment')} — ${formatXaf(payOrder.totalAmount)}`}
               </button>
               <button type="button" onClick={() => setShowPaymentRecap(false)} className="w-full text-gray-500 text-sm hover:underline py-1">
                 {t('form.cancel')}
@@ -525,7 +527,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
               value={reviewFormik.values.comment}
               onChange={reviewFormik.handleChange}
               onBlur={reviewFormik.handleBlur}
-              placeholder="Share your experience..."
+              placeholder={t('review.shareExperience')}
             />
             {reviewFormik.touched.comment && reviewFormik.errors.comment ? (
               <p className="text-xs text-red-600 mt-1">{reviewFormik.errors.comment}</p>
@@ -555,7 +557,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
               value={disputeFormik.values.disputeReason}
               onChange={disputeFormik.handleChange}
               onBlur={disputeFormik.handleBlur}
-              placeholder="What's the issue?"
+              placeholder={t('order.disputePlaceholder')}
             />
             {disputeFormik.touched.disputeReason && disputeFormik.errors.disputeReason ? (
               <p className="text-xs text-red-600 mt-1">{disputeFormik.errors.disputeReason}</p>
@@ -568,8 +570,9 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
               multiple
               accept="image/*,application/pdf"
               className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
-              onChange={(e) => e.target.files && setDisputeFiles(Array.from(e.target.files))}
+              onChange={(e) => e.target.files && setDisputeFiles(Array.from(e.target.files).slice(0, 3))}
             />
+            <p className="text-xs text-gray-400 mt-1">{t('order.uploadFilesHint')}</p>
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <button type="button" onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">
@@ -616,7 +619,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
             currentBookingIso={firstServiceBookingIso(rescheduleOrder) ?? undefined}
           />
         ) : (
-          <p className="text-sm text-red-600">Unable to load appointment details.</p>
+          <p className="text-sm text-red-600">{t('order.appointmentUnavailable')}</p>
         )}
         <div className="flex justify-end gap-3 pt-4">
           <button
@@ -857,6 +860,7 @@ export function BuyerPurchaseOrdersSection({
   emptyMsg?: string;
 }) {
   const { t } = useTranslation();
+  const { formatXaf } = useCurrency();
   const { offers, producers } = useStore();
   const { renderActions } = useBuyerOrderFlows();
 
@@ -868,7 +872,7 @@ export function BuyerPurchaseOrdersSection({
       ? p.name ||
           (p as any).user?.displayName ||
           `${(p.firstName ?? '').trim()} ${(p.lastName ?? '').trim()}`.trim()
-      : 'Unknown Producer';
+      : t('market.unknownProducer');
   };
 
   const getOrderItemImage = (item: any) => {
@@ -938,7 +942,7 @@ export function BuyerPurchaseOrdersSection({
               </div>
             </div>
             <div className="w-full sm:w-auto sm:text-right shrink-0" onClick={(e) => e.stopPropagation()}>
-              <p className="text-sm font-bold text-gray-900 mb-2">{order.totalAmount?.toLocaleString?.() ?? order.totalAmount} XAF</p>
+              <p className="text-sm font-bold text-gray-900 mb-2">{formatXaf(Number(order.totalAmount ?? 0))}</p>
               <div className="flex gap-2 flex-wrap sm:justify-end">{renderActions(order)}</div>
             </div>
           </div>

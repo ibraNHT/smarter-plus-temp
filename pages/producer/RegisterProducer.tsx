@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
+import { readReferralCodeFromLocation } from '../../utils/referralLink';
 import { MapPin, X, Plus, Lock, Phone, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { ProducerType, Location } from '../../types';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
@@ -20,7 +21,6 @@ import { buildRegisterPhone } from '../../utils/registerPhone';
 import { SEO } from '../../components/SEO';
 import { SEO_PAGE_META } from '../../services/seo/seoConfig';
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
-const PASSWORD_RULE_MESSAGE = 'Password must be at least 4 characters with 1 letter, 1 number, and 1 special character.';
 
 const AFRICA_COUNTRY_CODES = [
   // Central Africa
@@ -53,14 +53,16 @@ const AFRICA_COUNTRY_CODES = [
   { code: '+252', country: 'Somalia' },
 ];
 
-const PRODUCTION_TYPES = ['Agriculture', 'Livestock', 'Vegetables', 'Processed Goods', 'Plant Protection Products', 'Fertilizer', 'Equipment', 'Service'];
+import { MARKETPLACE_CATEGORIES } from '../../data/categories';
+
+const PRODUCTION_TYPES = MARKETPLACE_CATEGORIES;
 
 export const RegisterProducer: React.FC = () => {
   const { registerProducer } = useStore();
   const { t, language } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const refCode = searchParams.get('ref');
+  const refCode = readReferralCodeFromLocation(searchParams);
 
   // Locations State
   const [locations, setLocations] = useState<Location[]>([]);
@@ -96,24 +98,24 @@ export const RegisterProducer: React.FC = () => {
 
   const registerProducerSchema = z.object({
     type: z.enum(['BUSINESS', 'INDIVIDUAL']),
-    name: z.string().trim().min(2, 'Farm/producer name is required.'),
-    email: z.string().trim().email('Valid email is required.'),
-    password: z.string().min(1, 'Enter your password.').regex(PASSWORD_RULE, PASSWORD_RULE_MESSAGE),
-    confirmPassword: z.string().min(1, 'Confirm your password.'),
+    name: z.string().trim().min(2, t('validation.farmNameRequired')),
+    email: z.string().trim().email(t('validation.emailRequired')),
+    password: z.string().min(1, t('validation.passwordRequired')).regex(PASSWORD_RULE, t('form.passwordRequirements')),
+    confirmPassword: z.string().min(1, t('validation.confirmPassword')),
     phoneCode: z.string().min(1),
-    phone: z.string().trim().min(1, 'Enter your phone number.').min(6, 'Enter a valid phone number (at least 6 digits).'),
-    description: z.string().trim().min(10, 'Description should be at least 10 characters.'),
+    phone: z.string().trim().min(1, t('validation.phoneRequired')).min(6, t('validation.phoneMin')),
+    description: z.string().trim().min(10, t('validation.descriptionMin')),
     productionTypes: z.array(z.string()),
     taxIdentificationNumber: z.string(),
   }).superRefine((values, ctx) => {
     if (values.password !== values.confirmPassword) {
-      ctx.addIssue({ code: 'custom', path: ['confirmPassword'], message: 'Passwords do not match.' });
+      ctx.addIssue({ code: 'custom', path: ['confirmPassword'], message: t('validation.passwordsMatch') });
     }
     if (!values.taxIdentificationNumber.trim()) {
-      ctx.addIssue({ code: 'custom', path: ['taxIdentificationNumber'], message: 'NIU / Tax ID is required.' });
+      ctx.addIssue({ code: 'custom', path: ['taxIdentificationNumber'], message: t('validation.taxIdRequired') });
     }
   });
-  console.log('🔄 RegisterProducer rendered with translations:', t('form.security'));
+  // console.log('🔄 RegisterProducer rendered with translations:', t('form.security'));
 
   const formik = useFormik({
     initialValues: {
@@ -138,7 +140,7 @@ export const RegisterProducer: React.FC = () => {
         }
       }
       if (locations.length === 0) {
-        nextErrors.locations = 'Please add at least one location before continuing.';
+        nextErrors.locations = t('register.locationsError');
       }
       return nextErrors;
     },
@@ -189,7 +191,7 @@ export const RegisterProducer: React.FC = () => {
         setOtpOpen(false);
         navigate('/producer/dashboard?welcome=pending', { replace: true });
       } else {
-        setRegisterError(result.message || 'Registration failed.');
+        setRegisterError(result.message || t('register.registrationFailed'));
       }
     } finally {
       setIsCreatingAccount(false);
@@ -210,7 +212,7 @@ export const RegisterProducer: React.FC = () => {
         lng,
       });
     } catch {
-      setError('Could not read your location. Allow permission or enter the address manually.');
+      setError(t('register.locationReadFailed'));
     } finally {
       setGeoLoading(false);
     }
@@ -406,12 +408,12 @@ export const RegisterProducer: React.FC = () => {
           {/* NIU and certificates required for ALL producer types */}
           <div className="sm:col-span-6">
             <label htmlFor="tin" className="block text-sm font-medium text-gray-700">
-              NIU / Tax ID <span className="text-red-500">*</span>
+              {t('profile.niuTaxId')} <span className="text-red-500">*</span>
             </label>
             <p className="text-xs text-gray-500 mt-0.5">
               {formik.values.type === 'BUSINESS'
-                ? 'Required for business accounts; validated by the platform.'
-                : 'National Identification Number — required for all producers.'}
+                ? t('register.producer.niuBusinessHint')
+                : t('register.producer.niuIndividualHint')}
             </p>
             <input
               id="tin"
@@ -475,11 +477,11 @@ export const RegisterProducer: React.FC = () => {
           {/* Password Section */}
           <div className="sm:col-span-6 border-t border-gray-200 pt-4">
             <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center">
-              <Lock className="h-4 w-4 mr-1 text-primary-600" /> Security
+              <Lock className="h-4 w-4 mr-1 text-primary-600" /> {t('form.security')}
             </h3>
             <div className="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Password</label>
+                <label className="block text-sm font-medium text-gray-700">{t('form.password')}</label>
                 <div className="relative mt-1">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -498,16 +500,16 @@ export const RegisterProducer: React.FC = () => {
                     type="button"
                     onClick={() => setShowPassword(prev => !prev)}
                     className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-label={showPassword ? t('register.hidePassword') : t('register.showPassword')}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Min 4 chars: 1 letter, 1 number, 1 special</p>
+                <p className="text-xs text-gray-500 mt-1">{t('form.passwordRequirements')}</p>
                 <FieldError formik={formik} name="password" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Confirm Password</label>
+                <label className="block text-sm font-medium text-gray-700">{t('form.confirmPassword')}</label>
                 <div className="relative mt-1">
                   <input
                     type={showConfirmPassword ? 'text' : 'password'}
@@ -522,7 +524,7 @@ export const RegisterProducer: React.FC = () => {
                     type="button"
                     onClick={() => setShowConfirmPassword(prev => !prev)}
                     className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
-                    aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                    aria-label={showConfirmPassword ? t('register.hideConfirmPassword') : t('register.showConfirmPassword')}
                   >
                     {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -548,7 +550,7 @@ export const RegisterProducer: React.FC = () => {
 
         {/* Categories (Chips) */}
         <div className="border-t border-gray-200 pt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">{t('form.category')} (Multi-select)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{t('form.category')} ({t('register.multiSelect')})</label>
           <div className="flex flex-wrap gap-2 mb-3">
             {PRODUCTION_TYPES.map(cat => {
               const isSelected = formik.values.productionTypes.includes(cat);
@@ -573,13 +575,13 @@ export const RegisterProducer: React.FC = () => {
         {/* Location Manager */}
         <div className="border-t border-gray-200 pt-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-            <MapPin className="h-5 w-5 mr-2 text-primary-600" /> Location Details
+            <MapPin className="h-5 w-5 mr-2 text-primary-600" /> {t('register.locationDetails')}
           </h3>
 
           {/* Add Location Form */}
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4 space-y-3">
             <p className="text-xs text-gray-500">
-              Use your device location (browser permission). We do not load Google Places on signup. You can edit the address fields below.
+              {t('register.locationHint')}
             </p>
             <button
               type="button"
@@ -588,20 +590,20 @@ export const RegisterProducer: React.FC = () => {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-60"
             >
               <MapPin className="h-4 w-4" />
-              {geoLoading ? 'Getting location…' : 'Use my current location'}
+              {geoLoading ? t('register.gettingLocation') : t('register.useActualLocation')}
             </button>
             {currentLoc.lat !== 0 && currentLoc.lng !== 0 ? (
               <p className="text-xs text-gray-600">
-                Coordinates: {currentLoc.lat.toFixed(5)}, {currentLoc.lng.toFixed(5)}
+                {t('profile.coordinates')} {currentLoc.lat.toFixed(5)}, {currentLoc.lng.toFixed(5)}
               </p>
             ) : null}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('form.address')}</label>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
                 <input
                   type="text"
-                  placeholder="Street, area, or full address"
+                  placeholder={t('register.addressPlaceholder')}
                   className="flex-1 min-w-0 block w-full border border-gray-300 rounded-md shadow-sm p-2.5 sm:text-sm bg-white text-gray-900"
                   value={currentLoc.address}
                   onChange={e => {
@@ -620,12 +622,12 @@ export const RegisterProducer: React.FC = () => {
                   className="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-transparent rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50 min-h-[44px] sm:shrink-0"
                 >
                   <Plus className="h-5 w-5" />
-                  <span className="sm:hidden text-sm font-medium">Add location</span>
+                  <span className="sm:hidden text-sm font-medium">{t('register.addLocation')}</span>
                 </button>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('register.city')}</label>
                 <input
                   type="text"
                   value={currentLoc.city}
@@ -634,7 +636,7 @@ export const RegisterProducer: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Region / State</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('register.regionOrState')}</label>
                 <input
                   type="text"
                   value={currentLoc.region}
@@ -670,10 +672,10 @@ export const RegisterProducer: React.FC = () => {
               </div>
             )}
             {isNearbyLoading && (
-              <p className="mt-2 text-xs text-gray-500">Finding nearby locations...</p>
+              <p className="mt-2 text-xs text-gray-500">{t('register.findingLocation')}</p>
             )}
             <p className="mt-2 text-xs text-gray-500">
-              Type your full address, pick a suggestion, or drag the map pin. Click + to add this location.
+              {t('register.locationDescription')}
             </p>
           </div>
 
@@ -693,11 +695,11 @@ export const RegisterProducer: React.FC = () => {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-red-500 italic">At least one location is required.</p>
+            <p className="text-sm text-red-500 italic">{t('register.locationsRequired')}</p>
           )}
           {showLocationsError ? (
             <p className="text-sm text-red-600 mt-2 font-medium">
-              Please add at least one location before continuing.
+              {t('register.locationsError')}
             </p>
           ) : null}
         </div>
@@ -718,7 +720,7 @@ export const RegisterProducer: React.FC = () => {
             className={authActionButtonPrimary}
           >
             {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-            {isSubmitting ? 'Creating…' : formik.isSubmitting ? t('form.processing') : t('register.producer.btn')}
+            {isSubmitting ? t('ui.creating') : formik.isSubmitting ? t('register.producer.registering') : t('register.producer.btn')}
           </button>
         </AuthFormActions>
       </form>

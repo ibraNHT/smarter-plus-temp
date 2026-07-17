@@ -6,33 +6,34 @@ import {
   dismissAppToast,
   subscribeAppToasts,
 } from '../services/appToast';
+import { useTranslation } from '../services/i18nContext';
 
-const toastMeta = (type: AppToastType) => {
+const toastMeta = (type: AppToastType, t: (key: string) => string) => {
   switch (type) {
     case 'SUCCESS':
       return {
-        title: 'Success',
+        title: t('toast.success'),
         bgColor: 'bg-green-50',
         borderColor: 'border-green-200',
         icon: <CheckCircle className="h-6 w-6 text-green-600" />,
       };
     case 'ERROR':
       return {
-        title: 'Error',
+        title: t('toast.error'),
         bgColor: 'bg-red-50',
         borderColor: 'border-red-200',
         icon: <AlertCircle className="h-6 w-6 text-red-600" />,
       };
     case 'WARNING':
       return {
-        title: 'Attention',
+        title: t('toast.attention'),
         bgColor: 'bg-yellow-50',
         borderColor: 'border-yellow-200',
         icon: <AlertTriangle className="h-6 w-6 text-yellow-600" />,
       };
     default:
       return {
-        title: 'Info',
+        title: t('toast.info'),
         bgColor: 'bg-white',
         borderColor: 'border-gray-200',
         icon: <Info className="h-6 w-6 text-blue-500" />,
@@ -41,6 +42,7 @@ const toastMeta = (type: AppToastType) => {
 };
 
 export const AppToastContainer: React.FC = () => {
+  const { t } = useTranslation();
   const [visibleToasts, setVisibleToasts] = useState<AppToastItem[]>([]);
 
   useEffect(() => subscribeAppToasts(setVisibleToasts), []);
@@ -54,7 +56,7 @@ export const AppToastContainer: React.FC = () => {
       aria-live="polite"
     >
       {visibleToasts.map((toast) => {
-        const meta = toastMeta(toast.type);
+        const meta = toastMeta(toast.type, t);
         return (
           <div
             key={toast.id}
@@ -70,7 +72,7 @@ export const AppToastContainer: React.FC = () => {
                 type="button"
                 onClick={() => dismissAppToast(toast.id)}
                 className="bg-transparent rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none"
-                aria-label="Dismiss"
+                aria-label={t('common.dismiss')}
               >
                 <X className="h-5 w-5" />
               </button>

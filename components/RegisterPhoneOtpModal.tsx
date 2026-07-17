@@ -76,11 +76,11 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
     }
     const registrationEmail = resolveRegistrationEmail();
     if (!registrationEmail) {
-      setError('Email is required to receive your verification code.');
+      setError(t('registerOtp.emailRequired'));
       return;
     }
     if (!phone) {
-      setError('Phone number is required.');
+      setError(t('registerOtp.phoneRequired'));
       return;
     }
     setError('');
@@ -96,21 +96,21 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
         } as any,
       );
       if (res?.success === false) {
-        setError(res?.message || 'Could not send verification code. Try again in a moment.');
+        setError(res?.message || t('registerOtp.sendFailed'));
         return;
       }
       setCodeSent(true);
       setInfo(
         mode === 'initial'
-          ? `We sent a 6-digit code to ${registrationEmail}.`
-          : `New code sent to ${registrationEmail}.`,
+          ? t('registerOtp.codeSent', { email: registrationEmail })
+          : t('registerOtp.newCodeSent', { email: registrationEmail }),
       );
       setCooldown(RESEND_COOLDOWN_SECONDS);
       lastSentForRef.current = phone;
     } catch (e: any) {
       const message: string =
         e?.message ||
-        'Could not send verification code. Check your number and try again.';
+        t('registerOtp.sendFailedCheck');
       setError(message);
     } finally {
       setIsRequesting(false);
@@ -144,16 +144,16 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
       return;
     }
     if (!codeSent) {
-      setError('Please send a verification code first.');
+      setError(t('registerOtp.sendCodeFirst'));
       return;
     }
     if (code.length !== 6) {
-      setError('Please enter the 6-digit code.');
+      setError(t('registerOtp.enterCode'));
       return;
     }
     const registrationEmail = resolveRegistrationEmail();
     if (!registrationEmail) {
-      setError('Email is required. Go back and enter your email on the registration form.');
+      setError(t('registerOtp.emailMissing'));
       return;
     }
     setError('');
@@ -172,9 +172,9 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
         onVerified(res.registrationToken);
         return;
       }
-      setError(res?.message || 'Invalid or expired code. Please try again.');
+      setError(res?.message || t('registerOtp.invalidOrExpired'));
     } catch (e: any) {
-      setError(e?.message || 'Verification failed. Please try again.');
+      setError(e?.message || t('registerOtp.verificationFailed'));
     } finally {
       setIsVerifying(false);
     }
@@ -208,9 +208,9 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
           {isCreatingAccount ? (
             <div className="py-10 px-2 text-center" aria-live="polite">
               <Loader2 className="h-10 w-10 animate-spin text-primary-600 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Creating your account…</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">{t('registerOtp.creatingTitle')}</h3>
               <p className="text-sm text-gray-600">
-                Almost there — we are setting up your profile. This only takes a moment.
+                {t('registerOtp.creatingBody')}
               </p>
             </div>
           ) : (
@@ -220,14 +220,14 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
                   <ShieldCheck className="h-5 w-5" />
                 </span>
                 <h3 id="register-phone-otp-title" className="text-lg font-semibold text-gray-900">
-                  Verify your email
+                  {t('registerOtp.verifyEmailTitle')}
                 </h3>
               </div>
 
               <p className="text-sm text-gray-600 mb-4">
                 {codeSent
-                  ? `Enter the 6-digit code we sent to your email${email ? ` (${email})` : ''}. Check your spam folder if you do not see it.`
-                  : `Accept our terms below, then we will send a 6-digit code to your email${email ? ` (${email})` : ''}.`}
+                  ? t('verify.desc')
+                  : t('legal.beforeOtpHint')}
               </p>
 
               <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 mb-4 text-sm text-gray-700 space-y-1">
@@ -259,14 +259,14 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
                     className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 rounded-md bg-primary-600 text-white font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isRequesting && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {isRequesting ? 'Sending…' : t('legal.sendVerificationCode')}
+                    {isRequesting ? t('registerOtp.sending') : t('legal.sendVerificationCode')}
                   </button>
                   </>
                 ) : (
                   <>
                     <div>
                       <label htmlFor="register-otp-code" className="block text-sm font-medium text-gray-700 mb-1">
-                        Verification code
+                        {t('registerOtp.verifyCodeLabel')}
                       </label>
                       <input
                         id="register-otp-code"
@@ -295,7 +295,7 @@ export const RegisterPhoneOtpModal: React.FC<RegisterPhoneOtpModalProps> = ({
                             disabled={isVerifying || isRequesting}
                             className="w-full py-2.5 px-4 rounded-md border border-primary-600 text-primary-700 text-sm font-medium hover:bg-primary-50 disabled:opacity-50"
                           >
-                            Try creating account again
+                            {t('registerOtp.tryAgain')}
                           </button>
                         )}
                       </div>

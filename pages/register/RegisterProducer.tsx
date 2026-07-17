@@ -51,7 +51,9 @@ const AFRICA_COUNTRY_CODES = [
   { code: '+252', country: 'Somalia' },
 ];
 
-const PRODUCTION_TYPES = ['Agriculture', 'Livestock', 'Vegetables', 'Processed Goods', 'Plant Protection Products', 'Fertilizer', 'Equipment', 'Service'];
+import { MARKETPLACE_CATEGORIES } from '../../data/categories';
+
+const PRODUCTION_TYPES = MARKETPLACE_CATEGORIES;
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
 
 export const RegisterProducer: React.FC = () => {
@@ -106,21 +108,21 @@ export const RegisterProducer: React.FC = () => {
 
     // Security Validations
     if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match.');
+      setError(t('validation.passwordsMatch'));
       return;
     }
     if (!PASSWORD_RULE.test(formData.password)) {
-      setError('Password must be at least 4 characters with 1 letter, 1 number, and 1 special character.');
+      setError(t('form.passwordRequirements'));
       return;
     }
 
     if (locations.length === 0) {
-      showAppToast('Please add at least one location.', 'WARNING');
+      showAppToast(t('register.locationsError'), 'WARNING');
       return;
     }
 
     if (!formData.taxIdentificationNumber.trim()) {
-      setError('NIU / Tax ID is required.');
+      setError(t('validation.taxIdRequired'));
       return;
     }
     setIsLoading(true);
@@ -140,7 +142,7 @@ export const RegisterProducer: React.FC = () => {
     if (result.success) {
       navigate('/verify-email');
     } else {
-      setError(result.message || 'Registration failed.');
+      setError(result.message || t('register.registrationFailed'));
     }
   };
 
@@ -224,6 +226,29 @@ export const RegisterProducer: React.FC = () => {
               onChange={e => setFormData({ ...formData, taxIdentificationNumber: e.target.value })}
             />
           </div>
+          {/* NIU and certificates required for ALL producer types */}
+          <div className="sm:col-span-6">
+            <label htmlFor="tin" className="block text-sm font-medium text-gray-700">
+              NIU / Tax ID <span className="text-red-500">*</span>
+            </label>
+            {language === 'en' &&
+            <p className="text-xs text-gray-500 mt-0.5">
+              {formData.type === 'BUSINESS' ? 'Required for business accounts; validated by the platform.' : 'National Identification Number — required for all producers.'}
+            </p>}
+            {language === 'fr' &&
+            <p className="text-xs text-gray-500 mt-0.5">
+              {formData.type === 'BUSINESS' ? 'Requis pour les comptes professionnels ; validé par la plateforme.' : 'Numéro d\'identification nationale — requis pour tous les producteurs.'}
+            </p>}
+            <input
+              id="tin"
+              type="text"
+              name="taxIdentificationNumber"
+              required
+              className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
+              value={formData.taxIdentificationNumber}
+              onChange={e => setFormData({ ...formData, taxIdentificationNumber: e.target.value })}
+            />
+          </div>
 
           <div className="sm:col-span-3">
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">{t('form.email')}</label>
@@ -280,7 +305,7 @@ export const RegisterProducer: React.FC = () => {
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
                     className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-label={showPassword ? t('form.hidePassword') : t('form.showPassword')}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -300,7 +325,7 @@ export const RegisterProducer: React.FC = () => {
                     type="button"
                     onClick={() => setShowConfirmPassword((prev) => !prev)}
                     className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
-                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    aria-label={showConfirmPassword ? t('form.hidePassword') : t('form.showPassword')}
                   >
                     {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -379,7 +404,7 @@ export const RegisterProducer: React.FC = () => {
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Address/Street"
+                  placeholder={t('form.addressPlaceholder')}
                   className="flex-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 sm:text-sm bg-white text-gray-900"
                   value={currentLoc.address}
                   onChange={e => setCurrentLoc({ ...currentLoc, address: e.target.value })}
@@ -412,7 +437,7 @@ export const RegisterProducer: React.FC = () => {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-red-500 italic">At least one location is required to continue.</p>
+            <p className="text-sm text-red-500 italic">{t('register.producer.locationRequired')}</p>
           )}
         </div>
 

@@ -4,20 +4,38 @@ import { usePwaInstall } from '../contexts/PwaInstallContext';
 import { useTranslation } from '../services/i18nContext';
 import { useStoreOptional } from '../services/storeContext';
 
-/** Small bottom banner when the browser fires `beforeinstallprompt` (mainly Chrome/Android). */
+/** Bottom banner for Chrome install prompt + high-intent / iOS tips. */
 export const InstallAppBanner: React.FC = () => {
-  const { canInstall, bannerDismissed, dismissBanner, promptInstall } = usePwaInstall();
+  const {
+    canInstall,
+    bannerDismissed,
+    intentForced,
+    showIosTip,
+    intentSource,
+    dismissBanner,
+    dismissIosTip,
+    promptInstall,
+  } = usePwaInstall();
   const { t } = useTranslation();
   const store = useStoreOptional();
   const compareCount = store?.compareList?.length ?? 0;
 
-  if (!canInstall || bannerDismissed) return null;
+  const showChromeBanner = canInstall && (!bannerDismissed || intentForced);
+  const visible = showChromeBanner || showIosTip;
+  if (!visible) return null;
 
-  // Push the banner above the compare bar (~5rem tall on mobile) when both
-  // are visible to avoid overlapping floating UI.
   const bottomOffset = compareCount > 0
     ? 'calc(max(0.75rem, env(safe-area-inset-bottom)) + 5rem)'
     : 'max(0.75rem, env(safe-area-inset-bottom))';
+
+  const intentBody =
+    intentSource === 'favorite'
+      ? t('pwa.intentFavorite')
+      : intentSource === 'cart'
+        ? t('pwa.intentCart')
+        : intentSource === 'return'
+          ? t('pwa.intentReturn')
+          : t('pwa.bannerBody');
 
   return (
     <div
@@ -29,20 +47,26 @@ export const InstallAppBanner: React.FC = () => {
           <Smartphone className="h-5 w-5" aria-hidden />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-900">{t('pwa.bannerTitle')}</p>
-          <p className="text-xs text-gray-600 hidden sm:block">{t('pwa.bannerBody')}</p>
+          <p className="text-sm font-semibold text-gray-900">
+            {showIosTip ? t('pwa.iosTipTitle') : t('pwa.bannerTitle')}
+          </p>
+          <p className="text-xs text-gray-600">
+            {showIosTip ? t('pwa.iosTipBody') : intentForced ? intentBody : t('pwa.bannerBody')}
+          </p>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
+          {showChromeBanner && (
+            <button
+              type="button"
+              onClick={() => void promptInstall()}
+              className="text-sm font-semibold whitespace-nowrap rounded-lg bg-primary-600 text-white px-3 py-2 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+            >
+              {t('pwa.installButton')}
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => void promptInstall()}
-            className="text-sm font-semibold whitespace-nowrap rounded-lg bg-primary-600 text-white px-3 py-2 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-          >
-            {t('pwa.installButton')}
-          </button>
-          <button
-            type="button"
-            onClick={dismissBanner}
+            onClick={showIosTip ? dismissIosTip : dismissBanner}
             className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300"
             aria-label={t('pwa.dismiss')}
           >

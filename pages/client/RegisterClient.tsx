@@ -3,6 +3,7 @@ import React, { useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
+import { readReferralCodeFromLocation } from '../../utils/referralLink';
 import { User, Mail, Phone, MapPin, Camera, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { useFormik } from 'formik';
@@ -20,7 +21,6 @@ import { SEO } from '../../components/SEO';
 import { SEO_PAGE_META } from '../../services/seo/seoConfig';
 
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
-const PASSWORD_RULE_MESSAGE = 'Password must be at least 4 characters with 1 letter, 1 number, and 1 special character.';
 
 const AFRICA_COUNTRY_CODES = [
   // Central Africa
@@ -57,7 +57,7 @@ export const RegisterClient: React.FC = () => {
   const { t, language } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const refCode = searchParams.get('ref');
+  const refCode = readReferralCodeFromLocation(searchParams);
 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -91,24 +91,24 @@ export const RegisterClient: React.FC = () => {
 
   const registerClientSchema = z
     .object({
-      firstName: z.string().trim().min(2, 'First name is required.'),
-      lastName: z.string().trim().min(2, 'Last name is required.'),
-      gender: z.string().min(1, 'Gender is required.'),
-      dateOfBirth: z.string().min(1, 'Date of birth is required.'),
-      email: z.string().trim().email('Valid email is required.'),
-      password: z.string().min(1, 'Enter your password.').regex(PASSWORD_RULE, PASSWORD_RULE_MESSAGE),
-      confirmPassword: z.string().min(1, 'Confirm your password.'),
+      firstName: z.string().trim().min(2, t('validation.firstNameRequired')),
+      lastName: z.string().trim().min(2, t('validation.lastNameRequired')),
+      gender: z.string().min(1, t('validation.genderRequired')),
+      dateOfBirth: z.string().min(1, t('validation.dobRequired')),
+      email: z.string().trim().email(t('validation.emailRequired')),
+      password: z.string().min(1, t('validation.passwordRequired')).regex(PASSWORD_RULE, t('form.passwordRequirements')),
+      confirmPassword: z.string().min(1, t('validation.confirmPassword')),
       phoneCode: z.string().min(1),
-      phone: z.string().trim().min(1, 'Enter your phone number.').min(6, 'Enter a valid phone number (at least 6 digits).'),
-      address: z.string().trim().min(5, 'Address is required.'),
-      region: z.string().trim().min(2, 'Region is required.'),
-      city: z.string().trim().min(2, 'City is required.'),
+      phone: z.string().trim().min(1, t('validation.phoneRequired')).min(6, t('validation.phoneMin')),
+      address: z.string().trim().min(5, t('validation.addressRequired')),
+      region: z.string().trim().min(2, t('validation.regionRequired')),
+      city: z.string().trim().min(2, t('validation.cityRequired')),
       lat: z.number(),
       lng: z.number(),
       profileImageUrl: z.string(),
     })
     .refine((data) => data.password === data.confirmPassword, {
-      message: 'Passwords do not match.',
+      message: t('validation.passwordsMatch'),
       path: ['confirmPassword'],
     });
 
@@ -192,7 +192,7 @@ export const RegisterClient: React.FC = () => {
         setOtpOpen(false);
         navigate('/client/profile?tab=orders', { replace: true });
       } else {
-        setRegisterError(result.message || 'Registration failed.');
+        setRegisterError(result.message || t('register.registrationFailed'));
       }
     } finally {
       setIsCreatingAccount(false);
@@ -219,7 +219,7 @@ export const RegisterClient: React.FC = () => {
       const { lat, lng } = await requestBrowserLocation();
       await fillLocationFromCoords(lat, lng);
     } catch (e: unknown) {
-      setGeoError(e instanceof Error ? e.message : 'Could not get your location.');
+      setGeoError(e instanceof Error ? e.message : t('client.locationError'));
     } finally {
       setGeoLoading(false);
     }
@@ -261,7 +261,7 @@ export const RegisterClient: React.FC = () => {
           <div className="relative">
             <div className="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">
               {formik.values.profileImageUrl ? (
-                <img src={formik.values.profileImageUrl} alt="Profile" className="h-full w-full object-cover" />
+                <img src={formik.values.profileImageUrl} alt={t('ui.profile')} className="h-full w-full object-cover" />
               ) : (
                 <User className="h-12 w-12 text-gray-400" />
               )}
@@ -307,9 +307,9 @@ export const RegisterClient: React.FC = () => {
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}
             >
-              <option value="">Select Gender</option>
-              <option value="MALE">Male</option>
-              <option value="FEMALE">Female</option>
+              <option value="">{t('profile.selectGender')}</option>
+              <option value="MALE">{t('profile.male')}</option>
+              <option value="FEMALE">{t('profile.female')}</option>
             </select>
             <FieldError formik={formik} name="gender" />
           </div>
@@ -337,7 +337,7 @@ export const RegisterClient: React.FC = () => {
                 value={formik.values.email}
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
-                placeholder="you@example.com"
+                placeholder={t('ui.emailPlaceholder')}
               />
             </div>
             <FieldError formik={formik} name="email" />
@@ -369,7 +369,7 @@ export const RegisterClient: React.FC = () => {
                   value={formik.values.phone}
                   onChange={formik.handleChange}
                   onBlur={formik.handleBlur}
-                  placeholder="612 345 678"
+                  placeholder={t('ui.phonePlaceholder')}
                 />
               </div>
             </div>
@@ -379,11 +379,11 @@ export const RegisterClient: React.FC = () => {
           {/* Password Section */}
           <div className="sm:col-span-6 border-t border-gray-200 pt-4">
             <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center">
-              <Lock className="h-4 w-4 mr-1 text-primary-600" /> Security
+              <Lock className="h-4 w-4 mr-1 text-primary-600" /> {t('register.security')}
             </h3>
             <div className="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Password</label>
+                <label className="block text-sm font-medium text-gray-700">{t('form.password')}</label>
                 <div className="relative mt-1">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -402,16 +402,16 @@ export const RegisterClient: React.FC = () => {
                     type="button"
                     onClick={() => setShowPassword(prev => !prev)}
                     className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-label={showPassword ? t('ui.hidePassword') : t('ui.showPassword')}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Min 4 chars: 1 letter, 1 number, 1 special</p>
+                <p className="text-xs text-gray-500 mt-1">{t('form.passwordRequirements')}</p>
                 <FieldError formik={formik} name="password" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Confirm Password</label>
+                <label className="block text-sm font-medium text-gray-700">{t('form.confirmPassword')}</label>
                 <div className="relative mt-1">
                   <input
                     type={showConfirmPassword ? 'text' : 'password'}
@@ -426,7 +426,7 @@ export const RegisterClient: React.FC = () => {
                     type="button"
                     onClick={() => setShowConfirmPassword(prev => !prev)}
                     className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
-                    aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                    aria-label={showConfirmPassword ? t('ui.hideConfirmPassword') : t('ui.showConfirmPassword')}
                   >
                     {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -438,9 +438,9 @@ export const RegisterClient: React.FC = () => {
 
           {/* Location Section */}
           <div className="sm:col-span-6 border-t border-gray-100 pt-4">
-            <h4 className="text-sm font-medium text-gray-900 mb-3">Location Details</h4>
+            <h4 className="text-sm font-medium text-gray-900 mb-3">{t('profile.locationDetails')}</h4>
             <p className="text-xs text-gray-500 mb-3">
-              Use your device location (browser permission). We do not load Google Places on signup. You can edit the address fields below.
+              {t('profile.locationHint')}
             </p>
             <button
               type="button"
@@ -449,12 +449,12 @@ export const RegisterClient: React.FC = () => {
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-md bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-60 min-h-[44px]"
             >
               <MapPin className="h-4 w-4" />
-              {geoLoading ? 'Getting location…' : 'Use my current location'}
+              {geoLoading ? t('profile.gettingLocation') : t('profile.useMyLocation')}
             </button>
             {geoError ? <p className="mt-2 text-xs text-red-600">{geoError}</p> : null}
             {formik.values.lat !== 0 && formik.values.lng !== 0 && (
               <p className="mt-2 text-xs text-gray-600">
-                Coordinates: {formik.values.lat.toFixed(5)}, {formik.values.lng.toFixed(5)}
+                {t('profile.coordinates')} {formik.values.lat.toFixed(5)}, {formik.values.lng.toFixed(5)}
               </p>
             )}
           </div>
@@ -471,7 +471,7 @@ export const RegisterClient: React.FC = () => {
                 type="text"
                 name="address"
                 required
-                placeholder="Street, area, or full address"
+                placeholder={t('profile.addressPlaceholder')}
                 className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
                 value={formik.values.address}
                 onChange={formik.handleChange}
@@ -481,7 +481,7 @@ export const RegisterClient: React.FC = () => {
             <FieldError formik={formik} name="address" />
           </div>
           <div className="sm:col-span-3">
-            <label className="block text-sm font-medium text-gray-700">City</label>
+            <label className="block text-sm font-medium text-gray-700">{t('profile.city')}</label>
             <input
               type="text"
               className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900"
@@ -493,7 +493,7 @@ export const RegisterClient: React.FC = () => {
             <FieldError formik={formik} name="city" />
           </div>
           <div className="sm:col-span-3">
-            <label className="block text-sm font-medium text-gray-700">Region / State</label>
+            <label className="block text-sm font-medium text-gray-700">{t('profile.region')}</label>
             <input
               type="text"
               className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900"
@@ -518,7 +518,7 @@ export const RegisterClient: React.FC = () => {
           </button>
           <button type="submit" disabled={isLoading} className={authActionButtonPrimary}>
             {isLoading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-            {isLoading ? 'Creating…' : t('form.create')}
+            {isLoading ? t('ui.creating') : t('form.create')}
           </button>
         </AuthFormActions>
       </form>
