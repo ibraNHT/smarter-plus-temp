@@ -97,10 +97,16 @@ export async function postGuestSupportMessage(
 
 export async function getGuestSupportMessages(sessionId: string, guestEmail: string): Promise<SupportMessageDto[]> {
   try {
-    return await apiGet<SupportMessageDto[]>(
+    // The guest endpoint returns `{ messages: [...] }` (an object), unlike the
+    // authenticated endpoint which returns a bare array. Unwrap it here so the
+    // caller always receives an array — otherwise the guest poll's
+    // `Array.isArray(data)` guard is false and every agent reply is silently dropped.
+    const res = await apiGet<SupportMessageDto[] | { messages: SupportMessageDto[] }>(
       API_ENDPOINTS.support.guestSessionMessages(sessionId, guestEmail),
       { silent401: true },
     );
+    if (Array.isArray(res)) return res;
+    return Array.isArray((res as any)?.messages) ? (res as any).messages : [];
   } catch {
     return [];
   }
@@ -126,6 +132,28 @@ export async function returnSessionToAi(sessionId: string): Promise<void> {
   );
 }
 
+/** Logged-in user escalates their session to a human agent (WAITING_FOR_AGENT). */
+export async function requestSupportAgent(
+  sessionId: string,
+): Promise<{ ok: boolean; status: string }> {
+  return apiFetch<{ ok: boolean; status: string }>(
+    API_ENDPOINTS.support.requestAgent(sessionId),
+    { method: 'POST' },
+  );
+}
+
+/** Guest escalates their session to a human agent (guestEmail must match session). */
+export async function requestGuestSupportAgent(
+  sessionId: string,
+  guestEmail: string,
+): Promise<{ ok: boolean; status: string }> {
+  return apiPost<{ ok: boolean; status: string }>(
+    API_ENDPOINTS.support.guestRequestAgent(sessionId),
+    { guestEmail },
+    { silent401: true },
+  );
+}
+
 /** Merge server messages into previous list by id (append only new). */
 export function mergeIncomingSupportMessages<T extends { id: string }>(
   prev: T[],
@@ -135,4 +163,29 @@ export function mergeIncomingSupportMessages<T extends { id: string }>(
   const newOnes = incoming.filter((m) => !existingIds.has(m.id));
   if (newOnes.length === 0) return prev;
   return [...prev, ...newOnes];
+}
+
+/**
+ * Reconcile the local message list against authoritative server history.
+ *
+ * Server messages are the source of truth, so we take them as-is and then append
+ * only the LOCAL optimistic placeholders (temp ids `u-`/`a-`/`s-`) whose text the
+ * server does NOT yet have — i.e. still-sending, failed, or "connecting…" bubbles.
+ * This both removes the duplicates that a plain id-based append produces (server
+ * UUIDs never match optimistic ids) AND preserves un-persisted messages (e.g. a
+ * FAILED send with its retry button) that a blind replace would silently drop.
+ *
+ * IMPORTANT: callers must NOT pass an empty `server` array from a failed fetch —
+ * guard with `server.length > 0` so an errored poll never wipes the thread.
+ */
+export function reconcileServerMessages<
+  T extends { id: string; sender: string; text: string }
+>(prev: T[], server: T[]): T[] {
+  const serverKeys = new Set(server.map((m) => `${m.sender}::${m.text}`));
+  const isOptimistic = (id: string) =>
+    id.startsWith('u-') || id.startsWith('a-') || id.startsWith('s-');
+  const pending = prev.filter(
+    (m) => isOptimistic(m.id) && !serverKeys.has(`${m.sender}::${m.text}`)
+  );
+  return [...server, ...pending];
 }

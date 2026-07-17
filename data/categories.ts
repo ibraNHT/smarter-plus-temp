@@ -12,12 +12,17 @@
 /**
  * Categories that are sold as SERVICES (rendered with the service form:
  * hourly/day/job units + service duration) rather than the product form.
+ *
+ * Naming rule (client-confirmed): a "… Rentals" label is the SERVICE (renting
+ * out equipment/machinery), while the plain label is the PRODUCT (selling it).
+ * So "Equipment & Machinery Rentals" is a service; "Equipment & Machinery" is a
+ * product and is intentionally NOT in this list.
  */
 export const SERVICE_CATEGORIES = [
   'General Services',
   'General laborer',
   'Transit & warehouse',
-  'Equipment & Machinery',
+  'Equipment & Machinery Rentals',
 ] as const;
 
 /**
@@ -42,8 +47,29 @@ export const MARKETPLACE_CATEGORIES = [
 ] as const;
 
 const SERVICE_CATEGORY_SET = new Set<string>(SERVICE_CATEGORIES);
+const MARKETPLACE_CATEGORY_SET = new Set<string>(MARKETPLACE_CATEGORIES);
 
 /** True when a category must be sold/rendered as a service. */
 export const isServiceCategory = (
   category: string | null | undefined,
 ): boolean => SERVICE_CATEGORY_SET.has(String(category ?? '').trim());
+
+/**
+ * Clean a stored list of category strings for DISPLAY: drop anything that is not
+ * a selectable marketplace category (stale/legacy/junk) and de-duplicate while
+ * preserving order. Used so a producer's public profile shows only their real,
+ * current categories instead of leftover/duplicate ones.
+ */
+export const canonicalizeCategoryList = (
+  categories: readonly (string | null | undefined)[] | null | undefined,
+): string[] => {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const c of categories ?? []) {
+    const norm = String(c ?? '').trim();
+    if (!norm || !MARKETPLACE_CATEGORY_SET.has(norm) || seen.has(norm)) continue;
+    seen.add(norm);
+    out.push(norm);
+  }
+  return out;
+};

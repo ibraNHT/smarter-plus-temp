@@ -100,8 +100,9 @@ export enum WithdrawalStatus {
 export interface PaymentMethod {
   id: string;
   provider: 'ORANGE' | 'MTN' | 'BANK';
-  accountNumber: string; // Phone or IBAN
-  accountName: string;
+  accountNumber: string; // Phone (mobile money) or IBAN/account number (bank)
+  accountName: string; // Account holder name
+  bankName?: string; // Bank name — set for BANK provider only
 }
 
 export interface WithdrawalRequest {

@@ -91,6 +91,10 @@ export const RegisterProducer: React.FC = () => {
     description: string;
     productionTypes: string[];
     taxIdentificationNumber: string;
+    firstName: string;
+    lastName: string;
+    gender: string;
+    dateOfBirth: string;
   } | null>(null);
   const pendingPasswordRef = useRef('');
   const pendingLocationsRef = useRef<Location[]>([]);
@@ -107,12 +111,24 @@ export const RegisterProducer: React.FC = () => {
     description: z.string().trim().min(10, t('validation.descriptionMin')),
     productionTypes: z.array(z.string()),
     taxIdentificationNumber: z.string(),
+    firstName: z.string(),
+    lastName: z.string(),
+    gender: z.string(),
+    dateOfBirth: z.string(),
   }).superRefine((values, ctx) => {
     if (values.password !== values.confirmPassword) {
       ctx.addIssue({ code: 'custom', path: ['confirmPassword'], message: t('validation.passwordsMatch') });
     }
     if (!values.taxIdentificationNumber.trim()) {
       ctx.addIssue({ code: 'custom', path: ['taxIdentificationNumber'], message: t('validation.taxIdRequired') });
+    }
+    // Individual producers must provide personal identity details that
+    // differentiate them from a business (business producers don't fill these).
+    if (values.type === 'INDIVIDUAL') {
+      if (!values.firstName.trim()) ctx.addIssue({ code: 'custom', path: ['firstName'], message: 'First name is required.' });
+      if (!values.lastName.trim()) ctx.addIssue({ code: 'custom', path: ['lastName'], message: 'Last name is required.' });
+      if (!values.gender) ctx.addIssue({ code: 'custom', path: ['gender'], message: 'Gender is required.' });
+      if (!values.dateOfBirth) ctx.addIssue({ code: 'custom', path: ['dateOfBirth'], message: 'Date of birth is required.' });
     }
   });
   // console.log('🔄 RegisterProducer rendered with translations:', t('form.security'));
@@ -129,6 +145,10 @@ export const RegisterProducer: React.FC = () => {
       description: '',
       productionTypes: [] as string[],
       taxIdentificationNumber: '',
+      firstName: '',
+      lastName: '',
+      gender: '',
+      dateOfBirth: '',
     },
     validate: (values) => {
       const parsed = registerProducerSchema.safeParse(values);
@@ -184,6 +204,12 @@ export const RegisterProducer: React.FC = () => {
         productionTypes: values.productionTypes.length > 0 ? values.productionTypes : ['Agriculture'],
         referrerCode: refCode || undefined,
         taxIdentificationNumber: values.taxIdentificationNumber.trim() || undefined,
+        // Individual producers supply their own identity details; business
+        // producers leave these empty (registerProducer falls back for them).
+        firstName: values.type === 'INDIVIDUAL' ? values.firstName.trim() : undefined,
+        lastName: values.type === 'INDIVIDUAL' ? values.lastName.trim() : undefined,
+        gender: values.type === 'INDIVIDUAL' ? values.gender : undefined,
+        dateOfBirth: values.type === 'INDIVIDUAL' ? values.dateOfBirth : undefined,
         phoneVerificationToken,
       } as any, pendingPasswordRef.current);
 
@@ -391,6 +417,60 @@ export const RegisterProducer: React.FC = () => {
               </label>
             </div>
           </div>
+
+          {formik.values.type === 'INDIVIDUAL' && (
+            <>
+              <div className="sm:col-span-3">
+                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">{t('profile.firstName')}</label>
+                <input type="text" name="firstName"
+                  className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
+                  value={formik.values.firstName}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                />
+                <FieldError formik={formik} name="firstName" />
+              </div>
+
+              <div className="sm:col-span-3">
+                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">{t('profile.lastName')}</label>
+                <input type="text" name="lastName"
+                  className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
+                  value={formik.values.lastName}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                />
+                <FieldError formik={formik} name="lastName" />
+              </div>
+
+              <div className="sm:col-span-3">
+                <label className="block text-sm font-medium text-gray-700">{t('profile.gender')}</label>
+                <select
+                  className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm text-gray-900"
+                  name="gender"
+                  value={formik.values.gender}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                >
+                  <option value="">Select Gender</option>
+                  <option value="MALE">Male</option>
+                  <option value="FEMALE">Female</option>
+                </select>
+                <FieldError formik={formik} name="gender" />
+              </div>
+
+              <div className="sm:col-span-3">
+                <label className="block text-sm font-medium text-gray-700">{t('profile.dob')}</label>
+                <input type="date"
+                  className="mt-1 focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
+                  name="dateOfBirth"
+                  value={formik.values.dateOfBirth}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                />
+                <FieldError formik={formik} name="dateOfBirth" />
+              </div>
+            </>
+          )}
 
           <div className="sm:col-span-6">
             <label htmlFor="name" className="block text-sm font-medium text-gray-700">{t('form.farmName')}</label>

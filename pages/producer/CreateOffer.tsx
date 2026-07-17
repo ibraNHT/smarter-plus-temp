@@ -97,12 +97,13 @@ export const CreateOffer: React.FC = () => {
   // If producer has specific types, use them. Otherwise default to a broad list.
   const allAvailableCategories = useMemo(
     () => {
-      // Union the producer's own registered types with the canonical list so newly
-      // added categories always appear, even for producers who registered before
-      // those categories existed.
-      return Array.from(
-        new Set([...producerProductionTypes, ...MARKETPLACE_CATEGORIES]),
-      );
+      // An offer must belong to a sector the producer actually selected in their
+      // profile — so list ONLY their registered production types, not the full
+      // catalog. Fall back to the full list only when the producer has no sectors
+      // yet, so they can still create an offer.
+      return producerProductionTypes.length > 0
+        ? Array.from(new Set(producerProductionTypes))
+        : Array.from(MARKETPLACE_CATEGORIES);
     },
     [producerProductionTypes],
   );
