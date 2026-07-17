@@ -292,12 +292,14 @@ export const SupportChatWidget: React.FC = () => {
   const headerStatus = supportAiTyping
     ? { label: t('support.chatStatusTyping'), dot: 'bg-amber-300 animate-pulse' }
     : supportChatSending
+
       ? { label: t('support.chatStatusSending'), dot: 'bg-blue-300 animate-pulse' }
       : agentActive
         ? { label: t('support.chatStatusAgentConnected'), dot: 'bg-green-400' }
         : waitingForAgent
           ? { label: t('support.chatStatusWaitingForAgent'), dot: 'bg-yellow-400 animate-pulse' }
           : { label: t('support.chatStatusOnline'), dot: 'bg-green-400 animate-pulse' };
+
 
   if (!store) return null;
 
@@ -522,12 +524,14 @@ export const SupportChatWidget: React.FC = () => {
                 />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium leading-snug">
+
                     {agentActive ? t('support.connectedAgent') : t('support.waitingHumanTitle')}
                   </p>
                   <p className={`mt-0.5 leading-snug ${agentActive ? 'text-green-700' : 'text-yellow-700'}`}>
                     {agentActive
                       ? t('support.agentWithYou')
                       : t('support.waitingHumanDesc')}
+
                   </p>
                   <button
                     type="button"
@@ -563,7 +567,9 @@ export const SupportChatWidget: React.FC = () => {
                 ) : (
                   <Headphones className="h-3.5 w-3.5" aria-hidden />
                 )}
+
                 {requestingAgent ? t('support.connecting') : t('support.talkToHuman')}
+
               </button>
             </div>
           )}
