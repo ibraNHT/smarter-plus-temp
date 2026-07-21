@@ -11,6 +11,7 @@ import { Modal } from '../../components/Modal';
 import { OfferType, MarketType, Location, PreferredHomeDeliverySnapshot } from '../../types';
 import { LegalAcceptanceCheckbox } from '../../components/LegalAcceptanceCheckbox';
 import { isProducerDashboardUser } from '../../services/producerSession';
+import { addressTruncateClass, truncateAddress } from '../../utils/addressDisplay';
 
 function pickDefaultHomeLocationIndex(
   locs: Location[],
@@ -598,12 +599,14 @@ export const ShoppingCart: React.FC = () => {
                         >
                           {homeLocations.map((loc, idx) => (
                             <option key={loc.id ?? `${loc.address}-${idx}`} value={idx}>
-                              {loc.address}
+                              {truncateAddress(loc.address)}
                             </option>
                           ))}
                         </select>
                       </div>
-                      <p className="text-gray-900">{selectedHomeLocation?.address}</p>
+                      <p className={`text-gray-900 ${addressTruncateClass}`} title={selectedHomeLocation?.address}>
+                        {selectedHomeLocation?.address}
+                      </p>
                       <p className="text-gray-500">{selectedHomeLocation?.city}, {selectedHomeLocation?.region}</p>
                     </>
                   ) : (
@@ -690,7 +693,7 @@ export const ShoppingCart: React.FC = () => {
                     >
                       <option value="">--</option>
                       {availablePickupPoints.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name} — {p.address}, {p.city}</option>
+                        <option key={p.id} value={p.id}>{p.name} — {truncateAddress(p.address, 40)}, {p.city}</option>
                       ))}
                     </select>
                     {selectedPickupCity && availablePickupPoints.length === 0 && (
@@ -958,13 +961,23 @@ export const ShoppingCart: React.FC = () => {
                   {deliveryMethod === 'HOME' ? (
                     <p className="text-sm text-blue-900">
                       <span className="font-bold">{isServiceCart ? t('service.atClientLocation') : t('cart.homeDelivery')}:</span><br />
-                      {selectedHomeLocation?.address}, {selectedHomeLocation?.city}
+                      <span
+                        className={`inline-block ${addressTruncateClass}`}
+                        title={`${selectedHomeLocation?.address ?? ''}, ${selectedHomeLocation?.city ?? ''}`}
+                      >
+                        {selectedHomeLocation?.address}, {selectedHomeLocation?.city}
+                      </span>
                     </p>
                   ) : (
                     <p className="text-sm text-blue-900">
                       <span className="font-bold">{isServiceCart ? t('service.atServicePoint') : t('cart.pickupStation')}:</span><br />
                       {pickupPoints.find(p => p.id === selectedPickupPointId)?.name}<br />
-                      <span className="text-xs opacity-75">{pickupPoints.find(p => p.id === selectedPickupPointId)?.address}</span>
+                      <span
+                        className={`text-xs opacity-75 inline-block ${addressTruncateClass}`}
+                        title={pickupPoints.find(p => p.id === selectedPickupPointId)?.address}
+                      >
+                        {pickupPoints.find(p => p.id === selectedPickupPointId)?.address}
+                      </span>
                     </p>
                   )}
 

@@ -1095,8 +1095,8 @@ export const ClientProfile: React.FC = () => {
                                        setLocationSearch(loc.address ?? '');
                                     }}
                                  >
-                                    <div>
-                                       <p className="text-sm font-medium text-gray-900">{loc.address}</p>
+                                    <div className="min-w-0 flex-1">
+                                       <p className="text-sm font-medium text-gray-900 truncate" title={loc.address}>{loc.address}</p>
                                        <p className="text-xs text-gray-500">{loc.city}, {loc.region}</p>
                                     </div>
                                     <button
@@ -1186,7 +1186,7 @@ export const ClientProfile: React.FC = () => {
                                              }}
                                              className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
                                           >
-                                             <p className="text-sm text-gray-900">{item.address}</p>
+                                             <p className="text-sm text-gray-900 truncate" title={item.address}>{item.address}</p>
                                              <p className="text-xs text-gray-500">{[item.city, item.region].filter(Boolean).join(', ')}</p>
                                           </button>
                                        ))}
@@ -1800,9 +1800,11 @@ export const ClientProfile: React.FC = () => {
                      {selectedOrderLive.deliveryMethod === 'PICKUP' && selectedOrderLive.pickupPointId && (
                         <div className="mt-3 p-3 bg-gray-50 rounded-md border border-gray-200 text-sm">
                            <p className="font-medium text-gray-700 mb-1">{t('order.pickupPointLabel')}</p>
-                           <p className="text-gray-600">
-                              {(() => { const pp = pickupPoints.find(p => p.id === selectedOrderLive.pickupPointId); return pp ? `${pp.name} — ${pp.address}, ${pp.city}` : selectedOrderLive.pickupPointId; })()}
-                           </p>
+                           {(() => {
+                              const pp = pickupPoints.find(p => p.id === selectedOrderLive.pickupPointId);
+                              const label = pp ? `${pp.name} — ${pp.address}, ${pp.city}` : selectedOrderLive.pickupPointId;
+                              return <p className="text-gray-600 truncate" title={label}>{label}</p>;
+                           })()}
                         </div>
                      )}
 
