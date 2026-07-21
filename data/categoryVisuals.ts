@@ -20,8 +20,19 @@ const CATEGORY_AVATAR_BY_NAME: Record<string, string> = {
   'Equipment & Machinery Rentals': '/categories/equipment-rentals.webp',
 };
 
-/** Resolve the avatar image URL for a category name (or `All`). */
-export const getCategoryAvatar = (category: string): string => {
+/**
+ * Resolve the avatar image URL for a category name (or `All`).
+ *
+ * `overrideUrl` — an image supplied by the backend (e.g. a retail/ATI category
+ * configured in AgriAdmin). When present it wins, so newly-added store
+ * categories show their uploaded image; otherwise we fall back to the bundled
+ * marketplace art, then to the generic "All" avatar.
+ */
+export const getCategoryAvatar = (
+  category: string,
+  overrideUrl?: string | null,
+): string => {
+  if (overrideUrl && overrideUrl.trim()) return overrideUrl.trim();
   if (category === 'All') return CATEGORY_AVATAR_ALL;
   return CATEGORY_AVATAR_BY_NAME[category] ?? CATEGORY_AVATAR_ALL;
 };

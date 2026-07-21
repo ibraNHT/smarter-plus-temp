@@ -181,6 +181,8 @@ export interface PickupPoint {
   region: string;
   city: string;
   address: string; // Detailed description or landmark
+  image?: string; // Optional photo of the location (configured in AgriAdmin)
+  latLng?: { lat: number; lng: number }; // Optional geo coordinates
 }
 
 // SCHEDULING TYPES
