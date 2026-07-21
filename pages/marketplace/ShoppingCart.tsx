@@ -696,6 +696,17 @@ export const ShoppingCart: React.FC = () => {
                     {selectedPickupCity && availablePickupPoints.length === 0 && (
                       <p className="text-xs text-red-500 mt-1">{t('cart.pickupNoPointsHint')}</p>
                     )}
+                    {(() => {
+                      const sel = availablePickupPoints.find((p) => p.id === selectedPickupPointId);
+                      return sel?.image ? (
+                        <img
+                          src={sel.image}
+                          alt={sel.name}
+                          className="mt-2 w-full h-32 object-cover rounded-md border border-gray-200"
+                          loading="lazy"
+                        />
+                      ) : null;
+                    })()}
                   </div>
                 </div>
               )}

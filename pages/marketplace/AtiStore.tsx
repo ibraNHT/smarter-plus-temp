@@ -66,16 +66,25 @@ export const AtiStore: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
-  const [storeCategories, setStoreCategories] = useState<string[]>([]);
+  // Retail/ATI store categories come from the backend (configured in AgriAdmin).
+  // Each entry is { name, imageUrl } — backward-compatible with the old
+  // name-only string[] shape.
+  const [storeCategories, setStoreCategories] = useState<Array<{ name: string; imageUrl?: string }>>([]);
 
   useEffect(() => {
     let cancelled = false;
     fetch(`${import.meta.env.VITE_API_URL || '/api'}/retail/categories`)
       .then((r) => (r.ok ? r.json() : { categories: [] }))
       .then((data) => {
-        if (!cancelled && Array.isArray(data.categories) && data.categories.length) {
-          setStoreCategories(data.categories.filter((c: string) => c && c !== 'All'));
-        }
+        if (cancelled || !Array.isArray(data.categories)) return;
+        const normalized = data.categories
+          .map((c: any) =>
+            typeof c === 'string'
+              ? { name: c.trim() }
+              : { name: String(c?.name ?? '').trim(), imageUrl: c?.imageUrl ?? c?.image ?? undefined },
+          )
+          .filter((c: { name: string }) => c.name && c.name !== 'All');
+        if (normalized.length) setStoreCategories(normalized);
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -114,12 +123,18 @@ export const AtiStore: React.FC = () => {
 
   const sortedCategories = Object.keys(groupedOffers).sort();
 
-  const scrollerCategories =
+  const scrollerCategories: string[] =
     storeCategories.length > 0
-      ? storeCategories
+      ? storeCategories.map((c) => c.name)
       : (Array.from(new Set(atiOffers.map((o) => o.category))).filter(Boolean).length
           ? Array.from(new Set(atiOffers.map((o) => o.category))).filter(Boolean)
           : [...MARKETPLACE_CATEGORIES]);
+
+  // name → uploaded image URL, so the category scroller can render store art.
+  const categoryImages = storeCategories.reduce<Record<string, string>>((acc, c) => {
+    if (c.imageUrl) acc[c.name] = c.imageUrl;
+    return acc;
+  }, {});
 
   const handleSelectCategory = (cat: string) => {
     setSelectedCategory(cat);
@@ -194,6 +209,7 @@ export const AtiStore: React.FC = () => {
             selected={selectedCategory}
             onSelect={handleSelectCategory}
             categories={scrollerCategories}
+            categoryImages={categoryImages}
             sticky
           />
         </div>
