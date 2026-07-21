@@ -7,6 +7,8 @@ type CategoryAvatarScrollerProps = {
   onSelect: (category: string) => void;
   /** When omitted, uses All + MARKETPLACE_CATEGORIES. Pass without "All". */
   categories?: readonly string[];
+  /** Optional name→imageUrl map (e.g. retail/ATI categories from the backend). */
+  categoryImages?: Record<string, string | undefined>;
   className?: string;
   sticky?: boolean;
 };
@@ -15,6 +17,7 @@ export const CategoryAvatarScroller: React.FC<CategoryAvatarScrollerProps> = ({
   selected,
   onSelect,
   categories,
+  categoryImages,
   className = '',
   sticky = false,
 }) => {
@@ -42,7 +45,7 @@ export const CategoryAvatarScroller: React.FC<CategoryAvatarScrollerProps> = ({
         const isSelected = selected === category;
         const label =
           category === 'All' ? t('market.allCategories') : t(`category.${category}`);
-        const avatarSrc = getCategoryAvatar(category);
+        const avatarSrc = getCategoryAvatar(category, categoryImages?.[category]);
 
         return (
           <button
