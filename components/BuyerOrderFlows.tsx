@@ -123,7 +123,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
     validate: (values) => {
       const parsed = z
         .object({
-          comment: z.string().trim().min(2, 'Please add a short comment.'),
+          comment: z.string().trim().min(2, t('review.commentRequired')),
           rating: z.number().min(1).max(5),
         })
         .safeParse(values);
@@ -153,10 +153,10 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
     initialValues: { disputeReason: '' },
     validate: (values) => {
       const parsed = z
-        .object({ disputeReason: z.string().trim().min(5, 'Please describe the issue in at least 5 characters.') })
+        .object({ disputeReason: z.string().trim().min(5, t('order.disputeReasonRequired')) })
         .safeParse(values);
       if (parsed.success) return {};
-      return { disputeReason: parsed.error.issues[0]?.message || 'Invalid reason.' };
+      return { disputeReason: parsed.error.issues[0]?.message || t('order.invalidReason') };
     },
     onSubmit: (values, { setFieldError }) => {
       if (disputeOrderId) {
@@ -176,7 +176,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
       ? p.name ||
           (p as any).user?.displayName ||
           `${(p.firstName ?? '').trim()} ${(p.lastName ?? '').trim()}`.trim()
-      : 'Unknown Producer';
+      : t('market.unknownProducer');
   };
 
   const getProducerDisplayName = (order: Order) => order.producerDisplayName || getProducerName(order.producerId);
@@ -527,7 +527,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
               value={reviewFormik.values.comment}
               onChange={reviewFormik.handleChange}
               onBlur={reviewFormik.handleBlur}
-              placeholder="Share your experience..."
+              placeholder={t('review.shareExperience')}
             />
             {reviewFormik.touched.comment && reviewFormik.errors.comment ? (
               <p className="text-xs text-red-600 mt-1">{reviewFormik.errors.comment}</p>
@@ -557,7 +557,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
               value={disputeFormik.values.disputeReason}
               onChange={disputeFormik.handleChange}
               onBlur={disputeFormik.handleBlur}
-              placeholder="What's the issue?"
+              placeholder={t('order.disputePlaceholder')}
             />
             {disputeFormik.touched.disputeReason && disputeFormik.errors.disputeReason ? (
               <p className="text-xs text-red-600 mt-1">{disputeFormik.errors.disputeReason}</p>
@@ -619,7 +619,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
             currentBookingIso={firstServiceBookingIso(rescheduleOrder) ?? undefined}
           />
         ) : (
-          <p className="text-sm text-red-600">Unable to load appointment details.</p>
+          <p className="text-sm text-red-600">{t('order.appointmentUnavailable')}</p>
         )}
         <div className="flex justify-end gap-3 pt-4">
           <button
@@ -872,7 +872,7 @@ export function BuyerPurchaseOrdersSection({
       ? p.name ||
           (p as any).user?.displayName ||
           `${(p.firstName ?? '').trim()} ${(p.lastName ?? '').trim()}`.trim()
-      : 'Unknown Producer';
+      : t('market.unknownProducer');
   };
 
   const getOrderItemImage = (item: any) => {

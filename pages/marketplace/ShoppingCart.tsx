@@ -357,7 +357,7 @@ export const ShoppingCart: React.FC = () => {
     }
 
     if (!user) {
-      showAppToast('For security reasons, please log in or create an account to finalize your purchase.', 'WARNING');
+      showAppToast(t('auth.pleaseLogin'), 'WARNING');
       navigate('/login');
       return;
     }
@@ -458,7 +458,7 @@ export const ShoppingCart: React.FC = () => {
             <div className="bg-white shadow sm:rounded-lg overflow-hidden">
               <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-700">
-                  {isAtiOrder ? 'ATI Retail Store Order' : 'Producer Market Order'}
+                  {isAtiOrder ? t('cart.atiOrderLabel') : t('cart.producerOrderLabel')}
                 </span>
                 <button onClick={clearCart} className="text-xs text-red-600 hover:underline">
                   {t('cart.clear')}
@@ -505,7 +505,7 @@ export const ShoppingCart: React.FC = () => {
                         )}
                         {item.type === OfferType.SERVICE && item.serviceDuration != null && item.serviceDuration > 0 && (
                           <p className="text-xs text-gray-500 mt-1">
-                            {item.cartQuantity} × {item.serviceDuration}h = {item.cartQuantity * item.serviceDuration} hours total
+                            {t('product.totalDuration', { quantity: item.cartQuantity, duration: item.serviceDuration, total: item.cartQuantity * item.serviceDuration })}
                           </p>
                         )}
                       </div>
@@ -564,7 +564,7 @@ export const ShoppingCart: React.FC = () => {
             {/* Delivery Method Selection */}
             <div className="bg-white shadow sm:rounded-lg p-6">
               <h2 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                <Truck className="h-5 w-5 mr-2 text-gray-500" /> {isServiceCart ? t('service.fulfillment') : 'Delivery Method'}
+                <Truck className="h-5 w-5 mr-2 text-gray-500" /> {isServiceCart ? t('service.fulfillment') : t('cart.deliveryMethod')}
               </h2>
 
               <div className="flex space-x-4 mb-4">
@@ -573,24 +573,24 @@ export const ShoppingCart: React.FC = () => {
                   className={`flex-1 py-3 px-2 border rounded-md flex flex-col items-center justify-center text-sm font-medium transition-colors ${deliveryMethod === 'HOME' ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
                 >
                   <Home className="h-5 w-5 mb-1" />
-                  {isServiceCart ? t('service.atClientLocation') : 'Home Delivery'}
+                  {isServiceCart ? t('service.atClientLocation') : t('cart.homeDelivery')}
                 </button>
                 <button
                   onClick={() => setDeliveryMethod('PICKUP')}
                   className={`flex-1 py-3 px-2 border rounded-md flex flex-col items-center justify-center text-sm font-medium transition-colors ${deliveryMethod === 'PICKUP' ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
                 >
                   <MapPin className="h-5 w-5 mb-1" />
-                  {isServiceCart ? t('service.atServicePoint') : 'Pickup Station'}
+                  {isServiceCart ? t('service.atServicePoint') : t('cart.pickupStationLabel')}
                 </button>
               </div>
 
               {deliveryMethod === 'HOME' && (
                 <div className="bg-gray-50 p-3 rounded border border-gray-200 text-sm">
-                  <p className="font-bold text-gray-700 mb-1">{isServiceCart ? `${t('service.locationInfo')}:` : 'Delivering to:'}</p>
+                  <p className="font-bold text-gray-700 mb-1">{isServiceCart ? `${t('service.locationInfo')}:` : t('cart.deliveringTo')}</p>
                   {isHomeAddressValid ? (
                     <>
                       <div className="mb-2">
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Select saved address</label>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">{t('cart.selectSavedAddress')}</label>
                         <select
                           value={selectedHomeLocationIndex}
                           onChange={(e) => setSelectedHomeLocationIndex(Number(e.target.value))}
@@ -608,12 +608,12 @@ export const ShoppingCart: React.FC = () => {
                     </>
                   ) : (
                     <p className="text-red-500">
-                      No address in profile.{" "}
+                      {t('cart.noAddressInProfile')}.{" "}
                       <Link
                         to={isProducerDashboardUser(user) ? '/producer/profile' : '/client/profile'}
                         className="underline font-medium text-red-600 hover:text-red-700"
                       >
-                        Set address now
+                        {t('cart.setAddressNow')}
                       </Link>
                     </p>
                   )}
@@ -719,12 +719,12 @@ export const ShoppingCart: React.FC = () => {
               {isAtiOrder && (
                 <div className="mb-6 bg-blue-50 p-4 rounded-md border border-blue-100">
                   <h3 className="text-sm font-bold text-blue-900 mb-3 flex items-center">
-                    <Calendar className="h-4 w-4 mr-1" /> Retail Delivery Date
+                    <Calendar className="h-4 w-4 mr-1" /> {t('cart.retailDeliveryDate')}
                   </h3>
 
                   {/* Date Picker (Popup Calendar Trigger) */}
                   <div className="relative" ref={calendarRef}>
-                    <label className="block text-xs font-bold text-blue-800 mb-1">Select Date</label>
+                    <label className="block text-xs font-bold text-blue-800 mb-1">{t('cart.selectDate')}</label>
 
                     <button
                       type="button"
@@ -734,7 +734,7 @@ export const ShoppingCart: React.FC = () => {
                       <span className={deliveryDate ? 'font-medium' : 'text-gray-500'}>
                         {deliveryDate
                           ? new Date(deliveryDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-                          : 'Click to select date...'}
+                          : t('cart.selectDatePlaceholder')}
                       </span>
                       <Calendar className={`h-5 w-5 text-blue-600`} />
                     </button>
@@ -822,7 +822,7 @@ export const ShoppingCart: React.FC = () => {
                         <div className="flex space-x-2">
                           <input
                             type="text"
-                            placeholder="Coupon Code"
+                            placeholder={t('cart.couponPlaceholder')}
                             className="flex-1 border border-gray-300 rounded-md p-2 text-sm uppercase"
                             value={couponCode}
                             onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
@@ -833,7 +833,7 @@ export const ShoppingCart: React.FC = () => {
                             disabled={couponApplying}
                             className="bg-gray-800 text-white px-3 py-2 rounded-md text-xs font-bold hover:bg-gray-700 disabled:opacity-60"
                           >
-                            {couponApplying ? '…' : 'APPLY'}
+                            {couponApplying ? '…' : t('cart.couponApply')}
                           </button>
                         </div>
                         {couponError && <p className="text-xs text-red-500 mt-1">{couponError}</p>}
@@ -914,12 +914,12 @@ export const ShoppingCart: React.FC = () => {
                               </p>
                             ) : (
                               <p className="text-amber-700">
-                                <span className="font-semibold">{t('service.appointment')}:</span> Not selected
+                                <span className="font-semibold">{t('service.appointment')}:</span> {t('product.notSelected')}
                               </p>
                             )}
                             {item.serviceDuration != null && item.serviceDuration > 0 && (
                               <p>
-                                <span className="font-semibold">Total duration:</span> {item.cartQuantity} × {item.serviceDuration}h = {item.cartQuantity * item.serviceDuration} hours
+                                <span className="font-semibold">{t('product.totalDuration', { quantity: item.cartQuantity, duration: item.serviceDuration, total: item.cartQuantity * item.serviceDuration })}</span>
                               </p>
                             )}
                             <p>
@@ -940,29 +940,29 @@ export const ShoppingCart: React.FC = () => {
                   </div>
                   {appliedCoupon && (
                     <div className="flex justify-between text-sm text-green-600 mb-1 font-bold">
-                      <span>Discount ({appliedCoupon})</span>
+                      <span>{t('cart.discountLabel')} ({appliedCoupon})</span>
                       <span>- {formatXaf(discountAmount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between mt-2 pt-2 border-t border-gray-200 font-bold text-gray-900 text-lg">
-                    <span>Total</span>
+                    <span>{t('cart.total')}</span>
                     <span className="text-primary-600">{formatXaf(totalAmount)}</span>
                   </div>
                 </div>
 
                 <div className="bg-blue-50 p-3 rounded border border-blue-100">
                   <h4 className="text-xs font-bold text-blue-800 uppercase mb-2 flex items-center">
-                    <Truck className="h-3 w-3 mr-1" /> {isServiceCart ? t('service.locationInfo') : 'Delivery Info'}
+                    <Truck className="h-3 w-3 mr-1" /> {isServiceCart ? t('service.locationInfo') : t('cart.deliveryInfo')}
                   </h4>
 
                   {deliveryMethod === 'HOME' ? (
                     <p className="text-sm text-blue-900">
-                      <span className="font-bold">{isServiceCart ? t('service.atClientLocation') : 'Home Delivery'}:</span><br />
+                      <span className="font-bold">{isServiceCart ? t('service.atClientLocation') : t('cart.homeDelivery')}:</span><br />
                       {selectedHomeLocation?.address}, {selectedHomeLocation?.city}
                     </p>
                   ) : (
                     <p className="text-sm text-blue-900">
-                      <span className="font-bold">{isServiceCart ? t('service.atServicePoint') : 'Pickup Station'}:</span><br />
+                      <span className="font-bold">{isServiceCart ? t('service.atServicePoint') : t('cart.pickupStation')}:</span><br />
                       {pickupPoints.find(p => p.id === selectedPickupPointId)?.name}<br />
                       <span className="text-xs opacity-75">{pickupPoints.find(p => p.id === selectedPickupPointId)?.address}</span>
                     </p>
@@ -971,7 +971,7 @@ export const ShoppingCart: React.FC = () => {
                   {isAtiOrder && deliveryDate && (
                     <div className="mt-2 pt-2 border-t border-blue-200">
                       <h4 className="text-xs font-bold text-blue-800 uppercase mb-1 flex items-center">
-                        <Calendar className="h-3 w-3 mr-1" /> Delivery Date
+                        <Calendar className="h-3 w-3 mr-1" /> {t('cart.deliveryDate')}
                       </h4>
                       <p className="text-sm text-blue-900 font-medium">
                         {new Date(deliveryDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -1005,15 +1005,15 @@ export const ShoppingCart: React.FC = () => {
       {/* Guest Email Modal */}
       <Modal open={showGuestEmailModal} onClose={() => setShowGuestEmailModal(false)} maxWidth="md" zIndex={50} panelClassName="p-4 sm:p-6">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold text-gray-900">Checkout as Guest</h3>
+                <h3 className="text-lg font-bold text-gray-900">{t('cart.guestCheckoutTitle')}</h3>
                 <button onClick={() => setShowGuestEmailModal(false)}>
                   <X className="h-5 w-5 text-gray-400" />
                 </button>
               </div>
-              <p className="text-sm text-gray-500 mb-4">Please provide an email address so we can send your order details and track your cart.</p>
+              <p className="text-sm text-gray-500 mb-4">{t('cart.guestCheckoutDesc')}</p>
               <form onSubmit={guestEmailFormik.handleSubmit}>
                 <div className="mb-4">
-                  <label htmlFor="tempEmail" className="block text-sm font-medium text-gray-700">Email Address</label>
+                  <label htmlFor="tempEmail" className="block text-sm font-medium text-gray-700">{t('guest.emailLabel')}</label>
                   <input
                     type="email"
                     id="tempEmail"
@@ -1028,11 +1028,11 @@ export const ShoppingCart: React.FC = () => {
                   {guestEmailFormik.touched.tempEmail && guestEmailFormik.errors.tempEmail ? <p className="text-xs text-red-600 mt-1">{guestEmailFormik.errors.tempEmail}</p> : null}
                 </div>
                 <div className="flex justify-end gap-3">
-                  <button type="button" onClick={() => setShowGuestEmailModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">Cancel</button>
-                  <button type="submit" className="px-4 py-2 bg-primary-600 text-white rounded-md text-sm font-bold hover:bg-primary-700">Continue to Checkout</button>
+                  <button type="button" onClick={() => setShowGuestEmailModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">{t('cart.guestCancel')}</button>
+                  <button type="submit" className="px-4 py-2 bg-primary-600 text-white rounded-md text-sm font-bold hover:bg-primary-700">{t('cart.guestContinue')}</button>
                 </div>
                 <div className="mt-4 pt-4 border-t border-gray-200 text-center">
-                  <p className="text-sm text-gray-500">Already have an account? <Link to="/login" className="text-primary-600 font-medium hover:underline">Log in</Link></p>
+                  <p className="text-sm text-gray-500">{t('cart.guestAccountAlready')} <Link to="/login" className="text-primary-600 font-medium hover:underline">{t('cart.guestLoginLink')}</Link></p>
                 </div>
               </form>
       </Modal>

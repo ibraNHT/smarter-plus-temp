@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useStoreOptional } from '../services/storeContext';
+import { useTranslation } from '../services/i18nContext';
 import { X, Send, Headphones, Bot, User, Check, Clock, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -15,6 +16,7 @@ const TypingDots: React.FC = () => (
 );
 
 export const SupportChatWidget: React.FC = () => {
+  const { t } = useTranslation();
   const store = useStoreOptional();
   const [inputText, setInputText] = useState('');
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
@@ -265,14 +267,14 @@ export const SupportChatWidget: React.FC = () => {
     setFormEmailError('');
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!guestEmailInput.trim()) {
-      setFormEmailError('Email is required');
+      setFormEmailError(t('support.guestEmailRequired'));
       return;
     }
     if (!emailRegex.test(guestEmailInput.trim())) {
-      setFormEmailError('Please enter a valid email address');
+      setFormEmailError(t('support.guestEmailInvalid'));
       return;
     }
-    submitGuestForm(guestEmailInput.trim(), guestNameInput.trim() || 'Guest');
+    submitGuestForm(guestEmailInput.trim(), guestNameInput.trim() || t('support.guestFallbackName'));
   };
 
   const dockBottom =
@@ -288,14 +290,16 @@ export const SupportChatWidget: React.FC = () => {
   };
 
   const headerStatus = supportAiTyping
-    ? { label: 'AgriBot is typing…', dot: 'bg-amber-300 animate-pulse' }
+    ? { label: t('support.chatStatusTyping'), dot: 'bg-amber-300 animate-pulse' }
     : supportChatSending
-      ? { label: 'Sending…', dot: 'bg-blue-300 animate-pulse' }
+
+      ? { label: t('support.chatStatusSending'), dot: 'bg-blue-300 animate-pulse' }
       : agentActive
-        ? { label: 'Agent connected', dot: 'bg-green-400' }
+        ? { label: t('support.chatStatusAgentConnected'), dot: 'bg-green-400' }
         : waitingForAgent
-          ? { label: 'Waiting for an agent…', dot: 'bg-yellow-400 animate-pulse' }
-          : { label: 'Online', dot: 'bg-green-400 animate-pulse' };
+          ? { label: t('support.chatStatusWaitingForAgent'), dot: 'bg-yellow-400 animate-pulse' }
+          : { label: t('support.chatStatusOnline'), dot: 'bg-green-400 animate-pulse' };
+
 
   if (!store) return null;
 
@@ -316,8 +320,8 @@ export const SupportChatWidget: React.FC = () => {
               ? { top: fabPosition.top, left: fabPosition.left }
               : { bottom: dockBottom, right: 'max(0.75rem, env(safe-area-inset-right))' }
           }
-          aria-label="Open Support Chat (drag to move)"
-          title="Drag to move"
+          aria-label={t('support.openChatAria')}
+          title={t('support.dragHint')}
         >
           <Headphones className="h-6 w-6 pointer-events-none" />
         </button>
@@ -328,7 +332,7 @@ export const SupportChatWidget: React.FC = () => {
         className={`fixed z-50 w-[min(22rem,calc(100vw-1rem))] sm:w-80 md:w-96 h-[70dvh] sm:h-[500px] max-h-[calc(100dvh-5rem)] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col transition-opacity duration-200 ${isSupportChatOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
         style={widgetStyle}
         role="dialog"
-        aria-label="AgriBot Support Chat"
+        aria-label={t('support.chatDialogAria')}
         aria-hidden={!isSupportChatOpen}
       >
         {/* Header */}
@@ -353,7 +357,7 @@ export const SupportChatWidget: React.FC = () => {
             </div>
             <div className="min-w-0">
               <h3 className="font-bold text-sm truncate">
-                {isHandedOver ? 'Human Agent' : 'AgriBot Support'}
+                {isHandedOver ? t('support.humanAgent') : t('support.botName')}
               </h3>
               <span className="text-xs text-blue-100 flex items-center gap-1" aria-live="polite">
                 <span className={`w-2 h-2 rounded-full shrink-0 ${headerStatus.dot}`} />
@@ -366,7 +370,7 @@ export const SupportChatWidget: React.FC = () => {
             onClick={toggleSupportChat}
             className="text-blue-100 hover:text-white p-1.5 rounded-lg hover:bg-white/15 transition-colors shrink-0"
             onPointerDown={(e) => e.stopPropagation()}
-            aria-label="Close support chat"
+            aria-label={t('support.closeChatAria')}
           >
             <X className="h-5 w-5" />
           </button>
@@ -481,16 +485,16 @@ export const SupportChatWidget: React.FC = () => {
                           type="button"
                           onClick={() => void retrySupportMessage(msg.id)}
                           className="inline-flex items-center gap-0.5 text-red-200 hover:text-white transition-colors"
-                          title="Failed to send — tap to retry"
-                          aria-label="Retry sending message"
+                          title={t('support.retrySendTitle')}
+                          aria-label={t('support.retrySendAria')}
                         >
                           <AlertCircle className="h-3 w-3" />
-                          <span className="underline underline-offset-2">retry</span>
+                          <span className="underline underline-offset-2">{t('chat.retry')}</span>
                         </button>
                       ) : isSending ? (
-                        <Clock className="h-3 w-3 opacity-80 animate-pulse" aria-label="Sending" />
+                        <Clock className="h-3 w-3 opacity-80 animate-pulse" aria-label={t('support.sending')} />
                       ) : isSent ? (
-                        <Check className="h-3 w-3 opacity-90" aria-label="Sent" />
+                        <Check className="h-3 w-3 opacity-90" aria-label={t('support.sent')} />
                       ) : null
                     ) : null}
                   </div>
@@ -520,12 +524,14 @@ export const SupportChatWidget: React.FC = () => {
                 />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium leading-snug">
-                    {agentActive ? 'Connected with a support agent' : 'Waiting for a human agent'}
+
+                    {agentActive ? t('support.connectedAgent') : t('support.waitingHumanTitle')}
                   </p>
                   <p className={`mt-0.5 leading-snug ${agentActive ? 'text-green-700' : 'text-yellow-700'}`}>
                     {agentActive
-                      ? 'An agent is with you — send your message below.'
-                      : 'An agent will reply here shortly. No response yet?'}
+                      ? t('support.agentWithYou')
+                      : t('support.waitingHumanDesc')}
+
                   </p>
                   <button
                     type="button"
@@ -538,7 +544,7 @@ export const SupportChatWidget: React.FC = () => {
                     ) : (
                       <RefreshCw className="h-3 w-3" aria-hidden />
                     )}
-                    {returningToAi ? 'Switching…' : 'Back to AgriBot'}
+                    {returningToAi ? t('support.switching') : t('support.backToBot')}
                   </button>
                 </div>
               </div>
@@ -561,14 +567,16 @@ export const SupportChatWidget: React.FC = () => {
                 ) : (
                   <Headphones className="h-3.5 w-3.5" aria-hidden />
                 )}
-                {requestingAgent ? 'Connecting…' : 'Talk to a human agent'}
+
+                {requestingAgent ? t('support.connecting') : t('support.talkToHuman')}
+
               </button>
             </div>
           )}
 
           {/* AI typing indicator */}
           {supportAiTyping && (
-            <div className="flex justify-start agm-chat-bubble-in" aria-live="polite" aria-label="Typing">
+            <div className="flex justify-start agm-chat-bubble-in" aria-live="polite" aria-label={t('support.typing')}>
               <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white mr-2 flex-shrink-0 shadow-sm">
                 <Bot className="h-4 w-4" />
               </div>
@@ -586,13 +594,13 @@ export const SupportChatWidget: React.FC = () => {
             onSubmit={handleSubmitGuestForm}
             className="p-4 bg-white border-t border-gray-200 space-y-3 shrink-0"
           >
-            <p className="text-xs text-gray-500">Enter your email to start chatting with AgriBot.</p>
+            <p className="text-xs text-gray-500">{t('support.guestIntro')}</p>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Email Address *</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">{t('support.guestEmailLabel')}</label>
               <input
                 type="email"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
-                placeholder="your@email.com"
+                placeholder={t('support.guestEmailPlaceholder')}
                 value={guestEmailInput}
                 onChange={(e) => {
                   setGuestEmailInput(e.target.value);
@@ -603,11 +611,11 @@ export const SupportChatWidget: React.FC = () => {
               {formEmailError && <p className="text-xs text-red-500 mt-1">{formEmailError}</p>}
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Name (optional)</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">{t('support.guestNameLabel')}</label>
               <input
                 type="text"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
-                placeholder="Your name"
+                placeholder={t('support.guestNamePlaceholder')}
                 value={guestNameInput}
                 onChange={(e) => setGuestNameInput(e.target.value)}
               />
@@ -616,7 +624,7 @@ export const SupportChatWidget: React.FC = () => {
               type="submit"
               className="w-full bg-blue-600 text-white py-2.5 px-3 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm"
             >
-              Start Chat
+              {t('support.startChat')}
             </button>
           </form>
         ) : (
@@ -631,10 +639,10 @@ export const SupportChatWidget: React.FC = () => {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
                 placeholder={
                   supportAiTyping
-                    ? 'AgriBot is replying…'
+                    ? t('support.chatReplying')
                     : supportChatSending
-                      ? 'Sending…'
-                      : 'Ask about orders, payments, listings…'
+                      ? t('support.chatStatusSending')
+                      : t('support.chatComposerPlaceholder')
                 }
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
@@ -647,7 +655,7 @@ export const SupportChatWidget: React.FC = () => {
               type="submit"
               disabled={!canSend}
               className="bg-blue-600 text-white p-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 min-w-[2.75rem] flex items-center justify-center shadow-sm"
-              aria-label={supportChatSending ? 'Sending message' : 'Send message'}
+              aria-label={supportChatSending ? t('support.sendingMessageAria') : t('chat.sendMessage')}
             >
               {supportChatSending ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

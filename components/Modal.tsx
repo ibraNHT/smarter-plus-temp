@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
+import { useTranslation } from '../services/i18nContext';
 
 export type ModalMaxWidth = 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 
@@ -43,6 +44,7 @@ export const Modal: React.FC<ModalProps> = ({
   panelClassName = '',
   backdropClassName = 'bg-gray-900/50',
 }) => {
+  const { t } = useTranslation();
   useLockBodyScroll(open);
 
   useEffect(() => {
@@ -68,7 +70,7 @@ export const Modal: React.FC<ModalProps> = ({
       {closeOnBackdrop && onClose && (
         <button
           type="button"
-          aria-label="Close"
+          aria-label={t('common.close')}
           className={`agm-modal-backdrop absolute inset-0 ${backdropClassName} agm-modal-backdrop-in`}
           onClick={onClose}
         />

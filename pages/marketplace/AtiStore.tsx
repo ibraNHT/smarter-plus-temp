@@ -168,8 +168,8 @@ export const AtiStore: React.FC = () => {
             path: '/market/ati',
           }),
           buildBreadcrumbSchema([
-            { name: 'Home', path: '/' },
-            { name: 'ATI Store', path: '/market/ati' },
+            { name: t('nav.home'), path: '/' },
+            { name: t('nav.atiStore'), path: '/market/ati' },
           ]),
         ]}
       />
@@ -186,7 +186,7 @@ export const AtiStore: React.FC = () => {
             </div>
           </div>
           <div className="hidden md:block bg-blue-700 px-4 py-2 rounded-lg text-sm flex-shrink-0">
-            Official ATI Products • Verified Quality • Fast Delivery
+            {t('market.atiOfficial')}
           </div>
         </div>
       </div>
@@ -282,14 +282,14 @@ export const AtiStore: React.FC = () => {
                           {t(`category.${category}`)}
                         </h2>
                         <div className="flex items-center gap-3">
-                          <span className="text-xs text-gray-500 uppercase tracking-wider">{categoryOffers.length} Items</span>
+                          <span className="text-xs text-gray-500 uppercase tracking-wider">{categoryOffers.length} {t('market.items')}</span>
                           {!isExpanded && (
                             <button
                               type="button"
                               onClick={() => { setExpandedCategory(category); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                               className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
                             >
-                              See All &rarr;
+                              {t('market.seeAll')} &rarr;
                             </button>
                           )}
                           {isExpanded && (
@@ -298,7 +298,7 @@ export const AtiStore: React.FC = () => {
                               onClick={() => setExpandedCategory(null)}
                               className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
                             >
-                              &larr; All Categories
+                              &larr; {t('market.allCategoriesBack')}
                             </button>
                           )}
                         </div>
@@ -332,7 +332,7 @@ export const AtiStore: React.FC = () => {
                                 <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-100 rounded-xl shadow-md flex flex-col overflow-hidden hover:shadow-xl transition-all h-full agm-card-lift">
                                   <div className="bg-gray-100 h-40 relative">
                                     <img src={resolveOfferImageSrc(offer.imageUrl)} alt={offer.title} className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`} />
-                                    <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">ATI Choice</div>
+                                    <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">{t('market.atiChoice')}</div>
                                   </div>
                                   <div className="flex-1 p-3 space-y-2 flex flex-col">
                                     <h3 className="text-sm font-medium text-gray-900 line-clamp-2 h-10">{offer.title}</h3>
@@ -344,7 +344,7 @@ export const AtiStore: React.FC = () => {
                                         />
                                       ))}
                                       <span className="text-xs text-gray-400 ml-1">
-                                        {reviewCount > 0 ? `(${rating.toFixed(1)})` : '(No reviews)'}
+                                        {reviewCount > 0 ? `(${rating.toFixed(1)})` : t('market.noReviewsShort')}
                                       </span>
                                     </div>
                                     <div className="flex flex-col pt-2 border-t border-gray-100 mt-auto">
@@ -396,7 +396,7 @@ export const AtiStore: React.FC = () => {
                                       alt={offer.title}
                                       className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`}
                                     />
-                                    <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">ATI Choice</div>
+                                    <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">{t('market.atiChoice')}</div>
                                   </div>
                                   <div className="flex-1 p-3 space-y-2 flex flex-col">
                                     <h3 className="text-sm font-medium text-gray-900 line-clamp-2 h-10">
@@ -410,7 +410,7 @@ export const AtiStore: React.FC = () => {
                                         />
                                       ))}
                                       <span className="text-xs text-gray-400 ml-1">
-                                        {reviewCount > 0 ? `(${rating.toFixed(1)})` : '(No reviews)'}
+                                        {reviewCount > 0 ? `(${rating.toFixed(1)})` : `${t('market.noReviewsShort')})`}
                                       </span>
                                     </div>
                                     <div className="flex flex-col pt-2 border-t border-gray-100 mt-auto">

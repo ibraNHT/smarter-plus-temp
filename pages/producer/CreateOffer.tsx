@@ -22,17 +22,17 @@ const SERVICE_UNITS = new Set<UnitOfMeasure>([
 ]);
 const PRODUCT_DEFAULT_UNIT = UnitOfMeasure.KG;
 const SERVICE_DEFAULT_UNIT = UnitOfMeasure.HOUR;
-const createOfferSchema = z.object({
-  title: z.string().trim().min(3, 'Title must be at least 3 characters.'),
-  description: z.string().trim().min(10, 'Description must be at least 10 characters.'),
-  category: z.string().trim().min(1, 'Category is required.'),
-  unit: z.string().trim().min(1, 'Unit is required.'),
-  price: z.number().min(1, 'Price must be greater than 0.'),
-  quantity: z.number().min(1, 'Quantity must be at least 1.'),
-  minQuantity: z.number().min(1, 'Minimum order must be at least 1.'),
-  maxQuantity: z.number().min(0, 'Maximum order cannot be negative.'),
-  offerLocation: z.string().trim().min(2, 'Product location is required.'),
-  imageUrl: z.string().trim().min(1, 'Please upload a product/service image.'),
+const createOfferSchema = (t: (key: string) => string) => z.object({
+  title: z.string().trim().min(3, t('validation.titleMin')),
+  description: z.string().trim().min(10, t('validation.descriptionMinTen')),
+  category: z.string().trim().min(1, t('validation.categoryRequired')),
+  unit: z.string().trim().min(1, t('validation.unitRequired')),
+  price: z.number().min(1, t('validation.pricePositive')),
+  quantity: z.number().min(1, t('validation.quantityMin')),
+  minQuantity: z.number().min(1, t('validation.minOrderMin')),
+  maxQuantity: z.number().min(0, t('validation.maxOrderNegative')),
+  offerLocation: z.string().trim().min(2, t('validation.locationRequired')),
+  imageUrl: z.string().trim().min(1, t('validation.imageRequired')),
   type: z.nativeEnum(OfferType),
   serviceDuration: z.number(),
 }).superRefine((data, ctx) => {
@@ -40,14 +40,14 @@ const createOfferSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['maxQuantity'],
-      message: 'Maximum order quantity cannot be less than Minimum order quantity.',
+      message: t('validation.maxBelowMin'),
     });
   }
   if (data.type === OfferType.SERVICE && data.serviceDuration < 1) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['serviceDuration'],
-      message: 'Service duration must be at least 1 hour.',
+      message: t('validation.serviceDurationMin'),
     });
   }
 });
@@ -216,15 +216,15 @@ export const CreateOffer: React.FC = () => {
     e.target.value = '';
     if (!file) return;
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-      setImageError('Only PNG, JPG, or WebP images are accepted.');
+      setImageError(t('form.imageTypeAccepted'));
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setImageError('Image must be 5 MB or less.');
+      setImageError(t('form.imageSizeLimit'));
       return;
     }
     if (allOfferImages.length >= 3) {
-      setImageError('Maximum 3 images per offer.');
+      setImageError(t('form.maxImagesPerOffer'));
       return;
     }
     setImageError(null);
@@ -237,7 +237,7 @@ export const CreateOffer: React.FC = () => {
         setImageUrls(prev => [...prev, url]);
       }
     } catch (err) {
-      setImageError(err instanceof Error ? err.message : 'Image upload failed.');
+      setImageError(err instanceof Error ? err.message : t('form.uploadFailed'));
     } finally {
       setImageUploading(false);
     }
@@ -274,7 +274,7 @@ export const CreateOffer: React.FC = () => {
     // in JSON, which caused 400 validation errors for "unlimited" (0) max order.
     const maxQ = Math.max(0, Math.floor(Number(formData.maxQuantity) || 0));
     const offerLocation =
-      String(formData.offerLocation ?? registeredLocation ?? '').trim() || 'Location not set';
+      String(formData.offerLocation ?? registeredLocation ?? '').trim() || t('form.locationNotSet');
 
     const listingPrice = Number(formData.price);
     const listingCurrency = formData.listingCurrency || BASE_CURRENCY;
@@ -297,10 +297,10 @@ export const CreateOffer: React.FC = () => {
     };
 
     if (imageUploading) {
-      setSubmitError('Please wait for the image to finish uploading.');
+      setSubmitError(t('form.waitImageUpload'));
       return;
     }
-    const validation = createOfferSchema.safeParse({
+    const validation = createOfferSchema(t).safeParse({
       title: formData.title,
       description: formData.description,
       category: formData.category,
@@ -334,7 +334,7 @@ export const CreateOffer: React.FC = () => {
           imageUrls,
         });
         if (!result.success) {
-          setSubmitError(result.error ?? 'Could not update the offer.');
+          setSubmitError(result.error ?? t('form.updateOfferFailed'));
           return;
         }
       } else {
@@ -345,7 +345,7 @@ export const CreateOffer: React.FC = () => {
           imageUrls,
         });
         if (!result.success) {
-          setSubmitError(result.error ?? 'Could not publish the offer.');
+          setSubmitError(result.error ?? t('form.publishOfferFailed'));
           return;
         }
       }
@@ -403,7 +403,7 @@ export const CreateOffer: React.FC = () => {
            
            <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
              <div className="sm:col-span-6">
-               <label className="block text-sm font-medium text-gray-700 mb-2">Offer Type</label>
+               <label className="block text-sm font-medium text-gray-700 mb-2">{t('form.offerType')}</label>
                <div className="flex space-x-4">
                   <label className={`flex-1 border rounded-md p-4 cursor-pointer hover:bg-gray-50 text-center ${formData.type === OfferType.PRODUCT ? 'ring-2 ring-primary-500 border-transparent bg-primary-50' : ''}`}>
                     <input 
@@ -424,8 +424,8 @@ export const CreateOffer: React.FC = () => {
                       }
                       className="sr-only"
                     />
-                    <span className="font-bold block text-gray-900">Product</span>
-                    <span className="text-xs text-gray-500">Physical goods with stock</span>
+                    <span className="font-bold block text-gray-900">{t('form.product')}</span>
+                    <span className="text-xs text-gray-500">{t('form.productDesc')}</span>
                   </label>
                   <label className={`flex-1 border rounded-md p-4 cursor-pointer hover:bg-gray-50 text-center ${formData.type === OfferType.SERVICE ? 'ring-2 ring-primary-500 border-transparent bg-primary-50' : ''}`}>
                     <input 
@@ -446,16 +446,16 @@ export const CreateOffer: React.FC = () => {
                       }
                       className="sr-only"
                     />
-                    <span className="font-bold block text-gray-900">Service</span>
-                    <span className="text-xs text-gray-500">Time-based (Rental, Labor)</span>
+                    <span className="font-bold block text-gray-900">{t('form.service')}</span>
+                    <span className="text-xs text-gray-500">{t('form.serviceDesc')}</span>
                   </label>
                </div>
              </div>
 
              <div className="sm:col-span-4">
-               <label className="block text-sm font-medium text-gray-700">Title</label>
+               <label className="block text-sm font-medium text-gray-700">{t('form.title')}</label>
                <input type="text" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-900" 
-                 value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="e.g. Organic Red Onions"
+                 value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder={t('form.titlePlaceholder')}
                />
               {fieldErrors.title && <p ref={firstFieldErrorRef} className="mt-1 text-xs text-red-600">{fieldErrors.title}</p>}
              </div>
@@ -476,19 +476,19 @@ export const CreateOffer: React.FC = () => {
              {/* AI Section */}
              <div className="sm:col-span-6 bg-blue-50 p-4 rounded-md border border-blue-100">
                <div className="flex items-center justify-between mb-2">
-                 <label className="block text-sm font-medium text-blue-900">AI Helper (Gemini)</label>
+                 <label className="block text-sm font-medium text-blue-900">{t('form.aiHelper')}</label>
                  <Sparkles className="h-4 w-4 text-blue-500" />
                </div>
-               <p className="text-xs text-blue-700 mb-3">Enter key features (comma separated) and let AI write your description.</p>
+               <p className="text-xs text-blue-700 mb-3">{t('form.aiHint')}</p>
                <div className="flex flex-col sm:flex-row gap-2">
                  <input type="text" className="block w-full min-w-0 border border-blue-200 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900" 
-                    placeholder="e.g. sweet, crunchy, grown without pesticides, harvest 2023"
+                    placeholder={t('form.featuresPlaceholder')}
                     value={formData.features} onChange={e => setFormData({...formData, features: e.target.value})}
                  />
                  <button type="button" onClick={handleGenerateDescription} disabled={loadingAI || !formData.features}
                    className="inline-flex items-center justify-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none disabled:opacity-50 flex-shrink-0"
                  >
-                   {loadingAI ? <Loader2 className="animate-spin h-4 w-4" /> : 'Generate'}
+                   {loadingAI ? <Loader2 className="animate-spin h-4 w-4" /> : t('form.generate')}
                  </button>
                </div>
              </div>
@@ -506,18 +506,18 @@ export const CreateOffer: React.FC = () => {
                <div className="sm:col-span-6 bg-yellow-50 p-4 rounded border border-yellow-200">
                   <div className="flex items-center mb-2">
                     <Clock className="h-4 w-4 text-yellow-600 mr-2" />
-                    <h4 className="text-sm font-bold text-yellow-800">Service Configuration</h4>
+                    <h4 className="text-sm font-bold text-yellow-800">{t('form.serviceConfig')}</h4>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                      <div>
-                       <label className="block text-xs font-medium text-gray-700">Duration per Slot (Hours)</label>
+                       <label className="block text-xs font-medium text-gray-700">{t('form.durationPerSlot')}</label>
                        <NumberStepper min={1} required value={formData.serviceDuration}
                           onChange={n => setFormData({...formData, serviceDuration: n})}
                        />
                        {fieldErrors.serviceDuration && <p className="mt-1 text-xs text-red-600">{fieldErrors.serviceDuration}</p>}
                      </div>
                      <div>
-                       <p className="text-xs text-gray-500 mt-5">Clients will book timeslots of this duration based on your Availability Calendar.</p>
+                       <p className="text-xs text-gray-500 mt-5">{t('form.durationHint')}</p>
                      </div>
                   </div>
                </div>
@@ -525,12 +525,12 @@ export const CreateOffer: React.FC = () => {
 
              <div className="sm:col-span-2 space-y-3">
                <div>
-                 <label className="block text-sm font-medium text-gray-700">Listing currency</label>
+                 <label className="block text-sm font-medium text-gray-700">{t('form.listingCurrency')}</label>
                  <select
                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
                    value={formData.listingCurrency}
                    onChange={e => setFormData({ ...formData, listingCurrency: e.target.value })}
-                   aria-label="Listing currency"
+                   aria-label={t('form.listingCurrencyAria')}
                  >
                    {SUPPORTED_CURRENCIES.map((code) => (
                      <option key={code} value={code}>
@@ -547,8 +547,8 @@ export const CreateOffer: React.FC = () => {
                    min={0}
                    required
                    value={formData.price}
-                   placeholder={`Enter price in ${formData.listingCurrency}`}
-                   ariaLabel={`Price in ${formData.listingCurrency}`}
+                    placeholder={t('form.pricePlaceholder', { currency: formData.listingCurrency })}
+                    ariaLabel={t('form.priceAriaLabel', { currency: formData.listingCurrency })}
                    onChange={n => setFormData({...formData, price: n})}
                  />
                  {formData.listingCurrency !== BASE_CURRENCY && Number(formData.price) > 0 && (
@@ -561,7 +561,7 @@ export const CreateOffer: React.FC = () => {
              </div>
 
              <div className="sm:col-span-2">
-               <label className="block text-sm font-medium text-gray-700">{formData.type === OfferType.SERVICE ? 'Available Slots/Capacity' : t('form.quantity')}</label>
+               <label className="block text-sm font-medium text-gray-700">{formData.type === OfferType.SERVICE ? t('form.availableCapacity') : t('form.quantity')}</label>
                <NumberStepper min={1} required value={formData.quantity}
                   onChange={n => setFormData({...formData, quantity: n})}
                />
@@ -589,7 +589,7 @@ export const CreateOffer: React.FC = () => {
                 <NumberStepper min={1} required value={formData.minQuantity}
                   onChange={n => setFormData({...formData, minQuantity: n})}
                 />
-                <p className="mt-1 text-xs text-gray-500">Minimum amount a client can buy.</p>
+                <p className="mt-1 text-xs text-gray-500">{t('form.minOrderHint')}</p>
                 {fieldErrors.minQuantity && <p className="mt-1 text-xs text-red-600">{fieldErrors.minQuantity}</p>}
              </div>
              <div className="sm:col-span-3">
@@ -597,7 +597,7 @@ export const CreateOffer: React.FC = () => {
                 <NumberStepper min={0} value={formData.maxQuantity}
                   onChange={n => setFormData({...formData, maxQuantity: n})}
                 />
-                <p className="mt-1 text-xs text-gray-500">Maximum amount per client (0 = Unlimited).</p>
+                <p className="mt-1 text-xs text-gray-500">{t('form.maxOrderHint')}</p>
                 {fieldErrors.maxQuantity && <p className="mt-1 text-xs text-red-600">{fieldErrors.maxQuantity}</p>}
              </div>
 
@@ -613,11 +613,11 @@ export const CreateOffer: React.FC = () => {
                    value={formData.offerLocation}
                    onChange={e => setFormData({...formData, offerLocation: e.target.value})}
                  >
-                   <option value={registeredLocation}>My Location: {registeredLocation}</option>
+                   <option value={registeredLocation}>{t('form.myLocation' + ' ')} {registeredLocation}</option>
                    {/* Future: Add more locations here */}
                  </select>
                </div>
-               <p className="mt-1 text-xs text-gray-500">Select where this product is shipping from.</p>
+               <p className="mt-1 text-xs text-gray-500">{t('form.locationHint')}</p>
               {fieldErrors.offerLocation && <p className="mt-1 text-xs text-red-600">{fieldErrors.offerLocation}</p>}
              </div>
 
@@ -635,7 +635,7 @@ export const CreateOffer: React.FC = () => {
                </div>
                <div className="ml-3 text-sm">
                  <label htmlFor="isNegotiable" className="font-medium text-gray-700">{t('form.negotiable')}</label>
-                 <p className="text-gray-500">Allow clients to negotiate the price.</p>
+                 <p className="text-gray-500">{t('form.negotiateHint')}</p>
                </div>
              </div>
 
@@ -652,34 +652,34 @@ export const CreateOffer: React.FC = () => {
                </div>
                <div className="ml-3 text-sm">
                  <label htmlFor="isDeliveryAvailable" className="font-medium text-gray-700">{t('form.deliveryAvailable')}</label>
-                 <p className="text-gray-500">You can deliver this item/service.</p>
+                 <p className="text-gray-500">{t('form.deliveryHint')}</p>
                </div>
              </div>
 
              <div className="sm:col-span-6">
                <label className="block text-sm font-medium text-gray-700">
-                 {formData.type === OfferType.SERVICE ? 'Service images' : 'Product images'} <span className="text-gray-400 font-normal">({allOfferImages.length}/3)</span>
+                 {formData.type === OfferType.SERVICE ? t('form.services') : t('form.products')} <span className="text-gray-400 font-normal">({allOfferImages.length}/3)</span>
                </label>
                {allOfferImages.length > 0 ? (
                  <div className="mt-2 flex flex-wrap items-start gap-3">
                    {allOfferImages.map((url, idx) => (
                      <div key={url + idx} className="relative h-28 w-28 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
-                       <img src={url} alt={`Offer image ${idx + 1}`} className={offerImageInBox} />
+                       <img src={url} alt={t('form.offerImageAlt', { number: idx + 1 })} className={offerImageInBox} />
                        <button
                          type="button"
                          onClick={() => removeOfferImage(idx)}
                          className="absolute right-1 top-1 rounded-full bg-black/55 p-1 text-white hover:bg-black/75"
-                         aria-label="Remove image"
+                         aria-label={t('form.removeImageAria')}
                        >
                          <X className="h-3 w-3" />
                        </button>
-                       {idx === 0 && <span className="absolute left-1 bottom-1 bg-primary-600 text-white text-[10px] px-1 rounded">Main</span>}
+                       {idx === 0 && <span className="absolute left-1 bottom-1 bg-primary-600 text-white text-[10px] px-1 rounded">{t('form.mainImage')}</span>}
                      </div>
                    ))}
                    {allOfferImages.length < 3 && (
                      <label className={`flex h-28 w-28 flex-col items-center justify-center rounded-md border-2 border-dashed border-gray-300 text-gray-400 hover:border-primary-300 hover:text-primary-500 transition-colors ${imageUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}>
                        <Camera className="h-6 w-6 mb-1" />
-                       <span className="text-xs">{imageUploading ? 'Uploading…' : 'Add image'}</span>
+                       <span className="text-xs">{imageUploading ? t('form.uploading') : t('form.addImage')}</span>
                        <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={imageUploading} onChange={handleImagePick} />
                      </label>
                    )}
@@ -694,7 +694,7 @@ export const CreateOffer: React.FC = () => {
                      )}
                      <div className="flex text-sm text-gray-600">
                        <label className={`relative bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 ${imageUploading ? 'pointer-events-none opacity-60' : 'cursor-pointer'}`}>
-                         <span>{imageUploading ? 'Uploading…' : 'Upload photos (up to 3)'}</span>
+                         <span>{imageUploading ? t('form.uploading') : t('form.uploadPhotos')}</span>
                          <input
                            type="file"
                            accept="image/png,image/jpeg,image/webp"
@@ -704,7 +704,7 @@ export const CreateOffer: React.FC = () => {
                          />
                        </label>
                      </div>
-                     <p className="text-xs text-gray-500">PNG, JPG, or WebP up to 5MB</p>
+                     <p className="text-xs text-gray-500">{t('form.imageFormatHint')}</p>
                    </div>
                  </div>
                )}

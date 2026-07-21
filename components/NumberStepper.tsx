@@ -1,5 +1,6 @@
 import React from 'react';
 import { Minus, Plus } from 'lucide-react';
+import { useTranslation } from '../services/i18nContext';
 
 interface NumberStepperProps {
   value: number;
@@ -33,6 +34,7 @@ const NumberStepper: React.FC<NumberStepperProps> = ({
   ariaLabel,
   placeholder,
 }) => {
+  const { t } = useTranslation();
   const clamp = (n: number): number => {
     if (Number.isNaN(n)) n = min ?? 0;
     if (min != null && n < min) n = min;
@@ -51,7 +53,7 @@ const NumberStepper: React.FC<NumberStepperProps> = ({
         type="button"
         onClick={() => onChange(clamp(current - step))}
         disabled={atMin}
-        aria-label="Decrease"
+        aria-label={t('stepper.decrease')}
         className="flex items-center justify-center w-10 flex-shrink-0 border border-gray-300 rounded-l-md bg-gray-50 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <Minus className="h-4 w-4" />
@@ -81,7 +83,7 @@ const NumberStepper: React.FC<NumberStepperProps> = ({
         type="button"
         onClick={() => onChange(clamp(current + step))}
         disabled={atMax}
-        aria-label="Increase"
+        aria-label={t('stepper.increase')}
         className="flex items-center justify-center w-10 flex-shrink-0 border border-gray-300 rounded-r-md bg-gray-50 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <Plus className="h-4 w-4" />

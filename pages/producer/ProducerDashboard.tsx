@@ -179,7 +179,7 @@ export const ProducerDashboard: React.FC = () => {
    const myAverageRating = producerUserId ? getAverageRating(producerUserId) : 0;
 
    if (!isProducerDashboardUser(user)) {
-      return <div className="p-8 text-center">Access Denied</div>;
+      return <div className="p-8 text-center">{t('producer.accessDenied')}</div>;
    }
 
    /*
@@ -211,7 +211,7 @@ export const ProducerDashboard: React.FC = () => {
                </h2>
             </div>
             <div className="bg-white shadow rounded-lg p-6 sm:p-8 text-center text-gray-600">
-               Producer profile not found. Please complete your producer profile setup.
+               {t('dash.profileMissingDashboard')} 
             </div>
          </div>
       );
@@ -292,17 +292,17 @@ export const ProducerDashboard: React.FC = () => {
          if (joined) return joined;
       }
 
-      return 'No Address';
+       return t('dash.noAddress');
    };
 
    const getClientPhone = (clientId: string) => {
       const c = getClientDetails(clientId) as any;
-      return c?.phone || c?.user?.phone || 'N/A';
+       return c?.phone || c?.user?.phone || t('dash.notAvailable');
    };
 
    const getClientEmail = (clientId: string) => {
       const c = getClientDetails(clientId) as any;
-      return c?.email || c?.user?.email || 'N/A';
+       return c?.email || c?.user?.email || t('dash.notAvailable');
    };
 
    const getOrderItemImage = (item: any) => {
@@ -316,20 +316,20 @@ export const ProducerDashboard: React.FC = () => {
    const getProducerDisplayName = (order: Order) => {
       if (order.producerDisplayName) return order.producerDisplayName;
       const p = producers.find((prod) => prod.id === order.producerId);
-      if (!p) return 'Unknown Producer';
-      return p.name || (p as any).user?.displayName || `${(p.firstName ?? '').trim()} ${(p.lastName ?? '').trim()}`.trim() || 'Unknown Producer';
+       if (!p) return t('dash.unknownProducer');
+       return p.name || (p as any).user?.displayName || `${(p.firstName ?? '').trim()} ${(p.lastName ?? '').trim()}`.trim() || t('dash.unknownProducer');
    };
 
    const isSelectedOrderAsBuyer = selectedOrderLive ? isOrderAsBuyer(selectedOrderLive, user) : false;
 
    // Order lifecycle steps for timeline (booking → receiving)
    const ORDER_TIMELINE_STEPS: { status: OrderStatus; label: string }[] = [
-      { status: OrderStatus.PENDING_VALIDATION, label: 'Booked' },
-      { status: OrderStatus.CONFIRMED_AWAITING_PAYMENT, label: 'Confirmed' },
-      { status: OrderStatus.PAID_IN_PREPARATION, label: 'Paid' },
-      { status: OrderStatus.IN_TRANSIT, label: 'In transit' },
-      { status: OrderStatus.DELIVERED, label: 'Delivered' },
-      { status: OrderStatus.COMPLETED, label: 'Completed' },
+       { status: OrderStatus.PENDING_VALIDATION, label: t('dash.booked') },
+       { status: OrderStatus.CONFIRMED_AWAITING_PAYMENT, label: t('dash.confirmed') },
+       { status: OrderStatus.PAID_IN_PREPARATION, label: t('dash.paid') },
+       { status: OrderStatus.IN_TRANSIT, label: t('dash.inTransit') },
+       { status: OrderStatus.DELIVERED, label: t('dash.delivered') },
+       { status: OrderStatus.COMPLETED, label: t('dash.completed') },
    ];
    const TERMINAL_STATUSES = [OrderStatus.CANCELLED, OrderStatus.DISPUTE];
    const getOrderTimelineStepIndex = (status: OrderStatus) => {
@@ -453,7 +453,7 @@ export const ProducerDashboard: React.FC = () => {
          <SEO title="Producer Dashboard" noindex={true} />
          {managingAsAccountManager && (
             <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-               <p className="font-semibold">Account manager mode</p>
+               <p className="font-semibold">{t('dash.accountManagerMode')} </p>
                <p className="mt-1 text-sky-800">
                   Managing <span className="font-medium">{managedProducerLabel}</span> — full producer tools except changing their phone, email, or identity fields.
                </p>
@@ -491,7 +491,7 @@ export const ProducerDashboard: React.FC = () => {
                      <ArrowLeft className="h-5 w-5 text-gray-600" />
                   </button>
                   <h2 className="text-xl sm:text-2xl md:text-3xl font-bold leading-tight text-gray-900 truncate min-w-0">
-                     Dashboard: {currentProducer.name}
+                     {t('dash.dashboardTitle')} {currentProducer.name}
                   </h2>
                </div>
                <div className="mt-1 flex flex-col sm:flex-row sm:flex-wrap sm:mt-0 sm:space-x-6 sm:ml-12">
@@ -506,7 +506,7 @@ export const ProducerDashboard: React.FC = () => {
                   </div>
                   <div className="mt-2 flex items-center text-sm text-gray-500">
                      <Link to="/producer/availability" className="text-primary-600 hover:text-primary-800 font-medium flex items-center">
-                        <Calendar className="h-4 w-4 mr-1" /> Manage Availability
+                        <Calendar className="h-4 w-4 mr-1" /> {t('dash.manageAvailability')} 
                      </Link>
                   </div>
                </div>
@@ -569,11 +569,11 @@ export const ProducerDashboard: React.FC = () => {
                   <Package className="h-5 w-5 mr-2 text-primary-600" />
                   {t('dash.ordersToShip')}
                </h3>
-               <span className="bg-primary-100 text-primary-800 text-xs font-bold px-2 py-1 rounded-full">Action Required</span>
+               <span className="bg-primary-100 text-primary-800 text-xs font-bold px-2 py-1 rounded-full">{t('dash.actionRequired')} </span>
             </div>
             <ul className="divide-y divide-gray-200 agm-dash-scroll-4 agm-dash-row-tall scrollbar-thin">
                {ordersToShip.length === 0 ? (
-                  <li className="px-4 py-8 text-center text-gray-500">No orders ready for shipping.</li>
+                  <li className="px-4 py-8 text-center text-gray-500">{t('dash.noOrdersToShip')} </li>
                ) : (
                   ordersToShip.map(order => (
                      <li key={order.id} className="px-4 py-4 hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedOrder(order)}>
@@ -602,7 +602,7 @@ export const ProducerDashboard: React.FC = () => {
                            <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto">
                               {/* Contact & Location Buttons */}
                               <div className="text-xs text-gray-600 bg-gray-100 p-1.5 rounded border flex flex-col w-full sm:w-auto min-w-0">
-                                 <span className="font-bold">Client Contact:</span>
+                                 <span className="font-bold">{t('dash.clientContact')} </span>
                                  <span className="flex items-center"><Phone className="w-3 h-3 mr-1" /> {getClientPhone(order.clientId)}</span>
                                  <span className="flex items-center"><Mail className="w-3 h-3 mr-1" /> {getClientEmail(order.clientId)}</span>
                               </div>
@@ -637,7 +637,7 @@ export const ProducerDashboard: React.FC = () => {
                      <Truck className="h-5 w-5 mr-2 text-indigo-600" />
                      {t('dash.outForDelivery')}
                   </h3>
-                  <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-2 py-1 rounded-full">Action Required</span>
+                  <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-2 py-1 rounded-full">{t('dash.actionRequired')} </span>
                </div>
                <ul className="divide-y divide-gray-200 agm-dash-scroll-4 agm-dash-row-tall scrollbar-thin">
                   {inTransitOrders.map(order => (
@@ -664,7 +664,7 @@ export const ProducerDashboard: React.FC = () => {
                                     <Phone className="h-4 w-4 mr-2" /> {t('order.revealContact')}
                                  </button>
                               ) : (
-                                 <span className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-green-700"><CheckCircle className="h-4 w-4 mr-1" /> Contact Shared</span>
+                                 <span className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-green-700"><CheckCircle className="h-4 w-4 mr-1" />{t('dash.contactShared')} </span>
                               )}
                               <button
                                  onClick={(e) => { e.stopPropagation(); openOrderDeliveryInMaps(order); }}
@@ -704,7 +704,7 @@ export const ProducerDashboard: React.FC = () => {
                {pageLoading && pendingValidationOrders.length === 0 ? (
                   <li className="px-4 py-3"><ListSkeleton rows={3} /></li>
                ) : pendingValidationOrders.length === 0 ? (
-                  <li className="px-4 py-8 text-center text-gray-500">No new orders waiting validation.</li>
+                  <li className="px-4 py-8 text-center text-gray-500">{t('dash.noPendingOrders')} </li>
                ) : (
                   pendingValidationOrders.map(order => (
                      <li key={order.id} className="px-4 py-4 hover:bg-gray-50 agm-dash-order-actions--stack">
@@ -791,7 +791,7 @@ export const ProducerDashboard: React.FC = () => {
                {pageLoading && allMyOrders.length === 0 ? (
                   <li className="px-4 py-3"><ListSkeleton rows={3} /></li>
                ) : allMyOrders.length === 0 ? (
-                  <li className="px-4 py-8 text-center text-gray-500">No orders yet.</li>
+                  <li className="px-4 py-8 text-center text-gray-500">{t('dash.noOrders')} </li>
                ) : (
                   allMyOrders.map(order => (
                      <li key={order.id} className="px-4 py-3 hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedOrder(order)}>
@@ -828,7 +828,7 @@ export const ProducerDashboard: React.FC = () => {
                {pageLoading && pastOrders.length === 0 ? (
                   <li className="px-4 py-6"><ListSkeleton rows={2} /></li>
                ) : pastOrders.length === 0 ? (
-                  <li className="px-4 py-8 text-center text-gray-500">No past order history.</li>
+                  <li className="px-4 py-8 text-center text-gray-500">{t('dash.noPastOrders')} </li>
                ) : (
                   pastOrders.map(order => (
                      <li key={order.id} className="px-4 py-4 hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedOrder(order)}>
@@ -904,7 +904,7 @@ export const ProducerDashboard: React.FC = () => {
                {myOffers.length === 0 ? (
                   <li className="px-4 py-12 text-center">
                      <Package className="mx-auto h-12 w-12 text-gray-400" />
-                     <p className="mt-2 text-sm text-gray-500">No offers created yet.</p>
+                     <p className="mt-2 text-sm text-gray-500">{t('dash.noOffers')} </p>
                   </li>
                ) : (
                   myOffers.map((offer) => (
@@ -919,7 +919,7 @@ export const ProducerDashboard: React.FC = () => {
                                     <div className="flex text-sm">
                                        <p className="font-medium text-primary-600 truncate">{offer.title}</p>
                                        <p className="ml-1 flex-shrink-0 font-normal text-gray-500">in {offer.category}</p>
-                                       {offer.type === OfferType.SERVICE && <span className="ml-2 bg-purple-100 text-purple-800 text-xs px-2 rounded-full">Service</span>}
+                                       {offer.type === OfferType.SERVICE && <span className="ml-2 bg-purple-100 text-purple-800 text-xs px-2 rounded-full">{t('form.service')}</span>}
                                     </div>
                                     <div className="mt-2 flex">
                                        <div className="flex items-center text-sm text-gray-500">
@@ -932,13 +932,13 @@ export const ProducerDashboard: React.FC = () => {
                               </div>
                               <div className="mt-4 flex-shrink-0 sm:mt-0 sm:ml-5">
                                  <div className="flex items-center gap-3 overflow-hidden">
-                                    <Link to={`/producer/offers/edit/${offer.id}`} className="text-gray-400 hover:text-primary-600">Edit</Link>
+                                    <Link to={`/producer/offers/edit/${offer.id}`} className="text-gray-400 hover:text-primary-600">{t('dash.edit')} </Link>
                                     <button
                                        type="button"
                                        onClick={() => setOfferDeleteTarget({ id: offer.id, title: offer.title })}
                                        className="text-gray-400 hover:text-red-600"
-                                       aria-label={`Delete ${offer.title}`}
-                                       title="Delete offer"
+                                        aria-label={t('dash.deleteOfferAria', { title: offer.title })}
+                                       title={t('dash.deleteOffer')}
                                     >
                                        <Trash2 className="h-4 w-4" />
                                     </button>
@@ -1047,7 +1047,7 @@ export const ProducerDashboard: React.FC = () => {
                            })}
                            {(selectedOrderLive.status === OrderStatus.CANCELLED || selectedOrderLive.status === OrderStatus.DISPUTE) && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 ml-1">
-                                 {selectedOrderLive.status === OrderStatus.CANCELLED ? 'Cancelled' : 'Dispute'}
+                                  {selectedOrderLive.status === OrderStatus.CANCELLED ? t('dash.cancelled') : t('dash.dispute')}
                               </span>
                            )}
                         </div>
@@ -1080,7 +1080,7 @@ export const ProducerDashboard: React.FC = () => {
                            )}
                            {selectedOrderLive.deliveryMethod === 'PICKUP' && selectedOrderLive.pickupPointId && (
                               <p className="text-sm text-gray-600 mt-1">
-                                 Pickup:{' '}
+                                 {t('dash.pickup')}:{' '}
                                  {(() => {
                                     const pp = pickupPoints.find((p) => p.id === selectedOrderLive.pickupPointId);
                                     return pp ? `${pp.name} — ${pp.address}, ${pp.city}` : selectedOrderLive.pickupPointId;
@@ -1116,7 +1116,7 @@ export const ProducerDashboard: React.FC = () => {
                            <div className="mt-2 pt-2 border-t border-gray-200 text-sm">
                               {selectedOrderLive.contactRevealed ? (
                                  <>
-                                    <div className="font-bold text-gray-700 mb-1">Contact Info:</div>
+                                    <div className="font-bold text-gray-700 mb-1">{t('dash.contactInfo')}:</div>
                                     <div className="text-gray-600"><Phone className="h-3 w-3 inline mr-1" /> {getClientPhone(selectedOrderLive.clientId)}</div>
                                     <div className="text-gray-600"><Mail className="h-3 w-3 inline mr-1" /> {getClientEmail(selectedOrderLive.clientId)}</div>
                                  </>
@@ -1155,15 +1155,15 @@ export const ProducerDashboard: React.FC = () => {
                      {/* Dispute Info if any */}
                      {selectedOrderLive.status === OrderStatus.DISPUTE && (
                         <div className="bg-red-50 p-3 rounded-md mb-4 border border-red-200">
-                           <h4 className="text-sm font-bold text-red-800 mb-2 flex items-center"><AlertTriangle className="h-4 w-4 mr-2" /> Dispute Active</h4>
-                           <p className="text-sm text-red-700 mb-2"><span className="font-semibold">Reason:</span> {selectedOrderLive.disputeReason || 'N/A'}</p>
+                           <h4 className="text-sm font-bold text-red-800 mb-2 flex items-center"><AlertTriangle className="h-4 w-4 mr-2" /> {t('dash.disputeActive')}</h4>
+                           <p className="text-sm text-red-700 mb-2"><span className="font-semibold">{t('dash.reasonLabel')}</span> {selectedOrderLive.disputeReason || t('dash.notAvailable')}</p>
                            {selectedOrderLive.disputeEvidence && selectedOrderLive.disputeEvidence.length > 0 && (
                               <div>
-                                 <p className="text-xs font-bold text-red-800 mb-1">Evidence Uploaded:</p>
+                                 <p className="text-xs font-bold text-red-800 mb-1">{t('dash.evidenceUploaded')}</p>
                                  <ul className="list-disc ml-4">
                                     {selectedOrderLive.disputeEvidence.map(ev => (
                                        <li key={ev.id} className="text-xs text-red-600">
-                                          {ev.fileName} ({ev.uploaderId === user?.id ? 'You' : 'Client'})
+                                          {ev.fileName} ({ev.uploaderId === user?.id ? t('dash.you') : t('dash.clientLabel')})
                                        </li>
                                     ))}
                                  </ul>
@@ -1234,7 +1234,7 @@ export const ProducerDashboard: React.FC = () => {
 
                      <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
                         <span className="text-base font-medium text-gray-900">
-                           {isSelectedOrderAsBuyer ? 'Total' : t('dash.orderValue')}
+                           {isSelectedOrderAsBuyer ? t('dash.total') : t('dash.orderValue')}
                         </span>
                         <span className="text-xl font-bold text-primary-600">
                            {formatXaf(
@@ -1296,7 +1296,7 @@ export const ProducerDashboard: React.FC = () => {
                               className="block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
                               value={comment}
                               onChange={(e) => setComment(e.target.value)}
-                              placeholder="Comments about this client..."
+                              placeholder={t('dash.reviewPlaceholder')}
                            />
                         </div>
                         <button type="submit" className="w-full bg-primary-600 text-white rounded-md py-2 text-sm font-bold hover:bg-primary-700">
@@ -1319,7 +1319,7 @@ export const ProducerDashboard: React.FC = () => {
                                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
                                  <div className="flex text-sm text-gray-600">
                                     <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500">
-                                       <span>Upload files</span>
+                                       <span>{t('dash.uploadFiles')}</span>
                                        <input
                                           type="file"
                                           multiple
@@ -1334,7 +1334,7 @@ export const ProducerDashboard: React.FC = () => {
                            </div>
                            {evidenceFiles.length > 0 && (
                               <div className="mt-2">
-                                 <p className="text-xs font-bold text-gray-700">{evidenceFiles.length} files selected:</p>
+                                 <p className="text-xs font-bold text-gray-700">{t('dash.filesSelected', { count: evidenceFiles.length })}</p>
                                  <ul className="list-disc ml-4">
                                     {evidenceFiles.map((f, i) => <li key={i} className="text-xs text-gray-600">{f.name}</li>)}
                                  </ul>
@@ -1343,7 +1343,7 @@ export const ProducerDashboard: React.FC = () => {
                         </div>
 
                         <div className="flex justify-end">
-                           <button type="submit" className="px-4 py-2 text-white bg-primary-600 rounded-md text-sm hover:bg-primary-700">Upload</button>
+                           <button type="submit" className="px-4 py-2 text-white bg-primary-600 rounded-md text-sm hover:bg-primary-700">{t('dash.upload')}</button>
                         </div>
                      </form>
          </Modal>
@@ -1351,14 +1351,14 @@ export const ProducerDashboard: React.FC = () => {
          <ConfirmModal
             open={offerDeleteTarget !== null}
             tone="danger"
-            title="Delete offer?"
+            title={t('dash.deleteOfferTitle')}
             description={offerDeleteTarget && (
                <>
-                  <p>This action cannot be undone.</p>
+                  <p>{t('dash.deleteOfferDescription')}</p>
                   <p className="mt-2 break-words text-sm font-semibold text-gray-900">{offerDeleteTarget.title}</p>
                </>
             )}
-            confirmLabel="Delete"
+            confirmLabel={t('dash.delete')}
             busy={isDeletingOffer}
             onClose={() => { if (!isDeletingOffer) setOfferDeleteTarget(null); }}
             onConfirm={() => handleDeleteOffer()}
@@ -1367,8 +1367,8 @@ export const ProducerDashboard: React.FC = () => {
          <ConfirmModal
             open={rejectOrderTarget !== null}
             tone="danger"
-            title="Reject this order?"
-            description="The client will be notified that this order was rejected. This action cannot be undone."
+            title={t('dash.rejectOrderTitle')}
+            description={t('dash.rejectOrderDescription')}
             confirmLabel={t('dash.reject')}
             busy={orderActionBusy === `${rejectOrderTarget}:reject`}
             onClose={() => { if (orderActionBusy !== `${rejectOrderTarget}:reject`) setRejectOrderTarget(null); }}
