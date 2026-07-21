@@ -235,15 +235,15 @@ export const ClientProfile: React.FC = () => {
          const schema = z.object({
             type: z.enum(['INDIVIDUAL', 'BUSINESS']),
             farmName: z.string(),
-            description: z.string().trim().min(10, 'Description should be at least 10 characters.'),
+            description: z.string().trim().min(10, t('validation.descriptionMin')),
             productionTypes: z.array(z.string()),
             taxIdentificationNumber: z.string(),
          }).superRefine((v, ctx) => {
             if (v.type === 'BUSINESS' && !v.farmName.trim()) {
-               ctx.addIssue({ code: 'custom', path: ['farmName'], message: 'Farm/Business name is required for business accounts.' });
+               ctx.addIssue({ code: 'custom', path: ['farmName'], message: t('validation.farmNameRequired') });
             }
             if (!v.taxIdentificationNumber.trim()) {
-               ctx.addIssue({ code: 'custom', path: ['taxIdentificationNumber'], message: 'Tax ID (NIU) is required.' });
+               ctx.addIssue({ code: 'custom', path: ['taxIdentificationNumber'], message: t('validation.taxIdRequired') });
             }
          });
          const parsed = schema.safeParse(values);
@@ -266,7 +266,7 @@ export const ClientProfile: React.FC = () => {
             certifications: [],
          } as any);
          if (!ok) {
-            showAppToast('Upgrade failed. Please try again.', 'ERROR');
+            showAppToast(t('client.upgradeFailed'), 'ERROR');
             return;
          }
          setShowUpgradeModal(false);
@@ -278,7 +278,7 @@ export const ClientProfile: React.FC = () => {
       initialValues: { comment: '', rating: 5 },
       validate: (values) => {
          const parsed = z.object({
-            comment: z.string().trim().min(2, 'Please add a short comment.'),
+            comment: z.string().trim().min(2, t('validation.commentMin')),
             rating: z.number().min(1).max(5),
          }).safeParse(values);
          if (parsed.success) return {};
@@ -300,9 +300,9 @@ export const ClientProfile: React.FC = () => {
    const disputeFormik = useFormik({
       initialValues: { disputeReason: '' },
       validate: (values) => {
-         const parsed = z.object({ disputeReason: z.string().trim().min(5, 'Please describe the issue in at least 5 characters.') }).safeParse(values);
+         const parsed = z.object({ disputeReason: z.string().trim().min(5, t('validation.disputeReasonMin')) }).safeParse(values);
          if (parsed.success) return {};
-         return { disputeReason: parsed.error.issues[0]?.message || 'Invalid reason.' };
+         return { disputeReason: parsed.error.issues[0]?.message || t('validation.disputeReasonMin') };
       },
       onSubmit: (values, { setFieldError }) => {
          if (disputeOrderId) {
@@ -353,17 +353,17 @@ export const ClientProfile: React.FC = () => {
             const rows = await response.json();
             const mapped = Array.isArray(rows)
                ? rows.map((row: any) => {
-                    const addr = row?.address ?? {};
-                    const city = addr.city || addr.town || addr.village || addr.county || '';
-                    const region = addr.state || addr.region || addr.province || '';
-                    return {
-                       address: String(row?.display_name ?? ''),
-                       city: String(city),
-                       region: String(region),
-                       lat: Number(row?.lat ?? 0),
-                       lng: Number(row?.lon ?? 0),
-                    };
-                 }).filter((x: any) => x.address)
+                  const addr = row?.address ?? {};
+                  const city = addr.city || addr.town || addr.village || addr.county || '';
+                  const region = addr.state || addr.region || addr.province || '';
+                  return {
+                     address: String(row?.display_name ?? ''),
+                     city: String(city),
+                     region: String(region),
+                     lat: Number(row?.lat ?? 0),
+                     lng: Number(row?.lon ?? 0),
+                  };
+               }).filter((x: any) => x.address)
                : [];
             setLocationSuggestions(mapped);
             setShowLocationSuggestions(mapped.length > 0);
@@ -402,15 +402,15 @@ export const ClientProfile: React.FC = () => {
                const rows = searchRes.ok ? await searchRes.json() : [];
                const mapped = Array.isArray(rows)
                   ? rows.map((row: any) => {
-                       const a = row?.address ?? {};
-                       return {
-                          address: String(row?.display_name ?? ''),
-                          city: String(a.city || a.town || a.village || a.county || ''),
-                          region: String(a.state || a.region || a.province || ''),
-                          lat: Number(row?.lat ?? 0),
-                          lng: Number(row?.lon ?? 0),
-                       };
-                    }).filter((x: any) => x.address)
+                     const a = row?.address ?? {};
+                     return {
+                        address: String(row?.display_name ?? ''),
+                        city: String(a.city || a.town || a.village || a.county || ''),
+                        region: String(a.state || a.region || a.province || ''),
+                        lat: Number(row?.lat ?? 0),
+                        lng: Number(row?.lon ?? 0),
+                     };
+                  }).filter((x: any) => x.address)
                   : [];
                setLocationSuggestions(mapped);
                setShowLocationSuggestions(mapped.length > 0);
@@ -455,7 +455,7 @@ export const ClientProfile: React.FC = () => {
          });
          setLocationSearch(rev?.address || '');
       } catch {
-         showAppToast('Could not read your location. Allow permission or set the pin on the map.', 'WARNING');
+         showAppToast(t('client.locationError'), 'WARNING');
       } finally {
          setGeoLoading(false);
       }
@@ -465,7 +465,7 @@ export const ClientProfile: React.FC = () => {
       if (!referralCodeDisplay) return;
       const link = buildClientReferralLink(referralCodeDisplay);
       void navigator.clipboard.writeText(link);
-      showAppToast('Referral link copied!', 'SUCCESS');
+      showAppToast(t('client.referralLinkCopied'), 'SUCCESS');
    };
 
    const myReviews = user ? reviews.filter(r => r.targetId === user.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : [];
@@ -564,7 +564,7 @@ export const ClientProfile: React.FC = () => {
       return (
          <div className="max-w-7xl mx-auto py-8 px-4">
             <SEO title="Client Profile" noindex={true} />
-            <p className="p-8 text-center text-gray-600">Please log in to view your profile.</p>
+            <p className="p-8 text-center text-gray-600">{t('client.loginRequired')}</p>
          </div>
       );
    }
@@ -573,7 +573,7 @@ export const ClientProfile: React.FC = () => {
       return (
          <div className="max-w-7xl mx-auto py-8 px-4">
             <SEO title="Client Profile" noindex={true} />
-            <p className="p-8 text-center">Access Denied</p>
+            <p className="p-8 text-center">{t('client.accessDenied')}</p>
          </div>
       );
    }
@@ -605,8 +605,8 @@ export const ClientProfile: React.FC = () => {
          <div className="max-w-7xl mx-auto py-8 px-4">
             <SEO title="Client Profile" noindex={true} />
             <div className="p-8 text-center max-w-lg mx-auto space-y-4">
-               <p className="text-gray-700">No client profile was found for your account.</p>
-               <Link to="/register/client" className="text-primary-600 font-medium hover:underline">Complete client registration</Link>
+               <p className="text-gray-700">{t('client NoProfileFound')}</p>
+               <Link to="/register/client" className="text-primary-600 font-medium hover:underline">{t('client.completeRegistration')}</Link>
             </div>
          </div>
       );
@@ -618,12 +618,12 @@ export const ClientProfile: React.FC = () => {
 
    // Order lifecycle steps for timeline (booking → receiving)
    const ORDER_TIMELINE_STEPS: { status: OrderStatus; label: string }[] = [
-      { status: OrderStatus.PENDING_VALIDATION, label: 'Booked' },
-      { status: OrderStatus.CONFIRMED_AWAITING_PAYMENT, label: 'Confirmed' },
-      { status: OrderStatus.PAID_IN_PREPARATION, label: 'Paid' },
-      { status: OrderStatus.IN_TRANSIT, label: 'In transit' },
-      { status: OrderStatus.DELIVERED, label: 'Delivered' },
-      { status: OrderStatus.COMPLETED, label: 'Completed' },
+      { status: OrderStatus.PENDING_VALIDATION, label: t('orderTimeline.booked') },
+      { status: OrderStatus.CONFIRMED_AWAITING_PAYMENT, label: t('orderTimeline.confirmed') },
+      { status: OrderStatus.PAID_IN_PREPARATION, label: t('orderTimeline.paid') },
+      { status: OrderStatus.IN_TRANSIT, label: t('orderTimeline.inTransit') },
+      { status: OrderStatus.DELIVERED, label: t('orderTimeline.delivered') },
+      { status: OrderStatus.COMPLETED, label: t('orderTimeline.completed') },
    ];
    const TERMINAL_STATUSES = [OrderStatus.CANCELLED, OrderStatus.DISPUTE];
    const getOrderTimelineStepIndex = (status: OrderStatus) => {
@@ -713,12 +713,12 @@ export const ClientProfile: React.FC = () => {
       if (!formData || !file) return;
       const maxBytes = 2 * 1024 * 1024;
       if (file.size > maxBytes) {
-         showAppToast('Image must be 2 MB or less.', 'WARNING');
+         showAppToast(t('client.imageSizeError'), 'WARNING');
          return;
       }
       const allowed = ['image/jpeg', 'image/png', 'image/webp'];
       if (!allowed.includes(file.type)) {
-         showAppToast('Use JPG, PNG, or WebP.', 'WARNING');
+         showAppToast(t('client.imageTypeError'), 'WARNING');
          return;
       }
       setAvatarUploading(true);
@@ -726,7 +726,7 @@ export const ClientProfile: React.FC = () => {
          const url = await uploadAvatar(file);
          setFormData({ ...formData, profileImageUrl: url });
       } catch (err: unknown) {
-         showAppToast(err instanceof Error ? err.message : 'Upload failed.', 'ERROR');
+         showAppToast(err instanceof Error ? err.message : t('client.uploadFailed'), 'ERROR');
       } finally {
          setAvatarUploading(false);
       }
@@ -750,7 +750,7 @@ export const ClientProfile: React.FC = () => {
       navigate('/');
    };
   const openReviewModal = (orderId: string, producerId: string) => { setReviewOrderId(orderId); setReviewTargetId(producerId); reviewFormik.setValues({ rating: 5, comment: '' }); setShowReviewModal(true); };
-   const getProducerName = (producerId: string) => { const p = producers.find(prod => prod.id === producerId); return p ? (p.name || (p as any).user?.displayName || `${(p.firstName ?? '').trim()} ${(p.lastName ?? '').trim()}`.trim()) : 'Unknown Producer'; };
+   const getProducerName = (producerId: string) => { const p = producers.find(prod => prod.id === producerId); return p ? (p.name || (p as any).user?.displayName || `${(p.firstName ?? '').trim()} ${(p.lastName ?? '').trim()}`.trim()) : t('market.unknownProducer'); };
    /** Prefer snapshot fields from GET /reviews/user/:id; fallback to catalog by reviewer user id. */
    const getReviewAuthorDisplay = (review: Review) => {
       const displayFromRow = (row: any) => {
@@ -896,7 +896,7 @@ export const ClientProfile: React.FC = () => {
                         <div className="cursor-pointer flex-1 min-w-0">
                            <h4 className="text-sm font-bold text-gray-900 flex items-center gap-1.5 flex-wrap">
                               <span className="truncate">
-                                 {orderIsServiceOnly(order) ? t('service.booking') : 'Order'}{' '}
+                                 {orderIsServiceOnly(order) ? t('service.booking') : t('order.label')}{' '}
                                  #{order.id.substring(order.id.length - 6).toUpperCase()}
                               </span>
                               {orderIsServiceOnly(order) && (
@@ -911,7 +911,7 @@ export const ClientProfile: React.FC = () => {
                               </p>
                            )}
                            {order.deliveryMethod === 'PICKUP' && (
-                              <p className="text-xs text-gray-500 mt-0.5">📦 Pickup delivery</p>
+                              <p className="text-xs text-gray-500 mt-0.5">📦 {t('order.pickupDelivery')}</p>
                            )}
                         </div>
                         <div className="shrink-0">{getStatusBadge(order.status)}</div>
@@ -950,7 +950,7 @@ export const ClientProfile: React.FC = () => {
          <SEO title="Client Profile" noindex={true} />
          <div className="mb-4 sm:mb-6">
             <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 hover:text-primary-600 transition-colors font-medium text-sm sm:text-base">
-               <ArrowLeft className="h-5 w-5 mr-2" /> Back
+               <ArrowLeft className="h-5 w-5 mr-2" /> {t('profile.tabs.back')}
             </button>
          </div>
 
@@ -967,13 +967,13 @@ export const ClientProfile: React.FC = () => {
                      <Heart className={`${activeTab === 'favorites' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.favorites')}</span>
                   </button>
                   <button onClick={() => setActiveTab('payment')} className={`${activeTab === 'payment' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
-                     <CreditCard className={`${activeTab === 'payment' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">Payment</span>
+                     <CreditCard className={`${activeTab === 'payment' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.payment2')}</span>
                   </button>
                   <button onClick={() => setActiveTab('reputation')} className={`${activeTab === 'reputation' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
                      <ThumbsUp className={`${activeTab === 'reputation' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.reputation')}</span>
                   </button>
                   <button onClick={() => setActiveTab('referrals')} className={`${activeTab === 'referrals' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
-                     <Users className={`${activeTab === 'referrals' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">Referrals</span>
+                     <Users className={`${activeTab === 'referrals' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.referrals')}</span>
                   </button>
                   <Link to="/wallet" className="bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50 group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors">
                      <Wallet className="text-gray-400 group-hover:text-gray-500 flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6" /> <span className="truncate">{t('nav.wallet')}</span>
@@ -1005,21 +1005,19 @@ export const ClientProfile: React.FC = () => {
                   <div className="shadow sm:rounded-md bg-white p-4 sm:p-6 space-y-4">
                      <div className="flex items-center">
                         <CreditCard className="h-5 w-5 text-primary-600 mr-2" />
-                        <h3 className="text-lg font-medium text-gray-900">Payment &amp; reload</h3>
+                        <h3 className="text-lg font-medium text-gray-900">{t('profile.tabs.payment_reload')}</h3>
                      </div>
                      <CurrencyPreferenceCard />
                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                        <p className="text-sm text-gray-500">Wallet balance</p>
+                        <p className="text-sm text-gray-500">{t('order.walletBalance')}</p>
                         <p className="text-2xl font-extrabold text-gray-900">{(wallet?.balance ?? 0).toLocaleString()} XAF</p>
                      </div>
                      <p className="text-sm text-gray-600 leading-relaxed">
-                        Add money to your wallet to pay for orders. You pay securely through the
-                        hosted payment page — no card details are stored here. Wallet funds are for
-                        purchases only and can&apos;t be withdrawn.
+                        {t('profile.tabs.walletDescription')}
                      </p>
                      {PAYMENTS_ENABLED ? (
                         <Link to="/wallet" className="inline-flex items-center justify-center bg-primary-600 text-white px-5 py-2.5 rounded-md font-bold hover:bg-primary-700 shadow-sm">
-                           <Plus className="h-5 w-5 mr-1" /> Reload wallet
+                           <Plus className="h-5 w-5 mr-1" /> {t('profile.tabs.walleReload')}
                         </Link>
                      ) : (
                         <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-md p-3">
@@ -1040,7 +1038,7 @@ export const ClientProfile: React.FC = () => {
                         <div className="relative flex-shrink-0">
                            <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">
                               {formData.profileImageUrl ? (
-                                 <img src={formData.profileImageUrl} alt="Profile" className="h-full w-full object-cover" />
+                                 <img src={formData.profileImageUrl} alt={t('form.profileAlt')} className="h-full w-full object-cover" />
                               ) : (
                                  <User className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400" />
                               )}
@@ -1052,7 +1050,7 @@ export const ClientProfile: React.FC = () => {
                         </div>
                         <div className="min-w-0">
                            <p className="text-sm font-medium text-gray-700">{t('profile.uploadPhoto')}</p>
-                           <p className="text-xs text-gray-500">{avatarUploading ? 'Uploading…' : 'JPG, PNG, or WebP. Max 2 MB.'}</p>
+                           <p className="text-xs text-gray-500">{avatarUploading ? t('profile.uploading') : t('profile.uploadHint')}</p>
                         </div>
                      </div>
                      <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
@@ -1067,9 +1065,9 @@ export const ClientProfile: React.FC = () => {
                         <div className="sm:col-span-3">
                            <label className="block text-sm font-medium text-gray-700">{t('profile.gender')}</label>
                            <select name="gender" value={formData.gender || ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900">
-                              <option value="">Select Gender</option>
-                              <option value="MALE">Male</option>
-                              <option value="FEMALE">Female</option>
+                              <option value="">{t('profile.selectGender')}</option>
+                              <option value="MALE">{t('profile.male')}</option>
+                              <option value="FEMALE">{t('profile.female')}</option>
                            </select>
                         </div>
                         <div className="sm:col-span-3">
@@ -1085,7 +1083,7 @@ export const ClientProfile: React.FC = () => {
                            <input type="tel" name="phone" value={formData.phone ?? ''} onChange={handleInfoChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 bg-white text-gray-900" />
                         </div>
                         <div className="sm:col-span-6 border-t border-gray-100 pt-4 mt-2">
-                           <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center"><MapPin className="h-4 w-4 mr-1 text-primary-600" /> My Locations</h4>
+                           <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center"><MapPin className="h-4 w-4 mr-1 text-primary-600" /> {t('profile.myLocations')}</h4>
                            <div className="space-y-2 mb-4">
                               {(formData.locations || []).map((loc, idx) => (
                                  <div
@@ -1117,14 +1115,14 @@ export const ClientProfile: React.FC = () => {
                            </div>
                            <div className="bg-blue-50 p-3 rounded-md border border-blue-100 space-y-3">
                               <div className="flex flex-wrap items-center justify-between gap-2">
-                                 <p className="text-xs font-medium text-blue-700">Add or update an address</p>
+                                 <p className="text-xs font-medium text-blue-700">{t('profile.addOrUpdateAddress')}</p>
                                  {(formData.locations?.length ?? 0) > 0 && (
                                     <button
                                        type="button"
                                        onClick={startNewLocationEntry}
                                        className="text-xs font-semibold text-primary-700 hover:text-primary-900 underline"
                                     >
-                                       {editingLocationIndex != null ? 'New address (keep existing)' : 'Add another address'}
+                                       {editingLocationIndex != null ? t('profile.newAddressKeep') : t('profile.addAnotherAddress')}
                                     </button>
                                  )}
                               </div>
@@ -1135,7 +1133,7 @@ export const ClientProfile: React.FC = () => {
                                     disabled={geoLoading}
                                     className="text-sm px-3 py-1.5 rounded-md border border-primary-200 bg-white text-primary-700 hover:bg-primary-50 disabled:opacity-50"
                                  >
-                                    {geoLoading ? 'Getting location…' : 'Use my current location'}
+                                    {geoLoading ? t('location.gettingLocation') : t('location.useMyLocation')}
                                  </button>
                               </div>
                               <LocationMapPicker
@@ -1146,15 +1144,15 @@ export const ClientProfile: React.FC = () => {
                               />
                               <p className="text-xs text-gray-500">
                                  {editingLocationIndex != null
-                                    ? `Editing location #${editingLocationIndex + 1}. Drag pin or update fields, then save.`
-                                    : 'Drag the pin or tap the map to set coordinates. Address fields update from the pin when possible.'}
+                                    ? t('profile.updateLocation')
+                                    : t('profile.mapPinHint')}
                               </p>
                               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                  <div className="sm:col-span-2">
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">Search address</label>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">{t('location.searchAddress')}</label>
                                     <input
                                        type="text"
-                                       placeholder="Type to search (OpenStreetMap)"
+                                       placeholder={t('location.searchPlaceholder')}
                                        value={locationSearch}
                                        onChange={e => {
                                           const value = e.target.value;
@@ -1195,10 +1193,10 @@ export const ClientProfile: React.FC = () => {
                                     </div>
                                  )}
                                  {isNearbyLoading && (
-                                    <p className="sm:col-span-2 text-xs text-gray-500">Finding nearby locations...</p>
+                                    <p className="sm:col-span-2 text-xs text-gray-500">{t('location.findingNearby')}</p>
                                  )}
                                  <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">{t('location.city')}</label>
                                     <input
                                        type="text"
                                        value={newLoc.city ?? ''}
@@ -1207,7 +1205,7 @@ export const ClientProfile: React.FC = () => {
                                     />
                                  </div>
                                  <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">Region</label>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">{t('location.region')}</label>
                                     <input
                                        type="text"
                                        value={newLoc.region ?? ''}
@@ -1216,7 +1214,7 @@ export const ClientProfile: React.FC = () => {
                                     />
                                  </div>
                                  <div className="sm:col-span-2">
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">Full address</label>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">{t('location.fullAddress')}</label>
                                     <input
                                        type="text"
                                        value={newLoc.address ?? ''}
@@ -1283,7 +1281,7 @@ export const ClientProfile: React.FC = () => {
                            {(tabLoading || isClientProfileHydrating) && allMyOrders.length === 0 ? (
                               <li className="px-4 py-3"><ListSkeleton rows={4} /></li>
                            ) : allMyOrders.length === 0 ? (
-                              <li className="px-4 py-8 text-center text-gray-500">No orders yet.</li>
+                              <li className="px-4 py-8 text-center text-gray-500">{t('dash.noOrders')}</li>
                            ) : (
                               allMyOrders.map(order => (
                                  <li
@@ -1338,7 +1336,7 @@ export const ClientProfile: React.FC = () => {
                         {(tabLoading || isClientProfileHydrating) && pastOrders.length === 0 ? (
                            <ListSkeleton rows={2} />
                         ) : (
-                           renderOrderList(pastOrders, "No order history.")
+                           renderOrderList(pastOrders, t('dash.noPastOrders'))
                         )}
                      </section>
                   </div>
@@ -1351,11 +1349,11 @@ export const ClientProfile: React.FC = () => {
                      </div>
                      {unavailableFavoriteIds && unavailableFavoriteIds.length > 0 && (
                         <div className="mb-6 bg-yellow-50 p-4 rounded-md border border-yellow-100">
-                           <h4 className="text-sm font-bold text-yellow-800 mb-2">Unavailable Items</h4>
+                           <h4 className="text-sm font-bold text-yellow-800 mb-2">{t('favorites.unavailableTitle')}</h4>
                            <ul className="space-y-2">
                               {unavailableFavoriteIds.map(id => (
                                  <li key={id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-yellow-700">
-                                    <span>Item #{id} is no longer available.</span>
+                                    <span>{t('favorites.itemUnavailable', { id })}</span>
                                     <div className="flex items-center gap-2 flex-shrink-0"><button onClick={() => setFavoriteToRemove({ id, title: `Item #${id}` })} className="text-xs text-red-600 hover:underline">{t('cart.remove')}</button><Link to="/market/producers" className="text-xs bg-yellow-200 px-2 py-1 rounded hover:bg-yellow-300 flex items-center"><Search className="w-3 h-3 mr-1" /> {t('profile.findSimilar')}</Link></div>
                                  </li>
                               ))}
@@ -1435,27 +1433,27 @@ export const ClientProfile: React.FC = () => {
                   <div className="shadow sm:rounded-md sm:overflow-hidden bg-white p-4 sm:p-6">
                      <div className="border-b border-gray-200 pb-4 mb-4 flex flex-wrap items-end justify-between gap-3">
                         <div>
-                           <h3 className="font-display text-lg font-semibold text-gray-900">Referrals</h3>
-                           <p className="text-sm text-gray-500 mt-0.5">Invite friends and earn when they complete their first order.</p>
+                           <h3 className="font-display text-lg font-semibold text-gray-900">{t('referrals.yourImpact')}</h3>
+                           <p className="text-sm text-gray-500 mt-0.5">{t('referrals.inviteDesc')}</p>
                         </div>
                         <div className="text-right">
                            <p className="text-3xl font-display font-bold text-primary-700 leading-none">{referralCount}</p>
-                           <p className="text-xs font-semibold uppercase tracking-wide text-primary-600 mt-1">Referrals</p>
+                           <p className="text-xs font-semibold uppercase tracking-wide text-primary-600 mt-1">{t('referrals.yourImpact')}</p>
                         </div>
                      </div>
                      <div className="bg-primary-50 border border-primary-200 rounded-xl p-5 mb-6">
-                        <p className="text-sm text-primary-900 mb-1 font-bold">Your invite code</p>
+                        <p className="text-sm text-primary-900 mb-1 font-bold">{t('referrals.yourInviteCode')}</p>
                         <p className="font-display text-2xl sm:text-3xl font-bold tracking-wide text-primary-800 mb-4">
                            {referralCodeDisplay || '—'}
                         </p>
-                        <p className="text-sm text-primary-800 mb-2 font-medium">Your referral link</p>
+                        <p className="text-sm text-primary-800 mb-2 font-medium">{t('referrals.yourLink')}</p>
                         <div className="flex flex-col sm:flex-row gap-2">
                            <input type="text" readOnly value={buildClientReferralLink(referralCodeDisplay)} className="block w-full min-w-0 border-primary-200 rounded-md shadow-sm p-2.5 text-sm bg-white text-gray-700" />
                            <button type="button" onClick={copyReferralLink} className="agm-btn-primary bg-primary-600 text-white px-4 py-2.5 rounded-md text-sm font-medium hover:bg-primary-700 flex items-center justify-center flex-shrink-0">
-                              Copy link
+                              {t('referrals.copy')}
                            </button>
                         </div>
-                        <p className="text-xs text-primary-700 mt-3">Share this link with friends. Rewards apply when their first order is marked Completed (no prior cancellation).</p>
+                        <p className="text-xs text-primary-700 mt-3">{t('referrals.rewardsApply')}</p>
                      </div>
                      {myReferrals?.activeProgram ? (
                         <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6">
@@ -1464,33 +1462,33 @@ export const ClientProfile: React.FC = () => {
                               <p className="text-sm text-gray-600 mt-1">{myReferrals.activeProgram.description}</p>
                            ) : null}
                            <ul className="mt-3 text-sm text-gray-800 space-y-1 list-disc list-inside">
-                              <li>Referrer reward: {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.referrerRewardAmount).toFixed(2)}</li>
-                              <li>New user reward: {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.refereeRewardAmount).toFixed(2)}</li>
-                              <li>Minimum payout: {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.minimumPayoutThreshold).toFixed(2)}</li>
+                              <li>{t('referrals.referrerReward')} {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.referrerRewardAmount).toFixed(2)}</li>
+                              <li>{t('referrals.newUserReward')} {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.refereeRewardAmount).toFixed(2)}</li>
+                              <li>{t('referrals.minPayout')} {myReferrals.activeProgram.currency} {Number(myReferrals.activeProgram.minimumPayoutThreshold).toFixed(2)}</li>
                            </ul>
                            {myReferrals.activeProgram.termsUrl ? (
                               <a href={myReferrals.activeProgram.termsUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 text-sm font-medium mt-3 inline-block hover:underline">
-                                 Terms &amp; conditions
+                                 {t('referrals.termsTitle')}
                               </a>
                            ) : null}
                         </div>
                      ) : null}
                      <div className="border-t border-gray-200 pt-4">
-                        <h4 className="text-sm font-bold text-gray-900 mb-4">People you invited</h4>
+                        <h4 className="text-sm font-bold text-gray-900 mb-4">{t('referrals.peopleInvited')}</h4>
                         {referralCount === 0 ? (
                            <div className="text-center py-10 agm-empty-wash rounded-xl border border-primary-100">
                               <Users className="h-12 w-12 mx-auto text-primary-300 mb-2" />
-                              <p className="text-gray-600 font-medium">You haven&apos;t referred anyone yet.</p>
-                              <p className="text-sm text-gray-500 mt-1">Copy your link above and share it to get started.</p>
+                              <p className="text-gray-600 font-medium">{t('referrals.noReferrals')}</p>
+                              <p className="text-sm text-gray-500 mt-1">{t('referrals.inviteHint')}</p>
                            </div>
                         ) : (
                            <div className="space-y-3">
-                              <p className="text-sm text-gray-600">You have successfully referred {referralCount} user{referralCount === 1 ? '' : 's'}.</p>
+                              <p className="text-sm text-gray-600">{t('referrals.referredCount', { count: referralCount })}</p>
                               {referredPeople.length > 0 ? (
                                  <ul className="divide-y divide-gray-200 border border-gray-200 rounded-md bg-white">
                                     {referredPeople.map((u) => (
                                        <li key={u.id} className="px-3 py-2 flex justify-between text-sm">
-                                          <span className="font-medium text-gray-900">{u.displayName || 'User'}</span>
+                                          <span className="font-medium text-gray-900">{u.displayName || t('compare.unknown')}</span>
                                           <span className="text-gray-500">{u.joinedDate ? new Date(u.joinedDate).toLocaleDateString() : ''}</span>
                                        </li>
                                     ))}
@@ -1519,21 +1517,21 @@ export const ClientProfile: React.FC = () => {
                      <h3 className="text-lg font-medium text-gray-900 mb-4">{t('profile.upgrade')}</h3>
                      <form onSubmit={upgradeFormik.handleSubmit} className="space-y-4">
                         <div>
-                           <label className="block text-sm font-medium text-gray-700 mb-2">Producer Type</label>
+                           <label className="block text-sm font-medium text-gray-700 mb-2">{t('profile.producerType')}</label>
                            <div className="flex space-x-4">
-                              <label className="flex items-center"><input type="radio" name="type" value="INDIVIDUAL" checked={upgradeFormik.values.type === 'INDIVIDUAL'} onChange={upgradeFormik.handleChange} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">Individual</span></label>
-                              <label className="flex items-center"><input type="radio" name="type" value="BUSINESS" checked={upgradeFormik.values.type === 'BUSINESS'} onChange={upgradeFormik.handleChange} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">Business</span></label>
+                              <label className="flex items-center"><input type="radio" name="type" value="INDIVIDUAL" checked={upgradeFormik.values.type === 'INDIVIDUAL'} onChange={upgradeFormik.handleChange} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">{t('profile.individual')}</span></label>
+                              <label className="flex items-center"><input type="radio" name="type" value="BUSINESS" checked={upgradeFormik.values.type === 'BUSINESS'} onChange={upgradeFormik.handleChange} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">{t('profile.business')}</span></label>
                            </div>
                         </div>
-                        {upgradeFormik.values.type === 'BUSINESS' && (<div><label className="block text-sm font-medium text-gray-700">Farm/Business Name <span className="text-red-500">*</span></label><input type="text" name="farmName" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.farmName} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.farmName && upgradeFormik.errors.farmName ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.farmName}</p> : null}</div>)}
+                        {upgradeFormik.values.type === 'BUSINESS' && (<div><label className="block text-sm font-medium text-gray-700">{t('profile.producerType')}<span className="text-red-500">*</span></label><input type="text" name="farmName" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.farmName} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.farmName && upgradeFormik.errors.farmName ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.farmName}</p> : null}</div>)}
                         <div>
-                           <label className="block text-sm font-medium text-gray-700">NIU / Tax ID <span className="text-red-500">*</span></label>
+                           <label className="block text-sm font-medium text-gray-700">{t('profile.niuTaxId')} <span className="text-red-500">*</span></label>
                            <input type="text" name="taxIdentificationNumber" required placeholder="Enter your NIU" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.taxIdentificationNumber} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />
                            {upgradeFormik.touched.taxIdentificationNumber && upgradeFormik.errors.taxIdentificationNumber ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.taxIdentificationNumber as string}</p> : null}
                         </div>
-                        <div><label className="block text-sm font-medium text-gray-700">Description <span className="text-red-500">*</span></label><textarea name="description" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" rows={3} value={upgradeFormik.values.description} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.description && upgradeFormik.errors.description ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.description}</p> : null}</div>
-                        <div><label className="block text-sm font-medium text-gray-700 mb-2">Categories (Click to select)</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded bg-white">{PRODUCTION_TYPES.map(cat => (<button key={cat} type="button" onClick={() => toggleUpgradeCategory(cat)} className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${upgradeFormik.values.productionTypes.includes(cat) ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}</button>))}</div></div>
-                        <div className="mt-5 sm:mt-6 flex justify-end gap-3"><button type="button" onClick={() => setShowUpgradeModal(false)} className="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:text-sm">Cancel</button><button type="submit" className="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 sm:text-sm">Upgrade Account</button></div>
+                        <div><label className="block text-sm font-medium text-gray-700">{t('form.description')}<span className="text-red-500">*</span></label><textarea name="description" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" rows={3} value={upgradeFormik.values.description} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.description && upgradeFormik.errors.description ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.description}</p> : null}</div>
+                        <div><label className="block text-sm font-medium text-gray-700 mb-2">{t('profile.categoriesClick')}</label><div className="flex flex-wrap gap-2 border border-gray-200 p-3 rounded bg-white">{PRODUCTION_TYPES.map(cat => (<button key={cat} type="button" onClick={() => toggleUpgradeCategory(cat)} className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${upgradeFormik.values.productionTypes.includes(cat) ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t(`category.${cat}`)}</button>))}</div></div>
+                        <div className="mt-5 sm:mt-6 flex justify-end gap-3"><button type="button" onClick={() => setShowUpgradeModal(false)} className="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:text-sm">Cancel</button><button type="submit" className="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 sm:text-sm">{t('profile.upgradeAccount')}</button></div>
                      </form>
          </Modal>
 
@@ -1565,7 +1563,7 @@ export const ClientProfile: React.FC = () => {
                               <Package className="h-4 w-4 text-primary-700" />
                            </div>
                            <div>
-                              <p className="text-xs text-gray-500">Sold by</p>
+                              <p className="text-xs text-gray-500">{t('order.soldBy')}</p>
                               <p className="text-sm font-bold text-gray-900">{producerName}</p>
                            </div>
                         </div>
@@ -1634,7 +1632,7 @@ export const ClientProfile: React.FC = () => {
                               <span className="font-medium">- {payOrder.totalAmount.toLocaleString()} XAF</span>
                            </div>
                            <div className={`flex justify-between font-bold border-t pt-2 ${hasSufficientFunds ? 'border-blue-200 text-blue-800' : 'border-red-200 text-red-700'}`}>
-                              <span>Balance After Payment</span>
+                              <span>{t('order.balanceAfterPayment')}</span>
                               <span>{newBalance.toLocaleString()} XAF</span>
                            </div>
                         </div>
@@ -1645,7 +1643,7 @@ export const ClientProfile: React.FC = () => {
                               <div>
                                  <p className="text-xs font-bold text-red-700">{t('order.insufficient')}</p>
                                  <p className="text-xs text-red-600 mt-0.5">You need {(payOrder.totalAmount - walletBalance).toLocaleString()} XAF more.</p>
-                                 <Link to="/wallet" className="text-xs text-red-700 underline font-medium mt-1 inline-block" onClick={() => setShowPaymentRecap(false)}>Top up wallet →</Link>
+                                 <Link to="/wallet" className="text-xs text-red-700 underline font-medium mt-1 inline-block" onClick={() => setShowPaymentRecap(false)}>{t('wallet.topup')} →</Link>
                               </div>
                            </div>
                         )}
@@ -1715,7 +1713,7 @@ export const ClientProfile: React.FC = () => {
                            })}
                            {(selectedOrderLive.status === OrderStatus.CANCELLED || selectedOrderLive.status === OrderStatus.DISPUTE) && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 ml-1">
-                                 {selectedOrderLive.status === OrderStatus.CANCELLED ? 'Cancelled' : 'Dispute'}
+                                 {selectedOrderLive.status === OrderStatus.CANCELLED ? t('order.cancelled') : t('order.status.dispute')}
                               </span>
                            )}
                         </div>
@@ -1789,7 +1787,7 @@ export const ClientProfile: React.FC = () => {
                      {/* Shipping / Delivery address */}
                      {selectedOrderLive.deliveryMethod === 'HOME' && selectedOrderLive.shippingAddress && typeof selectedOrderLive.shippingAddress === 'object' && (
                         <div className="mt-3 p-3 bg-gray-50 rounded-md border border-gray-200 text-sm">
-                           <p className="font-medium text-gray-700 mb-1">Shipping Address:</p>
+                           <p className="font-medium text-gray-700 mb-1">{t('order.shippingAddressLabel')}</p>
                            <p className="text-gray-600">
                               {[
                                  (selectedOrderLive.shippingAddress as any).address,
@@ -1801,7 +1799,7 @@ export const ClientProfile: React.FC = () => {
                      )}
                      {selectedOrderLive.deliveryMethod === 'PICKUP' && selectedOrderLive.pickupPointId && (
                         <div className="mt-3 p-3 bg-gray-50 rounded-md border border-gray-200 text-sm">
-                           <p className="font-medium text-gray-700 mb-1">Pickup Point:</p>
+                           <p className="font-medium text-gray-700 mb-1">{t('order.pickupPointLabel')}</p>
                            {(() => {
                               const pp = pickupPoints.find(p => p.id === selectedOrderLive.pickupPointId);
                               const label = pp ? `${pp.name} — ${pp.address}, ${pp.city}` : selectedOrderLive.pickupPointId;
@@ -1826,7 +1824,7 @@ export const ClientProfile: React.FC = () => {
                                           <p className="flex items-center gap-1"><Mail className="h-3.5 w-3.5 shrink-0" /> {contact.email}</p>
                                        ) : null}
                                        {!contact.phone && !contact.email ? (
-                                          <p>Contact not available</p>
+                                          <p>{t('order.contactNotAvailable')}</p>
                                        ) : null}
                                     </div>
                                  );
@@ -1866,7 +1864,7 @@ export const ClientProfile: React.FC = () => {
                         </div>
                         <div className="mb-4">
                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('review.comment')}</label>
-                           <textarea name="comment" rows={3} className="block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500" value={reviewFormik.values.comment} onChange={reviewFormik.handleChange} onBlur={reviewFormik.handleBlur} placeholder="Share your experience..." />
+                           <textarea name="comment" rows={3} className="block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500" value={reviewFormik.values.comment} onChange={reviewFormik.handleChange} onBlur={reviewFormik.handleBlur} placeholder={t('review.shareExperience')} />
                            {reviewFormik.touched.comment && reviewFormik.errors.comment ? <p className="text-xs text-red-600 mt-1">{reviewFormik.errors.comment}</p> : null}
                         </div>
                         <button type="submit" className="w-full bg-primary-600 text-white rounded-md py-2 text-sm font-bold hover:bg-primary-700">{t('review.submit')}</button>
@@ -1876,7 +1874,7 @@ export const ClientProfile: React.FC = () => {
          <Modal open={showDisputeModal && !!disputeOrderId} onClose={() => setShowDisputeModal(false)} maxWidth="lg" zIndex={50} panelClassName="p-4 sm:p-6">
                      <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2"><h3 className="text-lg font-bold text-gray-900">{t('order.reportProblem')}</h3><button onClick={() => setShowDisputeModal(false)}><X className="h-5 w-5 text-gray-400" /></button></div>
                      <form onSubmit={disputeFormik.handleSubmit} className="space-y-4">
-                        <div><label className="block text-sm font-medium text-gray-700 mb-1">{t('order.reason')}</label><textarea name="disputeReason" required rows={3} className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" value={disputeFormik.values.disputeReason} onChange={disputeFormik.handleChange} onBlur={disputeFormik.handleBlur} placeholder="What's the issue?" />{disputeFormik.touched.disputeReason && disputeFormik.errors.disputeReason ? <p className="text-xs text-red-600 mt-1">{disputeFormik.errors.disputeReason}</p> : null}</div>
+                        <div><label className="block text-sm font-medium text-gray-700 mb-1">{t('order.reason')}</label><textarea name="disputeReason" required rows={3} className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" value={disputeFormik.values.disputeReason} onChange={disputeFormik.handleChange} onBlur={disputeFormik.handleBlur} placeholder={t('order.disputePlaceholder')} />{disputeFormik.touched.disputeReason && disputeFormik.errors.disputeReason ? <p className="text-xs text-red-600 mt-1">{disputeFormik.errors.disputeReason}</p> : null}</div>
                         <div><label className="block text-sm font-medium text-gray-700 mb-1">{t('order.uploadFiles')}</label><input type="file" multiple accept="image/*,application/pdf" className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100" onChange={handleDisputeFileChange} /></div>
                         <div className="flex justify-end gap-3 pt-4"><button type="button" onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">{t('form.cancel')}</button><button type="submit" className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700">{t('order.submitReport')}</button></div>
                      </form>
@@ -1899,7 +1897,7 @@ export const ClientProfile: React.FC = () => {
                   currentBookingIso={firstServiceBookingIso(rescheduleOrder) ?? undefined}
                />
             ) : (
-               <p className="text-sm text-red-600">Unable to load appointment details.</p>
+               <p className="text-sm text-red-600">{t('order.appointmentLoadError')}</p>
             )}
             <div className="flex justify-end gap-3 pt-4">
                <button type="button" onClick={() => setRescheduleOrderId(null)} disabled={reschedulingAppt} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:opacity-50">{t('form.cancel')}</button>

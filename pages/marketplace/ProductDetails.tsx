@@ -291,8 +291,8 @@ export const ProductDetails: React.FC = () => {
   if (!offer) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center">
-        <h2 className="text-2xl font-bold text-gray-900">Product Not Found</h2>
-        <button onClick={() => navigate(-1)} className="mt-4 text-primary-600 hover:underline">Go Back</button>
+        <h2 className="text-2xl font-bold text-gray-900">{t('product.notFound')}</h2>
+        <button onClick={() => navigate(-1)} className="mt-4 text-primary-600 hover:underline">{t('product.goBack')}</button>
       </div>
     );
   }
@@ -301,9 +301,9 @@ export const ProductDetails: React.FC = () => {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center">
         <Lock className="h-12 w-12 text-red-500 mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900">Access Denied</h2>
-        <p className="text-gray-500">This is a personalized offer reserved for another client.</p>
-        <button onClick={() => navigate(-1)} className="mt-4 text-primary-600 hover:underline">Go Back</button>
+        <h2 className="text-2xl font-bold text-gray-900">{t('product.accessDenied')}</h2>
+        <p className="text-gray-500">{t('product.reservedMessage')}</p>
+        <button onClick={() => navigate(-1)} className="mt-4 text-primary-600 hover:underline">{t('product.goBack')}</button>
       </div>
     );
   }
@@ -329,13 +329,13 @@ export const ProductDetails: React.FC = () => {
 
   const handleAddToCart = () => {
     if (offer.type === OfferType.SERVICE && !selectedSlot) {
-      showAppToast('Please select a time slot.', 'WARNING');
+      showAppToast(t('product.selectSlotWarning'), 'WARNING');
       return;
     }
 
     const result = addToCart(offer, quantity, selectedSlot || undefined);
     if (!result.success && result.error === 'OWN_OFFER') {
-      showAppToast('You cannot add your own offer to cart.', 'WARNING');
+      showAppToast(t('product.ownOfferError'), 'WARNING');
       return;
     }
     if (!result.success && result.error === 'PRODUCER_CONFLICT') {
@@ -343,7 +343,7 @@ export const ProductDetails: React.FC = () => {
       return;
     }
     if (!result.success && result.error === 'DUPLICATE_SERVICE_SLOT') {
-      showAppToast('This exact service slot is already booked or already in your cart.', 'WARNING');
+      showAppToast(t('product.duplicateSlotError'), 'WARNING');
       return;
     }
     nudgeInstall('cart');
@@ -584,17 +584,17 @@ export const ProductDetails: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4 mb-8">
                   <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
                     <div className="flex items-center text-sm text-gray-500 mb-1">
-                      <Package className="h-4 w-4 mr-2" /> {offer.type === OfferType.SERVICE ? 'Capacity' : t('product.stock')}
+                      <Package className="h-4 w-4 mr-2" /> {offer.type === OfferType.SERVICE ? t('product.capacity') : t('product.stock')}
                     </div>
                     <p className="font-bold text-gray-900">{offer.quantity} {t(`unit.${offer.unit}`)}</p>
                   </div>
                   <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
                     <div className="flex items-center text-sm text-gray-500 mb-1">
-                      <AlertCircle className="h-4 w-4 mr-2" /> Limits
+                      <AlertCircle className="h-4 w-4 mr-2" /> {t('product.limits')}
                     </div>
-                    <p className="text-xs text-gray-700">Min: <strong>{minOrder}</strong> {t(`unit.${offer.unit}`)}</p>
+                    <p className="text-xs text-gray-700">{t('product.minPrefix')} <strong>{minOrder}</strong> {t(`unit.${offer.unit}`)}</p>
                     {maxOrder < offer.quantity && (
-                      <p className="text-xs text-gray-700">Max: <strong>{maxOrder}</strong> {t(`unit.${offer.unit}`)}</p>
+                      <p className="text-xs text-gray-700">{t('product.maxPrefix')} <strong>{maxOrder}</strong> {t(`unit.${offer.unit}`)}</p>
                     )}
                   </div>
                 </div>
@@ -655,12 +655,12 @@ export const ProductDetails: React.FC = () => {
                               {displayTime}
                               {slot.status === 'BOOKED_BY_ME' && (
                                 <span className="absolute -top-2 right-1 rounded bg-blue-600 px-1 py-0.5 text-[9px] text-white">
-                                  Mine
+                                  {t('product.mineSlot')}
                                 </span>
                               )}
                               {slot.status === 'BOOKED' && (
                                 <span className="absolute -top-2 right-1 rounded bg-gray-500 px-1 py-0.5 text-[9px] text-white">
-                                  Busy
+                                  {t('product.busySlot')}
                                 </span>
                               )}
                             </button>
@@ -671,7 +671,7 @@ export const ProductDetails: React.FC = () => {
                     {/* Number of slots to book — like a product quantity, so the
                         buyer can book more than the minimum. */}
                     <div className="mt-4">
-                      <label className="block text-xs font-bold text-gray-500 mb-1">Number of slots</label>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">{t('product.numberOfSlots')}</label>
                       <div className="flex items-center w-40 border-2 border-gray-200 rounded-lg bg-white">
                         <button
                           type="button"
@@ -696,11 +696,10 @@ export const ProductDetails: React.FC = () => {
                           <Plus className="h-4 w-4" />
                         </button>
                       </div>
-                      {minOrder > 1 && <p className="text-xs text-orange-600 mt-1 font-medium">Minimum booking is {minOrder} slots.</p>}
+                      {minOrder > 1 && <p className="text-xs text-orange-600 mt-1 font-medium">{t('product.minBooking', { min: minOrder })}</p>}
                     </div>
                     <p className="text-xs text-gray-500 mt-3 flex items-center">
-                      <Clock className="h-3 w-3 mr-1" /> {quantity} slot{quantity > 1 ? 's' : ''} × {offer.serviceDuration}h =
-                      <strong className="ml-1">{quantity * (offer.serviceDuration || 1)} hours total</strong>
+                      <Clock className="h-3 w-3 mr-1" /> {t('product.totalDuration', { quantity, duration: offer.serviceDuration || 1, total: quantity * (offer.serviceDuration || 1) })}
                     </p>
                   </div>
                 ) : (
@@ -791,7 +790,7 @@ export const ProductDetails: React.FC = () => {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-base font-bold text-gray-900">
-                            ATI Retail Store
+                            {t('product.atiStoreName')}
                           </span>
                           {productRating > 0 && (
                             <span className="flex shrink-0 items-center text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">
@@ -804,7 +803,7 @@ export const ProductDetails: React.FC = () => {
                           {offer.offerLocation || 'Official Warehouse'}
                         </div>
                         <div className="flex items-center text-xs text-blue-700 mt-1 font-medium">
-                          <ShieldCheck className="h-3 w-3 mr-1" /> Vetted Quality
+                          <ShieldCheck className="h-3 w-3 mr-1" /> {t('product.vettedQuality')}
                         </div>
                       </div>
                     </div>
@@ -837,7 +836,7 @@ export const ProductDetails: React.FC = () => {
                     className="flex items-center justify-center bg-white text-primary-600 border-2 border-primary-600 px-6 py-3 rounded-xl font-bold hover:bg-primary-50 transition-colors disabled:opacity-60"
                   >
                     {negotiateLoading ? <Spinner className="h-5 w-5 mr-2" label="Opening chat" /> : <MessageCircle className="h-5 w-5 mr-2" />}
-                    {negotiateLoading ? 'Opening…' : isNegotiationAllowed ? `Chat / ${t('product.negotiate')}` : 'Chat with seller'}
+                    {negotiateLoading ? t('product.openingChat') : isNegotiationAllowed ? t('product.chatNegotiate') : t('product.chatWithSeller')}
                   </button>
                 )}
               </div>
@@ -903,7 +902,7 @@ export const ProductDetails: React.FC = () => {
                       {portfolio.videoUrl && (
                         <div className="flex-shrink-0 w-64 h-40 bg-black rounded-lg flex items-center justify-center relative cursor-pointer hover:opacity-90">
                           <PlayCircle className="h-12 w-12 text-white opacity-80" />
-                          <span className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded">Video</span>
+                          <span className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded">{t('product.videoLabel')}</span>
                         </div>
                       )}
                       {portfolio.imageUrls.map((url: string, idx: number) => (
@@ -1013,9 +1012,9 @@ export const ProductDetails: React.FC = () => {
       <ConfirmModal
         open={showLoginPrompt}
         tone="info"
-        title="Sign in required"
-        description="You need to be signed in to contact this producer."
-        confirmLabel="Sign in"
+        title={t('product.signInRequired')}
+        description={t('product.signInRequiredDesc')}
+        confirmLabel={t('product.signIn')}
         onClose={() => setShowLoginPrompt(false)}
         onConfirm={() => {
           setShowLoginPrompt(false);

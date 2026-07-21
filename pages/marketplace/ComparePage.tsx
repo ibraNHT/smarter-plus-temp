@@ -61,7 +61,7 @@ export const ComparePage: React.FC = () => {
 
   const getProducerName = (producerId: string) => {
      const p = producers.find(prod => prod.id === producerId);
-     return p ? (p.type === 'BUSINESS' ? p.name : `${p.firstName} ${p.lastName}`) : 'Unknown';
+     return p ? (p.type === 'BUSINESS' ? p.name : `${p.firstName} ${p.lastName}`) : t('compare.unknown');
   };
 
   const handleCompareAddToCart = (offer: (typeof selectedOffers)[number]) => {
@@ -73,7 +73,7 @@ export const ComparePage: React.FC = () => {
     const qty = comparePageAddQuantity(canonical);
     const result = addToCart(canonical, qty);
     if (!result.success && result.error === 'OWN_OFFER') {
-      showAppToast('You cannot add your own offer to cart.', 'WARNING');
+      showAppToast(t('compare.ownOfferError'), 'WARNING');
       return;
     }
     if (!result.success && result.error === 'PRODUCER_CONFLICT') {
@@ -164,7 +164,7 @@ export const ComparePage: React.FC = () => {
                       const rating = getAverageRating(offer.producerId);
                       return (
                          <td key={offer.id} className="px-6 py-4 whitespace-nowrap text-sm text-yellow-500 flex items-center">
-                            <Star className="h-4 w-4 fill-current mr-1" /> {rating > 0 ? rating : 'N/A'}
+                            <Star className="h-4 w-4 fill-current mr-1" /> {rating > 0 ? rating : t('compare.ratingFallback')}
                          </td>
                       )
                    })}
@@ -174,9 +174,9 @@ export const ComparePage: React.FC = () => {
                    {selectedOffers.map(offer => (
                       <td key={offer.id} className="px-6 py-4 whitespace-nowrap text-sm">
                          {offer.isDeliveryAvailable ? (
-                            <span className="text-green-600 flex items-center"><Check className="h-4 w-4 mr-1"/> Available</span>
+                            <span className="text-green-600 flex items-center"><Check className="h-4 w-4 mr-1"/> {t('compare.available')}</span>
                          ) : (
-                            <span className="text-gray-500 flex items-center"><XCircle className="h-4 w-4 mr-1"/> Pickup Only</span>
+                            <span className="text-gray-500 flex items-center"><XCircle className="h-4 w-4 mr-1"/> {t('compare.pickupOnly')}</span>
                          )}
                       </td>
                    ))}
@@ -190,7 +190,7 @@ export const ComparePage: React.FC = () => {
                    ))}
                 </tr>
                 <tr>
-                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-500 bg-gray-50">Action</td>
+                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-500 bg-gray-50">{t('compare.action')}</td>
                    {selectedOffers.map(offer => (
                       <td key={offer.id} className="px-6 py-4 whitespace-nowrap text-sm">
                          <button 

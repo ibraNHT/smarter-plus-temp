@@ -40,6 +40,7 @@ const DocSlot: React.FC<DocSlotProps> = ({
   onUpload,
   onClear,
 }) => {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -48,12 +49,12 @@ const DocSlot: React.FC<DocSlotProps> = ({
     e.target.value = '';
     if (!file) return;
     if (file.size > MAX_BYTES) {
-      showAppToast('File size exceeds 10MB limit.', 'WARNING');
+      showAppToast(t('upload.fileTooLarge'), 'WARNING');
       return;
     }
     const allowed = ['image/png', 'image/jpeg', 'application/pdf'];
     if (!allowed.includes(file.type)) {
-      showAppToast('Only PNG, JPG, and PDF formats are allowed.', 'WARNING');
+      showAppToast(t('upload.invalidFormat'), 'WARNING');
       return;
     }
     setUploading(true);
@@ -61,7 +62,7 @@ const DocSlot: React.FC<DocSlotProps> = ({
       const uploaded = await uploadDocument(file);
       onUpload(uploaded);
     } catch (err: unknown) {
-      showAppToast(err instanceof Error ? err.message : 'Upload failed.', 'ERROR');
+      showAppToast(err instanceof Error ? err.message : t('upload.failed'), 'ERROR');
     } finally {
       setUploading(false);
     }
@@ -74,7 +75,7 @@ const DocSlot: React.FC<DocSlotProps> = ({
           <p className="text-sm font-medium text-gray-900">
             {label}
             {required ? <span className="text-red-500 ml-0.5">*</span> : null}
-            {!required ? <span className="text-gray-400 font-normal ml-1">(optional)</span> : null}
+            {!required ? <span className="text-gray-400 font-normal ml-1">({t('form.optional')})</span> : null}
           </p>
           <p className="text-xs text-gray-500 mt-0.5">{hint}</p>
         </div>
@@ -84,7 +85,7 @@ const DocSlot: React.FC<DocSlotProps> = ({
             onClick={onClear}
             className="text-xs text-red-600 hover:text-red-800 font-medium inline-flex items-center gap-1"
           >
-            <X className="h-3.5 w-3.5" /> Remove
+            <X className="h-3.5 w-3.5" /> {t('cart.remove')}
           </button>
         ) : null}
       </div>
@@ -94,7 +95,7 @@ const DocSlot: React.FC<DocSlotProps> = ({
             <a href={url} target="_blank" rel="noopener noreferrer" className="shrink-0">
               <img
                 src={cloudinaryImageThumb(url)}
-                alt="Preview"
+                alt={t('portfolio.preview')}
                 className="h-20 w-28 object-cover rounded border border-gray-200 hover:opacity-90 transition-opacity"
                 onError={(e) => { (e.target as HTMLImageElement).src = url; }}
               />
@@ -105,7 +106,7 @@ const DocSlot: React.FC<DocSlotProps> = ({
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-xs text-primary-700 hover:underline mt-1"
             >
-              <ExternalLink className="h-3 w-3" /> View full image
+              <ExternalLink className="h-3 w-3" /> {t('portfolio.viewFullImage')}
             </a>
           </div>
         ) : (
@@ -127,7 +128,7 @@ const DocSlot: React.FC<DocSlotProps> = ({
           }`}
         >
           {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          {uploading ? 'Uploading…' : 'Choose file'}
+          {uploading ? t('upload.upLoading') : t('upload.chooseFile')}
           <input
             ref={inputRef}
             type="file"
@@ -138,7 +139,7 @@ const DocSlot: React.FC<DocSlotProps> = ({
           />
         </label>
       )}
-      <p className="text-xs text-gray-400 mt-2">PNG, JPG, or PDF — max 10 MB</p>
+      <p className="text-xs text-gray-400 mt-2">{t('upload.formatHint')}</p>
     </div>
   );
 };

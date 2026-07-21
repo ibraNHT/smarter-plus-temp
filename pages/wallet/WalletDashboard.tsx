@@ -69,7 +69,7 @@ export const WalletDashboard: React.FC = () => {
     let cancelled = false;
     // Persistent toast (durationMs = 0): stays on screen until we dismiss it,
     // i.e. until the top-up actually reflects in the wallet balance.
-    const confirmingId = showAppToast('Confirming your payment…', 'INFO', 0);
+    const confirmingId = showAppToast(t('wallet.confirmingPayment'), 'INFO', 0);
     const clearConfirming = () => { if (confirmingId) dismissAppToast(confirmingId); };
     (async () => {
       // Poll the status endpoint (which reconciles with Tranzak and credits the
@@ -82,12 +82,12 @@ export const WalletDashboard: React.FC = () => {
         if (status === 'SUCCESSFUL') {
           await refreshWallet({ force: true });
           clearConfirming();
-          if (!cancelled) showAppToast('Wallet topped up successfully!', 'SUCCESS');
+          if (!cancelled) showAppToast(t('wallet.topUpSuccess'), 'SUCCESS');
           return;
         }
         if (status === 'FAILED' || status === 'CANCELLED') {
           clearConfirming();
-          if (!cancelled) showAppToast('Payment was not completed.', 'ERROR');
+          if (!cancelled) showAppToast(t('wallet.paymentNotCompleted'), 'ERROR');
           return;
         }
         await new Promise((r) => setTimeout(r, 3000));
@@ -97,7 +97,7 @@ export const WalletDashboard: React.FC = () => {
       await refreshWallet({ force: true });
       clearConfirming();
       if (!cancelled) {
-        showAppToast('Still confirming your payment — it will appear once settled.', 'WARNING');
+        showAppToast(t('wallet.stillConfirming'), 'WARNING');
       }
     })();
     return () => { cancelled = true; clearConfirming(); };
@@ -111,7 +111,7 @@ export const WalletDashboard: React.FC = () => {
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [pendingWithdraw, setPendingWithdraw] = useState<{ amount: number; method: PaymentMethod } | null>(null);
 
-  if (!user) return <div className="p-8 text-center">Please login</div>;
+  if (!user) return <div className="p-8 text-center">{t('auth.loginRequired')}</div>;
 
   const walletOwnerId = producerAccountUserId(user);
   const wallet = getWallet(walletOwnerId);
@@ -127,7 +127,7 @@ export const WalletDashboard: React.FC = () => {
   const availableBalance = wallet.balance;
 
   const topUpSchema = z.object({
-    amount: z.coerce.number().min(100, 'Amount must be at least 100 XAF.'),
+    amount: z.coerce.number().min(100, t('wallet.amountMin')),
   });
 
   const topUpFormik = useFormik({
@@ -155,12 +155,12 @@ export const WalletDashboard: React.FC = () => {
         return;
       }
       setLoading(false);
-      showAppToast(result.message || 'Could not start payment.', 'ERROR');
+      showAppToast(result.message || t('wallet.startPaymentFailed'), 'ERROR');
     },
   });
 
   const withdrawSchema = z.object({
-    amount: z.coerce.number().min(100, 'Enter a valid amount (min 100 XAF).'),
+    amount: z.coerce.number().min(100, t('wallet.withdrawAmountMin')),
   });
 
   const withdrawFormik = useFormik({
@@ -177,17 +177,20 @@ export const WalletDashboard: React.FC = () => {
       // A 1.5% Tranzak fee is added on top; the wallet is debited amount + fee.
       const totalDebit = Math.round(asNumber * (1 + WITHDRAWAL_FEE_RATE) * 100) / 100;
       if (totalDebit > availableBalance) {
-        nextErrors.amount = `Amount + 1.5% fee (${totalDebit.toLocaleString()} XAF) cannot exceed your balance of ${availableBalance.toLocaleString()} XAF.`;
+        nextErrors.amount = t('wallet.amountFeeLimit', {
+          total: totalDebit.toLocaleString(),
+          balance: availableBalance.toLocaleString(),
+        });
       }
       return nextErrors;
     },
     onSubmit: async (values) => {
     if (!isProducer || !currentProducer) {
-      showAppToast('Withdrawals are for producers only.', 'WARNING');
+      showAppToast(t('wallet.withdrawProducerOnly'), 'WARNING');
       return;
     }
     if (!selectedSavedMethodId) {
-      showAppToast('Please select a payment method.', 'WARNING');
+      showAppToast(t('wallet.selectPaymentMethod'), 'WARNING');
       return;
     }
     const method = currentProducer.paymentMethods.find(pm => pm.id === selectedSavedMethodId);
@@ -251,7 +254,7 @@ export const WalletDashboard: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between mb-6 sm:mb-8 gap-2">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <button onClick={() => navigate(-1)} className="p-2 bg-white border border-gray-200 rounded-full hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0" aria-label="Back">
+            <button onClick={() => navigate(-1)} className="p-2 bg-white border border-gray-200 rounded-full hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0" aria-label={t('form.back')}>
               <ArrowLeft className="h-5 w-5 text-gray-600" />
             </button>
             <div className="p-2 sm:p-3 bg-primary-100 rounded-full flex-shrink-0">
@@ -296,14 +299,14 @@ export const WalletDashboard: React.FC = () => {
               </div>
               {(wallet.pendingBalance ?? 0) > 0 && (
                 <div>
-                  <p className="text-xs text-amber-600 uppercase tracking-wider font-semibold">Upcoming</p>
+                  <p className="text-xs text-amber-600 uppercase tracking-wider font-semibold">{t('wallet.upcoming')}</p>
                   <p className="text-lg sm:text-xl font-bold mt-0.5 tabular-nums text-amber-700 break-words">{(wallet.pendingBalance ?? 0).toLocaleString()} XAF</p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">Held until 5-day window</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{t('wallet.heldUntil')}</p>
                 </div>
               )}
               {pendingAmount > 0 && (
                 <div>
-                  <p className="text-xs text-orange-600 uppercase tracking-wider font-semibold">Pending Withdrawals</p>
+                  <p className="text-xs text-orange-600 uppercase tracking-wider font-semibold">{t('wallet.pendingWithdrawals')}</p>
                   <p className="text-lg sm:text-xl font-bold mt-0.5 tabular-nums text-orange-700 break-words">{pendingAmount.toLocaleString()} XAF</p>
                 </div>
               )}
@@ -352,7 +355,7 @@ export const WalletDashboard: React.FC = () => {
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('wallet.date')}</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('wallet.amount')}</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Method</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('wallet.method')}</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('dash.status')}</th>
                   </tr>
                 </thead>
@@ -422,12 +425,11 @@ export const WalletDashboard: React.FC = () => {
                 <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">{t('wallet.topup')}</h3>
                 <form onSubmit={topUpFormik.handleSubmit} className="space-y-4">
                   <p className="text-sm text-gray-500">
-                    Enter the amount to add to your wallet. You&apos;ll be redirected to our
-                    secure payment page to complete payment (Mobile Money, card, etc.).
+                    {t('wallet.topUpDescription')}
                   </p>
-                  <input type="number" name="amount" required min="100" className="w-full border border-gray-300 p-2 rounded bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500" value={topUpFormik.values.amount} onChange={topUpFormik.handleChange} onBlur={topUpFormik.handleBlur} placeholder="Amount (XAF)" />
+                  <input type="number" name="amount" required min="100" className="w-full border border-gray-300 p-2 rounded bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500" value={topUpFormik.values.amount} onChange={topUpFormik.handleChange} onBlur={topUpFormik.handleBlur} placeholder={t('wallet.amountPlaceholder')} />
                   {topUpFormik.touched.amount && topUpFormik.errors.amount ? <p className="text-xs text-red-600">{topUpFormik.errors.amount}</p> : null}
-                  <button type="submit" disabled={loading} className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700">{loading ? 'Redirecting…' : 'Proceed to Pay'}</button>
+                  <button type="submit" disabled={loading} className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700">{loading ? t('wallet.redirecting') : t('wallet.proceedToPay')}</button>
                 </form>
         </Modal>
 
@@ -439,8 +441,8 @@ export const WalletDashboard: React.FC = () => {
 
                   {isProducer && (!currentProducer?.paymentMethods || currentProducer.paymentMethods.length === 0) ? (
                     <div className="text-center py-4">
-                      <p className="text-red-600 text-sm mb-4">You have no saved payment methods.</p>
-                      <Link to="/producer/profile" className="text-primary-600 hover:underline text-sm font-bold">Go to Profile to Add Payment Method</Link>
+                      <p className="text-red-600 text-sm mb-4">{t('wallet.noSavedMethods')}</p>
+                      <Link to="/producer/profile" className="text-primary-600 hover:underline text-sm font-bold">{t('wallet.goToProfile')}</Link>
                     </div>
                   ) : (
                     <form onSubmit={withdrawFormik.handleSubmit} className="mt-4 space-y-6">
@@ -486,12 +488,12 @@ export const WalletDashboard: React.FC = () => {
                             <span className="text-gray-500 sm:text-sm">XAF</span>
                           </div>
                         </div>
-                        <p className="mt-1 text-xs text-gray-500">Max available: {availableBalance.toLocaleString()} XAF</p>
+                        <p className="mt-1 text-xs text-gray-500">{t('wallet.maxAvailable', { amount: availableBalance.toLocaleString() })}</p>
                         {Number(withdrawFormik.values.amount) >= 100 ? (
                           <div className="mt-2 rounded-md bg-gray-50 border border-gray-200 p-2 text-xs text-gray-600 space-y-0.5">
-                            <div className="flex justify-between"><span>You receive</span><span className="tabular-nums">{Number(withdrawFormik.values.amount).toLocaleString()} XAF</span></div>
-                            <div className="flex justify-between"><span>Tranzak fee (1.5%)</span><span className="tabular-nums">{(Math.round(Number(withdrawFormik.values.amount) * WITHDRAWAL_FEE_RATE * 100) / 100).toLocaleString()} XAF</span></div>
-                            <div className="flex justify-between font-semibold text-gray-900 border-t border-gray-200 pt-0.5"><span>Deducted from wallet</span><span className="tabular-nums">{(Math.round(Number(withdrawFormik.values.amount) * (1 + WITHDRAWAL_FEE_RATE) * 100) / 100).toLocaleString()} XAF</span></div>
+                            <div className="flex justify-between"><span>{t('wallet.youReceive')}</span><span className="tabular-nums">{Number(withdrawFormik.values.amount).toLocaleString()} XAF</span></div>
+                            <div className="flex justify-between"><span>{t('wallet.tranzakFee')}</span><span className="tabular-nums">{(Math.round(Number(withdrawFormik.values.amount) * WITHDRAWAL_FEE_RATE * 100) / 100).toLocaleString()} XAF</span></div>
+                            <div className="flex justify-between font-semibold text-gray-900 border-t border-gray-200 pt-0.5"><span>{t('wallet.deductedFromWallet')}</span><span className="tabular-nums">{(Math.round(Number(withdrawFormik.values.amount) * (1 + WITHDRAWAL_FEE_RATE) * 100) / 100).toLocaleString()} XAF</span></div>
                           </div>
                         ) : null}
                         {withdrawFormik.touched.amount && withdrawFormik.errors.amount ? <p className="mt-1 text-xs text-red-600">{withdrawFormik.errors.amount}</p> : null}

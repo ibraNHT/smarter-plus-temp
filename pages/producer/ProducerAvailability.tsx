@@ -47,7 +47,7 @@ export const ProducerAvailability: React.FC = () => {
   // Access guard runs against the session itself, NOT against `currentProducer`
   // (which is null while the producer catalog hydrates on hard refresh).
   if (!user || !isProducerDashboardUser(user)) {
-    return <div className="p-8 text-center">Access Denied</div>;
+    return <div className="p-8 text-center">{t('producer.accessDenied')}</div>;
   }
 
   const isAvailabilityHydrating = !currentProducer && pageLoading;
@@ -78,7 +78,7 @@ export const ProducerAvailability: React.FC = () => {
 
   const addException = () => {
     if (!newExceptionDate) return;
-    setExceptions(prev => [...prev, { id: Date.now().toString(), date: newExceptionDate, reason: newExceptionReason || 'Off' }]);
+    setExceptions(prev => [...prev, { id: Date.now().toString(), date: newExceptionDate, reason: newExceptionReason || t('avail.off') }]);
     setNewExceptionDate('');
     setNewExceptionReason('');
   };
@@ -102,7 +102,7 @@ export const ProducerAvailability: React.FC = () => {
     <div className="max-w-4xl mx-auto py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
       <div className="mb-4 sm:mb-6 flex items-center justify-between gap-3 flex-wrap">
          <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 hover:text-primary-600 transition-colors text-sm sm:text-base">
-           <ArrowLeft className="h-5 w-5 mr-1 sm:mr-2" /> Back
+           <ArrowLeft className="h-5 w-5 mr-1 sm:mr-2" /> {t('profile.tabs.back')}
          </button>
          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
             <Calendar className="h-5 w-5 sm:h-6 sm:w-6 mr-2 text-primary-600"/>
@@ -118,7 +118,7 @@ export const ProducerAvailability: React.FC = () => {
 
       {profileMissing && (
          <div className="bg-white shadow rounded-lg p-6 sm:p-8 text-center text-gray-600">
-            Producer profile not found. Please complete your producer profile setup before configuring availability.
+          {t('producer.profileMissing')}
          </div>
       )}
 
@@ -142,7 +142,7 @@ export const ProducerAvailability: React.FC = () => {
                          onChange={() => toggleDay(day)}
                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded mr-3"
                        />
-                       <span className="font-medium text-gray-900">{day}</span>
+                       <span className="font-medium text-gray-900">{t(`day.${day}`)}</span>
                     </div>
                     
                     <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
@@ -163,7 +163,7 @@ export const ProducerAvailability: React.FC = () => {
                            />
                          </>
                        ) : (
-                          <span className="text-sm text-gray-500 italic">Closed</span>
+                          <span className="text-sm text-gray-500 italic">{t('avail.closed')}</span>
                        )}
                     </div>
                  </div>
@@ -204,13 +204,13 @@ export const ProducerAvailability: React.FC = () => {
                      <p className="text-sm font-bold text-gray-900">{new Date(ex.date).toLocaleDateString()}</p>
                      <p className="text-xs text-gray-500">{ex.reason}</p>
                   </div>
-                  <button onClick={() => removeException(ex.id)} className="text-red-500 hover:text-red-700" aria-label="Remove exception">
+                  <button onClick={() => removeException(ex.id)} className="text-red-500 hover:text-red-700" aria-label={t('avail.removeException')}>
                      <Trash2 className="h-4 w-4" />
                   </button>
                </li>
             ))}
             {exceptions.length === 0 && (
-               <li className="text-sm text-gray-500 italic py-2">No exceptions added.</li>
+               <li className="text-sm text-gray-500 italic py-2">{t('avail.noExceptions')}</li>
             )}
          </ul>
       </div>

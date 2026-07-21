@@ -2106,6 +2106,22 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const registerProducer = async (data: any, password: string): Promise<{ success: boolean; message: string }> => {
     try {
+      // Individual producers must supply real identity details; never silently
+      // substitute placeholders (that is how empty gender/DOB accounts slipped in).
+      // Business producers are organisations and legitimately don't have these.
+      if (data.type === 'INDIVIDUAL') {
+        const missing =
+          !String(data.firstName ?? '').trim() ||
+          !String(data.lastName ?? '').trim() ||
+          !String(data.gender ?? '').trim() ||
+          !String(data.dateOfBirth ?? '').trim();
+        if (missing) {
+          return {
+            success: false,
+            message: 'Please complete all required personal details (first name, last name, gender, date of birth).',
+          };
+        }
+      }
       const producerRegisterBody: Record<string, string> = {
         email: String(data.email ?? '').trim(),
         phone: normalizeRegisterPhone(data.phone),
@@ -2189,6 +2205,20 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const registerClient = async (data: any, password: string, avatarFile?: File | null): Promise<{ success: boolean; message: string }> => {
     try {
+      // Every client must supply real identity details. Guard here so an empty
+      // field can never be silently replaced with a placeholder (e.g. gender
+      // "OTHER" or today's date) and create an account with junk data.
+      const missing =
+        !String(data.firstName ?? '').trim() ||
+        !String(data.lastName ?? '').trim() ||
+        !String(data.gender ?? '').trim() ||
+        !String(data.dateOfBirth ?? '').trim();
+      if (missing) {
+        return {
+          success: false,
+          message: 'Please complete all required fields (first name, last name, gender, date of birth).',
+        };
+      }
       const clientRegisterBody: Record<string, string> = {
         email: String(data.email ?? '').trim(),
         phone: normalizeRegisterPhone(data.phone),
@@ -2218,9 +2248,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const clientProfile = await apiFetch<{ id: string }>(API_ENDPOINTS.profiles.client, {
         method: 'POST',
         body: JSON.stringify({
-          firstName: data.firstName || "Client",
-          lastName: data.lastName || "",
-          gender: data.gender || "OTHER",
+          firstName: String(data.firstName).trim(),
+          lastName: String(data.lastName).trim(),
+          gender: String(data.gender).trim(),
           dateOfBirth: toIsoDateOfBirthSafe(data.dateOfBirth),
           locations: sanitizeProfileLocationsForApi(data.locations),
         }),
