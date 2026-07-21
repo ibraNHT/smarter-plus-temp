@@ -299,7 +299,7 @@ export const RegisterClient: React.FC = () => {
           </div>
 
           <div className="sm:col-span-3">
-            <label className="block text-sm font-medium text-gray-700">{t('profile.gender')}</label>
+            <label className="block text-sm font-medium text-gray-700">{t('profile.gender')} <span className="text-red-500">*</span></label>
             <select required
               className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm text-gray-900"
               name="gender"
@@ -315,7 +315,7 @@ export const RegisterClient: React.FC = () => {
           </div>
 
           <div className="sm:col-span-3">
-            <label className="block text-sm font-medium text-gray-700">{t('profile.dob')}</label>
+            <label className="block text-sm font-medium text-gray-700">{t('profile.dob')} <span className="text-red-500">*</span></label>
             <input type="date" required
               className="mt-1 focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
               name="dateOfBirth"
@@ -481,9 +481,10 @@ export const RegisterClient: React.FC = () => {
             <FieldError formik={formik} name="address" />
           </div>
           <div className="sm:col-span-3">
-            <label className="block text-sm font-medium text-gray-700">{t('profile.city')}</label>
+            <label className="block text-sm font-medium text-gray-700">{t('profile.city')} <span className="text-red-500">*</span></label>
             <input
               type="text"
+              required
               className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900"
               name="city"
               value={formik.values.city}
@@ -493,9 +494,10 @@ export const RegisterClient: React.FC = () => {
             <FieldError formik={formik} name="city" />
           </div>
           <div className="sm:col-span-3">
-            <label className="block text-sm font-medium text-gray-700">{t('profile.region')}</label>
+            <label className="block text-sm font-medium text-gray-700">{t('profile.region')} <span className="text-red-500">*</span></label>
             <input
               type="text"
+              required
               className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900"
               name="region"
               value={formik.values.region}

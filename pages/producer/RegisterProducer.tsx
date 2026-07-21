@@ -162,6 +162,9 @@ export const RegisterProducer: React.FC = () => {
       if (locations.length === 0) {
         nextErrors.locations = t('register.locationsError');
       }
+      if (values.productionTypes.length === 0) {
+        nextErrors.productionTypes = t('validation.categoriesRequired');
+      }
       return nextErrors;
     },
     onSubmit: async (values, { setSubmitting }) => {
@@ -421,8 +424,8 @@ export const RegisterProducer: React.FC = () => {
           {formik.values.type === 'INDIVIDUAL' && (
             <>
               <div className="sm:col-span-3">
-                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">{t('profile.firstName')}</label>
-                <input type="text" name="firstName"
+                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">{t('profile.firstName')} <span className="text-red-500">*</span></label>
+                <input type="text" name="firstName" required
                   className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
                   value={formik.values.firstName}
                   onChange={formik.handleChange}
@@ -432,8 +435,8 @@ export const RegisterProducer: React.FC = () => {
               </div>
 
               <div className="sm:col-span-3">
-                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">{t('profile.lastName')}</label>
-                <input type="text" name="lastName"
+                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">{t('profile.lastName')} <span className="text-red-500">*</span></label>
+                <input type="text" name="lastName" required
                   className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
                   value={formik.values.lastName}
                   onChange={formik.handleChange}
@@ -443,7 +446,7 @@ export const RegisterProducer: React.FC = () => {
               </div>
 
               <div className="sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">{t('profile.gender')}</label>
+                <label className="block text-sm font-medium text-gray-700">{t('profile.gender')} <span className="text-red-500">*</span></label>
                 <select
                   className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm text-gray-900"
                   name="gender"
@@ -459,8 +462,8 @@ export const RegisterProducer: React.FC = () => {
               </div>
 
               <div className="sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">{t('profile.dob')}</label>
-                <input type="date"
+                <label className="block text-sm font-medium text-gray-700">{t('profile.dob')} <span className="text-red-500">*</span></label>
+                <input type="date" required
                   className="mt-1 focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
                   name="dateOfBirth"
                   value={formik.values.dateOfBirth}
@@ -630,7 +633,9 @@ export const RegisterProducer: React.FC = () => {
 
         {/* Categories (Chips) */}
         <div className="border-t border-gray-200 pt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">{t('form.category')} ({t('register.multiSelect')})</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {t('form.category')} ({t('register.multiSelect')}) <span className="text-red-500">*</span>
+          </label>
           <div className="flex flex-wrap gap-2 mb-3">
             {PRODUCTION_TYPES.map(cat => {
               const isSelected = formik.values.productionTypes.includes(cat);
@@ -650,6 +655,9 @@ export const RegisterProducer: React.FC = () => {
               )
             })}
           </div>
+          {formik.values.productionTypes.length === 0 && formik.submitCount > 0 ? (
+            <p className="text-sm text-red-600 mt-1 font-medium">{t('validation.categoriesRequired')}</p>
+          ) : null}
         </div>
 
         {/* Location Manager */}
