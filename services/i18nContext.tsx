@@ -578,6 +578,7 @@ const translations: Record<string, Record<Language, string>> = {
   'validation.descriptionMin': { en: 'Description should be at least 10 characters.', fr: 'La description doit contenir au moins 10 caractères.' },
   'validation.farmNameRequired': { en: 'Farm/Business name is required for business accounts.', fr: 'Le nom de la ferme/entreprise est requis pour les comptes professionnels.' },
   'validation.taxIdRequired': { en: 'Tax ID (NIU) is required.', fr: 'L\'identifiant fiscal (NIU) est requis.' },
+  'validation.categoriesRequired': { en: 'Please select at least one category.', fr: 'Veuillez sélectionner au moins une catégorie.' },
   'validation.commentMin': { en: 'Please add a short comment.', fr: 'Veuillez ajouter un court commentaire.' },
   'validation.disputeReasonMin': { en: 'Please describe the issue in at least 5 characters.', fr: 'Veuillez décrire le problème en au moins 5 caractères.' },
 
