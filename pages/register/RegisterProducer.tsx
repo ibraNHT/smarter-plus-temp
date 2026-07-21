@@ -396,9 +396,9 @@ export const RegisterProducer: React.FC = () => {
           {locations.length > 0 ? (
             <ul className="divide-y divide-gray-200 border border-gray-200 rounded-md bg-white">
               {locations.map((loc, idx) => (
-                <li key={idx} className="px-4 py-3 flex justify-between items-center">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{loc.address}</p>
+                <li key={idx} className="px-4 py-3 flex justify-between items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-900 truncate" title={loc.address}>{loc.address}</p>
                     <p className="text-xs text-gray-500">{loc.city}, {loc.region}</p>
                   </div>
                   <button type="button" onClick={() => removeLocation(idx)} className="text-gray-400 hover:text-red-500">
