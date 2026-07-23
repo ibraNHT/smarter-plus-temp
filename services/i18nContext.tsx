@@ -591,6 +591,12 @@ const translations: Record<string, Record<Language, string>> = {
   'ui.profile': { en: 'Profile', fr: 'Profil' },
   'ui.emailPlaceholder': { en: 'you@example.com', fr: 'vous@exemple.com' },
   'ui.phonePlaceholder': { en: '612 345 678', fr: '612 345 678' },
+  'ui.firstNamePlaceholder': { en: 'e.g. Jean', fr: 'ex. Jean' },
+  'ui.lastNamePlaceholder': { en: 'e.g. Nkeng', fr: 'ex. Nkeng' },
+  'ui.cityPlaceholder': { en: 'e.g. Douala', fr: 'ex. Douala' },
+  'ui.regionPlaceholder': { en: 'e.g. Littoral', fr: 'ex. Littoral' },
+  'ui.farmNamePlaceholder': { en: 'e.g. Green Valley Farm', fr: 'ex. Ferme Green Valley' },
+  'ui.taxIdPlaceholder': { en: 'e.g. P123456789012A', fr: 'ex. P123456789012A' },
 
   // Client profile specific
   'client.profileTitle': { en: 'Client Profile', fr: 'Profil Client' },
