@@ -15,6 +15,7 @@ import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { CategoryAvatarScroller } from '../../components/CategoryAvatarScroller';
 import { MARKETPLACE_CATEGORIES } from '../../data/categories';
 import { offerImageInBox, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
+import { getApiBaseUrl } from '../../client-api/config';
 import { isProducerDashboardUser } from '../../services/producerSession';
 import { findProducerForUser } from '../../utils/producerAccountStatus';
 import { getAverageRatingFromReviews, getReviewsForOffer } from '../../utils/offerReviews';
@@ -73,7 +74,7 @@ export const AtiStore: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${import.meta.env.VITE_API_URL || '/api'}/retail/categories`)
+    fetch(`${getApiBaseUrl()}/api/retail/categories`)
       .then((r) => (r.ok ? r.json() : { categories: [] }))
       .then((data) => {
         if (cancelled || !Array.isArray(data.categories)) return;
@@ -132,7 +133,11 @@ export const AtiStore: React.FC = () => {
 
   // name → uploaded image URL, so the category scroller can render store art.
   const categoryImages = storeCategories.reduce<Record<string, string>>((acc, c) => {
-    if (c.imageUrl) acc[c.name] = c.imageUrl;
+    // Uploaded store-category images come from the same upload backend as offer
+    // photos, so resolve them the same way (rewrites API-origin /uploads URLs to
+    // same-origin to dodge Cross-Origin-Resource-Policy blocking; Cloudinary
+    // https URLs pass through unchanged).
+    if (c.imageUrl) acc[c.name] = resolveOfferImageSrc(c.imageUrl);
     return acc;
   }, {});
 

@@ -402,6 +402,7 @@ const translations: Record<string, Record<Language, string>> = {
   },
   'cart.subtotal': { en: 'Subtotal', fr: 'Sous-total' },
   'cart.serviceFee': { en: 'Service Fee (16.5%)', fr: 'Frais de service (16,5%)' },
+  'cart.serviceFeeRetail': { en: 'Service Fee (4%)', fr: 'Frais de service (4%)' },
   'cart.total': { en: 'Order Total', fr: 'Total Commande' },
   'cart.placeOrder': { en: 'Place Order', fr: 'Passer la commande' },
   'cart.continue': { en: 'Continue Shopping', fr: 'Continuer vos achats' },
