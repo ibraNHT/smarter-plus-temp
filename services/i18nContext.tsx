@@ -401,7 +401,7 @@ const translations: Record<string, Record<Language, string>> = {
     fr: 'Votre service est dans le panier. Choisissez la livraison ci-dessous, puis appuyez sur « Passer la commande » pour finaliser.',
   },
   'cart.subtotal': { en: 'Subtotal', fr: 'Sous-total' },
-  'cart.serviceFee': { en: 'Service Fee (16.5%)', fr: 'Frais de service (16,5%)' },
+  'cart.serviceFee': { en: 'Service Fee (16%)', fr: 'Frais de service (16%)' },
   'cart.serviceFeeRetail': { en: 'Service Fee (4%)', fr: 'Frais de service (4%)' },
   'cart.total': { en: 'Order Total', fr: 'Total Commande' },
   'cart.placeOrder': { en: 'Place Order', fr: 'Passer la commande' },
@@ -1087,7 +1087,7 @@ const translations: Record<string, Record<Language, string>> = {
   'faq.q4': { en: 'How do I become a verified producer?', fr: 'Comment devenir un producteur vérifié ?' },
   'faq.a4': { en: 'To become a verified producer, sign up for a producer account and upload the required documents (Business License or ID, and any relevant certificates) in your profile. Our team will review your documents and verify your status within 48 hours.', fr: 'Pour devenir producteur vérifié, inscrivez-vous pour un compte producteur et téléchargez les documents requis (licence commerciale ou pièce d\'identité, et tout certificat pertinent) dans votre profil. Notre équipe examinera vos documents et vérifiera votre statut dans les 48 heures.' },
   'faq.q5': { en: 'Are there fees for using the platform?', fr: 'Y a-t-il des frais pour utiliser la plateforme ?' },
-  'faq.a5': { en: 'Clients pay a 16.5% service fee on each order. Producers are charged a 5% commission on successful sales, which is deducted automatically from their earnings before withdrawal.', fr: 'Les clients paient des frais de service de 16,5 % sur chaque commande. Les producteurs paient une commission de 5 % sur les ventes réussies, qui est déduite automatiquement de leurs gains avant le retrait.' },
+  'faq.a5': { en: 'Clients pay a 16% service fee on each order. Producers are charged a 5% commission on successful sales, which is deducted automatically from their earnings before withdrawal.', fr: 'Les clients paient des frais de service de 16 % sur chaque commande. Les producteurs paient une commission de 5 % sur les ventes réussies, qui est déduite automatiquement de leurs gains avant le retrait.' },
 
   // More order (for all-orders list)
   // Partners (Company.tsx)

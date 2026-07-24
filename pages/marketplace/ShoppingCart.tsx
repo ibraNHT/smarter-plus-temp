@@ -135,10 +135,10 @@ export const ShoppingCart: React.FC = () => {
   const checkoutSectionRef = useRef<HTMLElement | null>(null);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
-  // ATI retail store = 4% service fee; producer marketplace = 16.5% buyer commission.
+  // ATI retail store = 4% service fee; producer marketplace = 16% buyer commission.
   // Kept in sync with API create-order use-case (order-amounts.util.ts FEE_RATES).
   const cartIsAti = cart.length > 0 && cart[0].marketType === MarketType.ATI;
-  const serviceFeeRate = cartIsAti ? 0.04 : 0.165;
+  const serviceFeeRate = cartIsAti ? 0.04 : 0.16;
   const serviceFee = subtotal * serviceFeeRate;
   const totalAmount = Math.max(0, subtotal + serviceFee - discountAmount);
   const isServiceCart = cartHasService(cart);
