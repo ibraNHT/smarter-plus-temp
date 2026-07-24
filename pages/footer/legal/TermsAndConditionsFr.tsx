@@ -348,7 +348,7 @@ export const TermsAndConditionsFr: React.FC<Props> = ({ title, meta }) => (
         </LegalParagraph>
         <LegalList
           items={[
-            <>Frais de service de 16,5 % pour toute commande passée sur la place de marché principale (le cas échéant);</>,
+            <>Frais de service de 16 % pour toute commande passée sur la place de marché principale (le cas échéant);</>,
             <>Frais de service de 3 % pour toute commande passée en boutique (le cas échéant).</>,
             <>Frais de retrait de 1,5 %. Ces frais nous sont facturés par Tranzak pour la gestion de votre paiement.</>,
         <>Frais de rechargement de portefeuille : il s'agit de la commission que nous percevons sur chaque commande vendue avec succès par un producteur avant le dépôt des fonds sur son portefeuille. Nous déduisons 5 % de ce montant.</>,
