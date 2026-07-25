@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A" />
+      <stop offset="100%" stop-color="#1E1B4B" />
+    </linearGradient>
+
+    <!-- Blue/Teal Gradient for "Smarter" -->
+    <linearGradient id="smarter-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2DD4BF" />
+      <stop offset="50%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#818CF8" />
+    </linearGradient>
+
+    <!-- Pink/Purple Gradient for "Panel" -->
+    <linearGradient id="panel-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#F472B6" />
+      <stop offset="100%" stop-color="#A855F7" />
+    </linearGradient>
+
+    <!-- Drop Shadow for Depth -->
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.4" />
+    </filter>
+  </defs>
+
+  <!-- App Icon Rounded Background -->
+  <rect width="512" height="512" rx="112" fill="url(#bg-grad)" />
+
+  <!-- Core Icon Shape: Abstract 'S' & 'P' Data Visualizer elements -->
+  <g filter="url(#shadow)">
+    <!-- Right Data Pillar (The 'P' stem / High Activity) -->
+    <rect x="288" y="128" width="64" height="256" rx="32" fill="url(#panel-grad)" />
+
+    <!-- Left Data Pillar (The 'S' bottom / Metric) -->
+    <rect x="160" y="256" width="64" height="128" rx="32" fill="url(#smarter-grad)" />
+    
+    <!-- Top Arc joining them to suggest cloud/brain/progress line -->
+    <path d="M 192 256 C 192 128, 288 128, 320 128" fill="none" stroke="url(#smarter-grad)" stroke-width="64" stroke-linecap="round" />
+
+    <!-- Center Floating Sparkle (Intelligence/AI) -->
+    <circle cx="212" cy="180" r="16" fill="#ffffff" />
+  </g>
+
+  <!-- Subtle grid lines to enforce "Panel/Dashboard" motif -->
+  <g stroke="#ffffff" stroke-opacity="0.05" stroke-width="2" stroke-dasharray="12 12">
+    <line x1="0" y1="128" x2="512" y2="128" />
+    <line x1="0" y1="256" x2="512" y2="256" />
+    <line x1="0" y1="384" x2="512" y2="384" />
+  </g>
+</svg>
