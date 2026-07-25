@@ -578,7 +578,7 @@ const translations: Record<string, Record<Language, string>> = {
   'validation.passwordsMatch': { en: 'Passwords do not match.', fr: 'Les mots de passe ne correspondent pas.' },
   'validation.descriptionMin': { en: 'Description should be at least 10 characters.', fr: 'La description doit contenir au moins 10 caractères.' },
   'validation.farmNameRequired': { en: 'Farm/Business name is required for business accounts.', fr: 'Le nom de la ferme/entreprise est requis pour les comptes professionnels.' },
-  'validation.taxIdRequired': { en: 'Your NIU / tax ID or Business ID is required .', fr: 'Votre numéro NIU / numéro d\'identification fiscale ou numéro d\'identification d'entreprise est requis.' },
+  'validation.taxIdRequired': { en: 'Your NIU / tax ID or Business ID is required .', fr: 'Votre numéro NIU / numéro d\'identification fiscale ou numéro d\'identification d\'entreprise est requis.' },
   'validation.categoriesRequired': { en: 'Please select at least one category.', fr: 'Veuillez sélectionner au moins une catégorie.' },
   'validation.commentMin': { en: 'Please add a short comment.', fr: 'Veuillez ajouter un court commentaire.' },
   'validation.disputeReasonMin': { en: 'Please describe the issue in at least 5 characters.', fr: 'Veuillez décrire le problème en au moins 5 caractères.' },
