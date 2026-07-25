@@ -14,7 +14,7 @@ import {
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { CategoryAvatarScroller } from '../../components/CategoryAvatarScroller';
 import { MARKETPLACE_CATEGORIES } from '../../data/categories';
-import { offerImageInBox, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
+import { offerImageInBox, resolveOfferImageSrc, onOfferImageError } from '../../utils/offerImageDisplay';
 import { isProducerDashboardUser } from '../../services/producerSession';
 import { findProducerForUser } from '../../utils/producerAccountStatus';
 import { getAverageRatingFromReviews, getReviewsForOffer } from '../../utils/offerReviews';
@@ -331,7 +331,7 @@ export const AtiStore: React.FC = () => {
                                 </div>
                                 <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-100 rounded-xl shadow-md flex flex-col overflow-hidden hover:shadow-xl transition-all h-full agm-card-lift">
                                   <div className="bg-gray-100 h-40 relative">
-                                    <img src={resolveOfferImageSrc(offer.imageUrl)} alt={offer.title} className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`} />
+                                    <img src={resolveOfferImageSrc(offer.imageUrl)} alt={offer.title} className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`} onError={onOfferImageError} />
                                     <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">{t('market.atiChoice')}</div>
                                   </div>
                                   <div className="flex-1 p-3 space-y-2 flex flex-col">
@@ -395,6 +395,7 @@ export const AtiStore: React.FC = () => {
                                       src={resolveOfferImageSrc(offer.imageUrl)}
                                       alt={offer.title}
                                       className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`}
+                                      onError={onOfferImageError}
                                     />
                                     <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">{t('market.atiChoice')}</div>
                                   </div>

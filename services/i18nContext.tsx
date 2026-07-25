@@ -577,7 +577,7 @@ const translations: Record<string, Record<Language, string>> = {
   'validation.passwordsMatch': { en: 'Passwords do not match.', fr: 'Les mots de passe ne correspondent pas.' },
   'validation.descriptionMin': { en: 'Description should be at least 10 characters.', fr: 'La description doit contenir au moins 10 caractères.' },
   'validation.farmNameRequired': { en: 'Farm/Business name is required for business accounts.', fr: 'Le nom de la ferme/entreprise est requis pour les comptes professionnels.' },
-  'validation.taxIdRequired': { en: 'Your NIU / tax ID or Business ID is required .', fr: 'Votre numéro NIU / numéro d\'identification fiscale ou numéro d\'identification d'entreprise est requis.' },
+  'validation.taxIdRequired': { en: 'Your NIU / tax ID or Business ID is required .', fr: 'Votre numéro NIU / numéro d\'identification fiscale ou numéro d\'identification d\'entreprise est requis.' },
   'validation.categoriesRequired': { en: 'Please select at least one category.', fr: 'Veuillez sélectionner au moins une catégorie.' },
   'validation.commentMin': { en: 'Please add a short comment.', fr: 'Veuillez ajouter un court commentaire.' },
   'validation.disputeReasonMin': { en: 'Please describe the issue in at least 5 characters.', fr: 'Veuillez décrire le problème en au moins 5 caractères.' },
@@ -791,7 +791,7 @@ const translations: Record<string, Record<Language, string>> = {
   'profile.producerPendingTitle': { en: 'Producer account pending', fr: 'Compte producteur en attente' },
   'profile.producerPendingMsg': {
     en: 'Your producer account is pending. You can still buy as a client. Enter your NIU / tax ID or Business ID and upload your NIU certificate or Business certificate below to complete verification.',
-    fr: 'Votre compte producteur est en attente. Vous pouvez toujours acheter en tant que client. Saisissez votre numéro NIU/d\'identification fiscale ou votre numéro d\'identification d'entreprise et téléchargez votre certificat NIU ou votre certificat d\'entreprise ci-dessous pour finaliser la vérification.',
+    fr: 'Votre compte producteur est en attente. Vous pouvez toujours acheter en tant que client. Saisissez votre numéro NIU/d\'identification fiscale ou votre numéro d\'identification d\'entreprise et téléchargez votre certificat NIU ou votre certificat d\'entreprise ci-dessous pour finaliser la vérification.',
   },
   'profile.complianceDocsTitle': { en: 'Tax & compliance documents', fr: 'Documents fiscaux et administratifs' },
   'upload.fileTooLarge': { en: 'File size exceeds 10MB limit.', fr: 'La taille du fichier dépasse la limite de 10 Mo.' },
@@ -806,12 +806,12 @@ const translations: Record<string, Record<Language, string>> = {
   'profile.taxIdNumber': { en: 'Tax identification number (TIN/NIU or Business number)', fr: 'Numéro d\'identification fiscale (NIF/NIU ou numéro d\'entreprise)' },
   'profile.taxIdNumberHint': {
     en: 'The unique tax ID printed on your NIU registration or on your Business registration (not the uploaded file).',
-    fr: 'L'identifiant fiscal unique imprimé sur votre inscription NIU ou sur votre inscription d\'entreprise (pas le fichier téléversé).',
+    fr: 'L\'identifiant fiscal unique imprimé sur votre inscription NIU ou sur votre inscription d\'entreprise (pas le fichier téléversé).',
   },
   'profile.taxClearanceDoc': { en: 'Your national Photo ID (recto & verso on one file)', fr: 'Votre pièce d\'identité nationale avec photo (recto et verso sur un seul fichier)' },
   'profile.taxClearanceDocHint': {
     en: 'A clear, legible and up to date image of your National photo ID Card..',
-    fr: 'Une image claire, lisible et à jour de votre carte d'identité nationale avec photo..',
+    fr: 'Une image claire, lisible et à jour de votre carte d\'identité nationale avec photo..',
   },
   'profile.niuCertificate': { en: 'NIU certificate or Business certificate', fr: 'Certificat NIU ou certificat d\'entreprise' },
   'profile.niuCertificateHint': {
