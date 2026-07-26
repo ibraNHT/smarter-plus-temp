@@ -96,6 +96,21 @@ const collectionFromEndpoint = (endpoint: string) => {
     return path.split('/')[0] || '';
 };
 
+/** Strip client-only / unsupported fields before replaying queued mutations. */
+const sanitizeQueuedApiBody = (body: unknown): unknown => {
+    if (typeof body !== 'string') return body;
+    try {
+        const parsed = JSON.parse(body);
+        if (!parsed || typeof parsed !== 'object') return body;
+        // Transaction (income/expenses) and several other models have no `updatedAt`.
+        delete (parsed as any).updatedAt;
+        delete (parsed as any).offline;
+        return JSON.stringify(parsed);
+    } catch {
+        return body;
+    }
+};
+
 const rewriteOfflineBlobRefs = (text: string, replacements: Record<string, string>) => {
     let out = text;
     for (const [from, to] of Object.entries(replacements)) {
@@ -323,6 +338,9 @@ export const syncOfflineActions = async () => {
     for (const action of otherActions) {
         try {
             let options = { ...(action.options || {}) };
+            if (typeof options.body === 'string') {
+                options = { ...options, body: sanitizeQueuedApiBody(options.body) as string };
+            }
             if (typeof options.body === 'string' && Object.keys(urlReplacements).length) {
                 options = { ...options, body: rewriteOfflineBlobRefs(options.body, urlReplacements) };
             }
@@ -331,7 +349,7 @@ export const syncOfflineActions = async () => {
             if (col) syncedCollections.add(col);
         } catch (e: any) {
             // If it failed due to a genuine network error, keep it in the queue for later
-            if (e.message === 'Failed to fetch' || e.message.includes('Network')) {
+            if (e.message === 'Failed to fetch' || String(e.message || '').includes('Network')) {
                 remainingQueue.push(action);
             }
         }
@@ -352,6 +370,10 @@ export const syncOfflineActions = async () => {
 
 if (typeof window !== 'undefined') {
     window.addEventListener('online', syncOfflineActions);
+    // Flush any queued mutations when the app loads already online (no `online` event fires).
+    if (navigator.onLine) {
+        void syncOfflineActions();
+    }
 }
 
 // --- AUTH HOOK ---
@@ -703,13 +725,14 @@ export function useSubmit(collectionName: string) {
 
     const persistOfflineAdd = async (body: any) => {
         const now = new Date().toISOString();
+        // Do not attach `updatedAt` — income/expenses (Transaction) and several models reject it.
         const offlineBody = {
             ...body,
             id: body.id || makeOfflineId(),
             createdAt: body.createdAt || now,
-            updatedAt: now,
         };
-        await queueAction(`/${collectionName}`, 'POST', offlineBody);
+        const { updatedAt: _ignoreUpdatedAt, offline: _ignoreOffline, ...apiBody } = offlineBody as any;
+        await queueAction(`/${collectionName}`, 'POST', apiBody);
         await applyOptimisticCollectionWrite(collectionName, (list) => {
             if (list.some((i: any) => i.id === offlineBody.id)) return list;
             return [...list, offlineBody];
@@ -718,10 +741,10 @@ export function useSubmit(collectionName: string) {
     };
 
     const persistOfflineUpdate = async (id: string, data: any) => {
-        const patch = { ...data, updatedAt: new Date().toISOString() };
-        await queueAction(`/${collectionName}/${id}`, 'PUT', data);
+        const { updatedAt: _u, offline: _o, ...apiData } = data as any;
+        await queueAction(`/${collectionName}/${id}`, 'PUT', apiData);
         await applyOptimisticCollectionWrite(collectionName, (list) =>
-            list.map((i: any) => (i.id === id ? { ...i, ...patch } : i))
+            list.map((i: any) => (i.id === id ? { ...i, ...apiData } : i))
         );
         return true;
     };

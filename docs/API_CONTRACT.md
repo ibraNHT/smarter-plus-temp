@@ -46,16 +46,33 @@ All requests use the base URL from `VITE_API_URL`. Auth uses either `Authorizati
 
 #### Platform admin API (external panel)
 
-Requires header `X-Platform-Admin-Key: <PLATFORM_ADMIN_API_KEY>`.
+Requires `Authorization: Bearer <platform_jwt>` from `POST /platform/auth/login` (platform staff users with roles).
 
-| Method | Path | Body / notes | Response |
-|--------|------|--------------|----------|
-| GET | `/platform/organizations` | — | `{ organizations: [{ id, name, email }] }` |
-| GET | `/platform/coupons` | `?code=&active=` | `{ coupons }` |
-| POST | `/platform/coupons` | `{ code, type: percent\|fixed\|trial, percentOff?, fixedOffXaf?, trialMonths?, … }` | Created coupon |
-| PATCH | `/platform/coupons/:id` | Partial update | Updated coupon |
-| POST | `/platform/coupons/:id/assignments` | `{ organizationId }` | Assignment |
-| DELETE | `/platform/coupons/:id/assignments/:organizationId` | — | `{ ok: true }` |
+Bootstrap (one-time, when no admins exist): `POST /platform/auth/bootstrap` with header `X-Platform-Admin-Key: <PLATFORM_ADMIN_API_KEY>`.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| POST | `/platform/auth/login` | `{ email, password }` → `{ token, admin }` |
+| GET | `/platform/auth/me` | Current admin + role permissions |
+| GET/POST/PATCH/DELETE | `/platform/roles`, `/platform/admins` | `manage_staff` |
+| GET/PATCH | `/platform/organizations`, `/platform/organizations/:id` | view/manage orgs; PATCH `{ status: active\|suspended }` |
+| GET/POST/PATCH | `/platform/coupons` (+ assignments) | `manage_coupons` |
+| GET | `/platform/payments` | `accounting` |
+| GET/POST/PATCH | `/platform/refunds` | `accounting` |
+| GET/POST/PATCH | `/platform/support/threads…` | `support` |
+| GET | `/platform/audit-logs` | `view_logs` |
+| GET/POST | `/platform/notifications`, `/platform/notifications/mark-read` | `view_notifications` (types: org_signup, payment, refund_request, support_message) |
+
+#### Tenant support chat
+
+Requires tenant JWT.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET/POST | `/support/threads` | List / open thread (`{ subject?, body }`) |
+| GET | `/support/threads/:id` | Thread + messages (org-scoped) |
+| POST | `/support/threads/:id/messages` | `{ body }` |
+| POST | `/billing/refund-requests` | Owner: `{ paymentId, amount?, reason? }` → creates refund `requested` |
 
 | GET | `/roles/:id` | — | `Role` (id, key, name, permissions array or JSON string). |
 | PUT | `/users/:id` | `{ password?, passwordNeedsReset?, profilePicUrl? }` | — |

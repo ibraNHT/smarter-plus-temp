@@ -1,6 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useAuth, useData, hydrateOfflineBlobUrls } from './hooks/useAppData';
 import { Sidebar, Header } from './components/Layout';
+import { SupportWidget } from './components/SupportWidget';
 import { TRANSLATIONS } from './constants';
 import { Spinner } from './components/UI';
 import { NotificationProvider } from './context/NotificationContext';
@@ -215,6 +216,7 @@ const MainApp = () => {
             {page === 'profile' && <Profile {...commonProps} onChangePassword={changePassword} refreshUser={refreshUser} embedded />}
           </Suspense>
         </main>
+        <SupportWidget t={t} />
       </div>
     </div>
   );
