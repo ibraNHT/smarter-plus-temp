@@ -430,6 +430,7 @@ export const RegisterProducer: React.FC = () => {
                   value={formik.values.firstName}
                   onChange={formik.handleChange}
                   onBlur={formik.handleBlur}
+                  placeholder={t('ui.firstNamePlaceholder')}
                 />
                 <FieldError formik={formik} name="firstName" />
               </div>
@@ -441,6 +442,7 @@ export const RegisterProducer: React.FC = () => {
                   value={formik.values.lastName}
                   onChange={formik.handleChange}
                   onBlur={formik.handleBlur}
+                  placeholder={t('ui.lastNamePlaceholder')}
                 />
                 <FieldError formik={formik} name="lastName" />
               </div>
@@ -483,6 +485,7 @@ export const RegisterProducer: React.FC = () => {
                 value={formik.values.name}
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
+                placeholder={t('ui.farmNamePlaceholder')}
               />
               <FieldError formik={formik} name="name" />
             </div>
@@ -504,6 +507,7 @@ export const RegisterProducer: React.FC = () => {
               name="taxIdentificationNumber"
               required
               className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
+              placeholder={t('ui.taxIdPlaceholder')}
               value={formik.values.taxIdentificationNumber}
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}

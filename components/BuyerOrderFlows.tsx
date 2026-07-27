@@ -23,7 +23,7 @@ import { showAppToast } from '../services/appToast';
 import { Modal } from './Modal';
 import { ConfirmModal } from './ConfirmModal';
 import { ServiceAppointmentPicker } from './ServiceAppointmentPicker';
-import { Order, OrderStatus, UserSession } from '../types';
+import { Order, OrderStatus, UserSession, MarketType } from '../types';
 import { offerImageInBox } from '../utils/offerImageDisplay';
 import { PAYMENTS_ENABLED } from '../utils/featureFlags';
 import { orderHasService, orderIsServiceOnly, serviceLineCount } from '../utils/orderLabels';
@@ -432,7 +432,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
                 <span className="font-medium">{formatXaf(payOrder.subtotal)}</span>
               </div>
               <div className="flex justify-between text-gray-600">
-                <span>{t('cart.serviceFee')}</span>
+                <span>{t(payOrder.items?.some(i => i.marketType === MarketType.ATI) ? 'cart.serviceFeeRetail' : 'cart.serviceFee')}</span>
                 <span className="font-medium">{formatXaf(payOrder.serviceFee)}</span>
               </div>
               {(payOrder.discountAmount ?? 0) > 0 && (

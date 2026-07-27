@@ -282,6 +282,7 @@ export const RegisterClient: React.FC = () => {
               value={formik.values.firstName}
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}
+              placeholder={t('ui.firstNamePlaceholder')}
             />
             <FieldError formik={formik} name="firstName" />
           </div>
@@ -294,6 +295,7 @@ export const RegisterClient: React.FC = () => {
               value={formik.values.lastName}
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}
+              placeholder={t('ui.lastNamePlaceholder')}
             />
             <FieldError formik={formik} name="lastName" />
           </div>
@@ -490,6 +492,7 @@ export const RegisterClient: React.FC = () => {
               value={formik.values.city}
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}
+              placeholder={t('ui.cityPlaceholder')}
             />
             <FieldError formik={formik} name="city" />
           </div>
@@ -503,6 +506,7 @@ export const RegisterClient: React.FC = () => {
               value={formik.values.region}
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}
+              placeholder={t('ui.regionPlaceholder')}
             />
             <FieldError formik={formik} name="region" />
           </div>

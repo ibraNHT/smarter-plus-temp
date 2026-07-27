@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../services/i18nContext';
 import { CATEGORY_SCROLLER_ITEMS, getCategoryAvatar } from '../data/categoryVisuals';
+import { offerImageThumb } from '../utils/offerImageDisplay';
 
 type CategoryAvatarScrollerProps = {
   selected: string;
@@ -11,6 +12,68 @@ type CategoryAvatarScrollerProps = {
   categoryImages?: Record<string, string | undefined>;
   className?: string;
   sticky?: boolean;
+};
+
+const CategoryChipAvatar: React.FC<{
+  category: string;
+  overrideUrl?: string;
+  isSelected: boolean;
+}> = ({ category, overrideUrl, isSelected }) => {
+  const localSrc = getCategoryAvatar(category);
+  const remoteSrc = overrideUrl ? offerImageThumb(overrideUrl, 'thumb') : null;
+  const [remoteReady, setRemoteReady] = useState(false);
+  const [remoteFailed, setRemoteFailed] = useState(false);
+  const showLocalUnderlay = !remoteSrc || remoteFailed || category === 'All';
+
+  useEffect(() => {
+    setRemoteReady(false);
+    setRemoteFailed(false);
+  }, [category, overrideUrl, remoteSrc]);
+
+  return (
+    <span
+      className={`relative block w-16 h-16 md:w-[4.5rem] md:h-[4.5rem] rounded-full overflow-hidden transition-transform duration-200 ${
+        isSelected
+          ? 'ring-4 ring-primary-500 ring-offset-2 scale-105 shadow-md'
+          : 'ring-2 ring-gray-200 group-hover:ring-primary-300 group-active:scale-95'
+      }`}
+    >
+      {/* Neutral placeholder while store thumb loads — no marketplace art flash. */}
+      {remoteSrc && !remoteReady && !remoteFailed && (
+        <span className="absolute inset-0 bg-gray-100 animate-pulse" aria-hidden />
+      )}
+      {showLocalUnderlay && (
+        <img
+          src={localSrc}
+          alt=""
+          width={72}
+          height={72}
+          draggable={false}
+          className={`absolute inset-0 w-full h-full object-cover transition-[filter,transform] duration-200 ${
+            isSelected ? 'brightness-110 scale-105' : 'group-hover:brightness-105'
+          }`}
+          loading="eager"
+          decoding="async"
+        />
+      )}
+      {remoteSrc && !remoteFailed && (
+        <img
+          src={remoteSrc}
+          alt=""
+          width={72}
+          height={72}
+          draggable={false}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-200 ${
+            remoteReady ? 'opacity-100' : 'opacity-0'
+          } ${isSelected ? 'brightness-110 scale-105' : ''}`}
+          loading="eager"
+          decoding="async"
+          onLoad={() => setRemoteReady(true)}
+          onError={() => setRemoteFailed(true)}
+        />
+      )}
+    </span>
+  );
 };
 
 export const CategoryAvatarScroller: React.FC<CategoryAvatarScrollerProps> = ({
@@ -45,7 +108,7 @@ export const CategoryAvatarScroller: React.FC<CategoryAvatarScrollerProps> = ({
         const isSelected = selected === category;
         const label =
           category === 'All' ? t('market.allCategories') : t(`category.${category}`);
-        const avatarSrc = getCategoryAvatar(category, categoryImages?.[category]);
+        const override = categoryImages?.[category];
 
         return (
           <button
@@ -59,26 +122,11 @@ export const CategoryAvatarScroller: React.FC<CategoryAvatarScrollerProps> = ({
             onClick={() => onSelect(category)}
             className="flex-none snap-start w-[4.75rem] md:w-[5.5rem] flex flex-col items-center gap-1.5 group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded-lg"
           >
-            <span
-              className={`relative block w-16 h-16 md:w-[4.5rem] md:h-[4.5rem] rounded-full overflow-hidden transition-transform duration-200 ${
-                isSelected
-                  ? 'ring-4 ring-primary-500 ring-offset-2 scale-105 shadow-md'
-                  : 'ring-2 ring-gray-200 group-hover:ring-primary-300 group-active:scale-95'
-              }`}
-            >
-              <img
-                src={avatarSrc}
-                alt=""
-                width={72}
-                height={72}
-                draggable={false}
-                className={`w-full h-full object-cover transition-[filter,transform] duration-200 ${
-                  isSelected ? 'brightness-110 scale-105' : 'group-hover:brightness-105'
-                }`}
-                loading="lazy"
-                decoding="async"
-              />
-            </span>
+            <CategoryChipAvatar
+              category={category}
+              overrideUrl={override}
+              isSelected={isSelected}
+            />
             <span
               className={`w-full text-center text-[11px] md:text-xs leading-tight line-clamp-2 ${
                 isSelected ? 'font-semibold text-primary-700' : 'font-medium text-gray-600'

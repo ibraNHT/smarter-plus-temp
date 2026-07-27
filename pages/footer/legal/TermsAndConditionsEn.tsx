@@ -318,7 +318,7 @@ export const TermsAndConditionsEn: React.FC<Props> = ({ title, meta }) => (
         <LegalParagraph>All orders placed on the platform are subject to fees and service charges. Prices are displayed in the currency supported by the Platform and may be subject to:</LegalParagraph>
         <LegalList
           items={[
-            <>A 16.5% service charge applies to all orders placed on the main marketplace (where applicable);</>,
+            <>A 16% service charge applies to all orders placed on the main marketplace (where applicable);</>,
             <>A 3% service charge applies to all orders placed in the shop (where applicable).</>,
             <> 1.5% withdrawal fee applies. These fees are charged to us by Tranzak for processing your payment.</>,
             <>wallet top-up fee: This is the commission we collect on each order successfully sold by a producer before the funds are deposited into their wallet. We deduct 5% of this amount.</>,

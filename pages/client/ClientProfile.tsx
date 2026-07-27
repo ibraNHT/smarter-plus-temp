@@ -5,7 +5,7 @@ import { clientProfileMatchesSession } from '../../services/clientProfileMatcher
 import { useTranslation } from '../../services/i18nContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { CurrencyPreferenceCard } from '../../components/CurrencyPreferenceCard';
-import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order, Review, OfferType } from '../../types';
+import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order, Review, OfferType, MarketType } from '../../types';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle, Loader2, Calendar, Phone, Mail } from 'lucide-react';
 import { useUpdateClientProfileMutation } from '../../client-api/hooks/useUpdateClientProfileMutation';
@@ -1606,7 +1606,7 @@ export const ClientProfile: React.FC = () => {
                               <span className="font-medium">{formatXaf(payOrder.subtotal)}</span>
                            </div>
                            <div className="flex justify-between text-gray-600">
-                              <span>{t('cart.serviceFee')}</span>
+                              <span>{t(payOrder.items?.some(i => i.marketType === MarketType.ATI) ? 'cart.serviceFeeRetail' : 'cart.serviceFee')}</span>
                               <span className="font-medium">{formatXaf(payOrder.serviceFee)}</span>
                            </div>
                            {(payOrder.discountAmount ?? 0) > 0 && (

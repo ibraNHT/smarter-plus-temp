@@ -2809,7 +2809,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         quantity: item.cartQuantity,
         bookingDate: item.bookingDate ? new Date(item.bookingDate).toISOString() : undefined,
       })),
-      requestedDeliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : new Date(Date.now() + 86400 * 1000).toISOString(),
+      requestedDeliveryDate: deliveryDate ? new Date(`${deliveryDate}T12:00:00`).toISOString() : new Date(Date.now() + 3 * 86400 * 1000).toISOString(),
       deliveryMethod,
       pickupPointId: pickupPointId || undefined,
       couponId: couponId || undefined,

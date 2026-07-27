@@ -229,7 +229,7 @@ export const RegisterProducer: React.FC = () => {
           {/* NIU and certificates required for ALL producer types */}
           <div className="sm:col-span-6">
             <label htmlFor="tin" className="block text-sm font-medium text-gray-700">
-              NIU / Tax ID <span className="text-red-500">*</span>
+            NIU / Tax ID or Business ID <span className="text-red-500">*</span>
             </label>
             {language === 'en' &&
             <p className="text-xs text-gray-500 mt-0.5">

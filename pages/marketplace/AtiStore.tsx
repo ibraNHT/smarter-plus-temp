@@ -14,6 +14,7 @@ import {
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { CategoryAvatarScroller } from '../../components/CategoryAvatarScroller';
 import { MARKETPLACE_CATEGORIES } from '../../data/categories';
+import { OfferImage } from '../../components/OfferImage';
 import { offerImageInBox, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
 import { isProducerDashboardUser } from '../../services/producerSession';
 import { findProducerForUser } from '../../utils/producerAccountStatus';
@@ -70,13 +71,18 @@ export const AtiStore: React.FC = () => {
   // Each entry is { name, imageUrl } — backward-compatible with the old
   // name-only string[] shape.
   const [storeCategories, setStoreCategories] = useState<Array<{ name: string; imageUrl?: string }>>([]);
+  const [storeCategoriesStatus, setStoreCategoriesStatus] = useState<'loading' | 'ready' | 'empty'>('loading');
 
   useEffect(() => {
     let cancelled = false;
+    setStoreCategoriesStatus('loading');
     fetch(`${import.meta.env.VITE_API_URL || '/api'}/retail/categories`)
       .then((r) => (r.ok ? r.json() : { categories: [] }))
       .then((data) => {
-        if (cancelled || !Array.isArray(data.categories)) return;
+        if (cancelled || !Array.isArray(data.categories)) {
+          if (!cancelled) setStoreCategoriesStatus('empty');
+          return;
+        }
         const normalized = data.categories
           .map((c: any) =>
             typeof c === 'string'
@@ -85,8 +91,11 @@ export const AtiStore: React.FC = () => {
           )
           .filter((c: { name: string }) => c.name && c.name !== 'All');
         if (normalized.length) setStoreCategories(normalized);
+        if (!cancelled) setStoreCategoriesStatus(normalized.length ? 'ready' : 'empty');
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setStoreCategoriesStatus('empty');
+      });
     return () => { cancelled = true; };
   }, []);
 
@@ -123,16 +132,21 @@ export const AtiStore: React.FC = () => {
 
   const sortedCategories = Object.keys(groupedOffers).sort();
 
+  const offerCategoryNames = Array.from(new Set(atiOffers.map((o) => o.category))).filter(Boolean);
   const scrollerCategories: string[] =
     storeCategories.length > 0
       ? storeCategories.map((c) => c.name)
-      : (Array.from(new Set(atiOffers.map((o) => o.category))).filter(Boolean).length
-          ? Array.from(new Set(atiOffers.map((o) => o.category))).filter(Boolean)
-          : [...MARKETPLACE_CATEGORIES]);
+      : storeCategoriesStatus === 'loading'
+        ? [] // Only "All" until retail categories arrive — no marketplace residue chips
+        : (offerCategoryNames.length ? offerCategoryNames : [...MARKETPLACE_CATEGORIES]);
 
   // name → uploaded image URL, so the category scroller can render store art.
   const categoryImages = storeCategories.reduce<Record<string, string>>((acc, c) => {
-    if (c.imageUrl) acc[c.name] = c.imageUrl;
+    // Uploaded store-category images come from the same upload backend as offer
+    // photos, so resolve them the same way (rewrites API-origin /uploads URLs to
+    // same-origin to dodge Cross-Origin-Resource-Policy blocking; Cloudinary
+    // https URLs pass through unchanged).
+    if (c.imageUrl) acc[c.name] = resolveOfferImageSrc(c.imageUrl);
     return acc;
   }, {});
 
@@ -331,8 +345,13 @@ export const AtiStore: React.FC = () => {
                                 </div>
                                 <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-100 rounded-xl shadow-md flex flex-col overflow-hidden hover:shadow-xl transition-all h-full agm-card-lift">
                                   <div className="bg-gray-100 h-40 relative">
-                                    <img src={resolveOfferImageSrc(offer.imageUrl)} alt={offer.title} className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`} />
-                                    <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">{t('market.atiChoice')}</div>
+                                    <OfferImage
+                                      src={offer.imageUrl}
+                                      alt={offer.title}
+                                      size="card"
+                                      className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`}
+                                    />
+                                    <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded z-[3]">{t('market.atiChoice')}</div>
                                   </div>
                                   <div className="flex-1 p-3 space-y-2 flex flex-col">
                                     <h3 className="text-sm font-medium text-gray-900 line-clamp-2 h-10">{offer.title}</h3>
@@ -344,7 +363,7 @@ export const AtiStore: React.FC = () => {
                                         />
                                       ))}
                                       <span className="text-xs text-gray-400 ml-1">
-                                        {reviewCount > 0 ? `(${rating.toFixed(1)})` : t('market.noReviewsShort')}
+                                        {reviewCount > 0 ? `(${rating.toFixed(1)})` : t('product.noReviewsShort')}
                                       </span>
                                     </div>
                                     <div className="flex flex-col pt-2 border-t border-gray-100 mt-auto">
@@ -391,12 +410,13 @@ export const AtiStore: React.FC = () => {
 
                                 <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-100 rounded-xl shadow-md flex flex-col overflow-hidden hover:shadow-xl transition-all h-full agm-card-lift">
                                   <div className="aspect-w-1 aspect-h-1 bg-gray-100 h-36 relative">
-                                    <img
-                                      src={resolveOfferImageSrc(offer.imageUrl)}
+                                    <OfferImage
+                                      src={offer.imageUrl}
                                       alt={offer.title}
+                                      size="card"
                                       className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`}
                                     />
-                                    <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">{t('market.atiChoice')}</div>
+                                    <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded z-[3]">{t('market.atiChoice')}</div>
                                   </div>
                                   <div className="flex-1 p-3 space-y-2 flex flex-col">
                                     <h3 className="text-sm font-medium text-gray-900 line-clamp-2 h-10">
@@ -410,7 +430,7 @@ export const AtiStore: React.FC = () => {
                                         />
                                       ))}
                                       <span className="text-xs text-gray-400 ml-1">
-                                        {reviewCount > 0 ? `(${rating.toFixed(1)})` : `${t('market.noReviewsShort')})`}
+                                        {reviewCount > 0 ? `(${rating.toFixed(1)})` : t('product.noReviewsShort')}
                                       </span>
                                     </div>
                                     <div className="flex flex-col pt-2 border-t border-gray-100 mt-auto">

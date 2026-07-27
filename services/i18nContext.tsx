@@ -401,7 +401,8 @@ const translations: Record<string, Record<Language, string>> = {
     fr: 'Votre service est dans le panier. Choisissez la livraison ci-dessous, puis appuyez sur « Passer la commande » pour finaliser.',
   },
   'cart.subtotal': { en: 'Subtotal', fr: 'Sous-total' },
-  'cart.serviceFee': { en: 'Service Fee (16.5%)', fr: 'Frais de service (16,5%)' },
+  'cart.serviceFee': { en: 'Service Fee (16%)', fr: 'Frais de service (16%)' },
+  'cart.serviceFeeRetail': { en: 'Service Fee (4%)', fr: 'Frais de service (4%)' },
   'cart.total': { en: 'Order Total', fr: 'Total Commande' },
   'cart.placeOrder': { en: 'Place Order', fr: 'Passer la commande' },
   'cart.continue': { en: 'Continue Shopping', fr: 'Continuer vos achats' },
@@ -577,7 +578,7 @@ const translations: Record<string, Record<Language, string>> = {
   'validation.passwordsMatch': { en: 'Passwords do not match.', fr: 'Les mots de passe ne correspondent pas.' },
   'validation.descriptionMin': { en: 'Description should be at least 10 characters.', fr: 'La description doit contenir au moins 10 caractères.' },
   'validation.farmNameRequired': { en: 'Farm/Business name is required for business accounts.', fr: 'Le nom de la ferme/entreprise est requis pour les comptes professionnels.' },
-  'validation.taxIdRequired': { en: 'Tax ID (NIU) is required.', fr: 'L\'identifiant fiscal (NIU) est requis.' },
+  'validation.taxIdRequired': { en: 'Your NIU / tax ID or Business ID is required .', fr: 'Votre numéro NIU / numéro d\'identification fiscale ou numéro d\'identification d\'entreprise est requis.' },
   'validation.categoriesRequired': { en: 'Please select at least one category.', fr: 'Veuillez sélectionner au moins une catégorie.' },
   'validation.commentMin': { en: 'Please add a short comment.', fr: 'Veuillez ajouter un court commentaire.' },
   'validation.disputeReasonMin': { en: 'Please describe the issue in at least 5 characters.', fr: 'Veuillez décrire le problème en au moins 5 caractères.' },
@@ -591,6 +592,12 @@ const translations: Record<string, Record<Language, string>> = {
   'ui.profile': { en: 'Profile', fr: 'Profil' },
   'ui.emailPlaceholder': { en: 'you@example.com', fr: 'vous@exemple.com' },
   'ui.phonePlaceholder': { en: '612 345 678', fr: '612 345 678' },
+  'ui.firstNamePlaceholder': { en: 'e.g. Jean', fr: 'ex. Jean' },
+  'ui.lastNamePlaceholder': { en: 'e.g. Nkeng', fr: 'ex. Nkeng' },
+  'ui.cityPlaceholder': { en: 'e.g. Douala', fr: 'ex. Douala' },
+  'ui.regionPlaceholder': { en: 'e.g. Littoral', fr: 'ex. Littoral' },
+  'ui.farmNamePlaceholder': { en: 'e.g. Green Valley Farm', fr: 'ex. Ferme Green Valley' },
+  'ui.taxIdPlaceholder': { en: 'e.g. P123456789012A', fr: 'ex. P123456789012A' },
 
   // Client profile specific
   'client.profileTitle': { en: 'Client Profile', fr: 'Profil Client' },
@@ -790,8 +797,8 @@ const translations: Record<string, Record<Language, string>> = {
   },
   'profile.producerPendingTitle': { en: 'Producer account pending', fr: 'Compte producteur en attente' },
   'profile.producerPendingMsg': {
-    en: 'Your producer account is pending. You can still buy as a client. Enter your NIU / tax ID and upload your NIU certificate (and business registration if applicable) below to complete verification.',
-    fr: 'Votre compte producteur est en attente. Vous pouvez toujours acheter en tant que client. Saisissez votre NIU et téléversez votre certificat NIU (et l\'immatriculation le cas échéant) ci-dessous pour finaliser la vérification.',
+    en: 'Your producer account is pending. You can still buy as a client. Enter your NIU / tax ID or Business ID and upload your NIU certificate or Business certificate below to complete verification.',
+    fr: 'Votre compte producteur est en attente. Vous pouvez toujours acheter en tant que client. Saisissez votre numéro NIU/d\'identification fiscale ou votre numéro d\'identification d\'entreprise et téléchargez votre certificat NIU ou votre certificat d\'entreprise ci-dessous pour finaliser la vérification.',
   },
   'profile.complianceDocsTitle': { en: 'Tax & compliance documents', fr: 'Documents fiscaux et administratifs' },
   'upload.fileTooLarge': { en: 'File size exceeds 10MB limit.', fr: 'La taille du fichier dépasse la limite de 10 Mo.' },
@@ -800,28 +807,28 @@ const translations: Record<string, Record<Language, string>> = {
   'upload.chooseFile': { en: 'Choose file', fr: 'Choisir un fichier' },
   'upload.formatHint': { en: 'PNG, JPG, or PDF — max 10 MB', fr: 'PNG, JPG ou PDF — 10 Mo maximum' },
   'profile.complianceDocsIntro': {
-    en: 'Required for all producers (individual and business): your TIN/NIU number, NIU certificate file, and tax compliance certificate (ACF). Use the same upload control for each document. Business registration (RCCM) is optional.',
-    fr: 'Obligatoire pour tous les producteurs : numéro NIU/TIN, certificat NIU et attestation ACF (deux documents distincts). Même bouton de téléversement pour chaque fichier. RCCM facultatif.',
+    en: 'Required for all producers (individual and business): your TIN/NIU number and or Business number, NIU/Business certificate file, and the photo ID card of the person in charge. The tax compliance certificate (ACF) or equivalent depending on your country, is optional. Use the same upload control for each document.',
+    fr: 'Obligatoire pour tous les producteurs : votre numéro TIN/NIU et/ou numéro d\'entreprise, le dossier de certificat NIU/Business et la carte d\'identité avec photo de la personne responsable. L\’attestation de conformité fiscale (ACF) ou équivalent selon votre pays, est facultative. Utilisez le même contrôle de téléchargement pour chaque document.',
   },
-  'profile.taxIdNumber': { en: 'Tax identification number (TIN/NIU)', fr: 'Numéro d\'identification fiscale (NIU/TIN)' },
+  'profile.taxIdNumber': { en: 'Tax identification number (TIN/NIU or Business number)', fr: 'Numéro d\'identification fiscale (NIF/NIU ou numéro d\'entreprise)' },
   'profile.taxIdNumberHint': {
-    en: 'The unique tax ID printed on your NIU registration (not the uploaded file).',
-    fr: 'Le numéro fiscal unique figurant sur votre enregistrement NIU (pas le fichier téléversé).',
+    en: 'The unique tax ID printed on your NIU registration or on your Business registration (not the uploaded file).',
+    fr: 'L\'identifiant fiscal unique imprimé sur votre inscription NIU ou sur votre inscription d\'entreprise (pas le fichier téléversé).',
   },
-  'profile.taxClearanceDoc': { en: 'Tax clearance certificate (ACF)', fr: 'Attestation de non-redevance (ACF)' },
+  'profile.taxClearanceDoc': { en: 'Your national Photo ID (recto & verso on one file)', fr: 'Votre pièce d\'identité nationale avec photo (recto et verso sur un seul fichier)' },
   'profile.taxClearanceDocHint': {
-    en: 'Tax completion / clearance document from the tax authority.',
-    fr: 'Document attestant la régularité fiscale auprès de l\'administration.',
+    en: 'A clear, legible and up to date image of your National photo ID Card..',
+    fr: 'Une image claire, lisible et à jour de votre carte d\'identité nationale avec photo..',
   },
-  'profile.niuCertificate': { en: 'NIU certificate', fr: 'Certificat NIU' },
+  'profile.niuCertificate': { en: 'NIU certificate or Business certificate', fr: 'Certificat NIU ou certificat d\'entreprise' },
   'profile.niuCertificateHint': {
-    en: 'Official NIU registration certificate for your business or activity.',
-    fr: 'Certificat officiel d\'enregistrement au NIU pour votre activité.',
+    en: 'Official NIU or Business registration certificate for your business or activity.',
+    fr: 'Certificat officiel d\'enregistrement NIU ou d\'entreprise pour votre entreprise ou activité.',
   },
-  'profile.businessRegistration': { en: 'Business registration', fr: 'Immatriculation / registre de commerce' },
+  'profile.businessRegistration': { en: 'Tax clearance certificate (ACF)', fr: 'Attestation de non-redevance (ACF)' },
   'profile.businessRegistrationHint': {
-    en: 'RCCM or equivalent — optional but helps speed up approval.',
-    fr: 'RCCM ou équivalent — facultatif mais accélère la validation.',
+    en: 'ACF or equivalent — optional but helps speed up approval.',
+    fr: 'ACF ou équivalent — facultatif mais accélère la validation.',
   },
   'profile.favorites.empty': { en: 'No favorite items yet.', fr: 'Pas encore de favoris.' },
   'profile.findSimilar': { en: 'Find Similar', fr: 'Trouver Similaire' },
@@ -1047,7 +1054,7 @@ const translations: Record<string, Record<Language, string>> = {
   // Profile (upgrade modal)
   'profile.producerType': { en: 'Producer Type', fr: 'Type de producteur' },
   'profile.farmBusinessName': { en: 'Farm/Business Name', fr: 'Nom de la ferme/entreprise' },
-  'profile.niuTaxId': { en: 'NIU / Tax ID', fr: 'NIU / N° fiscal' },
+  'profile.niuTaxId': { en: 'NIU / Tax ID or Business ID', fr: 'NIU / Numéro d\'identification fiscale ou numéro d\'entreprise' },
   'profile.categoriesClick': { en: 'Categories (Click to select)', fr: 'Catégories (Cliquez pour sélectionner)' },
   'profile.upgradeAccount': { en: 'Upgrade Account', fr: 'Mettre à niveau le compte' },
 
@@ -1086,7 +1093,7 @@ const translations: Record<string, Record<Language, string>> = {
   'faq.q4': { en: 'How do I become a verified producer?', fr: 'Comment devenir un producteur vérifié ?' },
   'faq.a4': { en: 'To become a verified producer, sign up for a producer account and upload the required documents (Business License or ID, and any relevant certificates) in your profile. Our team will review your documents and verify your status within 48 hours.', fr: 'Pour devenir producteur vérifié, inscrivez-vous pour un compte producteur et téléchargez les documents requis (licence commerciale ou pièce d\'identité, et tout certificat pertinent) dans votre profil. Notre équipe examinera vos documents et vérifiera votre statut dans les 48 heures.' },
   'faq.q5': { en: 'Are there fees for using the platform?', fr: 'Y a-t-il des frais pour utiliser la plateforme ?' },
-  'faq.a5': { en: 'Clients pay a 16.5% service fee on each order. Producers are charged a 5% commission on successful sales, which is deducted automatically from their earnings before withdrawal.', fr: 'Les clients paient des frais de service de 16,5 % sur chaque commande. Les producteurs paient une commission de 5 % sur les ventes réussies, qui est déduite automatiquement de leurs gains avant le retrait.' },
+  'faq.a5': { en: 'Clients pay a 16% service fee on each order. Producers are charged a 5% commission on successful sales, which is deducted automatically from their earnings before withdrawal.', fr: 'Les clients paient des frais de service de 16 % sur chaque commande. Les producteurs paient une commission de 5 % sur les ventes réussies, qui est déduite automatiquement de leurs gains avant le retrait.' },
 
   // More order (for all-orders list)
   // Partners (Company.tsx)

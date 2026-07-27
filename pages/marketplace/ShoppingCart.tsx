@@ -53,6 +53,7 @@ function pickDefaultHomeLocationIndex(
   return best;
 }
 import { loadGooglePlacesApi, parseGooglePlace, citiesLooselyMatch } from '../../services/googlePlaces';
+import { OfferImage } from '../../components/OfferImage';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { cartHasService } from '../../utils/orderLabels';
 import { showAppToast } from '../../services/appToast';
@@ -135,7 +136,11 @@ export const ShoppingCart: React.FC = () => {
   const checkoutSectionRef = useRef<HTMLElement | null>(null);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
-  const serviceFee = subtotal * 0.165; // 16.5% buyer commission (kept in sync with API create-order use-case)
+  // ATI retail store = 4% service fee; producer marketplace = 16% buyer commission.
+  // Kept in sync with API create-order use-case (order-amounts.util.ts FEE_RATES).
+  const cartIsAti = cart.length > 0 && cart[0].marketType === MarketType.ATI;
+  const serviceFeeRate = cartIsAti ? 0.04 : 0.16;
+  const serviceFee = subtotal * serviceFeeRate;
   const totalAmount = Math.max(0, subtotal + serviceFee - discountAmount);
   const isServiceCart = cartHasService(cart);
 
@@ -281,7 +286,7 @@ export const ShoppingCart: React.FC = () => {
 
   // Date Logic for Calendar
   const minDateObj = new Date();
-  minDateObj.setDate(minDateObj.getDate() + 1); // Tomorrow
+  minDateObj.setDate(minDateObj.getDate() + 3); // Earliest delivery = today + 3 days (no same/next-day delivery yet)
   minDateObj.setHours(0, 0, 0, 0);
 
   const maxDateObj = new Date();
@@ -472,13 +477,9 @@ export const ShoppingCart: React.FC = () => {
                     className={`p-4 sm:p-6 flex gap-3 sm:gap-4 ${item.type === OfferType.SERVICE ? 'bg-purple-50/40 border-l-4 border-l-purple-300' : ''}`}
                   >
                     <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 border border-gray-200 bg-gray-100 rounded-md overflow-hidden relative">
-                      <img
-                        src={item.imageUrl}
-                        alt={item.title}
-                        className={offerImageInBox}
-                      />
+                      <OfferImage src={item.imageUrl} alt={item.title} size="thumb" className={offerImageInBox} />
                       {item.type === OfferType.SERVICE && (
-                        <div className="absolute bottom-0 left-0 right-0 bg-purple-600 text-white text-[10px] text-center py-1 font-bold">
+                        <div className="absolute bottom-0 left-0 right-0 bg-purple-600 text-white text-[10px] text-center py-1 font-bold z-[3]">
                           {t('service.badge').toUpperCase()}
                         </div>
                       )}
@@ -736,7 +737,7 @@ export const ShoppingCart: React.FC = () => {
                     >
                       <span className={deliveryDate ? 'font-medium' : 'text-gray-500'}>
                         {deliveryDate
-                          ? new Date(deliveryDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+                          ? new Date(`${deliveryDate}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
                           : t('cart.selectDatePlaceholder')}
                       </span>
                       <Calendar className={`h-5 w-5 text-blue-600`} />
@@ -814,7 +815,7 @@ export const ShoppingCart: React.FC = () => {
                     <dd className="font-medium text-gray-900">{formatXaf(subtotal)}</dd>
                   </div>
                   <div className="py-4 flex items-center justify-between">
-                    <dt className="text-gray-600">{t('cart.serviceFee')}</dt>
+                    <dt className="text-gray-600">{t(cartIsAti ? 'cart.serviceFeeRetail' : 'cart.serviceFee')}</dt>
                     <dd className="font-medium text-gray-900">{formatXaf(serviceFee)}</dd>
                   </div>
 
@@ -938,7 +939,7 @@ export const ShoppingCart: React.FC = () => {
                     <span>{formatXaf(subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-sm text-gray-600 mb-1">
-                    <span>{t('cart.serviceFee')}</span>
+                    <span>{t(cartIsAti ? 'cart.serviceFeeRetail' : 'cart.serviceFee')}</span>
                     <span>{formatXaf(serviceFee)}</span>
                   </div>
                   {appliedCoupon && (
@@ -987,7 +988,7 @@ export const ShoppingCart: React.FC = () => {
                         <Calendar className="h-3 w-3 mr-1" /> {t('cart.deliveryDate')}
                       </h4>
                       <p className="text-sm text-blue-900 font-medium">
-                        {new Date(deliveryDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                        {new Date(`${deliveryDate}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                       </p>
                     </div>
                   )}

@@ -3,6 +3,7 @@ import React from 'react';
 import { useStoreOptional } from '../services/storeContext';
 import { useTranslation } from '../services/i18nContext';
 import { Link } from 'react-router-dom';
+import { OfferImage } from '../components/OfferImage';
 import { offerImageInBox } from '../utils/offerImageDisplay';
 import { Layers, X, ArrowRight } from 'lucide-react';
 
@@ -33,10 +34,10 @@ export const CompareWidget: React.FC = () => {
 
            {selectedOffers.map((offer: any) => (
               <div key={offer.id} className="relative group flex-shrink-0 w-10 h-10 sm:w-16 sm:h-16 bg-gray-100 rounded border border-gray-300 overflow-hidden">
-                 <img src={offer.imageUrl} alt={offer.title} className={offerImageInBox} />
+                 <OfferImage src={offer.imageUrl} alt={offer.title} size="thumb" className={offerImageInBox} />
                  <button
                    onClick={() => removeFromCompare(offer.id)}
-                   className="absolute top-0 right-0 bg-red-500 text-white p-0.5 rounded-bl sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                   className="absolute top-0 right-0 z-[3] bg-red-500 text-white p-0.5 rounded-bl sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                    aria-label="Remove from compare"
                  >
                     <X className="h-3 w-3" />
