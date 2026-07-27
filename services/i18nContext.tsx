@@ -1054,7 +1054,7 @@ const translations: Record<string, Record<Language, string>> = {
   // Profile (upgrade modal)
   'profile.producerType': { en: 'Producer Type', fr: 'Type de producteur' },
   'profile.farmBusinessName': { en: 'Farm/Business Name', fr: 'Nom de la ferme/entreprise' },
-  'profile.niuTaxId': { en: 'NIU / Tax ID', fr: 'NIU / N° fiscal' },
+  'profile.niuTaxId': { en: 'NIU / Tax ID or Business ID', fr: 'NIU / Numéro d\'identification fiscale ou numéro d\'entreprise' },
   'profile.categoriesClick': { en: 'Categories (Click to select)', fr: 'Catégories (Cliquez pour sélectionner)' },
   'profile.upgradeAccount': { en: 'Upgrade Account', fr: 'Mettre à niveau le compte' },
 

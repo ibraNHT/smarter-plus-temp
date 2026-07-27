@@ -11,7 +11,8 @@ import { ProductDetailsSkeleton } from '../../components/skeletons/ProductDetail
 import { ServiceSlotsSkeleton } from '../../components/Loaders';
 import { Spinner } from '../../components/Spinner';
 import { ConfirmModal } from '../../components/ConfirmModal';
-import { offerImageHero, offerImageInBox } from '../../utils/offerImageDisplay';
+import { OfferImage } from '../../components/OfferImage';
+import { offerImageHero, offerImageInBox, offerImageThumb } from '../../utils/offerImageDisplay';
 import { getOfferImageUrls } from '../../utils/offerImages';
 import { displayNameTruncateClass, resolveProducerDisplayName, resolveProfileImageUrl } from '../../utils/displayName';
 import { getAverageRatingFromReviews, getReviewsForOffer } from '../../utils/offerReviews';
@@ -475,12 +476,15 @@ export const ProductDetails: React.FC = () => {
             {/* Image Section — primary + additional photos */}
             <div className="md:w-1/2 flex flex-col bg-gray-100 p-3 sm:p-4">
               <div className="h-72 sm:h-80 md:h-96 md:min-h-96 flex items-center justify-center relative">
-              <img
+              <OfferImage
                 src={getOfferImageUrls(offer)[selectedOfferImageIndex] ?? offer.imageUrl}
                 alt={offer.title}
+                size="detail"
+                eager
                 className={offerImageHero}
+                wrapperClassName="absolute inset-0 flex items-center justify-center p-2"
               />
-              <div className="absolute top-3 left-3 sm:top-4 sm:left-4 flex flex-col gap-2">
+              <div className="absolute top-3 left-3 sm:top-4 sm:left-4 flex flex-col gap-2 z-[3]">
                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold shadow-sm ${isProducerMarket ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
                   }`}>
                   {isProducerMarket ? t('product.producerOffer') : t('product.atiOffer')}
@@ -510,7 +514,13 @@ export const ProductDetails: React.FC = () => {
                         selectedOfferImageIndex === idx ? 'border-primary-600' : 'border-gray-200'
                       }`}
                     >
-                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      <img
+                        src={offerImageThumb(url, 'thumb')}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
                     </button>
                   ))}
                 </div>
@@ -866,8 +876,8 @@ export const ProductDetails: React.FC = () => {
                     to={`/offer/${rel.id}`}
                     className="agm-card-lift flex-none snap-start w-44 sm:w-52 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden"
                   >
-                    <div className="h-28 bg-gray-100">
-                      <img src={rel.imageUrl} alt="" className={offerImageInBox} />
+                    <div className="h-28 bg-gray-100 relative">
+                      <OfferImage src={rel.imageUrl} alt="" size="card" />
                     </div>
                     <div className="p-3">
                       <p className="text-sm font-semibold text-gray-900 line-clamp-2 min-h-[2.5rem]">{rel.title}</p>

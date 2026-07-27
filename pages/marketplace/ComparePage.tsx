@@ -7,6 +7,7 @@ import { ArrowLeft, Star, X, ShoppingCart, Check, XCircle } from 'lucide-react';
 import { OfferType } from '../../types';
 import { comparePageAddQuantity, effectiveMinOrder } from '../../utils/offerCart';
 import { ComparePageSkeleton } from '../../components/skeletons/ComparePageSkeleton';
+import { OfferImage } from '../../components/OfferImage';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { showAppToast } from '../../services/appToast';
@@ -117,8 +118,8 @@ export const ComparePage: React.FC = () => {
                          >
                             <X className="h-5 w-5" />
                          </button>
-                         <div className="h-32 mb-3 rounded overflow-hidden bg-gray-100">
-                            <img src={offer.imageUrl} alt={offer.title} className={offerImageInBox} />
+                         <div className="h-32 mb-3 rounded overflow-hidden bg-gray-100 relative">
+                            <OfferImage src={offer.imageUrl} alt={offer.title} size="card" className={offerImageInBox} />
                          </div>
                          <div className="line-clamp-2 h-10">{offer.title}</div>
                       </th>

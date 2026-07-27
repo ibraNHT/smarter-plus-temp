@@ -74,4 +74,23 @@ await sharp(join(publicDir, 'favicon-32x32.png')).png().toFile(faviconIco);
 console.log('Wrote favicon.ico');
 
 await writeOgImage();
+
+async function writeLandingHeroWebp() {
+  const heroJpg = join(publicDir, 'landing-hero.jpg');
+  if (!existsSync(heroJpg)) {
+    console.warn('landing-hero.jpg missing — skip WebP variants');
+    return;
+  }
+  await sharp(heroJpg)
+    .resize({ width: 1920, withoutEnlargement: true })
+    .webp({ quality: 72 })
+    .toFile(join(publicDir, 'landing-hero.webp'));
+  await sharp(heroJpg)
+    .resize({ width: 960, withoutEnlargement: true })
+    .webp({ quality: 70 })
+    .toFile(join(publicDir, 'landing-hero-960.webp'));
+  console.log('Wrote landing-hero.webp + landing-hero-960.webp');
+}
+
+await writeLandingHeroWebp();
 console.log('Brand assets generated from ati-logo-source.png');
