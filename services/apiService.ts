@@ -73,6 +73,16 @@ interface ApiFetchOptions extends Omit<RequestInit, 'headers'> {
     headers?: Record<string, string>;
     /** If true, a 401 response will NOT trigger a logout+redirect. Use for background/polling calls. */
     silent401?: boolean;
+    /**
+     * If true, a 401 will NOT attempt a token refresh at all. Use for requests
+     * that have no session to refresh in the first place (e.g. login itself) —
+     * without this, a failed login still triggered attemptTokenRefresh(), which
+     * calls forceLogoutRedirect() internally whenever /auth/refresh 401/403s
+     * (the common case with no/stale refresh token), bypassing `silent401`
+     * entirely and clearing storage + firing the global session-expired event
+     * before the caller's own error handling ever ran.
+     */
+    skipAuthRefresh?: boolean;
     /** Internal flag — set to true after one refresh attempt to prevent infinite loops */
     _isRetry?: boolean;
     /** Internal — after a 304, retry GET once without conditional cache headers */
@@ -150,7 +160,7 @@ export const apiFetch = async <T = unknown>(
     path: string,
     options: ApiFetchOptions = {}
 ): Promise<T> => {
-    const { headers: extraHeaders, silent401, _isRetry, _after304Retry, ...rest } = options;
+    const { headers: extraHeaders, silent401, skipAuthRefresh, _isRetry, _after304Retry, ...rest } = options;
     const response = await fetch(`${BASE_URL}${path}`, {
         ...rest,
         credentials: 'include',
@@ -186,7 +196,7 @@ export const apiFetch = async <T = unknown>(
             throw err;
         }
 
-        if (response.status === 401) {
+        if (response.status === 401 && !skipAuthRefresh) {
             if (!_isRetry) {
                 const refreshed = await attemptTokenRefresh();
                 if (refreshed) {
@@ -205,6 +215,11 @@ export const apiFetch = async <T = unknown>(
             // required), NOT an auth failure. Do NOT log out — fall through and throw so
             // the caller can handle the specific error (e.g. prompt for OTP).
         }
+        // skipAuthRefresh === true: this request never had a session to refresh in
+        // the first place (e.g. a login attempt) — a 401 here is just this request's
+        // own business-logic failure (invalid credentials). Skip refresh AND
+        // forceLogoutRedirect entirely; fall through and throw so the caller shows
+        // its own error message.
 
         let message = `API error ${response.status}`;
         try {
