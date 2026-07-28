@@ -932,6 +932,8 @@ const translations: Record<string, Record<Language, string>> = {
   'support.typing': { en: 'Typing', fr: 'En train d\'écrire' },
   'chat.sendCounter': { en: 'Send Counter-Offer', fr: 'Envoyer une contre-proposition' },
   'chat.select': { en: 'Select a conversation', fr: 'Sélectionnez une conversation' },
+  'chat.notFound': { en: 'This conversation could not be found.', fr: 'Cette conversation est introuvable.' },
+  'profile.notFound': { en: 'User not found', fr: 'Utilisateur introuvable' },
   'chat.loadingMessages': { en: 'Loading messages…', fr: 'Chargement des messages…' },
   'chat.loadingChats': { en: 'Loading conversations…', fr: 'Chargement des conversations…' },
 

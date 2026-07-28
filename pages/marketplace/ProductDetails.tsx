@@ -1,10 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { ArrowLeft, ShoppingCart, MessageCircle, MapPin, ShieldCheck, Package, Plus, Minus, User, Lock, Truck, AlertCircle, Calendar, Clock, Star, Image as ImageIcon, PlayCircle, X, Heart, Layers, Share2 } from 'lucide-react';
-import { MarketType, OfferType, OrderStatus, UserRole, Review } from '../../types';
+import { MarketType, OfferType, OrderStatus, UserRole, Review, Offer } from '../../types';
 import { SEO } from '../../components/SEO';
 import { buildProductBreadcrumbSchema } from '../../services/seo/schemaBuilders';
 import { ProductDetailsSkeleton } from '../../components/skeletons/ProductDetailsSkeleton';
@@ -12,7 +12,7 @@ import { ServiceSlotsSkeleton } from '../../components/Loaders';
 import { Spinner } from '../../components/Spinner';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { OfferImage } from '../../components/OfferImage';
-import { offerImageHero, offerImageInBox, offerImageThumb } from '../../utils/offerImageDisplay';
+import { offerImageHero, offerImageInBox, offerImageThumb, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
 import { getOfferImageUrls } from '../../utils/offerImages';
 import { displayNameTruncateClass, resolveProducerDisplayName, resolveProfileImageUrl } from '../../utils/displayName';
 import { getAverageRatingFromReviews, getReviewsForOffer } from '../../utils/offerReviews';
@@ -63,7 +63,47 @@ export const ProductDetails: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
-  const offer = offerId ? getOfferById(offerId) : undefined;
+  // The store only ever holds the newest 100 marketplace offers (plus the ATI
+  // list), so a direct or shared link to an older offer resolved to nothing and
+  // rendered a confident "Product not found" for a product that exists. Fetch
+  // this one offer by id alongside the list refresh: it's a small request, it
+  // lets the page paint without waiting for the whole catalog, and it keeps the
+  // page working even if that list request fails outright.
+  const [fetchedOffer, setFetchedOffer] = useState<Offer | undefined>(undefined);
+  const [offerLookupSettled, setOfferLookupSettled] = useState(false);
+  const fetchedOfferIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!offerId) return;
+    if (fetchedOfferIdRef.current === offerId) return;
+    fetchedOfferIdRef.current = offerId;
+    setFetchedOffer(undefined);
+    setOfferLookupSettled(false);
+    apiFetch<any>(API_ENDPOINTS.offers.detail(offerId), { silent401: true } as any)
+      .then((row) => {
+        if (fetchedOfferIdRef.current !== offerId) return; // navigated to another offer
+        if (!row?.id) return;
+        setFetchedOffer({
+          ...row,
+          imageUrl: resolveOfferImageSrc(row.imageUrl),
+          imageUrls: Array.isArray(row.imageUrls)
+            ? row.imageUrls.map((u: string) => resolveOfferImageSrc(u))
+            : [],
+        } as Offer);
+      })
+      .catch(() => {
+        /* Genuinely missing or a network failure — the not-found branch below
+           only renders once BOTH this lookup and the list refresh have settled. */
+      })
+      .finally(() => {
+        if (fetchedOfferIdRef.current === offerId) setOfferLookupSettled(true);
+      });
+  }, [offerId]);
+
+  const storeOffer = offerId ? getOfferById(offerId) : undefined;
+  // Prefer the store copy (kept fresh by refreshOffers), fall back to the one we
+  // fetched directly.
+  const offer = storeOffer ?? (fetchedOffer?.id === offerId ? fetchedOffer : undefined);
   const producer = offer ? producers.find(p => p.id === offer.producerId) : undefined;
 
   // Initialize quantity to minQuantity if available, else 1
@@ -285,7 +325,9 @@ export const ProductDetails: React.FC = () => {
     }
   }, [offer, producer]);
 
-  if (pageLoading && !offer) {
+  // Only claim "not found" once BOTH the catalog refresh and the by-id lookup
+  // have settled — otherwise a slow network reads as a missing product.
+  if (!offer && (pageLoading || !offerLookupSettled)) {
     return <ProductDetailsSkeleton />;
   }
 
