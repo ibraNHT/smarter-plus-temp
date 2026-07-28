@@ -2016,6 +2016,17 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const data = await apiFetch<AuthSessionPayload>(API_ENDPOINTS.auth.login, {
         method: 'POST',
         body: JSON.stringify({ identifier, password }),
+        // A 401 here means invalid credentials, not a dead session — there is no
+        // session to refresh yet. Without these, apiFetch treated a failed login
+        // attempt like an expired session: it tried a pointless token refresh
+        // (which itself calls forceLogoutRedirect() whenever /auth/refresh
+        // 401/403s — the common case with no/stale refresh token, bypassing
+        // silent401 entirely), clearing storage and firing the global
+        // session-expired event before this call's own catch block (below) could
+        // show the error — which looked like the page silently reloading with
+        // the form wiped instead of showing "Invalid credentials".
+        silent401: true,
+        skipAuthRefresh: true,
       });
       await establishSession(data);
       return { success: true, message: 'Logged in successfully.' };

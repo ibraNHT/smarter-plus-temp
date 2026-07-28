@@ -226,16 +226,16 @@ export const CreateOffer: React.FC = () => {
   // Autosave the in-progress NEW offer so an unwanted mobile reload/remount
   // (backgrounded photo picker, resumed-session forced logout) doesn't wipe it.
   // Skip empty/pristine state so we don't persist a blank draft on first mount.
+  // Writes SYNCHRONOUSLY on every change (no debounce) — a manual refresh can
+  // happen within milliseconds of the last keystroke, and a debounced write
+  // that hadn't fired yet was silently lost when the page reloaded.
   useEffect(() => {
     if (offerId || existingOffer) return;
     const isPristine =
       !formData.title && !formData.description && !imageUrl &&
       formData.price === 0 && formData.quantity === 0;
     if (isPristine) return;
-    const handle = window.setTimeout(() => {
-      writeNewOfferDraft({ formData, imageUrl, imageUrls });
-    }, 500);
-    return () => window.clearTimeout(handle);
+    writeNewOfferDraft({ formData, imageUrl, imageUrls });
   }, [offerId, existingOffer, formData, imageUrl, imageUrls]);
 
   useEffect(() => {
