@@ -13,6 +13,7 @@ import {
   isSocialBot,
 } from './buildOfferOgHtml.mjs';
 
+//random psuh 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST_DIR = process.env.STATIC_ROOT
   ? path.resolve(process.env.STATIC_ROOT)
