@@ -1151,7 +1151,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
    * the mutation. This helper prevents that.
    */
   const bustCache = (queryKey: readonly unknown[]) => {
-    void queryClient.invalidateQueries({ queryKey: queryKey as any, exact: false });
+    return queryClient.invalidateQueries({ queryKey: queryKey as any, exact: false });
   };
 
   // ─── PER-FEATURE REFRESHERS (React Query backed) ───────────────────────────
@@ -1266,33 +1266,51 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         ? row.imageUrls.map((u: string) => resolveOfferImageSrc(u))
         : row.imageUrls,
     });
-    const marketplaceList = (marketplace
-      ? Array.isArray(marketplace)
-        ? marketplace
-        : ((marketplace as any).data ?? [])
-      : []
-    ).map(withDisplayImage);
-    const retailRaw = retail ?? [];
-    const retailList = (Array.isArray(retailRaw) ? retailRaw : []).map((row: any) =>
-      withDisplayImage({
-        ...row,
-        marketType: row.marketType ?? MarketType.ATI,
-        quantity: Number(row.quantity ?? 0),
-        price: Number(row.price ?? 0),
-        isNegotiable: row.isNegotiable ?? false,
-        isDeliveryAvailable: row.isDeliveryAvailable ?? true,
-        minQuantity: Number(row.minQuantity ?? 1),
-        createdAt: row.createdAt ?? new Date().toISOString(),
-      }),
-    );
-    const byId = new Map<string, Offer>();
-    for (const o of marketplaceList) {
-      if (o?.id) byId.set(o.id, o);
-    }
-    for (const o of retailList) {
-      if (o?.id) byId.set(o.id, o);
-    }
-    setOffers(Array.from(byId.values()));
+    // `cached()` swallows fetch errors and returns null (network blip, retry
+    // exhaustion — real conditions on a real network, essentially never seen on
+    // localhost's instant loopback). A null here must NOT be treated as "this
+    // side of the catalog is empty": doing so wiped out every already-known
+    // marketplace or retail offer on the next unconditional setOffers below —
+    // including one just saved a moment ago by createOffer/updateOffer — because
+    // this is called unconditionally on every dashboard/page mount.
+    const marketplaceFetchOk = marketplace !== null;
+    const retailFetchOk = retail !== null;
+    const marketplaceList = marketplaceFetchOk
+      ? (Array.isArray(marketplace) ? marketplace : ((marketplace as any).data ?? [])).map(withDisplayImage)
+      : [];
+    const retailList = retailFetchOk
+      ? (Array.isArray(retail) ? retail : []).map((row: any) =>
+          withDisplayImage({
+            ...row,
+            marketType: row.marketType ?? MarketType.ATI,
+            quantity: Number(row.quantity ?? 0),
+            price: Number(row.price ?? 0),
+            isNegotiable: row.isNegotiable ?? false,
+            isDeliveryAvailable: row.isDeliveryAvailable ?? true,
+            minQuantity: Number(row.minQuantity ?? 1),
+            createdAt: row.createdAt ?? new Date().toISOString(),
+          }),
+        )
+      : [];
+    setOffers((prev) => {
+      const byId = new Map<string, Offer>();
+      // Seed with whatever we already had for any side that failed to fetch,
+      // so a transient failure preserves the last-known-good data instead of
+      // dropping it.
+      if (!marketplaceFetchOk) {
+        for (const o of prev) if (o.marketType !== MarketType.ATI) byId.set(o.id, o);
+      }
+      if (!retailFetchOk) {
+        for (const o of prev) if (o.marketType === MarketType.ATI) byId.set(o.id, o);
+      }
+      for (const o of marketplaceList) {
+        if (o?.id) byId.set(o.id, o);
+      }
+      for (const o of retailList) {
+        if (o?.id) byId.set(o.id, o);
+      }
+      return Array.from(byId.values());
+    });
   };
 
   const syncProducerDashboardSession = (rows: ProducerProfile[]): boolean => {
@@ -2664,7 +2682,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(payload),
       });
       setOffers(prev => [...prev, newOffer]);
-      bustCache(QK.offers());
+      await bustCache(QK.offers());
       addNotification(user.id, 'Offer created successfully.', 'SUCCESS');
       return { success: true };
     } catch (err: unknown) {
@@ -2703,7 +2721,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(payload),
       });
       setOffers(prev => prev.map(o => o.id === saved.id ? saved : o));
-      bustCache(QK.offers());
+      await bustCache(QK.offers());
       if (user) addNotification(user.id, 'Offer updated successfully.', 'SUCCESS');
       return { success: true };
     } catch (error: unknown) {
@@ -2734,7 +2752,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         method: 'DELETE',
       });
       setOffers(prev => prev.filter(o => o.id !== offerId));
-      bustCache(QK.offers());
+      await bustCache(QK.offers());
       if (user) addNotification(user.id, 'Offer deleted successfully.', 'SUCCESS');
       return { success: true };
     } catch (error: unknown) {
