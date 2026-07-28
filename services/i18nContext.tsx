@@ -266,6 +266,7 @@ const translations: Record<string, Record<Language, string>> = {
   'form.publish': { en: 'Publish', fr: 'Publier' },
   'form.unpublish': { en: 'Unpublish', fr: 'Dépublier' },
   'form.editOffer': { en: 'Edit Offer', fr: 'Modifier l\'Offre' },
+  'form.offerNotFound': { en: 'This offer could not be loaded. It may have been removed.', fr: 'Cette offre n\'a pas pu être chargée. Elle a peut-être été supprimée.' },
   'form.update': { en: 'Update', fr: 'Mettre à jour' },
   'form.location': { en: 'Product Location', fr: 'Lieu du Produit' },
   'form.deliveryAvailable': { en: 'Delivery Available', fr: 'Livraison Possible' },
@@ -931,6 +932,8 @@ const translations: Record<string, Record<Language, string>> = {
   'support.typing': { en: 'Typing', fr: 'En train d\'écrire' },
   'chat.sendCounter': { en: 'Send Counter-Offer', fr: 'Envoyer une contre-proposition' },
   'chat.select': { en: 'Select a conversation', fr: 'Sélectionnez une conversation' },
+  'chat.notFound': { en: 'This conversation could not be found.', fr: 'Cette conversation est introuvable.' },
+  'profile.notFound': { en: 'User not found', fr: 'Utilisateur introuvable' },
   'chat.loadingMessages': { en: 'Loading messages…', fr: 'Chargement des messages…' },
   'chat.loadingChats': { en: 'Loading conversations…', fr: 'Chargement des conversations…' },
 

@@ -1035,6 +1035,21 @@ export const ChatPage: React.FC = () => {
                      </p>
                   </div>
                </>
+            ) : chatId && chatListLoading ? (
+               /* Deep-linked straight into a thread: the conversation list is still
+                  loading, so we can't know yet whether this chat exists. Showing the
+                  generic "select a conversation" empty state here was a dead end —
+                  on mobile the list is hidden, so there was nothing to select. */
+               <div className="flex-1 flex items-center justify-center">
+                  <Spinner />
+               </div>
+            ) : chatId ? (
+               /* List has loaded and this id genuinely isn't in it. */
+               <div className="flex-1 flex flex-col items-center justify-center text-gray-400 px-6 text-center">
+                  <AlertCircle className="h-16 w-16 mb-4 opacity-20" />
+                  <p>{t('chat.notFound')}</p>
+                  <button onClick={() => navigate('/messages')} className="mt-4 text-primary-600">{t('profile.tabs.back')}</button>
+               </div>
             ) : (
                <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
                   <MessageCircle className="h-16 w-16 mb-4 opacity-20" />

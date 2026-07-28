@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useStore } from "../../services/storeContext";
 import { useTranslation } from "../../services/i18nContext";
@@ -60,6 +60,7 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
     refreshProducers,
     refreshClients,
     refreshOffers,
+    loadPublicProfileById,
   } = useStore();
   const { t, language } = useTranslation();
   const { formatXaf } = useCurrency();
@@ -93,6 +94,31 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
       setProfileData(client);
     }
   }, [id, role, producers, clients]);
+
+  // The store catalogs are not guaranteed to hold this profile: the clients
+  // catalog only ever contains the viewer's own buyer profile (and nothing for
+  // anonymous visitors), so a shared /profile/client/:id link showed "User not
+  // found" for practically everyone. Resolve it directly when it's missing.
+  const [profileLookupSettled, setProfileLookupSettled] = useState(false);
+  const profileLookupKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!id) return;
+    const key = `${role}:${id}`;
+    if (profileLookupKeyRef.current === key) return;
+    profileLookupKeyRef.current = key;
+    setProfileLookupSettled(false);
+    const alreadyInStore =
+      role === "PRODUCER"
+        ? producers.some((p) => p.id === id)
+        : clients.some((c) => c.id === id);
+    if (alreadyInStore) {
+      setProfileLookupSettled(true);
+      return;
+    }
+    void loadPublicProfileById(role, id).finally(() => {
+      if (profileLookupKeyRef.current === key) setProfileLookupSettled(true);
+    });
+  }, [id, role]);
 
   useEffect(() => {
     const uid = profileData?.userId;
@@ -204,12 +230,14 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
     return () => clearInterval(timer);
   }, [role, producerPortfolios]);
 
-  if (pageLoading && !profileData) {
+  // Only claim "not found" once the catalog refresh AND the direct by-id lookup
+  // have both settled — otherwise a slow network reads as a missing user.
+  if (!profileData && (pageLoading || !profileLookupSettled)) {
     return <PublicProfileSkeleton />;
   }
 
   if (!profileData) {
-    return <div className="p-8 text-center">User not found</div>;
+    return <div className="p-8 text-center">{t('profile.notFound')}</div>;
   }
 
   const isVerified =

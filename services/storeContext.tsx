@@ -364,6 +364,8 @@ interface StoreContextType {
   deleteOffer: (offerId: string) => Promise<{ success: boolean; error?: string }>;
   getProducerOffers: (producerId: string) => Offer[];
   getOfferById: (offerId: string) => Offer | undefined;
+  /** Load one public profile by id into the store (for deep-linked profile pages). */
+  loadPublicProfileById: (role: 'PRODUCER' | 'CLIENT', id: string) => Promise<boolean>;
   getAvailableSlots: (producerId: string, date: Date, durationHours: number) => Date[];
   addToCart: (offer: Offer, quantity: number, bookingDate?: string) => { success: boolean; error?: 'PRODUCER_CONFLICT' | 'OWN_OFFER' | 'DUPLICATE_SERVICE_SLOT' };
   removeFromCart: (offerId: string) => void;
@@ -1414,6 +1416,43 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     });
   };
 
+  /**
+   * Resolve ONE public profile by id from the public list endpoints and add it to
+   * the store. The catalogs the public profile page reads are not guaranteed to
+   * contain the requested profile: `refreshClients` below loads only the viewer's
+   * own buyer profile, and nothing at all for anonymous visitors — so a shared
+   * `/profile/client/:id` link rendered "User not found" for essentially everyone.
+   *
+   * Deliberately does NOT reuse upsertClientInStore/upsertProducerInStore: those
+   * match on session identity, so upserting a third party's profile could
+   * overwrite the viewer's own row. This only ever APPENDS a profile that isn't
+   * present. Returns true when the profile was found.
+   */
+  const loadPublicProfileById = async (
+    role: 'PRODUCER' | 'CLIENT',
+    id: string,
+  ): Promise<boolean> => {
+    if (!id) return false;
+    const endpoint =
+      role === 'PRODUCER' ? API_ENDPOINTS.producers.list : API_ENDPOINTS.clients.list;
+    try {
+      const data = await apiFetch<any>(endpoint, { silent401: true } as any);
+      const rows = Array.isArray(data) ? data : ((data as any)?.data ?? []);
+      const match = rows.find((r: any) => r?.id === id);
+      if (!match) return false;
+      if (role === 'PRODUCER') {
+        const mapped = mapProducerRow(match);
+        setProducers((prev) => (prev.some((p) => p.id === mapped.id) ? prev : [...prev, mapped]));
+      } else {
+        const mapped = mapClientRow(match);
+        setClients((prev) => (prev.some((c) => c.id === mapped.id) ? prev : [...prev, mapped as any]));
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const refreshClients = async (opts?: { force?: boolean }) => {
     if (!getToken()) return;
     const session = userRef.current;
@@ -2016,6 +2055,17 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const data = await apiFetch<AuthSessionPayload>(API_ENDPOINTS.auth.login, {
         method: 'POST',
         body: JSON.stringify({ identifier, password }),
+        // A 401 here means invalid credentials, not a dead session — there is no
+        // session to refresh yet. Without these, apiFetch treated a failed login
+        // attempt like an expired session: it tried a pointless token refresh
+        // (which itself calls forceLogoutRedirect() whenever /auth/refresh
+        // 401/403s — the common case with no/stale refresh token, bypassing
+        // silent401 entirely), clearing storage and firing the global
+        // session-expired event before this call's own catch block (below) could
+        // show the error — which looked like the page silently reloading with
+        // the form wiped instead of showing "Invalid credentials".
+        silent401: true,
+        skipAuthRefresh: true,
       });
       await establishSession(data);
       return { success: true, message: 'Logged in successfully.' };
@@ -4267,7 +4317,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     fetchMessages,
     startNegotiation,
     sendMessage, retryMessage, emitTyping, respondToProposal,
-    login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, deleteOffer, getProducerOffers, getOfferById,
+    login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, deleteOffer, getProducerOffers, getOfferById, loadPublicProfileById,
     addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, markOrderDelivered, confirmReceipt, completeOrder, requestOrderCancellation, updateAppointment, reportProblem, addDisputeEvidence, revealContactInfo,
     getWallet, fundWallet, initiateTopUp, checkTopUpStatus, requestWithdrawal, markNotificationsAsRead, markNotificationAsRead, deleteNotification, clearNotifications, getAvailableSlots, submitReview, getAverageRating,
     getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,
