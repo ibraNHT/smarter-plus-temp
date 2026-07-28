@@ -14,8 +14,8 @@ import {
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { CategoryAvatarScroller } from '../../components/CategoryAvatarScroller';
 import { MARKETPLACE_CATEGORIES } from '../../data/categories';
-import { OfferImage } from '../../components/OfferImage';
-import { offerImageInBox, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
+import { offerImageInBox, resolveOfferImageSrc, onOfferImageError } from '../../utils/offerImageDisplay';
+import { getApiBaseUrl } from '../../client-api/config';
 import { isProducerDashboardUser } from '../../services/producerSession';
 import { findProducerForUser } from '../../utils/producerAccountStatus';
 import { getAverageRatingFromReviews, getReviewsForOffer } from '../../utils/offerReviews';
@@ -75,8 +75,7 @@ export const AtiStore: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    setStoreCategoriesStatus('loading');
-    fetch(`${import.meta.env.VITE_API_URL || '/api'}/retail/categories`)
+    fetch(`${getApiBaseUrl()}/api/retail/categories`)
       .then((r) => (r.ok ? r.json() : { categories: [] }))
       .then((data) => {
         if (cancelled || !Array.isArray(data.categories)) {
@@ -345,13 +344,8 @@ export const AtiStore: React.FC = () => {
                                 </div>
                                 <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-100 rounded-xl shadow-md flex flex-col overflow-hidden hover:shadow-xl transition-all h-full agm-card-lift">
                                   <div className="bg-gray-100 h-40 relative">
-                                    <OfferImage
-                                      src={offer.imageUrl}
-                                      alt={offer.title}
-                                      size="card"
-                                      className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`}
-                                    />
-                                    <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded z-[3]">{t('market.atiChoice')}</div>
+                                    <img src={resolveOfferImageSrc(offer.imageUrl)} alt={offer.title} className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`} onError={onOfferImageError} />
+                                    <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">{t('market.atiChoice')}</div>
                                   </div>
                                   <div className="flex-1 p-3 space-y-2 flex flex-col">
                                     <h3 className="text-sm font-medium text-gray-900 line-clamp-2 h-10">{offer.title}</h3>
@@ -415,6 +409,7 @@ export const AtiStore: React.FC = () => {
                                       alt={offer.title}
                                       size="card"
                                       className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`}
+                                      onError={onOfferImageError}
                                     />
                                     <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded z-[3]">{t('market.atiChoice')}</div>
                                   </div>

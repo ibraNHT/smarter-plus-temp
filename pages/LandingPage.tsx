@@ -6,7 +6,7 @@ import { useStore } from '../services/storeContext';
 import { SEO } from '../components/SEO';
 import { SEO_PAGE_META } from '../services/seo/seoConfig';
 import { buildOrganizationSchema, buildWebSiteSchema } from '../services/seo/schemaBuilders';
-import { OfferImage } from '../components/OfferImage';
+import { offerImageInBox, onOfferImageError } from '../utils/offerImageDisplay';
 import { MarketType } from '../types';
 import { getCategoryAvatar, CATEGORY_SCROLLER_ITEMS } from '../data/categoryVisuals';
 import { useCurrency } from '../contexts/CurrencyContext';
@@ -169,8 +169,8 @@ export const LandingPage: React.FC = () => {
                   className="agm-card-lift flex-none snap-start w-56 sm:w-60 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow"
                 >
                   <div className="h-36 bg-gray-100 relative">
-                    <OfferImage src={offer.imageUrl} alt="" size="card" />
-                    <span className={`absolute top-2 left-2 z-[3] text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded ${
+                    <img src={offer.imageUrl} alt="" className={offerImageInBox} onError={onOfferImageError} />
+                    <span className={`absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded ${
                       offer.marketType === MarketType.ATI ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'
                     }`}>
                       {offer.marketType === MarketType.ATI ? t('landing.card.retail') : t('landing.card.wholesale')}
