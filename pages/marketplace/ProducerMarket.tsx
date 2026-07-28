@@ -14,7 +14,7 @@ import {
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { CategoryAvatarScroller } from '../../components/CategoryAvatarScroller';
 import { ClampText } from '../../components/ClampText';
-import { OfferImage } from '../../components/OfferImage';
+import { offerImageInBox, onOfferImageError } from '../../utils/offerImageDisplay';
 import { displayNameTruncateClass, resolveProducerDisplayName } from '../../utils/displayName';
 import { isProducerDashboardUser } from '../../services/producerSession';
 import { findProducerForUser } from '../../utils/producerAccountStatus';
@@ -330,7 +330,7 @@ export const ProducerMarket: React.FC = () => {
 
         <Link to={`/offer/${offer.id}`} className="flex h-full flex-col min-h-0">
           <div className="relative bg-gray-100 h-40 sm:h-44 md:h-44">
-            <OfferImage src={offer.imageUrl} alt={offer.title} size="card" />
+            <img src={offer.imageUrl} alt={offer.title} className={offerImageInBox} onError={onOfferImageError} />
 
             {/* Single image accent: Nearby > Service */}
             {isLocal ? (
