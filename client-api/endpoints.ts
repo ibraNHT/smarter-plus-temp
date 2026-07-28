@@ -57,6 +57,10 @@ export const API_ENDPOINTS = {
     list: "/api/offers",
     /** Official ATI retail catalog (all ATI marketType offers). */
     retailList: "/api/retail/offers",
+    /** Single offer by id (public). Needed when the cached catalog list — which
+     *  only holds the first page — doesn't contain it, e.g. after a hard reload
+     *  straight onto the edit page. */
+    detail: (id: string) => `/api/offers/${id}`,
     create: "/api/offers",
     update: (id: string) => `/api/offers/${id}`,
     remove: (id: string) => `/api/offers/${id}`,

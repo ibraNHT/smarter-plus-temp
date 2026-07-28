@@ -53,6 +53,7 @@ function pickDefaultHomeLocationIndex(
   return best;
 }
 import { loadGooglePlacesApi, parseGooglePlace, citiesLooselyMatch } from '../../services/googlePlaces';
+import { OfferImage } from '../../components/OfferImage';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { cartHasService } from '../../utils/orderLabels';
 import { showAppToast } from '../../services/appToast';
@@ -476,13 +477,9 @@ export const ShoppingCart: React.FC = () => {
                     className={`p-4 sm:p-6 flex gap-3 sm:gap-4 ${item.type === OfferType.SERVICE ? 'bg-purple-50/40 border-l-4 border-l-purple-300' : ''}`}
                   >
                     <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 border border-gray-200 bg-gray-100 rounded-md overflow-hidden relative">
-                      <img
-                        src={item.imageUrl}
-                        alt={item.title}
-                        className={offerImageInBox}
-                      />
+                      <OfferImage src={item.imageUrl} alt={item.title} size="thumb" className={offerImageInBox} />
                       {item.type === OfferType.SERVICE && (
-                        <div className="absolute bottom-0 left-0 right-0 bg-purple-600 text-white text-[10px] text-center py-1 font-bold">
+                        <div className="absolute bottom-0 left-0 right-0 bg-purple-600 text-white text-[10px] text-center py-1 font-bold z-[3]">
                           {t('service.badge').toUpperCase()}
                         </div>
                       )}

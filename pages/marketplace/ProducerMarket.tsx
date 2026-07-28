@@ -14,7 +14,7 @@ import {
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { CategoryAvatarScroller } from '../../components/CategoryAvatarScroller';
 import { ClampText } from '../../components/ClampText';
-import { offerImageInBox, onOfferImageError } from '../../utils/offerImageDisplay';
+import { OfferImage } from '../../components/OfferImage';
 import { displayNameTruncateClass, resolveProducerDisplayName } from '../../utils/displayName';
 import { isProducerDashboardUser } from '../../services/producerSession';
 import { findProducerForUser } from '../../utils/producerAccountStatus';
@@ -330,15 +330,15 @@ export const ProducerMarket: React.FC = () => {
 
         <Link to={`/offer/${offer.id}`} className="flex h-full flex-col min-h-0">
           <div className="relative bg-gray-100 h-40 sm:h-44 md:h-44">
-            <img src={offer.imageUrl} alt={offer.title} className={offerImageInBox} onError={onOfferImageError} />
+            <OfferImage src={offer.imageUrl} alt={offer.title} size="card" />
 
             {/* Single image accent: Nearby > Service */}
             {isLocal ? (
-              <div className="absolute top-2 left-2 bg-green-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide shadow-sm flex items-center">
+              <div className="absolute top-2 left-2 z-[3] bg-green-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide shadow-sm flex items-center">
                 <MapPin className="h-3 w-3 mr-1" /> {t('market.nearby')}
               </div>
             ) : offer.type === 'SERVICE' ? (
-              <span className="absolute top-2 left-2 bg-purple-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide shadow-sm">
+              <span className="absolute top-2 left-2 z-[3] bg-purple-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide shadow-sm">
                 {t('market.service')}
               </span>
             ) : null}

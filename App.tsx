@@ -1,39 +1,19 @@
-
-import React, { useEffect } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { ToastContainer } from './components/ToastContainer';
 import { AppToastContainer } from './components/AppToastContainer';
 import { SupportChatWidget } from './components/SupportChatWidget';
-import { CompareWidget } from './components/CompareWidget'; // New
+import { CompareWidget } from './components/CompareWidget';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { Register } from './pages/Register';
-import { VerifyEmail } from './pages/auth/VerifyEmail';
-import { RegisterProducer } from './pages/producer/RegisterProducer';
-import { RegisterClient } from './pages/client/RegisterClient';
-import { ClientProfile } from './pages/client/ClientProfile';
-import { ProducerProfile } from './pages/producer/ProducerProfile';
-import { ProducerDashboard } from './pages/producer/ProducerDashboard';
-import { ProducerAvailability } from './pages/producer/ProducerAvailability';
-import { CreateOffer } from './pages/producer/CreateOffer';
 import { ProducerMarket } from './pages/marketplace/ProducerMarket';
 import { AtiStore } from './pages/marketplace/AtiStore';
 import { ProductDetails } from './pages/marketplace/ProductDetails';
 import { ShoppingCart } from './pages/marketplace/ShoppingCart';
-import { ComparePage } from './pages/marketplace/ComparePage'; // New
-import { WalletDashboard } from './pages/wallet/WalletDashboard';
-import { ChatPage } from './pages/messages/ChatPage';
-import { PublicProfile } from './pages/public/PublicProfile';
-// Static Pages
-import { Blog } from './pages/footer/Blog';
-import { FAQ } from './pages/footer/FAQ';
-import { Jobs, Partners } from './pages/footer/Company';
-import { Terms, Privacy } from './pages/footer/Legal';
-import { HelpCenterIndex } from './pages/footer/helpCenter/HelpCenterIndex';
-import { HelpCenterArticle } from './pages/footer/helpCenter/HelpCenterArticle';
-
+import { ComparePage } from './pages/marketplace/ComparePage';
 import { StoreProvider, useStore, useStoreOptional } from './services/storeContext';
 import { I18nProvider } from './services/i18nContext';
 import { PublicRoute } from './components/PublicRoute';
@@ -45,8 +25,65 @@ import { getToken } from './services/apiService';
 import { isWebAppSessionBlocked } from './services/authRoles';
 import { isProducerDashboardUser } from './services/producerSession';
 import { UserRole } from './types';
+import { Spinner } from './components/Spinner';
+
+const VerifyEmail = lazy(() =>
+  import('./pages/auth/VerifyEmail').then((m) => ({ default: m.VerifyEmail })),
+);
+const RegisterProducer = lazy(() =>
+  import('./pages/producer/RegisterProducer').then((m) => ({ default: m.RegisterProducer })),
+);
+const RegisterClient = lazy(() =>
+  import('./pages/client/RegisterClient').then((m) => ({ default: m.RegisterClient })),
+);
+const ClientProfile = lazy(() =>
+  import('./pages/client/ClientProfile').then((m) => ({ default: m.ClientProfile })),
+);
+const ProducerProfile = lazy(() =>
+  import('./pages/producer/ProducerProfile').then((m) => ({ default: m.ProducerProfile })),
+);
+const ProducerDashboard = lazy(() =>
+  import('./pages/producer/ProducerDashboard').then((m) => ({ default: m.ProducerDashboard })),
+);
+const ProducerAvailability = lazy(() =>
+  import('./pages/producer/ProducerAvailability').then((m) => ({ default: m.ProducerAvailability })),
+);
+const CreateOffer = lazy(() =>
+  import('./pages/producer/CreateOffer').then((m) => ({ default: m.CreateOffer })),
+);
+const WalletDashboard = lazy(() =>
+  import('./pages/wallet/WalletDashboard').then((m) => ({ default: m.WalletDashboard })),
+);
+const ChatPage = lazy(() =>
+  import('./pages/messages/ChatPage').then((m) => ({ default: m.ChatPage })),
+);
+const PublicProfile = lazy(() =>
+  import('./pages/public/PublicProfile').then((m) => ({ default: m.PublicProfile })),
+);
+const Blog = lazy(() => import('./pages/footer/Blog').then((m) => ({ default: m.Blog })));
+const FAQ = lazy(() => import('./pages/footer/FAQ').then((m) => ({ default: m.FAQ })));
+const Jobs = lazy(() => import('./pages/footer/Company').then((m) => ({ default: m.Jobs })));
+const Partners = lazy(() =>
+  import('./pages/footer/Company').then((m) => ({ default: m.Partners })),
+);
+const Terms = lazy(() => import('./pages/footer/Legal').then((m) => ({ default: m.Terms })));
+const Privacy = lazy(() => import('./pages/footer/Legal').then((m) => ({ default: m.Privacy })));
+const HelpCenterIndex = lazy(() =>
+  import('./pages/footer/helpCenter/HelpCenterIndex').then((m) => ({ default: m.HelpCenterIndex })),
+);
+const HelpCenterArticle = lazy(() =>
+  import('./pages/footer/helpCenter/HelpCenterArticle').then((m) => ({
+    default: m.HelpCenterArticle,
+  })),
+);
 
 const PRODUCER_ROUTE_ROLES = [UserRole.PRODUCER, UserRole.MANAGER];
+
+const RouteFallback: React.FC = () => (
+  <div className="flex justify-center items-center min-h-[40vh] py-16" role="status" aria-live="polite">
+    <Spinner />
+  </div>
+);
 
 const RoleScopeBoundary: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const store = useStoreOptional();
@@ -89,22 +126,9 @@ const GuardedRoute: React.FC<{ children: React.ReactNode; allowedRoles: UserRole
   return <>{children}</>;
 };
 
-/**
- * Routes that use a full-screen auth layout (no global navbar/footer).
- */
 const AUTH_FULLSCREEN_PREFIXES = ['/login', '/register', '/verify-email'];
-
-/**
- * Pages where the global Footer would push content below the fold (e.g. full-height chat).
- */
 const FOOTER_HIDDEN_PREFIXES = ['/messages', ...AUTH_FULLSCREEN_PREFIXES];
 
-/**
- * Notifications/emails link to `/orders/:id` (e.g. "your proposal was accepted",
- * dispute filed). There is no standalone order page, so route the user to the
- * orders view that matches their role: clients land on their profile orders tab,
- * producers/managers on the dashboard. Falls back to login when signed out.
- */
 const OrderDeepLinkRedirect: React.FC = () => {
   const { user } = useStore();
   const { id } = useParams<{ id: string }>();
@@ -112,15 +136,12 @@ const OrderDeepLinkRedirect: React.FC = () => {
   if (user.role === UserRole.PRODUCER || (user.role === UserRole.MANAGER && user.producerId)) {
     return <Navigate to="/producer/dashboard" replace />;
   }
-  // Carry the order id so the client profile can open that specific order
-  // (and surface its Pay action) instead of dropping the user on a generic list.
   const target = id
     ? `/client/profile?tab=orders&order=${encodeURIComponent(id)}`
     : '/client/profile?tab=orders';
   return <Navigate to={target} replace />;
 };
 
-/** Opens AgriBot when the user lands with ?openSupport=1 (e.g. from admin email/notification). */
 const SupportDeepLinkHandler: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, openSupportChat } = useStore();
@@ -136,11 +157,6 @@ const SupportDeepLinkHandler: React.FC = () => {
   return null;
 };
 
-/**
- * Old referral/share links used HashRouter (`/#/register?ref=CODE`).
- * BrowserRouter ignores the hash path, so friends landed on `/` with no `ref`.
- * Rewrite legacy hash routes to real path routes once on load / hashchange.
- */
 const LegacyHashRouteRedirect: React.FC = () => {
   const navigate = useNavigate();
 
@@ -148,12 +164,11 @@ const LegacyHashRouteRedirect: React.FC = () => {
     const rewrite = () => {
       const raw = window.location.hash || '';
       if (!raw.startsWith('#/')) return;
-      const withoutHash = raw.slice(1); // /register/client?ref=CODE
+      const withoutHash = raw.slice(1);
       const qIndex = withoutHash.indexOf('?');
       const pathPart = qIndex >= 0 ? withoutHash.slice(0, qIndex) : withoutHash;
       const queryPart = qIndex >= 0 ? withoutHash.slice(qIndex) : '';
       if (!pathPart.startsWith('/')) return;
-      // Only rewrite known app paths (avoid fighting unrelated hashes)
       if (
         !pathPart.startsWith('/register') &&
         !pathPart.startsWith('/login') &&
@@ -193,56 +208,50 @@ const AppShell: React.FC = () => {
       <RoleScopeBoundary>
         <main className="flex-grow w-full min-w-0">
           <div key={location.key} className="agm-page-in">
-          <Routes>
-            <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
-            <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+            <Suspense fallback={<RouteFallback />}>
+              <Routes>
+                <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
+                <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
 
-            {/* Registration Routes */}
-            <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
-            <Route path="/verify-email" element={<PublicRoute><VerifyEmail /></PublicRoute>} />
-            <Route path="/register/producer" element={<PublicRoute><RegisterProducer /></PublicRoute>} />
-            <Route path="/register/client" element={<PublicRoute><RegisterClient /></PublicRoute>} />
+                <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+                <Route path="/verify-email" element={<PublicRoute><VerifyEmail /></PublicRoute>} />
+                <Route path="/register/producer" element={<PublicRoute><RegisterProducer /></PublicRoute>} />
+                <Route path="/register/client" element={<PublicRoute><RegisterClient /></PublicRoute>} />
 
-            {/* Marketplaces */}
-            <Route path="/market/producers" element={<ProducerMarket />} />
-            <Route path="/market/ati" element={<AtiStore />} />
-            <Route path="/offer/:offerId" element={<ProductDetails />} />
-            <Route path="/cart" element={<ShoppingCart />} />
-            <Route path="/compare" element={<ComparePage />} />
+                <Route path="/market/producers" element={<ProducerMarket />} />
+                <Route path="/market/ati" element={<AtiStore />} />
+                <Route path="/offer/:offerId" element={<ProductDetails />} />
+                <Route path="/cart" element={<ShoppingCart />} />
+                <Route path="/compare" element={<ComparePage />} />
 
-            {/* Public Profiles */}
-            <Route path="/profile/producer/:id" element={<PublicProfile role="PRODUCER" />} />
-            <Route path="/profile/client/:id" element={<PublicProfile role="CLIENT" />} />
+                <Route path="/profile/producer/:id" element={<PublicProfile role="PRODUCER" />} />
+                <Route path="/profile/client/:id" element={<PublicProfile role="CLIENT" />} />
 
-            {/* User Feature Routes */}
-            <Route path="/wallet" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER, UserRole.MANAGER]}><WalletDashboard /></GuardedRoute>} />
-            <Route path="/messages" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER, UserRole.MANAGER]}><ChatPage /></GuardedRoute>} />
-            <Route path="/messages/:chatId" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER, UserRole.MANAGER]}><ChatPage /></GuardedRoute>} />
-            <Route path="/client/profile" element={<GuardedRoute allowedRoles={[UserRole.CLIENT]}><ClientProfile /></GuardedRoute>} />
+                <Route path="/wallet" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER, UserRole.MANAGER]}><WalletDashboard /></GuardedRoute>} />
+                <Route path="/messages" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER, UserRole.MANAGER]}><ChatPage /></GuardedRoute>} />
+                <Route path="/messages/:chatId" element={<GuardedRoute allowedRoles={[UserRole.CLIENT, UserRole.PRODUCER, UserRole.MANAGER]}><ChatPage /></GuardedRoute>} />
+                <Route path="/client/profile" element={<GuardedRoute allowedRoles={[UserRole.CLIENT]}><ClientProfile /></GuardedRoute>} />
 
-            {/* Order notification deep links → role-appropriate orders view */}
-            <Route path="/orders/:id" element={<OrderDeepLinkRedirect />} />
+                <Route path="/orders/:id" element={<OrderDeepLinkRedirect />} />
 
-            {/* Producer Routes */}
-            <Route path="/producer/dashboard" element={<GuardedRoute allowedRoles={PRODUCER_ROUTE_ROLES}><ProducerDashboard /></GuardedRoute>} />
-            <Route path="/producer/profile/:tab?" element={<GuardedRoute allowedRoles={PRODUCER_ROUTE_ROLES}><ProducerProfile /></GuardedRoute>} />
-            <Route path="/producer/availability" element={<GuardedRoute allowedRoles={PRODUCER_ROUTE_ROLES}><ProducerAvailability /></GuardedRoute>} />
-            <Route path="/producer/offers/new" element={<GuardedRoute allowedRoles={PRODUCER_ROUTE_ROLES}><CreateOffer /></GuardedRoute>} />
-            <Route path="/producer/offers/edit/:offerId" element={<GuardedRoute allowedRoles={PRODUCER_ROUTE_ROLES}><CreateOffer /></GuardedRoute>} />
+                <Route path="/producer/dashboard" element={<GuardedRoute allowedRoles={PRODUCER_ROUTE_ROLES}><ProducerDashboard /></GuardedRoute>} />
+                <Route path="/producer/profile/:tab?" element={<GuardedRoute allowedRoles={PRODUCER_ROUTE_ROLES}><ProducerProfile /></GuardedRoute>} />
+                <Route path="/producer/availability" element={<GuardedRoute allowedRoles={PRODUCER_ROUTE_ROLES}><ProducerAvailability /></GuardedRoute>} />
+                <Route path="/producer/offers/new" element={<GuardedRoute allowedRoles={PRODUCER_ROUTE_ROLES}><CreateOffer /></GuardedRoute>} />
+                <Route path="/producer/offers/edit/:offerId" element={<GuardedRoute allowedRoles={PRODUCER_ROUTE_ROLES}><CreateOffer /></GuardedRoute>} />
 
-            {/* Footer Routes */}
-            <Route path="/blog" element={<Blog />} />
-            <Route path="/help" element={<HelpCenterIndex />} />
-            <Route path="/help/:topicId" element={<HelpCenterArticle />} />
-            <Route path="/faq" element={<FAQ />} />
-            <Route path="/jobs" element={<Jobs />} />
-            <Route path="/partners" element={<Partners />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/privacy" element={<Privacy />} />
+                <Route path="/blog" element={<Blog />} />
+                <Route path="/help" element={<HelpCenterIndex />} />
+                <Route path="/help/:topicId" element={<HelpCenterArticle />} />
+                <Route path="/faq" element={<FAQ />} />
+                <Route path="/jobs" element={<Jobs />} />
+                <Route path="/partners" element={<Partners />} />
+                <Route path="/terms" element={<Terms />} />
+                <Route path="/privacy" element={<Privacy />} />
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
           </div>
         </main>
       </RoleScopeBoundary>
@@ -268,4 +277,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-// sadsa?

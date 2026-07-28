@@ -266,6 +266,7 @@ const translations: Record<string, Record<Language, string>> = {
   'form.publish': { en: 'Publish', fr: 'Publier' },
   'form.unpublish': { en: 'Unpublish', fr: 'Dépublier' },
   'form.editOffer': { en: 'Edit Offer', fr: 'Modifier l\'Offre' },
+  'form.offerNotFound': { en: 'This offer could not be loaded. It may have been removed.', fr: 'Cette offre n\'a pas pu être chargée. Elle a peut-être été supprimée.' },
   'form.update': { en: 'Update', fr: 'Mettre à jour' },
   'form.location': { en: 'Product Location', fr: 'Lieu du Produit' },
   'form.deliveryAvailable': { en: 'Delivery Available', fr: 'Livraison Possible' },
@@ -592,6 +593,12 @@ const translations: Record<string, Record<Language, string>> = {
   'ui.profile': { en: 'Profile', fr: 'Profil' },
   'ui.emailPlaceholder': { en: 'you@example.com', fr: 'vous@exemple.com' },
   'ui.phonePlaceholder': { en: '612 345 678', fr: '612 345 678' },
+  'ui.firstNamePlaceholder': { en: 'e.g. Jean', fr: 'ex. Jean' },
+  'ui.lastNamePlaceholder': { en: 'e.g. Nkeng', fr: 'ex. Nkeng' },
+  'ui.cityPlaceholder': { en: 'e.g. Douala', fr: 'ex. Douala' },
+  'ui.regionPlaceholder': { en: 'e.g. Littoral', fr: 'ex. Littoral' },
+  'ui.farmNamePlaceholder': { en: 'e.g. Green Valley Farm', fr: 'ex. Ferme Green Valley' },
+  'ui.taxIdPlaceholder': { en: 'e.g. P123456789012A', fr: 'ex. P123456789012A' },
 
   // Client profile specific
   'client.profileTitle': { en: 'Client Profile', fr: 'Profil Client' },
@@ -925,6 +932,8 @@ const translations: Record<string, Record<Language, string>> = {
   'support.typing': { en: 'Typing', fr: 'En train d\'écrire' },
   'chat.sendCounter': { en: 'Send Counter-Offer', fr: 'Envoyer une contre-proposition' },
   'chat.select': { en: 'Select a conversation', fr: 'Sélectionnez une conversation' },
+  'chat.notFound': { en: 'This conversation could not be found.', fr: 'Cette conversation est introuvable.' },
+  'profile.notFound': { en: 'User not found', fr: 'Utilisateur introuvable' },
   'chat.loadingMessages': { en: 'Loading messages…', fr: 'Chargement des messages…' },
   'chat.loadingChats': { en: 'Loading conversations…', fr: 'Chargement des conversations…' },
 
@@ -1048,7 +1057,7 @@ const translations: Record<string, Record<Language, string>> = {
   // Profile (upgrade modal)
   'profile.producerType': { en: 'Producer Type', fr: 'Type de producteur' },
   'profile.farmBusinessName': { en: 'Farm/Business Name', fr: 'Nom de la ferme/entreprise' },
-  'profile.niuTaxId': { en: 'NIU / Tax ID', fr: 'NIU / N° fiscal' },
+  'profile.niuTaxId': { en: 'NIU / Tax ID or Business ID', fr: 'NIU / Numéro d\'identification fiscale ou numéro d\'entreprise' },
   'profile.categoriesClick': { en: 'Categories (Click to select)', fr: 'Catégories (Cliquez pour sélectionner)' },
   'profile.upgradeAccount': { en: 'Upgrade Account', fr: 'Mettre à niveau le compte' },
 

@@ -9,9 +9,24 @@ export const offerImageInBox = 'h-full w-full object-contain object-center';
 export const offerImageHero =
   'max-h-full max-w-full object-contain object-center';
 
-/** Shown when imageUrl is missing or failed to load. */
+export type OfferImageSize = 'thumb' | 'card' | 'detail';
+
+const CLOUDINARY_TRANSFORMS: Record<OfferImageSize, string> = {
+  // Avoid c_fill on first paint — crop transforms are slower to derive on cold CDN.
+  thumb: 'w_160,h_160,c_fill,f_auto,q_auto',
+  card: 'w_400,f_auto,q_auto',
+  detail: 'w_800,f_auto,q_auto',
+};
+
+/** Local SVG — no third-party placeholder hop on broken images. */
 export const OFFER_IMAGE_PLACEHOLDER =
-  'https://placehold.co/400x300/e5e7eb/6b7280?text=No+image';
+  'data:image/svg+xml,' +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+      <rect fill="#e5e7eb" width="400" height="300"/>
+      <text x="200" y="158" text-anchor="middle" fill="#6b7280" font-family="system-ui,sans-serif" font-size="18">No image</text>
+    </svg>`,
+  );
 
 /** Swap broken/missing remote images to the placeholder so cards are not blank white. */
 export function onOfferImageError(event: { currentTarget: HTMLImageElement }) {
@@ -51,6 +66,7 @@ export function resolveOfferImageSrc(url?: string | null): string {
   if (!trimmed || trimmed === 'null' || trimmed === 'undefined') {
     return OFFER_IMAGE_PLACEHOLDER;
   }
+  if (trimmed.startsWith('data:')) return trimmed;
   if (trimmed.startsWith('/uploads/')) return trimmed;
   try {
     const parsed = new URL(trimmed);
@@ -66,4 +82,34 @@ export function resolveOfferImageSrc(url?: string | null): string {
     /* relative or invalid URL — use as-is */
   }
   return trimmed;
+}
+
+/**
+ * Insert Cloudinary delivery transforms after `/upload/` (same pattern as compliance thumbs).
+ * Non-Cloudinary URLs are returned unchanged.
+ */
+export function offerImageThumb(
+  url?: string | null,
+  size: OfferImageSize = 'card',
+): string {
+  const resolved = resolveOfferImageSrc(url);
+  if (!resolved || resolved === OFFER_IMAGE_PLACEHOLDER || resolved.startsWith('data:')) {
+    return resolved;
+  }
+  if (!resolved.includes('res.cloudinary.com') || !resolved.includes('/upload/')) {
+    return resolved;
+  }
+
+  const marker = '/upload/';
+  const idx = resolved.indexOf(marker);
+  if (idx === -1) return resolved;
+
+  const transform = CLOUDINARY_TRANSFORMS[size];
+  let after = resolved.slice(idx + marker.length);
+  // Drop an existing transform segment so we don't stack transforms.
+  // Transforms look like "w_400,c_fill,f_auto/" before the version/path.
+  if (/^[a-z]+_/i.test(after) && after.includes(',')) {
+    after = after.replace(/^[^/]+\//, '');
+  }
+  return `${resolved.slice(0, idx + marker.length)}${transform}/${after}`;
 }

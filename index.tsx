@@ -4,6 +4,7 @@ import App from './App';
 import { HelmetProvider } from 'react-helmet-async';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './client-api/queryClient';
+import './index.css';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

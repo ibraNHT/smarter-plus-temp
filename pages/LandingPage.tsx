@@ -6,7 +6,7 @@ import { useStore } from '../services/storeContext';
 import { SEO } from '../components/SEO';
 import { SEO_PAGE_META } from '../services/seo/seoConfig';
 import { buildOrganizationSchema, buildWebSiteSchema } from '../services/seo/schemaBuilders';
-import { offerImageInBox, onOfferImageError } from '../utils/offerImageDisplay';
+import { OfferImage } from '../components/OfferImage';
 import { MarketType } from '../types';
 import { getCategoryAvatar, CATEGORY_SCROLLER_ITEMS } from '../data/categoryVisuals';
 import { useCurrency } from '../contexts/CurrencyContext';
@@ -66,11 +66,22 @@ export const LandingPage: React.FC = () => {
       {/* Brand-first full-bleed hero */}
       <div className="relative min-h-[78vh] sm:min-h-[85vh] flex items-end sm:items-center bg-primary-950 overflow-hidden">
         <div className="absolute inset-0">
-          <img
-            className="agm-hero-kenburns w-full h-full object-cover"
-            src="/landing-hero.jpg"
-            alt=""
-          />
+          <picture>
+            <source
+              type="image/webp"
+              srcSet="/landing-hero-960.webp 960w, /landing-hero.webp 1920w"
+              sizes="100vw"
+            />
+            <img
+              className="agm-hero-kenburns w-full h-full object-cover"
+              src="/landing-hero.jpg"
+              alt=""
+              width={1920}
+              height={1280}
+              decoding="async"
+              fetchPriority="high"
+            />
+          </picture>
           <div className="absolute inset-0 bg-gradient-to-t from-primary-950 via-primary-950/75 to-primary-900/40" />
         </div>
 
@@ -158,8 +169,8 @@ export const LandingPage: React.FC = () => {
                   className="agm-card-lift flex-none snap-start w-56 sm:w-60 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow"
                 >
                   <div className="h-36 bg-gray-100 relative">
-                    <img src={offer.imageUrl} alt="" className={offerImageInBox} onError={onOfferImageError} />
-                    <span className={`absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded ${
+                    <OfferImage src={offer.imageUrl} alt="" size="card" />
+                    <span className={`absolute top-2 left-2 z-[3] text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded ${
                       offer.marketType === MarketType.ATI ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'
                     }`}>
                       {offer.marketType === MarketType.ATI ? t('landing.card.retail') : t('landing.card.wholesale')}
