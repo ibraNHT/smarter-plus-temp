@@ -36,14 +36,6 @@ export function onOfferImageError(event: { currentTarget: HTMLImageElement }) {
   img.src = OFFER_IMAGE_PLACEHOLDER;
 }
 
-/** Swap broken/missing remote images to the placeholder so cards are not blank white. */
-export function onOfferImageError(event: { currentTarget: HTMLImageElement }) {
-  const img = event.currentTarget;
-  if (img.dataset.fallbackApplied === '1') return;
-  img.dataset.fallbackApplied = '1';
-  img.src = OFFER_IMAGE_PLACEHOLDER;
-}
-
 const API_ORIGINS = (() => {
   const bases = new Set<string>();
   const raw = import.meta.env.VITE_API_BASE_URL as string | undefined;

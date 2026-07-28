@@ -13,6 +13,7 @@ import {
 } from '../../services/seo/schemaBuilders';
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { CategoryAvatarScroller } from '../../components/CategoryAvatarScroller';
+import { OfferImage } from '../../components/OfferImage';
 import { MARKETPLACE_CATEGORIES } from '../../data/categories';
 import { offerImageInBox, resolveOfferImageSrc, onOfferImageError } from '../../utils/offerImageDisplay';
 import { getApiBaseUrl } from '../../client-api/config';
@@ -409,7 +410,6 @@ export const AtiStore: React.FC = () => {
                                       alt={offer.title}
                                       size="card"
                                       className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`}
-                                      onError={onOfferImageError}
                                     />
                                     <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded z-[3]">{t('market.atiChoice')}</div>
                                   </div>
