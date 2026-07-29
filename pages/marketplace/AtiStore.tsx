@@ -14,7 +14,8 @@ import {
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { CategoryAvatarScroller } from '../../components/CategoryAvatarScroller';
 import { MARKETPLACE_CATEGORIES } from '../../data/categories';
-import { offerImageInBox, resolveOfferImageSrc, onOfferImageError } from '../../utils/offerImageDisplay';
+import { OfferImage } from '../../components/OfferImage';
+import { offerImageInBox, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
 import { getApiBaseUrl } from '../../client-api/config';
 import { isProducerDashboardUser } from '../../services/producerSession';
 import { findProducerForUser } from '../../utils/producerAccountStatus';
@@ -75,8 +76,19 @@ export const AtiStore: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
+    setStoreCategoriesStatus('loading');
+    // VITE_API_URL is never set by any deploy (Docker/CI only define
+    // VITE_API_BASE_URL), so this fell back to a relative /api path. The SPA
+    // host has no /api proxy — nginx answers it from the SPA fallback with
+    // index.html at HTTP 200 — so r.json() threw, the catch marked categories
+    // "empty", and the storefront silently fell back to the hardcoded
+    // MARKETPLACE_CATEGORIES list. A category newly added in AgriAdmin is not in
+    // that list and has no offers yet, so it never appeared.
     fetch(`${getApiBaseUrl()}/api/retail/categories`)
-      .then((r) => (r.ok ? r.json() : { categories: [] }))
+      .then((r) => {
+        const isJson = r.headers.get('content-type')?.includes('application/json');
+        return r.ok && isJson ? r.json() : { categories: [] };
+      })
       .then((data) => {
         if (cancelled || !Array.isArray(data.categories)) {
           if (!cancelled) setStoreCategoriesStatus('empty');
@@ -344,7 +356,12 @@ export const AtiStore: React.FC = () => {
                                 </div>
                                 <Link to={`/offer/${offer.id}`} className="group relative bg-white border border-gray-100 rounded-xl shadow-md flex flex-col overflow-hidden hover:shadow-xl transition-all h-full agm-card-lift">
                                   <div className="bg-gray-100 h-40 relative">
-                                    <img src={resolveOfferImageSrc(offer.imageUrl)} alt={offer.title} className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`} onError={onOfferImageError} />
+                                    <OfferImage
+                                      src={offer.imageUrl}
+                                      alt={offer.title}
+                                      size="card"
+                                      className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`}
+                                    />
                                     <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">{t('market.atiChoice')}</div>
                                   </div>
                                   <div className="flex-1 p-3 space-y-2 flex flex-col">
@@ -360,9 +377,11 @@ export const AtiStore: React.FC = () => {
                                         {reviewCount > 0 ? `(${rating.toFixed(1)})` : t('product.noReviewsShort')}
                                       </span>
                                     </div>
-                                    <div className="flex flex-col pt-2 border-t border-gray-100 mt-auto">
-                                      <span className="text-lg font-bold text-blue-700">{formatXaf(offer.price)}</span>
-                                      <span className="text-xs text-gray-500">{t('market.per')} {offer.unit}</span>
+                                    <div className="flex flex-col pt-2 border-t border-gray-100 mt-auto min-w-0">
+                                      {/* text-base on phones: two cards per row leaves too
+                                          little width for text-lg to hold the amount on one line. */}
+                                      <span className="text-base sm:text-lg font-bold text-blue-700 leading-tight">{formatXaf(offer.price)}</span>
+                                      <span className="text-xs text-gray-500 truncate">{t('market.per')} {offer.unit}</span>
                                     </div>
                                   </div>
                                 </Link>
@@ -372,7 +391,10 @@ export const AtiStore: React.FC = () => {
                         </div>
                       ) : (
                         <div className="w-full min-w-0 overflow-hidden">
-                        <div className="flex w-full min-w-0 overflow-x-auto pb-4 gap-5 scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-gray-50 px-1">
+                        {/* Two cards per row on phones, horizontal swipe row from sm up.
+                            The two-per-row phone layout is a client requirement — see
+                            docs/UI-LAYOUT-RULES.md before changing these classes. */}
+                        <div className="grid grid-cols-2 gap-3 px-1 pb-4 sm:flex sm:w-full sm:min-w-0 sm:gap-5 sm:overflow-x-auto scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-gray-50">
                           {categoryOffers.map((offer) => {
                             const isFav = favorites.includes(offer.id);
                             const isComparing = compareList.includes(offer.id);
@@ -380,7 +402,7 @@ export const AtiStore: React.FC = () => {
                             const filledStars = reviewCount > 0 ? Math.round(rating) : 0;
 
                             return (
-                              <div key={offer.id} className="relative min-w-[220px] w-[240px] flex-shrink-0">
+                              <div key={offer.id} className="relative w-full min-w-0 sm:min-w-[220px] sm:w-[240px] sm:flex-shrink-0">
                                 <div className="absolute top-2 right-2 z-10 flex gap-1">
                                   {(user?.role === UserRole.CLIENT || isProducerDashboardUser(user)) && (
                                     <button
@@ -409,7 +431,6 @@ export const AtiStore: React.FC = () => {
                                       alt={offer.title}
                                       size="card"
                                       className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`}
-                                      onError={onOfferImageError}
                                     />
                                     <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded z-[3]">{t('market.atiChoice')}</div>
                                   </div>
@@ -428,9 +449,11 @@ export const AtiStore: React.FC = () => {
                                         {reviewCount > 0 ? `(${rating.toFixed(1)})` : t('product.noReviewsShort')}
                                       </span>
                                     </div>
-                                    <div className="flex flex-col pt-2 border-t border-gray-100 mt-auto">
-                                      <span className="text-lg font-bold text-blue-700">{formatXaf(offer.price)}</span>
-                                      <span className="text-xs text-gray-500">{t('market.per')} {offer.unit}</span>
+                                    <div className="flex flex-col pt-2 border-t border-gray-100 mt-auto min-w-0">
+                                      {/* text-base on phones: two cards per row leaves too
+                                          little width for text-lg to hold the amount on one line. */}
+                                      <span className="text-base sm:text-lg font-bold text-blue-700 leading-tight">{formatXaf(offer.price)}</span>
+                                      <span className="text-xs text-gray-500 truncate">{t('market.per')} {offer.unit}</span>
                                     </div>
                                   </div>
                                 </Link>

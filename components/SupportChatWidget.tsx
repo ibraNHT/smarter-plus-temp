@@ -142,6 +142,37 @@ export const SupportChatWidget: React.FC = () => {
   }, []);
 
   const isSupportChatOpen = store?.isSupportChatOpen ?? false;
+
+  // Keep a dragged widget fully on-screen. Dragging clamps against the widget's
+  // height at drop time only, so afterwards anything that shortens the viewport
+  // (rotation, the mobile browser's collapsing URL bar, the on-screen keyboard)
+  // or grows the widget (a handover banner appearing) leaves its bottom — the
+  // composer and send button — below the fold, unreachable because the panel is
+  // position:fixed. A ResizeObserver covers the content-growth case, which no
+  // window event reports.
+  useEffect(() => {
+    if (!isSupportChatOpen) return;
+    const reclamp = () => {
+      setPosition((prev) => {
+        if (!prev) return prev;
+        const next = clampToViewport(prev.top, prev.left, widgetRef.current);
+        return next.top === prev.top && next.left === prev.left ? prev : next;
+      });
+    };
+    reclamp();
+    window.addEventListener('resize', reclamp);
+    window.addEventListener('orientationchange', reclamp);
+    window.visualViewport?.addEventListener('resize', reclamp);
+    const observer =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(reclamp) : null;
+    if (widgetRef.current && observer) observer.observe(widgetRef.current);
+    return () => {
+      window.removeEventListener('resize', reclamp);
+      window.removeEventListener('orientationchange', reclamp);
+      window.visualViewport?.removeEventListener('resize', reclamp);
+      observer?.disconnect();
+    };
+  }, [isSupportChatOpen]);
   const toggleSupportChat = store?.toggleSupportChat ?? (() => {});
   const supportMessages = store?.supportMessages ?? [];
   const supportAiTyping = store?.supportAiTyping ?? false;
@@ -376,10 +407,15 @@ export const SupportChatWidget: React.FC = () => {
           </button>
         </div>
 
-        {/* Messages */}
+        {/* Messages.
+            `min-h-0` is load-bearing: a flex child defaults to `min-height:auto`,
+            so without it this list refuses to shrink below its content height and
+            the widget (fixed height + overflow-hidden) clips the composer below
+            the fold — the send button disappears on small screens as soon as the
+            messages or the notice blocks get long. */}
         <div
           ref={chatBodyRef}
-          className="flex-1 bg-gradient-to-b from-gray-50 to-gray-100/80 p-3 sm:p-4 overflow-y-auto overflow-x-hidden space-y-3 scroll-smooth"
+          className="flex-1 min-h-0 bg-gradient-to-b from-gray-50 to-gray-100/80 p-3 sm:p-4 overflow-y-auto overflow-x-hidden space-y-3 scroll-smooth"
         >
           {supportMessages.map((msg) => {
             const isUser = msg.sender === 'USER';
@@ -590,9 +626,14 @@ export const SupportChatWidget: React.FC = () => {
 
         {/* Composer / guest form */}
         {showGuestForm && !user ? (
+          /* Capped and scrollable: this block is taller than the plain composer
+             (intro copy + two labelled fields + button), and the intro wraps to
+             more lines in some languages. Left unbounded in a fixed-height
+             widget it pushed its own submit button past the bottom edge and
+             squeezed the message list to nothing. */
           <form
             onSubmit={handleSubmitGuestForm}
-            className="p-4 bg-white border-t border-gray-200 space-y-3 shrink-0"
+            className="p-4 bg-white border-t border-gray-200 space-y-3 shrink-0 max-h-[70%] overflow-y-auto"
           >
             <p className="text-xs text-gray-500">{t('support.guestIntro')}</p>
             <div>
