@@ -743,7 +743,10 @@ export const ChatPage: React.FC = () => {
          </div>
 
          {/* Chat Area */}
-         <div className={`${!chatId ? 'hidden md:flex' : 'flex'} flex-1 flex-col bg-white`}>
+         {/* `min-h-0` lets the message list shrink so the composer stays on screen;
+             `min-w-0` keeps long names and offer labels truncating instead of
+             widening the column past the viewport. */}
+         <div className={`${!chatId ? 'hidden md:flex' : 'flex'} flex-1 min-h-0 min-w-0 flex-col bg-white`}>
             {activeChat ? (
                <>
                   {/* Header */}
@@ -778,7 +781,7 @@ export const ChatPage: React.FC = () => {
                   <div
                      ref={messagesContainerRef}
                      onScroll={handleMessagesScroll}
-                     className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 relative"
+                     className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 bg-gray-50 relative"
                   >
                      {activeChat.offerId ? (
                         <div className="flex justify-center">
@@ -915,7 +918,7 @@ export const ChatPage: React.FC = () => {
                                        )}
                                     </div>
                                  ) : (
-                                    <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                                    <p className="text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">{msg.text}</p>
                                  )}
                                  <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isMe ? 'text-primary-200' : 'text-gray-400'}`}>
                                     <span>

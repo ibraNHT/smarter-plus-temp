@@ -8,10 +8,10 @@ export const OfferCardSkeleton: React.FC<{ variant?: Variant }> = ({ variant = '
   return (
     <div
       aria-hidden="true"
-      className={`relative flex-shrink-0 bg-white overflow-hidden ${
+      className={`relative w-full min-w-0 sm:flex-shrink-0 bg-white overflow-hidden ${
         isAti
-          ? 'min-w-[220px] w-[240px] rounded-lg border border-gray-100'
-          : 'min-w-[280px] w-[300px] rounded-xl shadow-md border border-gray-100'
+          ? 'sm:min-w-[220px] sm:w-[240px] rounded-lg border border-gray-100'
+          : 'sm:min-w-[280px] sm:w-[300px] rounded-xl shadow-md border border-gray-100'
       }`}
     >
       <Shimmer className={`w-full ${isAti ? 'h-36' : 'h-44'}`} />
@@ -44,7 +44,7 @@ export const OfferRowSkeleton: React.FC<{ count?: number; variant?: Variant }> =
   return (
     <div className="w-full min-w-0 overflow-hidden">
       <div
-        className={`flex w-full min-w-0 overflow-x-auto pb-4 pt-2 gap-5 scrollbar-thin px-1 ${
+        className={`grid grid-cols-2 gap-3 px-1 pb-4 pt-2 sm:flex sm:w-full sm:min-w-0 sm:gap-5 sm:overflow-x-auto scrollbar-thin ${
           isAti
             ? 'scrollbar-thumb-blue-200 scrollbar-track-gray-50'
             : 'scrollbar-thumb-gray-300 scrollbar-track-transparent'

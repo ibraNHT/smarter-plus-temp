@@ -271,7 +271,7 @@ export const ProducerMarket: React.FC = () => {
     return (
       <div
         key={offer.id}
-        className={`group relative w-full min-w-0 bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 border agm-card-lift ${isLocal ? 'border-green-300 ring-2 ring-green-50' : 'border-gray-100'} h-full flex flex-col ${inCarousel ? 'min-w-[240px] w-[260px] flex-shrink-0 md:min-w-[280px] md:w-[300px]' : ''}`}
+        className={`group relative w-full min-w-0 bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 border agm-card-lift ${isLocal ? 'border-green-300 ring-2 ring-green-50' : 'border-gray-100'} h-full flex flex-col ${inCarousel ? 'sm:min-w-[240px] sm:w-[260px] sm:flex-shrink-0 md:min-w-[280px] md:w-[300px]' : ''}`}
       >
         {/* Action Buttons Overlay */}
         <div className="absolute top-2 right-2 z-10 flex flex-col gap-2">
@@ -390,14 +390,18 @@ export const ProducerMarket: React.FC = () => {
               )}
             </div>
 
-            <div className="mt-auto flex items-end justify-between pt-2 md:pt-3 border-t border-gray-100 gap-2 shrink-0">
+            {/* Two cards per row leaves ~150px of card width on a phone, which is
+                not enough for price and stock side by side: the stock column would
+                not shrink, so the amount wrapped onto three lines and ran into it.
+                Stack them below sm, side by side from sm up. */}
+            <div className="mt-auto flex flex-col gap-1 pt-2 md:pt-3 border-t border-gray-100 shrink-0 sm:flex-row sm:items-end sm:justify-between sm:gap-2">
               <div className="min-w-0">
-                <p className="text-[10px] md:text-xs text-gray-400">{t('market.per')} {t(`unit.${offer.unit}`)}</p>
-                <p className="text-base md:text-lg font-bold text-primary-700 leading-tight">{formatXaf(offer.price)}</p>
+                <p className="text-[10px] md:text-xs text-gray-400 truncate">{t('market.per')} {t(`unit.${offer.unit}`)}</p>
+                <p className="text-sm md:text-lg font-bold text-primary-700 leading-tight">{formatXaf(offer.price)}</p>
               </div>
-              <div className="text-right shrink-0">
-                <p className="text-[10px] md:text-xs text-gray-400">{t('market.available')}</p>
-                <p className="text-xs md:text-sm font-semibold text-gray-900">{offer.quantity} {t(`unit.${offer.unit}`)}</p>
+              <div className="flex min-w-0 items-baseline justify-between gap-1 sm:block sm:shrink-0 sm:text-right">
+                <p className="text-[10px] md:text-xs text-gray-400 shrink-0">{t('market.available')}</p>
+                <p className="text-xs md:text-sm font-semibold text-gray-900 truncate">{offer.quantity} {t(`unit.${offer.unit}`)}</p>
               </div>
             </div>
           </div>
@@ -545,7 +549,7 @@ export const ProducerMarket: React.FC = () => {
                   <Star className="h-6 w-6 text-yellow-500 mr-2 fill-current" />
                   {t('market.recommended')}
                 </h2>
-                <div className="flex overflow-x-auto pb-8 pt-2 space-x-4 md:space-x-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent px-1 md:px-1">
+                <div className="grid grid-cols-2 gap-3 px-1 pb-8 pt-2 sm:flex sm:gap-4 sm:overflow-x-auto md:gap-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
                   {recommendedOffers.map((offer) => renderOfferCard(offer, true))}
                 </div>
               </div>
@@ -624,8 +628,11 @@ export const ProducerMarket: React.FC = () => {
                           ))}
                         </div>
                       ) : (
-                        /* Category preview: horizontal swipe row on all viewports; "See All" opens full grid */
-                        <div className="flex overflow-x-auto pb-8 pt-2 space-x-4 md:space-x-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent px-1 -mx-1">
+                        /* Category preview: two cards per row on phones, horizontal swipe
+                           row from sm up; "See All" opens the full grid. The two-per-row
+                           phone layout is a client requirement — see docs/UI-LAYOUT-RULES.md
+                           before changing these classes. */
+                        <div className="grid grid-cols-2 gap-3 px-1 pb-8 pt-2 sm:flex sm:gap-4 sm:overflow-x-auto sm:-mx-1 md:gap-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
                           {sortedCategoryOffers.map((offer) => renderOfferCard(offer, true))}
                         </div>
                       )}
