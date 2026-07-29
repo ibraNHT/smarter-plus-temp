@@ -13,6 +13,7 @@ import {
 } from '../../services/seo/schemaBuilders';
 import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { CategoryAvatarScroller } from '../../components/CategoryAvatarScroller';
+import { OfferImage } from '../../components/OfferImage';
 import { MARKETPLACE_CATEGORIES } from '../../data/categories';
 import { OfferImage } from '../../components/OfferImage';
 import { offerImageInBox, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
