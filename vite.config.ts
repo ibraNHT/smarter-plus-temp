@@ -82,16 +82,20 @@ export default defineConfig(({ mode }) => {
                     },
                   },
                   {
+                    // Catalog reads must revalidate: StaleWhileRevalidate answered
+                    // from the cache first, so a producer who edited an offer got
+                    // the pre-edit list back on the next mount and the change
+                    // looked like it reverted until a page reload. NetworkFirst
+                    // serves the live response whenever the user is online and
+                    // keeps the cache only as a slow/offline fallback.
                     urlPattern: ({ url }) =>
                       url.pathname === '/api/offers' ||
-                      url.pathname.startsWith('/api/offers?') ||
                       url.pathname === '/api/retail/offers' ||
-                      url.pathname.startsWith('/api/retail/offers?') ||
-                      url.pathname === '/api/producers' ||
-                      url.pathname.startsWith('/api/producers?'),
-                    handler: 'StaleWhileRevalidate',
+                      url.pathname === '/api/producers',
+                    handler: 'NetworkFirst',
                     options: {
                       cacheName: 'api-catalog',
+                      networkTimeoutSeconds: 5,
                       expiration: {
                         maxEntries: 40,
                         maxAgeSeconds: 60 * 5,
