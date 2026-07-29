@@ -21,19 +21,22 @@ const CATEGORY_AVATAR_BY_NAME: Record<string, string> = {
 };
 
 /**
- * Resolve the avatar image URL for a category name (or `All`).
+ * Resolve the avatar image URL for a real category name.
  *
  * `overrideUrl` — an image supplied by the backend (e.g. a retail/ATI category
  * configured in AgriAdmin). When present it wins, so newly-added store
  * categories show their uploaded image; otherwise we fall back to the bundled
- * marketplace art, then to the generic "All" avatar.
+ * marketplace art.
+ *
+ * Do not use this for `All` — that chip is a filter, not a product category, and
+ * is rendered as an icon (see CategoryAvatarScroller), never a product photo.
  */
 export const getCategoryAvatar = (
   category: string,
   overrideUrl?: string | null,
 ): string => {
   if (overrideUrl && overrideUrl.trim()) return overrideUrl.trim();
-  if (category === 'All') return CATEGORY_AVATAR_ALL;
+  if (category === 'All') return CATEGORY_AVATAR_ALL; // unused by scroller; kept for callers
   return CATEGORY_AVATAR_BY_NAME[category] ?? CATEGORY_AVATAR_ALL;
 };
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { LayoutGrid } from 'lucide-react';
 import { useTranslation } from '../services/i18nContext';
 import { CATEGORY_SCROLLER_ITEMS, getCategoryAvatar } from '../data/categoryVisuals';
 import { offerImageThumb } from '../utils/offerImageDisplay';
@@ -14,6 +15,23 @@ type CategoryAvatarScrollerProps = {
   sticky?: boolean;
 };
 
+/**
+ * "All Categories" is a filter, not a product type — never show a product photo
+ * (the old /categories/all.webp vegetable shot looked like a random pick).
+ */
+const AllCategoriesAvatar: React.FC<{ isSelected: boolean }> = ({ isSelected }) => (
+  <span
+    className={`relative flex w-16 h-16 md:w-[4.5rem] md:h-[4.5rem] items-center justify-center rounded-full transition-transform duration-200 ${
+      isSelected
+        ? 'ring-4 ring-primary-500 ring-offset-2 scale-105 shadow-md bg-primary-50 text-primary-700'
+        : 'ring-2 ring-gray-200 bg-gray-50 text-gray-500 group-hover:ring-primary-300 group-hover:text-primary-600 group-active:scale-95'
+    }`}
+    aria-hidden
+  >
+    <LayoutGrid className="h-7 w-7 md:h-8 md:w-8" strokeWidth={1.75} />
+  </span>
+);
+
 const CategoryChipAvatar: React.FC<{
   category: string;
   overrideUrl?: string;
@@ -23,12 +41,16 @@ const CategoryChipAvatar: React.FC<{
   const remoteSrc = overrideUrl ? offerImageThumb(overrideUrl, 'thumb') : null;
   const [remoteReady, setRemoteReady] = useState(false);
   const [remoteFailed, setRemoteFailed] = useState(false);
-  const showLocalUnderlay = !remoteSrc || remoteFailed || category === 'All';
+  const showLocalUnderlay = !remoteSrc || remoteFailed;
 
   useEffect(() => {
     setRemoteReady(false);
     setRemoteFailed(false);
   }, [category, overrideUrl, remoteSrc]);
+
+  if (category === 'All') {
+    return <AllCategoriesAvatar isSelected={isSelected} />;
+  }
 
   return (
     <span
@@ -98,8 +120,8 @@ export const CategoryAvatarScroller: React.FC<CategoryAvatarScrollerProps> = ({
   return (
     <div
       ref={scrollerRef}
-      className={`flex w-full min-w-0 overflow-x-auto snap-x snap-mandatory gap-4 md:gap-5 pb-3 pt-1 px-1 scrollbar-thin ${
-        sticky ? 'sticky top-0 z-20 bg-white/95 backdrop-blur-sm -mx-1 px-2 py-2 border-b border-gray-100' : ''
+      className={`flex w-full min-w-0 overflow-x-auto snap-x snap-mandatory gap-4 md:gap-5 px-2 pt-3.5 pb-3 scrollbar-thin ${
+        sticky ? 'sticky top-0 z-20 bg-white/95 backdrop-blur-sm -mx-1 px-3 pt-4 pb-3 border-b border-gray-100' : ''
       } ${className}`}
       role="listbox"
       aria-label={t('form.category')}

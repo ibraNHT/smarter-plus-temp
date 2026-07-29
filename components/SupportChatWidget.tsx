@@ -93,6 +93,15 @@ export const SupportChatWidget: React.FC = () => {
     fabDraggingRef.current = true;
     fabMovedRef.current = false;
     document.body.style.userSelect = 'none';
+    // Default dock uses `right`/`bottom`. Switch to `left`/`top` immediately so a
+    // later left assignment cannot sit alongside right — that pair compresses the
+    // circle as you drag toward the right edge.
+    const docked = { top: rect.top, left: rect.left };
+    setFabPosition(docked);
+    el.style.left = `${docked.left}px`;
+    el.style.top = `${docked.top}px`;
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
   };
 
   const handleFabPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -101,10 +110,13 @@ export const SupportChatWidget: React.FC = () => {
     const dy = e.clientY - fabPointerStartRef.current.y;
     if (!fabMovedRef.current && Math.hypot(dx, dy) < FAB_DRAG_THRESHOLD_PX) return;
     fabMovedRef.current = true;
-    const left = e.clientX - fabOffsetRef.current.x;
-    const top = e.clientY - fabOffsetRef.current.y;
-    fabRef.current.style.left = `${left}px`;
-    fabRef.current.style.top = `${top}px`;
+    const next = clampToViewport(
+      e.clientY - fabOffsetRef.current.y,
+      e.clientX - fabOffsetRef.current.x,
+      fabRef.current,
+    );
+    fabRef.current.style.left = `${next.left}px`;
+    fabRef.current.style.top = `${next.top}px`;
     fabRef.current.style.right = 'auto';
     fabRef.current.style.bottom = 'auto';
   };
@@ -345,10 +357,10 @@ export const SupportChatWidget: React.FC = () => {
           onPointerUp={handleFabPointerUp}
           onPointerCancel={handleFabPointerCancel}
           onClick={handleFabClick}
-          className="fixed z-50 bg-blue-600 text-white p-3.5 sm:p-4 rounded-full shadow-lg hover:bg-blue-700 transition-colors hover:scale-110 flex items-center justify-center ring-2 ring-blue-400/30 cursor-grab active:cursor-grabbing touch-none select-none"
+          className="fixed z-50 h-14 w-14 shrink-0 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition-colors hover:scale-110 flex items-center justify-center ring-2 ring-blue-400/30 cursor-grab active:cursor-grabbing touch-none select-none"
           style={
             fabPosition
-              ? { top: fabPosition.top, left: fabPosition.left }
+              ? { top: fabPosition.top, left: fabPosition.left, right: 'auto', bottom: 'auto' }
               : { bottom: dockBottom, right: 'max(0.75rem, env(safe-area-inset-right))' }
           }
           aria-label={t('support.openChatAria')}
