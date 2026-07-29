@@ -412,25 +412,27 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
                       No active offers at the moment.
                     </p>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4">
                       {activeOffers.slice(0, 4).map((offer) => (
                         <div
                           key={offer.id}
-                          className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow bg-white flex items-center cursor-pointer"
+                          className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow bg-white flex flex-col sm:flex-row sm:items-center cursor-pointer"
                           onClick={() => navigate(`/offer/${offer.id}`)}
                         >
-                          <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded bg-gray-100 mr-3">
+                          {/* Stacks on mobile so two cards per row stay legible;
+                              the wide layout is unchanged from sm: up. */}
+                          <div className="h-24 w-full sm:h-12 sm:w-12 flex-shrink-0 overflow-hidden rounded bg-gray-100 mb-2 sm:mb-0 sm:mr-3">
                             <img
                               src={offer.imageUrl}
                               className={offerImageInBox}
                               alt={offer.title}
                             />
                           </div>
-                          <div className="overflow-hidden">
+                          <div className="min-w-0">
                             <p className="font-medium text-gray-900 truncate">
                               {offer.title}
                             </p>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-gray-500 truncate">
                               {formatXaf(offer.price)} / {t(`unit.${offer.unit}`)}
                             </p>
                           </div>

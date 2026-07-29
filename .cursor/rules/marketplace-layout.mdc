@@ -1,0 +1,61 @@
+---
+description: Locked client-approved layout rules for marketplace offer/category lists
+globs: pages/marketplace/*.tsx,components/skeletons/OfferCardSkeleton.tsx,components/SupportChatWidget.tsx
+alwaysApply: false
+---
+
+# Marketplace layout — client-approved, do not change silently
+
+The client signed off on these layouts and has asked twice for them to be
+restored after they were changed. Treat them as requirements, not preferences.
+If a change seems visually better, propose it first — do not just apply it.
+
+## Offer and category lists show two cards per row on phones
+
+Every offer/product list must fit **two cards per row below `sm` (640px)**.
+Category preview rows use a 2-column grid on phones and only become a
+horizontal swipe row from `sm` up.
+
+```tsx
+// ❌ BAD — fixed-width cards in a flex row: ~1.5 cards fit a 360px phone,
+//          so it reads as one per row with sideways scrolling.
+<div className="flex overflow-x-auto gap-5">
+  <div className="min-w-[220px] w-[240px] flex-shrink-0">…</div>
+</div>
+
+// ✅ GOOD — two per row on phones, swipe row from sm up.
+<div className="grid grid-cols-2 gap-3 sm:flex sm:gap-5 sm:overflow-x-auto">
+  <div className="w-full min-w-0 sm:min-w-[220px] sm:w-[240px] sm:flex-shrink-0">…</div>
+</div>
+```
+
+Applies to `AtiStore.tsx`, `ProducerMarket.tsx` (both the category previews and
+the Recommended row), and `OfferCardSkeleton.tsx` — the skeleton must match the
+real grid or the layout visibly jumps from one-up to two-up while loading.
+
+Never drop the base `grid-cols-2` to `grid-cols-1`, and never reintroduce a
+mobile `min-w-[...]`/`w-[...]` on a card that sits in these rows.
+
+## Card text must fit a half-width phone card
+
+Two per row leaves roughly 150px of usable card width, so card typography has to
+scale down on phones or it wraps and collides:
+
+- Price is `text-sm`/`text-base` on phones, `md:text-lg` up. Never `text-lg` at
+  the base — `12,321 FCFA (XAF)` does not fit on one line.
+- Never put two columns side by side in the card footer at the base width, and
+  never mark one of them `shrink-0` there: it starves the other, which is what
+  wrapped the price onto three lines on top of the stock figure. Stack with
+  `flex-col` and switch to `sm:flex-row`.
+- Give unit/label lines `min-w-0` plus `truncate` so long unit names cannot push
+  the layout wider.
+
+## The chat composer must stay reachable
+
+In `SupportChatWidget.tsx` the panel is fixed-height with `overflow-hidden`, so
+any block that can grow will push the send button past the bottom edge:
+
+- Keep `flex-1 min-h-0` on the message list.
+- Keep the guest form capped and scrollable (`max-h-[70%] overflow-y-auto`).
+- Keep the effect that re-clamps a dragged position on resize,
+  `orientationchange`, `visualViewport` resize, and `ResizeObserver`.
