@@ -15,7 +15,6 @@ import { OfferRowSkeleton } from '../../components/skeletons/OfferCardSkeleton';
 import { CategoryAvatarScroller } from '../../components/CategoryAvatarScroller';
 import { OfferImage } from '../../components/OfferImage';
 import { MARKETPLACE_CATEGORIES } from '../../data/categories';
-import { OfferImage } from '../../components/OfferImage';
 import { offerImageInBox, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
 import { getApiBaseUrl } from '../../client-api/config';
 import { isProducerDashboardUser } from '../../services/producerSession';
@@ -36,7 +35,7 @@ export const AtiStore: React.FC = () => {
       rating: getAverageRatingFromReviews(offerReviews),
     };
   };
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
 
   const hasCachedCatalog = offers.length > 0 && producers.length > 0;
   const [pageLoading, setPageLoading] = useState(!hasCachedCatalog);
@@ -72,7 +71,7 @@ export const AtiStore: React.FC = () => {
   // Retail/ATI store categories come from the backend (configured in AgriAdmin).
   // Each entry is { name, imageUrl } — backward-compatible with the old
   // name-only string[] shape.
-  const [storeCategories, setStoreCategories] = useState<Array<{ name: string; imageUrl?: string }>>([]);
+  const [storeCategories, setStoreCategories] = useState<Array<{ name: string; nameFr?: string; imageUrl?: string }>>([]);
   const [storeCategoriesStatus, setStoreCategoriesStatus] = useState<'loading' | 'ready' | 'empty'>('loading');
 
   useEffect(() => {
@@ -99,7 +98,11 @@ export const AtiStore: React.FC = () => {
           .map((c: any) =>
             typeof c === 'string'
               ? { name: c.trim() }
-              : { name: String(c?.name ?? '').trim(), imageUrl: c?.imageUrl ?? c?.image ?? undefined },
+              : {
+                  name: String(c?.name ?? '').trim(),
+                  nameFr: c?.nameFr ? String(c.nameFr).trim() : undefined,
+                  imageUrl: c?.imageUrl ?? c?.image ?? undefined,
+                },
           )
           .filter((c: { name: string }) => c.name && c.name !== 'All');
         if (normalized.length) setStoreCategories(normalized);
@@ -161,6 +164,18 @@ export const AtiStore: React.FC = () => {
     if (c.imageUrl) acc[c.name] = resolveOfferImageSrc(c.imageUrl);
     return acc;
   }, {});
+
+  // name → label for the current language. Retail categories are created by ATI
+  // staff in AgriAdmin, so they have no static `category.*` translation key —
+  // their French wording is stored per-category as `nameFr`. Built-in
+  // marketplace categories keep using the static translations.
+  const categoryLabels = storeCategories.reduce<Record<string, string>>((acc, c) => {
+    if (language === 'fr' && c.nameFr) acc[c.name] = c.nameFr;
+    return acc;
+  }, {});
+
+  /** Localized display label for a category name. */
+  const categoryLabel = (name: string) => categoryLabels[name] ?? t(`category.${name}`);
 
   const handleSelectCategory = (cat: string) => {
     setSelectedCategory(cat);
@@ -236,6 +251,7 @@ export const AtiStore: React.FC = () => {
             onSelect={handleSelectCategory}
             categories={scrollerCategories}
             categoryImages={categoryImages}
+            categoryLabels={categoryLabels}
             sticky
           />
         </div>
@@ -305,7 +321,7 @@ export const AtiStore: React.FC = () => {
                               <ArrowLeft className="h-5 w-5 text-gray-600" />
                             </button>
                           )}
-                          {t(`category.${category}`)}
+                          {categoryLabel(category)}
                         </h2>
                         <div className="flex items-center gap-3">
                           <span className="text-xs text-gray-500 uppercase tracking-wider">{categoryOffers.length} {t('market.items')}</span>

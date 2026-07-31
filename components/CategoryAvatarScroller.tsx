@@ -11,6 +11,13 @@ type CategoryAvatarScrollerProps = {
   categories?: readonly string[];
   /** Optional name→imageUrl map (e.g. retail/ATI categories from the backend). */
   categoryImages?: Record<string, string | undefined>;
+  /**
+   * Optional name→label overrides for the CURRENT language. Retail/ATI
+   * categories are created by staff in AgriAdmin and have no static
+   * `category.*` translation key, so their localized wording is supplied here.
+   * Names absent from the map fall back to the static translations.
+   */
+  categoryLabels?: Record<string, string | undefined>;
   className?: string;
   sticky?: boolean;
 };
@@ -103,6 +110,7 @@ export const CategoryAvatarScroller: React.FC<CategoryAvatarScrollerProps> = ({
   onSelect,
   categories,
   categoryImages,
+  categoryLabels,
   className = '',
   sticky = false,
 }) => {
@@ -129,7 +137,9 @@ export const CategoryAvatarScroller: React.FC<CategoryAvatarScrollerProps> = ({
       {items.map((category) => {
         const isSelected = selected === category;
         const label =
-          category === 'All' ? t('market.allCategories') : t(`category.${category}`);
+          category === 'All'
+            ? t('market.allCategories')
+            : categoryLabels?.[category] ?? t(`category.${category}`);
         const override = categoryImages?.[category];
 
         return (
