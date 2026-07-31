@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global Reset */
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f3f4f6; /* gray-100 — light (clear) mode */
+  color: #111827; /* gray-900 */
+}
+
+html.dark body {
+  background-color: #111827; /* gray-900 */
+  color: white;
+}
+
+/* Print Styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-only {
+    display: block !important;
+  }
+
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+
+  /* Hide scrollbars and navigation in print */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+
+  aside,
+  header,
+  nav {
+    display: none !important;
+  }
+
+  /* Estimate letterhead must remain visible (it is not an app chrome header) */
+  #estimate-print-root .estimate-letterhead {
+    display: flex !important;
+  }
+
+  #estimate-print-root {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  
+  /* Ensure cards look like documents */
+  .bg-white,
+  .dark\:bg-gray-800 {
+    background-color: white !important;
+    border: 1px solid #ddd !important;
+    box-shadow: none !important;
+    color: black !important;
+  }
+}
