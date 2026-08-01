@@ -40,6 +40,8 @@ const MainApp = () => {
     resendOtp,
     inviteAcceptStart,
     inviteAcceptVerify,
+    forgotPasswordStart,
+    forgotPasswordVerify,
     refreshUser,
     logout,
     changePassword,
@@ -121,6 +123,8 @@ const MainApp = () => {
         resendOtp={resendOtp}
         inviteAcceptStart={inviteAcceptStart}
         inviteAcceptVerify={inviteAcceptVerify}
+        forgotPasswordStart={forgotPasswordStart}
+        forgotPasswordVerify={forgotPasswordVerify}
         t={t}
       />
     );
