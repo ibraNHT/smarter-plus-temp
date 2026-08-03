@@ -2045,8 +2045,34 @@ const translations: Record<string, Record<Language, string>> = {
 
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
 
+const LANGUAGE_STORAGE_KEY = 'agm_language';
+
+/** Read the saved language choice, ignoring anything unrecognised/corrupt. */
+function readStoredLanguage(): Language {
+  if (typeof window === 'undefined') return 'en';
+  try {
+    const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    if (saved === 'fr' || saved === 'en') return saved;
+  } catch {
+    /* storage unavailable (private mode / blocked) — fall through to default */
+  }
+  return 'en';
+}
+
 export const I18nProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [language, setLanguage] = useState<Language>('en');
+  // The language used to live in plain state, so every reload — and every fresh
+  // launch of the installed PWA — snapped the whole app back to English no
+  // matter what the visitor had picked. Persist the choice so it survives.
+  const [language, setLanguageState] = useState<Language>(readStoredLanguage);
+
+  const setLanguage = (lang: Language) => {
+    setLanguageState(lang);
+    try {
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+    } catch {
+      /* best-effort: keep the in-memory switch working even if we can't store it */
+    }
+  };
   const t = (key: string, replacements?: Record<string, string | number>): string => {
   const entry = translations[key];
   if (!entry) {
