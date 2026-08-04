@@ -523,12 +523,35 @@ export function useAuth() {
         }
     };
 
-    const resendOtp = async (email: string, purpose: 'signup' | 'login' | 'invite') => {
+    const resendOtp = async (email: string, purpose: 'signup' | 'login' | 'invite' | 'forgot') => {
         const res = await apiFetch('/auth/otp/resend', {
             method: 'POST',
             body: JSON.stringify({ email, purpose }),
         }) as { message?: string; devOtp?: string };
         showNotification(res.message || 'Code resent', 'success');
+        return res;
+    };
+
+    /** These run while logged out, so a 401 must surface as an error instead of clearing auth and reloading. */
+    const keepPageOn401 = () => { /* no reload */ };
+
+    /** Request a password-reset OTP for an email (unauthenticated). */
+    const forgotPasswordStart = async (email: string) => {
+        const res = await apiFetch('/auth/forgot-password/start', {
+            method: 'POST',
+            body: JSON.stringify({ email }),
+        }, keepPageOn401) as { otpRequired?: boolean; email: string; message?: string; devOtp?: string };
+        showNotification(res.message || 'If that email exists, a reset code was sent', 'success');
+        return res;
+    };
+
+    /** Verify reset OTP and set a new password (unauthenticated). */
+    const forgotPasswordVerify = async (email: string, code: string, newPassword: string) => {
+        const res = await apiFetch('/auth/forgot-password/verify', {
+            method: 'POST',
+            body: JSON.stringify({ email, code, newPassword }),
+        }, keepPageOn401) as { message?: string };
+        showNotification(res.message || 'Password updated. You can log in now.', 'success');
         return res;
     };
 
@@ -619,6 +642,8 @@ export function useAuth() {
         resendOtp,
         inviteAcceptStart,
         inviteAcceptVerify,
+        forgotPasswordStart,
+        forgotPasswordVerify,
         refreshUser,
         logout,
         changePassword,

@@ -25,7 +25,9 @@ All requests use the base URL from `VITE_API_URL`. Auth uses either `Authorizati
 | POST | `/auth/signup/verify` | `{ email, code }` | `{ token, user, role }` — creates org + free subscription |
 | POST | `/auth/login/start` | `{ email, password }` | `{ otpRequired, email, message, devOtp? }` |
 | POST | `/auth/login/verify` | `{ email, code }` | `{ token, user, role }` |
-| POST | `/auth/otp/resend` | `{ email, purpose }` | Resend OTP (`signup` \| `login` \| `invite`) |
+| POST | `/auth/forgot-password/start` | `{ email }` | `{ otpRequired, email, message, devOtp? }` — always generic success (do not reveal if email exists) |
+| POST | `/auth/forgot-password/verify` | `{ email, code, newPassword }` | `{ message }` — sets new password; does not create a session |
+| POST | `/auth/otp/resend` | `{ email, purpose }` | Resend OTP (`signup` \| `login` \| `invite` \| `forgot`) |
 | GET | `/auth/session` | — | `{ token?, user, role }` for current session |
 | POST | `/login` | `{ email, password }` | Same as `/auth/login/start` (legacy; OTP required) |
 | PUT | `/update-password` | `{ oldPassword, newPassword }` | Success |
