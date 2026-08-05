@@ -29,12 +29,21 @@ horizontal swipe row from `sm` up.
 </div>
 ```
 
-Applies to `AtiStore.tsx`, `ProducerMarket.tsx` (both the category previews and
-the Recommended row), and `OfferCardSkeleton.tsx` — the skeleton must match the
-real grid or the layout visibly jumps from one-up to two-up while loading.
+Applies to `AtiStore.tsx` and the `variant="ati"` branch of
+`OfferCardSkeleton.tsx` — the skeleton must match the real grid or the layout
+visibly jumps from one-up to two-up while loading.
 
 Never drop the base `grid-cols-2` to `grid-cols-1`, and never reintroduce a
 mobile `min-w-[...]`/`w-[...]` on a card that sits in these rows.
+
+**Exception — `ProducerMarket.tsx` (2026-08-03):** the collapsed category row,
+Recommended row, and `variant="producer"` skeleton were deliberately switched to
+an unconditional horizontal-scroll row on explicit client request, to match the
+homepage carousel. This is intentional — the "BAD" pattern above is what was
+applied here on purpose, but with the mobile card narrowed to `w-40`
+(`min-w-[250px]`) instead of ~220-260px, so ~2 cards stay visible on a 360px
+phone instead of ~1.5. Do not revert this to a grid without re-confirming with
+the client — see `docs/UI-LAYOUT-RULES.md` §1 for the full explanation.
 
 ## Card text must fit a half-width phone card
 

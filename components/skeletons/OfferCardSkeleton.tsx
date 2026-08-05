@@ -8,10 +8,10 @@ export const OfferCardSkeleton: React.FC<{ variant?: Variant }> = ({ variant = '
   return (
     <div
       aria-hidden="true"
-      className={`relative w-full min-w-0 sm:flex-shrink-0 bg-white overflow-hidden ${
+      className={`relative bg-white overflow-hidden ${
         isAti
-          ? 'sm:min-w-[220px] sm:w-[240px] rounded-lg border border-gray-100'
-          : 'sm:min-w-[280px] sm:w-[300px] rounded-xl shadow-md border border-gray-100'
+          ? 'w-full min-w-0 sm:min-w-[220px] sm:w-[240px] sm:flex-shrink-0 rounded-lg border border-gray-100'
+          : 'min-w-[250px] w-40 flex-shrink-0 sm:min-w-[280px] sm:w-[300px] rounded-xl shadow-md border border-gray-100'
       }`}
     >
       <Shimmer className={`w-full ${isAti ? 'h-36' : 'h-44'}`} />
@@ -44,10 +44,10 @@ export const OfferRowSkeleton: React.FC<{ count?: number; variant?: Variant }> =
   return (
     <div className="w-full min-w-0 overflow-hidden">
       <div
-        className={`grid grid-cols-2 gap-3 px-1 pb-4 pt-2 sm:flex sm:w-full sm:min-w-0 sm:gap-5 sm:overflow-x-auto scrollbar-thin ${
+        className={`px-1 pb-4 pt-2 overflow-x-auto scrollbar-thin ${
           isAti
-            ? 'scrollbar-thumb-blue-200 scrollbar-track-gray-50'
-            : 'scrollbar-thumb-gray-300 scrollbar-track-transparent'
+            ? 'grid grid-cols-2 gap-3 sm:flex sm:w-full sm:min-w-0 sm:gap-5 scrollbar-thumb-blue-200 scrollbar-track-gray-50'
+            : 'flex gap-3 -mx-1 snap-x snap-mandatory md:gap-6 scrollbar-thumb-gray-300 scrollbar-track-transparent'
         }`}
       >
         {Array.from({ length: count }).map((_, i) => (

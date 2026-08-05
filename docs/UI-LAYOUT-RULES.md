@@ -20,11 +20,10 @@ the fixed card widths caused it, which is why it is easy to reintroduce.
 
 **Where this is enforced:**
 
-| File | Location |
-| --- | --- |
-| `pages/marketplace/AtiStore.tsx` | collapsed category row |
-| `pages/marketplace/ProducerMarket.tsx` | collapsed category row + Recommended row |
-| `components/skeletons/OfferCardSkeleton.tsx` | `OfferCardSkeleton` + `OfferRowSkeleton` |
+| File                                         | Location                                                                              |
+| -------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `pages/marketplace/AtiStore.tsx`             | collapsed category row                                                                |
+| `components/skeletons/OfferCardSkeleton.tsx` | `OfferCardSkeleton` + `OfferRowSkeleton` (`variant="ati"` only — see exception below) |
 
 The skeleton must match the real grid. If it stays one-up while the real list is
 two-up, the layout visibly jumps as data loads.
@@ -33,7 +32,9 @@ The pattern:
 
 ```tsx
 <div className="grid grid-cols-2 gap-3 sm:flex sm:gap-5 sm:overflow-x-auto">
-  <div className="w-full min-w-0 sm:min-w-[220px] sm:w-[240px] sm:flex-shrink-0">…</div>
+  <div className="w-full min-w-0 sm:min-w-[220px] sm:w-[240px] sm:flex-shrink-0">
+    …
+  </div>
 </div>
 ```
 
@@ -42,6 +43,21 @@ Two things break it: dropping the base `grid-cols-2`, and putting an unprefixed
 `sm:` so they never apply on phones.
 
 The expanded ("See all") view is already a `grid-cols-2` grid and needs no change.
+
+**Exception — Producer Market (2026-08-03, client-requested reversal):**
+`pages/marketplace/ProducerMarket.tsx`'s collapsed category row + Recommended row,
+and the `variant="producer"` branch of `OfferCardSkeleton`/`OfferRowSkeleton`, were
+deliberately switched to an unconditional horizontal-scroll row (matching the
+homepage's carousel), on explicit client instruction to look/behave like the
+homepage. This intentionally reintroduces the flex/fixed-width pattern described
+above as "why it regressed" — but with the mobile card narrowed to `w-40`
+(`min-w-[250px]`) instead of the ~220-260px width that caused the original
+regression, so ~2 cards plus a peek of the next stay visible on a ~360px phone
+instead of ~1.5. **AtiStore.tsx is unaffected and still follows the 2-per-row
+rule above.** If Producer Market's mobile carousel is ever reported as looking
+like "one per row" again, the fix is to narrow the card further, not to revert
+to a grid — that reversal was intentional and client-approved, don't restore the
+grid without re-confirming with the client first.
 
 ### Card text has to fit the narrower card
 
