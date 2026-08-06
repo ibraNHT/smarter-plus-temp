@@ -536,6 +536,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [pickupPoints, setPickupPoints] = useState<PickupPoint[]>([]);
   const [myReferrals, setMyReferrals] = useState<MyReferralsData | null>(null);
   const initialCatalogLoadDoneRef = useRef(false);
+  // True once the server-side cart has actually been read for this session.
+  // The debounced sync below replaces the whole server cart, so pushing an
+  // empty local cart before this flag is set would silently wipe a cart the
+  // user built on another device. See the guard in the DEBOUNCED CART SYNC effect.
+  const cartHydratedRef = useRef(false);
   const [isInitialCatalogLoading, setIsInitialCatalogLoading] = useState(true);
 
   // Chat State
@@ -644,6 +649,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setMyReferrals(null);
       setReviews([]);
       setCart([]);
+      // The next session must re-read the server cart before it is allowed to
+      // overwrite it (see cartHydratedRef).
+      cartHydratedRef.current = false;
       setOrders([]);
       setWithdrawalRequests([]);
       setNotifications([]);
@@ -667,7 +675,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (guestEmail) localStorage.setItem('guestEmail', guestEmail);
     else localStorage.removeItem('guestEmail');
 
-    if (user && getToken()) {
+    // `sync-cart` REPLACES the server cart (deleteMany + createMany server-side),
+    // so an empty push is destructive. On a fresh device the local cart starts
+    // empty and this effect fires ~750ms after mount — well before the slower
+    // catalog+cart fetches finish hydrating — which used to wipe the cart the
+    // user had built elsewhere. Only skip the *empty-and-not-yet-hydrated* case:
+    // a non-empty cart always syncs, and once hydrated an empty cart syncs too
+    // (the user genuinely emptied it, and that must persist).
+    const safeToSync = cart.length > 0 || cartHydratedRef.current;
+    if (user && getToken() && safeToSync) {
       const timer = setTimeout(() => {
         apiFetch(API_ENDPOINTS.cart.sync, {
           method: 'POST',
@@ -1669,7 +1685,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       opts?.force,
     );
     const rows = payload?.items;
-    if (!Array.isArray(rows) || rows.length === 0) return;
+    // A failed fetch leaves `rows` undefined — stay un-hydrated so the sync
+    // effect keeps refusing to push an empty cart over a server cart we
+    // could not read.
+    if (!Array.isArray(rows)) return;
+    if (rows.length === 0) {
+      // Server cart is genuinely empty: local empty state matches it, so
+      // syncing from here on is safe.
+      cartHydratedRef.current = true;
+      return;
+    }
     // Read offers from the React Query cache (always current after a refresh
     // in the same render cycle, unlike `offers` from useState which is stale
     // inside the same closure). Fall back to component state when missing.
@@ -1683,21 +1708,22 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         ? ((offersList as any).data as Offer[])
         : offers;
     if (offersArr.length === 0) return; // bootstrap will retry on next page mount
-    setCart((prev) => {
-      if (prev.length > 0) return prev;
-      const hydrated = rows
-        .map((row) => {
-          const off = offersArr.find((o: any) => o.id === row.offerId) as Offer | undefined;
-          if (!off) return null;
-          return {
-            ...off,
-            cartQuantity: Math.max(1, Math.floor(Number(row.quantity)) || 1),
-            bookingDate: row.bookingDate ? new Date(row.bookingDate).toISOString() : undefined,
-          } as CartItem;
-        })
-        .filter(Boolean) as CartItem[];
-      return hydrated.length ? hydrated : prev;
-    });
+    const hydrated = rows
+      .map((row) => {
+        const off = offersArr.find((o: any) => o.id === row.offerId) as Offer | undefined;
+        if (!off) return null;
+        return {
+          ...off,
+          cartQuantity: Math.max(1, Math.floor(Number(row.quantity)) || 1),
+          bookingDate: row.bookingDate ? new Date(row.bookingDate).toISOString() : undefined,
+        } as CartItem;
+      })
+      .filter(Boolean) as CartItem[];
+    // Only mark hydrated once local state can actually represent the server
+    // cart. If none of the rows resolved to a known offer we stay un-hydrated
+    // rather than let an empty cart overwrite the server's.
+    if (hydrated.length > 0) cartHydratedRef.current = true;
+    setCart((prev) => (prev.length > 0 ? prev : hydrated.length ? hydrated : prev));
   };
 
   /**
@@ -1896,22 +1922,25 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           { silent401: true } as any,
         ).catch(() => null);
         const rows = cartPayload?.items;
-        if (Array.isArray(rows) && rows.length > 0) {
-          setCart((prev) => {
-            if (prev.length > 0) return prev;
-            const hydrated = rows
-              .map((row) => {
-                const off = offersList.find((o: any) => o.id === row.offerId) as Offer | undefined;
-                if (!off) return null;
-                return {
-                  ...off,
-                  cartQuantity: Math.max(1, Math.floor(Number(row.quantity)) || 1),
-                  bookingDate: row.bookingDate ? new Date(row.bookingDate).toISOString() : undefined,
-                } as CartItem;
-              })
-              .filter(Boolean) as CartItem[];
-            return hydrated.length ? hydrated : prev;
-          });
+        if (Array.isArray(rows) && rows.length === 0) {
+          // Server cart is genuinely empty — local empty state matches it.
+          cartHydratedRef.current = true;
+        } else if (Array.isArray(rows) && rows.length > 0) {
+          const hydrated = rows
+            .map((row) => {
+              const off = offersList.find((o: any) => o.id === row.offerId) as Offer | undefined;
+              if (!off) return null;
+              return {
+                ...off,
+                cartQuantity: Math.max(1, Math.floor(Number(row.quantity)) || 1),
+                bookingDate: row.bookingDate ? new Date(row.bookingDate).toISOString() : undefined,
+              } as CartItem;
+            })
+            .filter(Boolean) as CartItem[];
+          // See refreshCart: only unlock syncing once local state can actually
+          // represent what the server holds.
+          if (hydrated.length > 0) cartHydratedRef.current = true;
+          setCart((prev) => (prev.length > 0 ? prev : hydrated.length ? hydrated : prev));
         }
       }
     } catch (error) {
@@ -2051,12 +2080,19 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
     if (localCart.length > 0) {
+      // A non-empty local cart deliberately wins on login (the user just added
+      // these items on this device), and this push makes the server match it.
+      cartHydratedRef.current = true;
       apiFetch(API_ENDPOINTS.cart.sync, {
         method: 'POST',
         silent401: true,
         body: JSON.stringify({ items: localCart.map((i: any) => ({ offerId: i.id, quantity: i.cartQuantity || 1 })) }),
       } as any).catch(() => {});
     }
+    // NOTE: when localCart is empty we deliberately do NOT mark hydrated here —
+    // the server may hold a cart from another device, and fetchData below is
+    // what reads it. Marking it here would let the debounced sync push an empty
+    // cart and wipe it.
 
     // `skipCatalogFetch` avoids a race: an in-flight fetch from here can finish *after* the
     // profile is created and overwrite `clients` / `producers` with stale data. Registration
@@ -2109,6 +2145,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setMyReferrals(null);
     setReviews([]);
     setCart([]);
+    // The next session must re-read the server cart before it is allowed to
+    // overwrite it (see cartHydratedRef).
+    cartHydratedRef.current = false;
     localStorage.removeItem('currentUser');
     // Drop session-scoped data so the next login/register does not reconcile against a huge
     // in-memory graph from the previous user (slower updates, brief wrong-user flash).
@@ -2857,6 +2896,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
   const clearCart = () => {
     setCart([]);
+    // Deliberate user action that also clears the server cart below, so local
+    // and server agree from here on.
+    cartHydratedRef.current = true;
     if (user?.id) bustCache(QK.cart(user.id));
     if (user && getToken()) {
       apiFetch(API_ENDPOINTS.cart.clear, {
