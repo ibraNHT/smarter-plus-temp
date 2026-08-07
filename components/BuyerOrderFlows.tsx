@@ -26,7 +26,7 @@ import { ServiceAppointmentPicker } from './ServiceAppointmentPicker';
 import { Order, OrderStatus, UserSession, MarketType } from '../types';
 import { offerImageInBox } from '../utils/offerImageDisplay';
 import { PAYMENTS_ENABLED } from '../utils/featureFlags';
-import { orderHasService, orderIsRetail, orderIsServiceOnly, serviceLineCount } from '../utils/orderLabels';
+import { orderHasService, orderIsRetail, orderIsServiceOnly, serviceDurationHoursForOrder, serviceLineCount } from '../utils/orderLabels';
 import {
   canCancelDirectly,
   canLeaveReview,
@@ -250,10 +250,9 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
   };
 
   const rescheduleOrder = rescheduleOrderId ? orders.find((o) => o.id === rescheduleOrderId) ?? null : null;
-  const rescheduleServiceItem = rescheduleOrder
-    ? (rescheduleOrder.items || []).find((it: any) => String(it.type ?? '').toUpperCase() === 'SERVICE')
-    : null;
-  const rescheduleDurationHours = Math.max(1, Number((rescheduleServiceItem as any)?.serviceDuration ?? 1) || 1);
+  const rescheduleDurationHours = rescheduleOrder
+    ? serviceDurationHoursForOrder(rescheduleOrder, offers)
+    : 1;
 
   const renderActions = useCallback(
     (order: Order, size: ActionSize = 'sm', afterAction?: () => void) => {

@@ -23,7 +23,7 @@ import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { PAYMENTS_ENABLED } from '../../utils/featureFlags';
-import { orderHasService, orderIsRetail, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
+import { orderHasService, orderIsRetail, orderIsServiceOnly, serviceDurationHoursForOrder, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
 import { ORDER_STATUS_LABEL_KEY, ORDER_STATUS_PILL_CLASS } from '../../utils/orderStatusDisplay';
 import {
   canCancelDirectly,
@@ -823,13 +823,9 @@ export const ClientProfile: React.FC = () => {
       setRescheduleSlotIso(firstServiceBookingIso(order));
    };
    const rescheduleOrder = rescheduleOrderId ? orders.find((o) => o.id === rescheduleOrderId) ?? null : null;
-   const rescheduleServiceItem = rescheduleOrder
-      ? (rescheduleOrder.items || []).find((it: any) => String(it.type ?? '').toUpperCase() === 'SERVICE')
-      : null;
-   const rescheduleDurationHours = Math.max(
-      1,
-      Number((rescheduleServiceItem as any)?.serviceDuration ?? 1) || 1,
-   );
+   const rescheduleDurationHours = rescheduleOrder
+      ? serviceDurationHoursForOrder(rescheduleOrder, offers)
+      : 1;
    const openCancelRequestModal = (orderId: string) => { setCancelRequestOrderId(orderId); setCancelRequestReason(''); };
    const getStatusBadge = (status: OrderStatus) => (
       <span

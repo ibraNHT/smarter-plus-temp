@@ -9,6 +9,26 @@ export function orderIsRetail(order: Pick<Order, 'items'>): boolean {
   return (order.items ?? []).some((i) => i.marketType === MarketType.ATI);
 }
 
+/**
+ * Slot length in hours for an order's service line.
+ *
+ * OrderItem carries no serviceDuration (there is no such column), so this reads it
+ * from the offer the item points at. Defaulting to 1 made the reschedule picker ask
+ * for 1-hour slots on a multi-hour service — wrong grid, and the server validated
+ * the wrong window.
+ */
+export function serviceDurationHoursForOrder(
+  order: Pick<Order, 'items'>,
+  offers: Array<{ id: string; serviceDuration?: number }>,
+): number {
+  const svc = (order.items ?? []).find((i: any) => i?.type === OfferType.SERVICE);
+  const onItem = Number((svc as any)?.serviceDuration ?? 0) || 0;
+  if (onItem > 0) return Math.max(1, onItem);
+  const offerId = (svc as any)?.offerId ?? (svc as any)?.id;
+  const offer = offerId ? offers.find((o) => o.id === offerId) : undefined;
+  return Math.max(1, Number(offer?.serviceDuration ?? 1) || 1);
+}
+
 export function orderHasService(order: Pick<Order, 'items'>): boolean {
   return order.items.some((i) => i.type === OfferType.SERVICE);
 }
