@@ -20,6 +20,8 @@ import { getApiBaseUrl } from '../../client-api/config';
 import { isProducerDashboardUser } from '../../services/producerSession';
 import { findProducerForUser } from '../../utils/producerAccountStatus';
 import { getAverageRatingFromReviews, getReviewsForOffer } from '../../utils/offerReviews';
+import { apiFetch } from '../../services/apiService';
+import { API_ENDPOINTS } from '../../client-api/endpoints';
 import { usePwaInstall } from '../../contexts/PwaInstallContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 
@@ -28,7 +30,39 @@ export const AtiStore: React.FC = () => {
   const { formatXaf } = useCurrency();
   const { nudgeInstall } = usePwaInstall();
 
+  // Star ratings for the grid come from the server in ONE call. Resolving them in
+  // the browser needs the order behind each review, and local `orders` only ever
+  // holds the viewer's own — so signed-out visitors saw no stars at all and signed-in
+  // shoppers saw only their own review counted. The local join stays as a fallback
+  // for a rating just left in this session, before the aggregate refetches.
+  const [offerRatings, setOfferRatings] = useState<
+    Record<string, { count: number; average: number }>
+  >({});
+  useEffect(() => {
+    let alive = true;
+    apiFetch<Array<{ offerId: string; count: number; average: number }>>(
+      API_ENDPOINTS.reviews.offerRatings,
+      { silent401: true } as any,
+    )
+      .then((rows) => {
+        if (!alive || !Array.isArray(rows)) return;
+        const byOffer: Record<string, { count: number; average: number }> = {};
+        rows.forEach((r) => {
+          byOffer[r.offerId] = { count: r.count, average: r.average };
+        });
+        setOfferRatings(byOffer);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [reviews.length]);
+
   const getOfferReviewStats = (offerId: string) => {
+    const serverStats = offerRatings[offerId];
+    if (serverStats) {
+      return { reviewCount: serverStats.count, rating: serverStats.average };
+    }
     const offerReviews = getReviewsForOffer(offerId, reviews, orders);
     return {
       reviewCount: offerReviews.length,

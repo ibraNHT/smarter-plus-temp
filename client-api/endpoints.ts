@@ -120,6 +120,8 @@ export const API_ENDPOINTS = {
     byUser: (userId: string) => `/api/reviews/user/${userId}`,
     /** Public per-offer reviews — readable while signed out. */
     byOffer: (offerId: string) => `/api/reviews/offer/${offerId}`,
+    /** Public {offerId, count, average} for every reviewed offer — one call for a grid. */
+    offerRatings: '/api/reviews/offer-ratings',
     all: "/api/reviews",
   },
   portfolios: {
