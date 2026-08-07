@@ -390,7 +390,7 @@ interface StoreContextType {
   requestOrderCancellation: (orderId: string, reason?: string) => Promise<void>;
   updateAppointment: (orderId: string, bookingDate: string) => Promise<boolean>;
   reportProblem: (orderId: string, reason: string, files: File[]) => Promise<void>;
-  addDisputeEvidence: (orderId: string, files: File[]) => Promise<void>;
+  addDisputeEvidence: (orderId: string, files: File[], note?: string) => Promise<void>;
   revealContactInfo: (orderId: string) => Promise<void>;
   submitReview: (review: Omit<Review, 'id' | 'createdAt'>) => Promise<void>;
   getAverageRating: (targetId: string) => number;
@@ -3153,14 +3153,18 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const addDisputeEvidence = async (orderId: string, files: File[]) => {
+  const addDisputeEvidence = async (orderId: string, files: File[], note?: string) => {
     if (!user || files.length === 0) return;
     // Append evidence to an already-open dispute (used by the producer, and by
-    // the buyer to add more). Persists via the same endpoint as reportProblem,
-    // just without a reason. Previously this only mutated local state, so the
-    // admin never received the producer's evidence.
+    // the buyer to add more). Persists via the same endpoint as reportProblem.
+    // `note` carries this party's own account of the dispute — the API stores it
+    // per submission, so an admin can read the rebuttal instead of only seeing
+    // the images. Previously this only mutated local state, so the admin never
+    // received the producer's evidence at all.
     const formData = new FormData();
     files.forEach(f => formData.append('files', f));
+    const trimmedNote = (note ?? '').trim();
+    if (trimmedNote) formData.append('reason', trimmedNote);
     try {
       const result = await apiUpload<DisputeEvidence[] | { evidence: DisputeEvidence[] }>(API_ENDPOINTS.orders.dispute(orderId), formData);
       const evidence = Array.isArray(result) ? result : (result?.evidence ?? []);

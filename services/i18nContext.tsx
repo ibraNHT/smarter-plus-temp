@@ -1851,6 +1851,8 @@ const translations: Record<string, Record<Language, string>> = {
   'dash.total': { en: 'Total', fr: 'Total' },
   'dash.reviewPlaceholder': { en: 'Comments about this client...', fr: 'Commentaires sur ce client...' },
   'dash.uploadFiles': { en: 'Upload files', fr: 'Téléverser des fichiers' },
+  'dash.evidenceNote': { en: 'Your explanation', fr: 'Votre explication' },
+  'dash.evidenceNotePlaceholder': { en: 'Explain your side of this dispute — the admin reviewing it will read this alongside your files.', fr: 'Expliquez votre version du litige — l’administrateur le lira avec vos fichiers.' },
   'dash.evidenceUploadHint': { en: 'JPG, PNG, PDF up to 10MB — up to 3 files', fr: 'JPG, PNG, PDF jusqu’à 10 Mo — 3 fichiers maximum' },
   'dash.filesSelected': { en: '{count} files selected:', fr: '{count} fichiers sélectionnés :' },
   'dash.upload': { en: 'Upload', fr: 'Téléverser' },

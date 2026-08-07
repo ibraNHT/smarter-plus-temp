@@ -89,6 +89,7 @@ export const ProducerDashboard: React.FC = () => {
    const [showEvidenceModal, setShowEvidenceModal] = useState(false);
    const [evidenceOrderId, setEvidenceOrderId] = useState<string | null>(null);
    const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+   const [evidenceNote, setEvidenceNote] = useState('');
    const [orderActionBusy, setOrderActionBusy] = useState<string | null>(null);
 
    const handleMarkDelivered = async (orderId: string) => {
@@ -403,13 +404,14 @@ export const ProducerDashboard: React.FC = () => {
       e.stopPropagation();
       setEvidenceOrderId(orderId);
       setEvidenceFiles([]);
+      setEvidenceNote('');
       setShowEvidenceModal(true);
    };
 
    const handleEvidenceUpload = (e: React.FormEvent) => {
       e.preventDefault();
       if (evidenceOrderId && evidenceFiles.length > 0) {
-         addDisputeEvidence(evidenceOrderId, evidenceFiles);
+         addDisputeEvidence(evidenceOrderId, evidenceFiles, evidenceNote);
          setShowEvidenceModal(false);
       }
    };
@@ -1316,6 +1318,19 @@ export const ProducerDashboard: React.FC = () => {
                      </div>
 
                      <form onSubmit={handleEvidenceUpload}>
+                        {/* The producer's own account of the dispute. Without this the
+                            admin saw their images with nothing to read — the buyer had a
+                            reason field but the seller had none. */}
+                        <div className="mb-4">
+                           <label className="block text-sm font-medium text-gray-700 mb-1">{t('dash.evidenceNote')}</label>
+                           <textarea
+                              rows={3}
+                              className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
+                              value={evidenceNote}
+                              onChange={(e) => setEvidenceNote(e.target.value)}
+                              placeholder={t('dash.evidenceNotePlaceholder')}
+                           />
+                        </div>
                         <div className="mb-6">
                            <div className="flex items-center justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
                               <div className="space-y-1 text-center">
