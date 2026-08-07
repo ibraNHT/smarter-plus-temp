@@ -48,7 +48,7 @@ export const Sidebar = ({ page, setPage, isOpen, setIsOpen, user, logout, t, can
             </button>
           ))}
         </nav>
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+        {/* <div className="p-4 border-t border-gray-200 dark:border-gray-700">
           <button
             onClick={() => { setPage('profile'); setIsOpen(false); }}
             className="flex items-center gap-3 mb-4 w-full p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-left"
@@ -65,6 +65,35 @@ export const Sidebar = ({ page, setPage, isOpen, setIsOpen, user, logout, t, can
             <LogOut className="w-5 h-5 mr-3" />
             {t('logout')}
           </button>
+        </div> */}
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => { setPage('profile'); setIsOpen(false); }}
+            className="flex items-center gap-3 mb-0 w-full p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-left"
+          >
+            <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center font-bold shrink-0 overflow-hidden">
+              {user?.profilePicUrl ? <img src={getAbsoluteImageUrl(user.profilePicUrl)} alt="User" className="w-full h-full object-cover" /> : user?.firstName?.charAt(0)}
+            </div>
+            <div className="overflow-hidden">
+              <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{user?.firstName} {user?.lastName}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-500 truncate">{t('profile')}</div>
+            </div>
+          </button>
+          {/* Show the translator there for mobile devices only */}
+          <div className="lg:hidden mb-2 flex items-center gap-6 w-auto">
+            <button onClick={logout} className="w-full flex items-center px-4 py-4 my-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
+              <LogOut className="w-5 h-5 mr-3" />
+              {t('logout')}
+            </button>
+            <select value={t('lang')} onChange={e => t.setLang(e.target.value)} className="w-full bg-gray-100 dark:bg-gray-700 border-none rounded-md text-sm p-2 mb-4 text-gray-900 dark:text-white">
+              <option value="en">EN</option>
+              <option value="fr">FR</option>
+            </select>
+          </div>
+          {/* <button onClick={logout} className="w-full flex items-center px-4 py-0 mb-4 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
+            <LogOut className="w-5 h-5 mr-3" />
+            {t('logout')}
+          </button> */}
         </div>
       </aside>
     </>
@@ -203,7 +232,7 @@ export const Header = ({ setIsOpen, lang, setLang, currency, setCurrency, locati
               )}
             </button>
             {notifOpen && (
-              <div className="absolute right-0 top-full mt-1 w-80 max-h-96 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-xl z-50">
+              <div className="absolute left-0 top-full mt-1 w-64 sm:w-80 max-h-96 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-xl z-50">
                 <div className="p-3 border-b border-gray-200 dark:border-gray-700 font-medium text-sm text-gray-800 dark:text-gray-200">{t('notifications')}</div>
                 {notifLoading ? (
                   <div className="p-4 text-center text-gray-500 dark:text-gray-500 text-sm">Loading...</div>
@@ -260,7 +289,7 @@ export const Header = ({ setIsOpen, lang, setLang, currency, setCurrency, locati
           <option value="CAD">CAD</option>
           <option value="EUR">EUR</option>
         </select>
-        <select value={lang} onChange={e => setLang(e.target.value)} className="bg-gray-100 dark:bg-gray-700 border-none rounded-md text-sm p-2 text-gray-900 dark:text-white">
+        <select value={lang} onChange={e => setLang(e.target.value)} className="hidden lg:block bg-gray-100 dark:bg-gray-700 border-none rounded-md text-sm p-2 text-gray-900 dark:text-white">
           <option value="en">EN</option>
           <option value="fr">FR</option>
         </select>

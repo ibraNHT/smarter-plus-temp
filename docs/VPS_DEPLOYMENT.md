@@ -106,7 +106,7 @@ nano .env
 Set at least:
 
 - `NODE_ENV=production`
-- `PORT=3000` (or `5001` if you prefer; Nginx will proxy to this port)
+- `PORT=3000` (or `5002` if you prefer; Nginx will proxy to this port)
 - `JWT_SECRET` – long random string (≥ 32 characters)
 - `DATABASE_URL` – e.g. `postgresql://user:password@localhost:5432/smarter_panel`
 - `FRONTEND_ORIGIN` – e.g. `https://app.smarterworkspace.cloud` or `https://your-domain.com` (no trailing slash; add multiple origins comma-separated if needed)

@@ -7,17 +7,17 @@ const raw = typeof import.meta !== 'undefined' && import.meta.env
   ? (import.meta.env as Record<string, string | undefined>)
   : ({} as Record<string, string | undefined>);
 
-/** Production API base (no port). Used when baked-in URL wrongly includes :3000/:5001. */
+/** Production API base (no port). Used when baked-in URL wrongly includes :3000/:5002. */
 const PRODUCTION_API_BASE = 'https://api.smarterworkspace.cloud';
 
 /**
- * In production (smarterworkspace.cloud), if the baked-in URL contains a port (:3000, :5001),
+ * In production (smarterworkspace.cloud), if the baked-in URL contains a port (:3000, :5002),
  * use the known public API base so uploads and API calls don't fail (ERR_SSL_PROTOCOL_ERROR).
  */
 function normalizeApiUrl(url: string, pathSuffix: string): string {
   if (typeof window === 'undefined') return url;
   const isProductionHost = /smarterworkspace\.cloud$/i.test(window.location.hostname);
-  const hasWrongPort = /:\d+(\/|$)/.test(url) && (url.includes(':3000') || url.includes(':5001'));
+  const hasWrongPort = /:\d+(\/|$)/.test(url) && (url.includes(':3000') || url.includes(':5002'));
   if (isProductionHost && hasWrongPort) {
     return `${PRODUCTION_API_BASE}${pathSuffix}`;
   }

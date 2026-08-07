@@ -35,9 +35,9 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       // Proxy API + upload routes + static /uploads to backend: same browser origin as Vite → no CORS in dev.
       proxy: {
-        '/api': { target: 'http://127.0.0.1:3000', changeOrigin: true },
-        '/upload': { target: 'http://127.0.0.1:3000', changeOrigin: true },
-        '/uploads': { target: 'http://127.0.0.1:3000', changeOrigin: true },
+        '/api': { target: 'http://127.0.0.1:5002', changeOrigin: true },
+        '/upload': { target: 'http://127.0.0.1:5002', changeOrigin: true },
+        '/uploads': { target: 'http://127.0.0.1:5002', changeOrigin: true },
       },
     },
     // Only add security headers plugin in production (e.g. `vite preview`). In dev they block Vite's inline scripts and break the app.
