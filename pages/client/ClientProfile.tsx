@@ -23,7 +23,7 @@ import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { PAYMENTS_ENABLED } from '../../utils/featureFlags';
-import { orderHasService, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
+import { orderHasService, orderIsRetail, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
 import { ORDER_STATUS_LABEL_KEY, ORDER_STATUS_PILL_CLASS } from '../../utils/orderStatusDisplay';
 import {
   canCancelDirectly,
@@ -804,7 +804,9 @@ export const ClientProfile: React.FC = () => {
       return `${date} · ${order.items?.length ?? 0} ${t('dash.itemsProduct')}`;
    };
   const openDisputeModal = (orderId: string) => { setDisputeOrderId(orderId); disputeFormik.setFieldValue('disputeReason', ''); setDisputeFiles([]); setShowDisputeModal(true); };
-   const handleDisputeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) { setDisputeFiles(Array.from(e.target.files)); } };
+   /** Cap at 3 — the API's FilesInterceptor("files", 3) rejects the whole submission
+    * beyond that, so an uncapped picker silently failed the entire dispute report. */
+   const handleDisputeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) { setDisputeFiles(Array.from(e.target.files).slice(0, 3)); } };
    /** Service appointments can be rescheduled until the order goes in transit. */
    const canRescheduleAppointment = (order: Order) =>
       orderHasService(order)
@@ -1808,8 +1810,10 @@ export const ClientProfile: React.FC = () => {
                         </div>
                      )}
 
-                     {/* Contact reveal for IN_TRANSIT orders */}
-                     {selectedOrderLive.status === OrderStatus.IN_TRANSIT && (
+                     {/* Contact reveal for IN_TRANSIT marketplace orders. ATI retail
+                         orders are sold by the platform, not a producer — there is no
+                         seller profile to reveal, so the block is hidden for them. */}
+                     {selectedOrderLive.status === OrderStatus.IN_TRANSIT && !orderIsRetail(selectedOrderLive) && (
                         <div className="mt-3 p-3 bg-blue-50 rounded-md border border-blue-200 text-sm">
                            <p className="font-medium text-blue-800 mb-1 flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> Producer Contact</p>
                            {selectedOrderLive.contactRevealed ? (

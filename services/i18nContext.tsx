@@ -1263,9 +1263,11 @@ const translations: Record<string, Record<Language, string>> = {
   en: 'Not selected',
   fr: 'Non sélectionné',
 },
+// Legal seller of record for every ATI retail order. Retail has no producer
+// profile behind it, so this is the name shown as "Sold by" and on receipts.
 'product.atiStoreName': {
-  en: 'ATI Retail Store',
-  fr: 'Boutique de détail ATI',
+  en: 'Achete Tout ICI Sarl',
+  fr: 'Achete Tout ICI Sarl',
 },
 'product.vettedQuality': {
   en: 'Vetted Quality',

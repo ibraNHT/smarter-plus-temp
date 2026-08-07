@@ -95,20 +95,34 @@ export async function postGuestSupportMessage(
   );
 }
 
-export async function getGuestSupportMessages(sessionId: string, guestEmail: string): Promise<SupportMessageDto[]> {
+/**
+ * Guest poll payload: messages **and** the session status.
+ *
+ * Guests get no WebSocket (it is JWT-gated) and have no session-detail endpoint,
+ * so this single poll is the only channel by which an admin's status change —
+ * assign to me, return to AI, close — can reach the guest widget. The endpoint
+ * previously returned no status at all, which is why the guest side never
+ * reacted to anything the Console did.
+ *
+ * It returns `{ messages: [...] }` (an object) unlike the authenticated endpoint
+ * which returns a bare array; both shapes are unwrapped so callers always get an
+ * array — otherwise an `Array.isArray` guard drops every agent reply.
+ */
+export async function getGuestSupportSnapshot(
+  sessionId: string,
+  guestEmail: string,
+): Promise<{ messages: SupportMessageDto[]; status: string | null }> {
   try {
-    // The guest endpoint returns `{ messages: [...] }` (an object), unlike the
-    // authenticated endpoint which returns a bare array. Unwrap it here so the
-    // caller always receives an array — otherwise the guest poll's
-    // `Array.isArray(data)` guard is false and every agent reply is silently dropped.
-    const res = await apiGet<SupportMessageDto[] | { messages: SupportMessageDto[] }>(
-      API_ENDPOINTS.support.guestSessionMessages(sessionId, guestEmail),
-      { silent401: true },
-    );
-    if (Array.isArray(res)) return res;
-    return Array.isArray((res as any)?.messages) ? (res as any).messages : [];
+    const res = await apiGet<
+      SupportMessageDto[] | { messages: SupportMessageDto[]; status?: string | null }
+    >(API_ENDPOINTS.support.guestSessionMessages(sessionId, guestEmail), { silent401: true });
+    if (Array.isArray(res)) return { messages: res, status: null };
+    return {
+      messages: Array.isArray((res as any)?.messages) ? (res as any).messages : [],
+      status: typeof (res as any)?.status === 'string' ? (res as any).status : null,
+    };
   } catch {
-    return [];
+    return { messages: [], status: null };
   }
 }
 

@@ -326,6 +326,9 @@ export interface DisputeEvidence {
   fileUrl: string; // Mock URL
   fileType: 'IMAGE' | 'DOCUMENT';
   uploadedAt: string;
+  /** Note the uploading party submitted with this evidence batch. Null on rows
+   *  created before the column existed. */
+  note?: string | null;
 }
 
 // Coupon System

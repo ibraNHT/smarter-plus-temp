@@ -41,7 +41,8 @@ function pickProducerName(offer, producer) {
     if (full) return full;
     if (producer.name) return producer.name;
   }
-  if (offer?.marketType === 'ATI' || offer?.market_type === 'ATI') return 'ATI Retail Store';
+  // Seller of record for ATI retail — keep in sync with i18n 'product.atiStoreName'.
+  if (offer?.marketType === 'ATI' || offer?.market_type === 'ATI') return 'Achete Tout ICI Sarl';
   return offer?.producerName || offer?.sellerName || null;
 }
 

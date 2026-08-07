@@ -1164,6 +1164,9 @@ export const ProducerDashboard: React.FC = () => {
                                     {selectedOrderLive.disputeEvidence.map(ev => (
                                        <li key={ev.id} className="text-xs text-red-600">
                                           {ev.fileName} ({ev.uploaderId === user?.id ? t('dash.you') : t('dash.clientLabel')})
+                                          {ev.note ? (
+                                             <span className="block text-red-700 italic whitespace-pre-wrap">{ev.note}</span>
+                                          ) : null}
                                        </li>
                                     ))}
                                  </ul>

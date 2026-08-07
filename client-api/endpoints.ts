@@ -118,6 +118,8 @@ export const API_ENDPOINTS = {
   reviews: {
     create: "/api/reviews",
     byUser: (userId: string) => `/api/reviews/user/${userId}`,
+    /** Public per-offer reviews — readable while signed out. */
+    byOffer: (offerId: string) => `/api/reviews/offer/${offerId}`,
     all: "/api/reviews",
   },
   portfolios: {

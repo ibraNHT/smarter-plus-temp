@@ -187,10 +187,39 @@ export const ProductDetails: React.FC = () => {
 
   const producerReviews = allProducerReviews;
 
+  // Reviews for THIS offer. The server resolves the review→offer link (a Review
+  // points at an Order, not an Offer) because the local join can only see the
+  // viewer's own orders — so a shopper saw just their own review and a signed-out
+  // visitor saw none at all. The local join is kept as a fallback so a review left
+  // in this session shows up before the refetch lands.
+  const [fetchedOfferReviews, setFetchedOfferReviews] = useState<any[]>([]);
+  useEffect(() => {
+    if (!offerId) {
+      setFetchedOfferReviews([]);
+      return;
+    }
+    let alive = true;
+    apiFetch<any[]>(API_ENDPOINTS.reviews.byOffer(offerId), { silent401: true } as any)
+      .then((data) => {
+        if (alive && Array.isArray(data)) setFetchedOfferReviews(data);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [offerId, reviews.length]);
+
   const offerReviews = React.useMemo(() => {
     if (!offerId) return [];
-    return getReviewsForOffer(offerId, reviews, orders);
-  }, [offerId, reviews, orders]);
+    const byId = new Map<string, Review>();
+    [
+      ...getReviewsForOffer(offerId, reviews, orders),
+      ...fetchedOfferReviews.map(mapReviewRow),
+    ].forEach((r) => byId.set(r.id, r));
+    return Array.from(byId.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }, [offerId, reviews, orders, fetchedOfferReviews]);
 
   const getClientByUserOrProfileId = (id: string) =>
     clients.find((c) => c.id === id || c.userId === id);
@@ -427,7 +456,7 @@ export const ProductDetails: React.FC = () => {
   };
 
   const producerDisplayName = !isProducerMarket
-    ? 'ATI Retail Store'
+    ? t('product.atiStoreName')
     : resolveProducerDisplayName(producer);
   const producerAvatarUrl = isProducerMarket ? resolveProfileImageUrl(producer) : undefined;
 

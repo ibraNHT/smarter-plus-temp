@@ -26,7 +26,7 @@ import { ServiceAppointmentPicker } from './ServiceAppointmentPicker';
 import { Order, OrderStatus, UserSession, MarketType } from '../types';
 import { offerImageInBox } from '../utils/offerImageDisplay';
 import { PAYMENTS_ENABLED } from '../utils/featureFlags';
-import { orderHasService, orderIsServiceOnly, serviceLineCount } from '../utils/orderLabels';
+import { orderHasService, orderIsRetail, orderIsServiceOnly, serviceLineCount } from '../utils/orderLabels';
 import {
   canCancelDirectly,
   canLeaveReview,
@@ -803,6 +803,9 @@ export function BuyerPurchaseProducerContact({ order }: { order: Order }) {
   const { producers, revealContactInfo } = useStore();
 
   if (order.status !== OrderStatus.IN_TRANSIT) return null;
+  // ATI retail orders are sold by the platform, not by a producer — there is no
+  // seller profile to reveal, so the whole block is hidden for them.
+  if (orderIsRetail(order)) return null;
 
   const getProducerContact = (producerId: string) => {
     const p = producers.find((prod) => prod.id === producerId) as any;

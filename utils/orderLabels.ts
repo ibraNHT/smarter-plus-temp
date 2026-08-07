@@ -1,4 +1,13 @@
-import { CartItem, OfferType, Order } from '../types';
+import { CartItem, MarketType, OfferType, Order } from '../types';
+
+/**
+ * ATI retail order (sold by the platform itself) rather than a marketplace order
+ * sold by a producer. Retail has no seller profile behind it — the seller is ATI —
+ * so producer-facing affordances (reveal contact, chat with seller) must be hidden.
+ */
+export function orderIsRetail(order: Pick<Order, 'items'>): boolean {
+  return (order.items ?? []).some((i) => i.marketType === MarketType.ATI);
+}
 
 export function orderHasService(order: Pick<Order, 'items'>): boolean {
   return order.items.some((i) => i.type === OfferType.SERVICE);

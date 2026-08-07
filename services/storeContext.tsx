@@ -4,7 +4,7 @@ import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerS
 import { generateSupportResponse } from './geminiService';
 import {
   getSupportMessages,
-  getGuestSupportMessages,
+  getGuestSupportSnapshot,
   mapDtoToSupportMessage,
   mergeIncomingSupportMessages,
   reconcileServerMessages,
@@ -3864,33 +3864,48 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  // Polling for guest support messages when handed over to agent
+  // Polling for guest support sessions.
+  //
+  // This is a guest's ONLY sync channel — the /notifications socket is JWT-gated,
+  // so nothing an admin does in the Console reaches them any other way. It runs
+  // whenever the widget is open on a guest session (not just after hand-over), so
+  // an admin who picks up or closes a session the guest never escalated still
+  // gets reflected on the guest's side.
   useEffect(() => {
-    if (!isSupportChatOpen || !isHandedOver || user || !supportSessionId || !guestEmail) return;
+    if (!isSupportChatOpen || user || !supportSessionId || !guestEmail) return;
 
     const pollInterval = setInterval(async () => {
       try {
-        const data = await getGuestSupportMessages(supportSessionId, guestEmail);
-        if (data && Array.isArray(data)) {
-          const backendMessages = data.map((msg: any) =>
-            mapDtoToSupportMessage({
-              id: msg.id,
-              sender: msg.sender,
-              text: msg.text,
-              timestamp: msg.timestamp,
-            })
-          );
-          // Server history is authoritative — reconcile (not append) so a guest's
-          // optimistic AI-mode bubbles (temp ids) don't duplicate against their
-          // persisted server copies. Guard empty so an errored poll can't wipe it.
-          if (backendMessages.length > 0) {
-            setSupportMessages((prev) => reconcileServerMessages(prev, backendMessages));
-          }
-          // Guests have no socket — infer "agent connected" from a real agent reply
-          // so the widget stops showing "waiting for an agent".
-          if (backendMessages.some((m) => m.sender === 'AGENT' && !m.internal)) {
-            setSupportSessionStatus('AGENT_ACTIVE');
-          }
+        const { messages, status } = await getGuestSupportSnapshot(supportSessionId, guestEmail);
+        const backendMessages = messages.map((msg: any) =>
+          mapDtoToSupportMessage({
+            id: msg.id,
+            sender: msg.sender,
+            text: msg.text,
+            timestamp: msg.timestamp,
+          })
+        );
+        // Server history is authoritative — reconcile (not append) so a guest's
+        // optimistic AI-mode bubbles (temp ids) don't duplicate against their
+        // persisted server copies. Guard empty so an errored poll can't wipe it.
+        if (backendMessages.length > 0) {
+          setSupportMessages((prev) => reconcileServerMessages(prev, backendMessages));
+        }
+        // Authoritative status from the server — mirrors what the socket's
+        // 'support:session-update' handler does for logged-in users.
+        if (
+          status === 'AI_HANDLING' ||
+          status === 'WAITING_FOR_AGENT' ||
+          status === 'AGENT_ACTIVE' ||
+          status === 'CLOSED'
+        ) {
+          setSupportSessionStatus(status);
+          setIsHandedOver(status === 'WAITING_FOR_AGENT' || status === 'AGENT_ACTIVE');
+        } else if (backendMessages.some((m) => m.sender === 'AGENT' && !m.internal)) {
+          // Fallback for an API that predates the status field: a real agent reply
+          // means someone is on the other end.
+          setSupportSessionStatus('AGENT_ACTIVE');
+          setIsHandedOver(true);
         }
       } catch (err) {
         logApiFailure('Error polling support messages:', err);
@@ -3898,7 +3913,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }, 5000); // Poll every 5 seconds while chat is open
 
     return () => clearInterval(pollInterval);
-  }, [isSupportChatOpen, isHandedOver, user, supportSessionId, guestEmail]);
+  }, [isSupportChatOpen, user, supportSessionId, guestEmail]);
 
   // Polling for authenticated users when handed over to agent.
   // Also re-syncs inbox every 15s to detect if an admin resets the session
