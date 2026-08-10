@@ -24,6 +24,17 @@ const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#e
 const INCOME_COLOR = '#10b981';
 const EXPENSE_COLOR = '#ef4444';
 
+const formatCompactAmount = (value: number | string) => {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return String(value ?? '');
+  const sign = number < 0 ? '-' : '';
+  const abs = Math.abs(number);
+  if (abs >= 1_000_000_000) return `${sign}${(abs / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`;
+  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
+  return `${sign}${abs}`;
+};
+
 export default function Reports({ t, locationId, currency, lang }: any) {
   const { data: income = [] } = useData('income', locationId);
   const { data: expenses = [] } = useData('expenses', locationId);
@@ -475,7 +486,7 @@ export default function Reports({ t, locationId, currency, lang }: any) {
                   <BarChart data={monthlySeries} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                     <XAxis dataKey="month" stroke="#9ca3af" tick={{ fontSize: 12 }} />
-                    <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} tickFormatter={(v) => formatCurrency(v, currency)} />
+                    <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} tickFormatter={formatCompactAmount} />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend />
                     <Bar dataKey="income" name={t('income')} fill={INCOME_COLOR} radius={[4, 4, 0, 0]} />
@@ -547,7 +558,7 @@ export default function Reports({ t, locationId, currency, lang }: any) {
                   <BarChart data={lossesByReasonData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                     <XAxis dataKey="name" stroke="#9ca3af" tick={{ fontSize: 12 }} />
-                    <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} tickFormatter={(v) => formatCurrency(v, currency)} />
+                    <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} tickFormatter={formatCompactAmount} />
                     <Tooltip content={<CustomTooltip />} />
                     <Bar dataKey="value" name={t('inventoryLossValue')} fill="#f59e0b" radius={[4, 4, 0, 0]}>
                       {lossesByReasonData.map((entry) => (
@@ -571,7 +582,7 @@ export default function Reports({ t, locationId, currency, lang }: any) {
                   <LineChart data={monthlySeries} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                     <XAxis dataKey="month" stroke="#9ca3af" tick={{ fontSize: 12 }} />
-                    <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} tickFormatter={(v) => formatCurrency(v, currency)} />
+                    <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} tickFormatter={formatCompactAmount} />
                     <Tooltip content={<CustomTooltip />} />
                     <Line type="monotone" dataKey="net" name={t('netBalance')} stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
                   </LineChart>
