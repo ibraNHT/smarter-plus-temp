@@ -86,7 +86,9 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    const refreshed = await attemptTokenRefresh();
+    // Honour silent401 — otherwise a guest support call refreshed, got 401, and
+    // was redirected to /login from inside the refresh helper.
+    const refreshed = await attemptTokenRefresh({ silent: silent401 });
     if (!refreshed) {
       // Refresh failed → the session itself is dead. (attemptTokenRefresh already
       // redirects when the refresh endpoint 401/403s.) Force out unless silent.

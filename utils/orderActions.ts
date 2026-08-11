@@ -1,4 +1,5 @@
 import { Order, OrderStatus } from '../types';
+import { orderIsRetail } from './orderLabels';
 
 /** Map legacy / retail API status strings to the Connect OrderStatus enum. */
 export function normalizeOrderStatus(raw: unknown): OrderStatus {
@@ -31,6 +32,20 @@ export function normalizeOrderStatus(raw: unknown): OrderStatus {
 
 export function isTerminalOrderStatus(status: OrderStatus): boolean {
   return [OrderStatus.CANCELLED, OrderStatus.DISPUTE].includes(status);
+}
+
+/**
+ * When the buyer may pay.
+ *
+ * Marketplace: after the producer validates (CONFIRMED_AWAITING_PAYMENT).
+ * ATI retail: immediately — retail is pay-upfront, so the customer settles while
+ * the order is still PENDING_VALIDATION and staff then verify that payment. The
+ * API already allows PAID_IN_PREPARATION from either state, so this only opens
+ * the UI gate.
+ */
+export function canPayNow(order: Pick<Order, 'status' | 'items'>): boolean {
+  if (order.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT) return true;
+  return order.status === OrderStatus.PENDING_VALIDATION && orderIsRetail(order);
 }
 
 /**

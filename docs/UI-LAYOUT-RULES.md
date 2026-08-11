@@ -98,3 +98,22 @@ Three separate guards keep it visible — keep all three:
    `orientationchange`, `visualViewport` resize, and a `ResizeObserver` — the
    observer is the only thing that catches content growth, which fires no
    window event.
+
+---
+
+## 2026-08-10 — AtiStore joins the carousel exception (client request)
+
+The two-per-row phone rule above **no longer applies to `AtiStore.tsx`**. The client
+asked for the retail store's category rows to scroll horizontally on mobile, "as in
+the marketplace". `AtiStore.tsx` now uses the same unconditional carousel classes as
+`ProducerMarket.tsx`:
+
+- row: `flex gap-3 px-1 pb-8 pt-2 overflow-x-auto -mx-1 snap-x snap-mandatory md:gap-6`
+- card: `min-w-[250px] w-40 flex-shrink-0 snap-start sm:min-w-[240px] sm:w-[260px] md:min-w-[280px] md:w-[300px]`
+
+The unprefixed `min-w-[250px]` is deliberate — it is what makes the row swipeable on a
+phone. **Do not "restore" `grid grid-cols-2` on these rows.**
+
+Still unchanged: the expanded "See all" grid (`AtiStore.tsx` ~line 384) keeps
+`grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`, mirroring ProducerMarket's
+expanded view. Only the collapsed category rows are carousels.

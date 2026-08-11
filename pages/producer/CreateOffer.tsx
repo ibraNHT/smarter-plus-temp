@@ -773,7 +773,7 @@ export const CreateOffer: React.FC = () => {
                    value={formData.offerLocation}
                    onChange={e => setFormData({...formData, offerLocation: e.target.value})}
                  >
-                   <option value={registeredLocation}>{t('form.myLocation' + ' ')} {registeredLocation}</option>
+                   <option value={registeredLocation}>{t('form.myLocation')} {registeredLocation}</option>
                    {/* Future: Add more locations here */}
                  </select>
                </div>

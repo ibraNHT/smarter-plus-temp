@@ -1212,7 +1212,7 @@ export const ProducerDashboard: React.FC = () => {
                                        {item.type === OfferType.SERVICE ? (
                                           <>
                                              <p className="text-xs text-gray-600 mt-1">
-                                                {t('service.bookedQty')}: {item.cartQuantity} {t(`unit.${item.unit}`)} · {formatXaf(item.price)} / {t(`unit.${item.unit}`)}
+                                                {t('service.bookedQty')}: {item.cartQuantity} {t('service.slotsUnit')} · {formatXaf(item.price)} / {t(`unit.${item.unit}`)}
                                              </p>
                                              {item.bookingDate && (
                                                 <p className="text-xs text-purple-800 font-semibold mt-1 flex items-center gap-1">
@@ -1343,7 +1343,22 @@ export const ProducerDashboard: React.FC = () => {
                                           multiple
                                           accept=".jpg,.jpeg,.png,.pdf"
                                           className="sr-only"
-                                          onChange={(e) => e.target.files && setEvidenceFiles(Array.from(e.target.files).slice(0, 3))}
+                                          onChange={(e) => {
+                                             // Append rather than replace: a FileList only holds the
+                                             // LAST dialog's picks, so clicking three times kept just
+                                             // one file. Dedupe by name+size+mtime, cap at the API's 3.
+                                             const picked = Array.from(e.target.files ?? []);
+                                             if (picked.length) {
+                                                setEvidenceFiles(prev => {
+                                                   const merged = [...prev];
+                                                   for (const f of picked) {
+                                                      if (!merged.some(x => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) merged.push(f);
+                                                   }
+                                                   return merged.slice(0, 3);
+                                                });
+                                             }
+                                             e.target.value = '';
+                                          }}
                                        />
                                     </label>
                                  </div>

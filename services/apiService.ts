@@ -106,7 +106,15 @@ export const isRefreshOnCooldown = (): boolean =>
  *  in-flight promise and cooldown state as the fetch-based `apiFetch` below.
  *  Otherwise both pipelines would attempt refresh independently and could
  *  burn the rotated refresh token before either retry runs. */
-export const attemptTokenRefresh = async (): Promise<boolean> => {
+/**
+ * @param opts.silent  Never force a logout/redirect on failure. Required for
+ *   guest-facing calls (support chat): a signed-out visitor has nothing to
+ *   refresh, so a 401 here is expected — redirecting them was the "talk to a
+ *   human agent sends me to the login page" bug.
+ */
+export const attemptTokenRefresh = async (opts: { silent?: boolean } = {}): Promise<boolean> => {
+    // A pure guest has nothing to refresh — don't try, and never redirect.
+    if (!getToken() && !getRefreshToken()) return false;
     if (refreshInFlight) return refreshInFlight;
     if (Date.now() - lastRefreshFailed < REFRESH_COOLDOWN_MS) return false;
 
@@ -127,7 +135,7 @@ export const attemptTokenRefresh = async (): Promise<boolean> => {
                 // sign the user out and route to login. For other 5xx errors
                 // we don't force-logout: the request may succeed later.
                 if (response.status === 401 || response.status === 403) {
-                    forceLogoutRedirect();
+                    if (!opts.silent) forceLogoutRedirect();
                 }
                 return false;
             }
@@ -198,7 +206,7 @@ export const apiFetch = async <T = unknown>(
 
         if (response.status === 401 && !skipAuthRefresh) {
             if (!_isRetry) {
-                const refreshed = await attemptTokenRefresh();
+                const refreshed = await attemptTokenRefresh({ silent: !!silent401 });
                 if (refreshed) {
                     return apiFetch<T>(path, { ...options, _isRetry: true });
                 }

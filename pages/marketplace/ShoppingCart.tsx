@@ -61,6 +61,9 @@ import { useFormik } from 'formik';
 import { z } from 'zod';
 import { useCurrency } from '../../contexts/CurrencyContext';
 
+/** Delivery windows ATI can actually serve. */
+const ATI_DELIVERY_SLOTS = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00'];
+
 export const ShoppingCart: React.FC = () => {
   const { cart, removeFromCart, placeOrder, user, clearCart, clients, producers, moveToFavorites, validateCoupon, pickupPoints, guestEmail, setGuestEmail, refreshOffers, refreshProducers, refreshPickupPoints, refreshCart, refreshClients } = useStore();
   const { t } = useTranslation();
@@ -121,6 +124,11 @@ export const ShoppingCart: React.FC = () => {
 
   // Delivery Date State (ATI Only)
   const [deliveryDate, setDeliveryDate] = useState('');
+  // ATI retail also needs the delivery WINDOW — staff cannot turn up at any hour.
+  // The order payload always carried a time (hardcoded to noon); this makes the
+  // customer choose it. Fixed slots rather than a free time input so the windows
+  // stay ones ATI can actually serve.
+  const [deliveryTime, setDeliveryTime] = useState('');
   const [calendarViewDate, setCalendarViewDate] = useState(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const calendarRef = useRef<HTMLDivElement>(null);
@@ -279,7 +287,7 @@ export const ShoppingCart: React.FC = () => {
   const isDeliveryMethodValid = deliveryMethod === 'HOME' ? isHomeAddressValid : isPickupValid;
 
   // ATI Specific Validation: If ATI order, Date is required.
-  const isAtiDateValid = !isAtiOrder || !!deliveryDate;
+  const isAtiDateValid = !isAtiOrder || (!!deliveryDate && !!deliveryTime);
 
   // Global Valid Check
   const canPlaceOrder = isDeliveryMethodValid && isAtiDateValid;
@@ -410,6 +418,7 @@ export const ShoppingCart: React.FC = () => {
               lng: selectedHomeLocation.lng,
             }
           : undefined,
+        isAtiOrder ? deliveryTime : undefined,
       );
       if (ok) {
         setShowRecap(false);
@@ -515,7 +524,7 @@ export const ShoppingCart: React.FC = () => {
                         <p className="text-gray-500">
                           {item.type === OfferType.SERVICE ? (
                             <>
-                              {t('service.bookedQty')}: {item.cartQuantity} {t(`unit.${item.unit}`)}
+                              {t('service.bookedQty')}: {item.cartQuantity} {t('service.slotsUnit')}
                             </>
                           ) : (
                             <>
@@ -805,6 +814,31 @@ export const ShoppingCart: React.FC = () => {
                       </div>
                     )}
                   </div>
+
+                  <div className="mt-4">
+                    <label className="block text-xs font-bold text-blue-800 mb-2">
+                      {t('cart.selectDeliveryTime')}
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {ATI_DELIVERY_SLOTS.map((slot) => (
+                        <button
+                          key={slot}
+                          type="button"
+                          onClick={() => setDeliveryTime(slot)}
+                          className={`px-2 py-2 rounded-md border text-sm font-medium transition-colors ${
+                            deliveryTime === slot
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                          }`}
+                        >
+                          {slot}
+                        </button>
+                      ))}
+                    </div>
+                    {!deliveryTime && (
+                      <p className="mt-1 text-xs text-gray-500">{t('cart.selectDeliveryTimeHint')}</p>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -927,7 +961,7 @@ export const ShoppingCart: React.FC = () => {
                               </p>
                             )}
                             <p>
-                              <span className="font-semibold">{t('service.bookedQty')}:</span> {item.cartQuantity} {t(`unit.${item.unit}`)}
+                              <span className="font-semibold">{t('service.bookedQty')}:</span> {item.cartQuantity} {t('service.slotsUnit')}
                             </p>
                           </div>
                         )}

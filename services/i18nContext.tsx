@@ -404,6 +404,8 @@ const translations: Record<string, Record<Language, string>> = {
   'cart.subtotal': { en: 'Subtotal', fr: 'Sous-total' },
   'cart.serviceFee': { en: 'Service Fee (16%)', fr: 'Frais de service (16%)' },
   'cart.serviceFeeRetail': { en: 'Service Fee (4%)', fr: 'Frais de service (4%)' },
+  'cart.selectDeliveryTime': { en: 'Delivery time', fr: 'Heure de livraison' },
+  'cart.selectDeliveryTimeHint': { en: 'Choose a delivery window.', fr: 'Choisissez un créneau de livraison.' },
   'cart.total': { en: 'Order Total', fr: 'Total Commande' },
   'cart.placeOrder': { en: 'Place Order', fr: 'Passer la commande' },
   'cart.continue': { en: 'Continue Shopping', fr: 'Continuer vos achats' },
@@ -459,6 +461,9 @@ const translations: Record<string, Record<Language, string>> = {
   'service.scheduledServices': { en: 'Scheduled services', fr: 'Services planifiés' },
   'service.appointment': { en: 'Appointment', fr: 'Rendez-vous' },
   'service.perSlotHours': { en: 'h per slot', fr: 'h par créneau' },
+  // A service line's cartQuantity is a SLOT COUNT, not hours — rendering it with
+  // the offer's pricing unit produced "Booked: 7 Hour(s)" for 7 slots of 3h.
+  'service.slotsUnit': { en: 'slot(s)', fr: 'créneau(x)' },
   'service.lineSingular': { en: 'service', fr: 'service' },
   'service.linePlural': { en: 'services', fr: 'services' },
   'service.slotSingular': { en: 'slot', fr: 'créneau' },
@@ -864,6 +869,18 @@ const translations: Record<string, Record<Language, string>> = {
   'profile.uploadDocs': { en: 'Upload Certificates (Max 10MB)', fr: 'Télécharger Certificats (Max 10MB)' },
 
   // Chat
+  // These were switched from hardcoded literals to t() calls without the keys
+  // ever being added, so t() fell through to returning the key itself.
+  'chat.today': { en: 'Today', fr: "Aujourd'hui" },
+  'chat.yesterday': { en: 'Yesterday', fr: 'Hier' },
+  'chat.service': { en: 'Service', fr: 'Service' },
+  'chat.product': { en: 'Product', fr: 'Produit' },
+  'chat.offer': { en: 'Offer', fr: 'Offre' },
+  'chat.unknown': { en: 'Unknown', fr: 'Inconnu' },
+  'chat.unknownClient': { en: 'Unknown Client', fr: 'Client inconnu' },
+  'chat.unknownProducer': { en: 'Unknown Producer', fr: 'Producteur inconnu' },
+  'chat.user': { en: 'User', fr: 'Utilisateur' },
+
   'chat.proposal': { en: 'Formal Proposal', fr: 'Proposition Formelle' },
   'chat.proposed': { en: 'Proposed', fr: 'Proposé' },
   'chat.makeProposal': { en: 'Make a Proposal', fr: 'Faire une Proposition' },

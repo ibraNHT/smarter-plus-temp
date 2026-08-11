@@ -68,3 +68,6 @@ any block that can grow will push the send button past the bottom edge:
 - Keep the guest form capped and scrollable (`max-h-[70%] overflow-y-auto`).
 - Keep the effect that re-clamps a dragged position on resize,
   `orientationchange`, `visualViewport` resize, and `ResizeObserver`.
+
+## 2026-08-10 update
+AtiStore.tsx collapsed category rows are now horizontal carousels on ALL breakpoints (client request), same classes as ProducerMarket. Do NOT restore `grid grid-cols-2` there. The expanded "See all" grid is unchanged.

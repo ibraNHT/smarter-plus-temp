@@ -182,8 +182,16 @@ export function formatMoney(
   const currency = (opts?.currency || BASE_CURRENCY).toUpperCase();
   const rates = opts?.rates ?? DEFAULT_RATES;
   const value = fromXaf(amountXaf, currency, rates);
-  const digits =
-    opts?.maximumFractionDigits ?? (ZERO_DECIMAL.has(currency) ? 0 : 2);
+  const explicitDigits = opts?.maximumFractionDigits;
+  let digits = explicitDigits ?? (ZERO_DECIMAL.has(currency) ? 0 : 2);
+  // XAF has no minor unit in circulation, so whole numbers suit ordinary amounts —
+  // but a percentage-derived surcharge is legitimately fractional. Rounding 0.32
+  // to "0" told the customer a fee they ARE charged does not exist (16% of 2 XAF),
+  // so reveal decimals when whole-number rounding would erase the value entirely.
+  // Anything >= 0.5 is unaffected.
+  if (explicitDigits == null && digits === 0 && value !== 0 && Math.abs(value) < 0.5) {
+    digits = 2;
+  }
   const formatted = value.toLocaleString(undefined, {
     minimumFractionDigits: 0,
     maximumFractionDigits: digits,

@@ -27,6 +27,7 @@ import { orderHasService, orderIsRetail, orderIsServiceOnly, serviceDurationHour
 import { ORDER_STATUS_LABEL_KEY, ORDER_STATUS_PILL_CLASS } from '../../utils/orderStatusDisplay';
 import {
   canCancelDirectly,
+  canPayNow,
   canRequestCancellation,
   canReportProblem,
   canLeaveReview,
@@ -806,7 +807,22 @@ export const ClientProfile: React.FC = () => {
   const openDisputeModal = (orderId: string) => { setDisputeOrderId(orderId); disputeFormik.setFieldValue('disputeReason', ''); setDisputeFiles([]); setShowDisputeModal(true); };
    /** Cap at 3 — the API's FilesInterceptor("files", 3) rejects the whole submission
     * beyond that, so an uncapped picker silently failed the entire dispute report. */
-   const handleDisputeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) { setDisputeFiles(Array.from(e.target.files).slice(0, 3)); } };
+   /** Append rather than replace — a FileList only holds the LAST dialog's picks,
+    * so choosing files one at a time kept only the final one. Deduped, capped at
+    * the API's FilesInterceptor("files", 3). */
+   const handleDisputeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const picked = Array.from(e.target.files ?? []);
+      if (picked.length) {
+         setDisputeFiles(prev => {
+            const merged = [...prev];
+            for (const f of picked) {
+               if (!merged.some(x => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) merged.push(f);
+            }
+            return merged.slice(0, 3);
+         });
+      }
+      e.target.value = '';
+   };
    /** Service appointments can be rescheduled until the order goes in transit. */
    const canRescheduleAppointment = (order: Order) =>
       orderHasService(order)
@@ -845,7 +861,7 @@ export const ClientProfile: React.FC = () => {
 
       return (
          <>
-            {PAYMENTS_ENABLED && order.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT && (
+            {PAYMENTS_ENABLED && canPayNow(order) && (
                <button onClick={wrap(() => initiatePayment(order.id))} className={`bg-primary-600 text-white ${btnBold} rounded-md font-bold hover:bg-primary-700 shadow-sm flex items-center gap-1`}><CreditCard className={iconSm} /> {t('order.payNow')}</button>
             )}
             {canRescheduleAppointment(order) && (
@@ -1754,7 +1770,7 @@ export const ClientProfile: React.FC = () => {
                                        {item.type === OfferType.SERVICE ? (
                                           <>
                                              <p className="text-xs text-gray-600 mt-1">
-                                                {t('service.bookedQty')}: {item.cartQuantity ?? item.quantity ?? 1} {t(`unit.${item.unit}`)} · {formatXaf(item.price ?? 0)} / {t(`unit.${item.unit}`)}
+                                                {t('service.bookedQty')}: {item.cartQuantity ?? item.quantity ?? 1} {t('service.slotsUnit')} · {formatXaf(item.price ?? 0)} / {t(`unit.${item.unit}`)}
                                              </p>
                                              {item.bookingDate && (
                                                 <p className="text-xs text-purple-800 font-semibold mt-1 flex items-center gap-1">

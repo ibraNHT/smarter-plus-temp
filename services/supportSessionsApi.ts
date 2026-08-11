@@ -52,10 +52,12 @@ export async function listUserSupportSessions(): Promise<UserSupportSessionSumma
 }
 
 export async function createOrGetSupportSession(): Promise<CreateSupportSessionResponse> {
+  // silent401: a support click must never force a logout/redirect.
   return apiFetch<CreateSupportSessionResponse>(API_ENDPOINTS.support.sessions, {
     method: 'POST',
     body: JSON.stringify({}),
-  });
+    silent401: true,
+  } as any);
 }
 
 /**
@@ -152,7 +154,7 @@ export async function requestSupportAgent(
 ): Promise<{ ok: boolean; status: string }> {
   return apiFetch<{ ok: boolean; status: string }>(
     API_ENDPOINTS.support.requestAgent(sessionId),
-    { method: 'POST' },
+    { method: 'POST', silent401: true } as any,
   );
 }
 

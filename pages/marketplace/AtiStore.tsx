@@ -443,9 +443,10 @@ export const AtiStore: React.FC = () => {
                       ) : (
                         <div className="w-full min-w-0 overflow-hidden">
                         {/* Two cards per row on phones, horizontal swipe row from sm up.
-                            The two-per-row phone layout is a client requirement — see
-                            docs/UI-LAYOUT-RULES.md before changing these classes. */}
-                        <div className="grid grid-cols-2 gap-3 px-1 pb-4 sm:flex sm:w-full sm:min-w-0 sm:gap-5 sm:overflow-x-auto scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-gray-50">
+                            Horizontal swipe row on ALL breakpoints, matching ProducerMarket — client
+                            requested 2026-08-10, superseding the earlier two-per-row phone rule.
+                            See docs/UI-LAYOUT-RULES.md before changing these classes. */}
+                        <div className="flex gap-3 px-1 pb-8 pt-2 overflow-x-auto -mx-1 snap-x snap-mandatory md:gap-6 scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-gray-50">
                           {categoryOffers.map((offer) => {
                             const isFav = favorites.includes(offer.id);
                             const isComparing = compareList.includes(offer.id);
@@ -453,7 +454,7 @@ export const AtiStore: React.FC = () => {
                             const filledStars = reviewCount > 0 ? Math.round(rating) : 0;
 
                             return (
-                              <div key={offer.id} className="relative w-full min-w-0 sm:min-w-[220px] sm:w-[240px] sm:flex-shrink-0">
+                              <div key={offer.id} className="relative min-w-[250px] w-40 flex-shrink-0 snap-start sm:min-w-[240px] sm:w-[260px] md:min-w-[280px] md:w-[300px]">
                                 <div className="absolute top-2 right-2 z-10 flex gap-1">
                                   {(user?.role === UserRole.CLIENT || isProducerDashboardUser(user)) && (
                                     <button

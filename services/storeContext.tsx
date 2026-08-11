@@ -378,6 +378,8 @@ interface StoreContextType {
     pickupPointId?: string,
     homeDeliveryLocationId?: string,
     homeShippingSnapshot?: PreferredHomeDeliverySnapshot | null,
+    /** ATI retail: "HH:MM" delivery window chosen at checkout. */
+    deliveryTime?: string,
   ) => Promise<boolean>;
   confirmOrder: (orderId: string) => Promise<void>;
   rejectOrder: (orderId: string) => Promise<void>;
@@ -663,11 +665,17 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return () => window.removeEventListener('agm:session-expired', onSessionExpired);
   }, []);
 
-  // Persist the guest support session id so a page reload resumes agent-reply polling.
+  // Persist the guest support session id so a page reload resumes agent-reply
+  // polling. Requires guestEmail: without it, a session created while signed IN
+  // was being written here at logout and then restored as if it were a guest
+  // session, which the guest endpoints reject with 403.
   useEffect(() => {
-    if (!user && supportSessionId) localStorage.setItem('supportSessionId', supportSessionId);
-    else if (!supportSessionId) localStorage.removeItem('supportSessionId');
-  }, [user, supportSessionId]);
+    if (!user && supportSessionId && guestEmail) {
+      localStorage.setItem('supportSessionId', supportSessionId);
+    } else if (!supportSessionId || user) {
+      localStorage.removeItem('supportSessionId');
+    }
+  }, [user, supportSessionId, guestEmail]);
 
   // ─── DEBOUNCED CART SYNC ───────────────────────────────────────────────────
   useEffect(() => {
@@ -2141,6 +2149,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
     clearToken();
     setUser(null);
+    // The support conversation belonged to the session that just ended. Leaving
+    // it behind meant the AUTHENTICATED session id got reused on the guest
+    // endpoints, which reject it (no guestEmail / owned by a user) — that was
+    // the "chatbot 403 after logging out" report.
+    setSupportSessionId(null);
+    setIsHandedOver(false);
+    setSupportSessionStatus('AI_HANDLING');
+    setSupportMessages([]);
+    try { localStorage.removeItem('supportSessionId'); } catch { /* noop */ }
     useSessionStore.getState().clear();
     setMyReferrals(null);
     setReviews([]);
@@ -2910,7 +2927,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── ORDERS ──────────────────────────────────────────────────────────────────
 
-  const placeOrder = async (couponId?: string, _discountAmount: number = 0, deliveryDate?: string, deliveryMethod: 'HOME' | 'PICKUP' = 'HOME', pickupPointId?: string, homeDeliveryLocationId?: string, homeShippingSnapshot?: PreferredHomeDeliverySnapshot | null): Promise<boolean> => {
+  const placeOrder = async (couponId?: string, _discountAmount: number = 0, deliveryDate?: string, deliveryMethod: 'HOME' | 'PICKUP' = 'HOME', pickupPointId?: string, homeDeliveryLocationId?: string, homeShippingSnapshot?: PreferredHomeDeliverySnapshot | null, deliveryTime?: string): Promise<boolean> => {
     if (cart.length === 0 || (!user && !guestEmail)) return false;
 
     const payload = {
@@ -2919,7 +2936,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         quantity: item.cartQuantity,
         bookingDate: item.bookingDate ? new Date(item.bookingDate).toISOString() : undefined,
       })),
-      requestedDeliveryDate: deliveryDate ? new Date(`${deliveryDate}T12:00:00`).toISOString() : new Date(Date.now() + 3 * 86400 * 1000).toISOString(),
+      // requestedDeliveryDate is a full DateTime end to end (Prisma TIMESTAMP(3)),
+      // but the hour was hardcoded to noon, so the customer's chosen delivery
+      // window was never actually sent. Use the picked slot when there is one.
+      requestedDeliveryDate: deliveryDate
+        ? new Date(`${deliveryDate}T${deliveryTime || '12:00'}:00`).toISOString()
+        : new Date(Date.now() + 3 * 86400 * 1000).toISOString(),
       deliveryMethod,
       pickupPointId: pickupPointId || undefined,
       couponId: couponId || undefined,
@@ -3835,7 +3857,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setRequestingAgent(true);
     try {
       let sessionId = supportSessionIdRef.current ?? supportSessionId;
-      if (user) {
+      // Branch on the TOKEN, not on `user`: a stale currentUser with no token sent
+    // guests down the authenticated path, which 401s and bounced them to /login.
+    const authed = !!user && !!getToken();
+    if (authed) {
         if (!sessionId) {
           const created = await createOrGetSupportSession();
           sessionId = created.sessionId;

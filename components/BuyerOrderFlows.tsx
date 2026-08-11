@@ -30,6 +30,7 @@ import { orderHasService, orderIsRetail, orderIsServiceOnly, serviceDurationHour
 import {
   canCancelDirectly,
   canLeaveReview,
+  canPayNow,
   canReportProblem,
   canRequestCancellation,
   isActiveOrderStatus,
@@ -266,7 +267,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
 
       return (
         <>
-          {PAYMENTS_ENABLED && order.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT && (
+          {PAYMENTS_ENABLED && canPayNow(order) && (
             <button
               type="button"
               onClick={wrap(() => initiatePayment(order.id))}
@@ -569,7 +570,22 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
               multiple
               accept="image/*,application/pdf"
               className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
-              onChange={(e) => e.target.files && setDisputeFiles(Array.from(e.target.files).slice(0, 3))}
+              onChange={(e) => {
+                                             // Append rather than replace: a FileList only holds the
+                                             // LAST dialog's picks, so clicking three times kept just
+                                             // one file. Dedupe by name+size+mtime, cap at the API's 3.
+                                             const picked = Array.from(e.target.files ?? []);
+                                             if (picked.length) {
+                                                setDisputeFiles(prev => {
+                                                   const merged = [...prev];
+                                                   for (const f of picked) {
+                                                      if (!merged.some(x => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) merged.push(f);
+                                                   }
+                                                   return merged.slice(0, 3);
+                                                });
+                                             }
+                                             e.target.value = '';
+                                          }}
             />
             <p className="text-xs text-gray-400 mt-1">{t('order.uploadFilesHint')}</p>
           </div>
