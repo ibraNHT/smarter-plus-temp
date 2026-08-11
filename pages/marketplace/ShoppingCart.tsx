@@ -382,8 +382,9 @@ export const ShoppingCart: React.FC = () => {
     }
 
     if (!canPlaceOrder) {
-      if (!isDeliveryMethodValid) showAppToast('Please select a valid delivery method and address/pickup point.', 'WARNING');
-      else if (!isAtiDateValid) showAppToast('Please select a delivery date.', 'WARNING');
+      if (!isDeliveryMethodValid) showAppToast(t('cart.selectDeliveryMethodWarning'), 'WARNING');
+      else if (!deliveryDate) showAppToast(t('cart.selectDeliveryDateWarning'), 'WARNING');
+      else if (!deliveryTime) showAppToast(t('cart.selectDeliveryTimeHint'), 'WARNING');
       return;
     }
 
@@ -1023,6 +1024,7 @@ export const ShoppingCart: React.FC = () => {
                       </h4>
                       <p className="text-sm text-blue-900 font-medium">
                         {new Date(`${deliveryDate}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                        {deliveryTime ? ` · ${deliveryTime}` : ''}
                       </p>
                     </div>
                   )}

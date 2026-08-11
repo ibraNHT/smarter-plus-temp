@@ -589,9 +589,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     // (guests have no socket; the 5s poll needs the sessionId + handed-over flag).
     if (!getToken()) {
       const savedSupportSessionId = localStorage.getItem('supportSessionId');
-      if (savedSupportSessionId) {
+      const savedGuestEmail = localStorage.getItem('guestEmail');
+      // Only restore a session we can prove is a GUEST one. A session saved while
+      // signed in has no guestEmail; replaying it on the guest endpoints returns
+      // 403 forever, and nothing downstream ever clears it. Drop it instead.
+      if (savedSupportSessionId && savedGuestEmail) {
         setSupportSessionId(savedSupportSessionId);
         setIsHandedOver(true);
+      } else if (savedSupportSessionId) {
+        try { localStorage.removeItem('supportSessionId'); } catch { /* noop */ }
       }
     }
 
@@ -660,6 +666,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setChats([]);
       setMessages([]);
       setCompareList([]);
+      // Same reset as logout(): an expired session is still the END of that
+      // session, and leaving the support id behind re-creates the guest 403 bug.
+      setSupportSessionId(null);
+      setIsHandedOver(false);
+      setSupportSessionStatus('AI_HANDLING');
+      setSupportMessages([]);
+      try { localStorage.removeItem('supportSessionId'); } catch { /* noop */ }
     };
     window.addEventListener('agm:session-expired', onSessionExpired);
     return () => window.removeEventListener('agm:session-expired', onSessionExpired);
@@ -672,7 +685,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   useEffect(() => {
     if (!user && supportSessionId && guestEmail) {
       localStorage.setItem('supportSessionId', supportSessionId);
-    } else if (!supportSessionId || user) {
+    } else {
+      // Unconditional else — the (!user && id && !guestEmail) case previously
+      // matched neither branch and left a poisoned id in place.
       localStorage.removeItem('supportSessionId');
     }
   }, [user, supportSessionId, guestEmail]);

@@ -10,7 +10,7 @@ export const OfferCardSkeleton: React.FC<{ variant?: Variant }> = ({ variant = '
       aria-hidden="true"
       className={`relative bg-white overflow-hidden ${
         isAti
-          ? 'w-full min-w-0 sm:min-w-[220px] sm:w-[240px] sm:flex-shrink-0 rounded-lg border border-gray-100'
+          ? 'min-w-[250px] w-40 flex-shrink-0 snap-start sm:min-w-[240px] sm:w-[260px] md:min-w-[280px] md:w-[300px] rounded-xl border border-gray-100'
           : 'min-w-[250px] w-40 flex-shrink-0 sm:min-w-[280px] sm:w-[300px] rounded-xl shadow-md border border-gray-100'
       }`}
     >
@@ -46,7 +46,7 @@ export const OfferRowSkeleton: React.FC<{ count?: number; variant?: Variant }> =
       <div
         className={`px-1 pb-4 pt-2 overflow-x-auto scrollbar-thin ${
           isAti
-            ? 'grid grid-cols-2 gap-3 sm:flex sm:w-full sm:min-w-0 sm:gap-5 scrollbar-thumb-blue-200 scrollbar-track-gray-50'
+            ? 'flex gap-3 -mx-1 snap-x snap-mandatory md:gap-6 scrollbar-thumb-blue-200 scrollbar-track-gray-50'
             : 'flex gap-3 -mx-1 snap-x snap-mandatory md:gap-6 scrollbar-thumb-gray-300 scrollbar-track-transparent'
         }`}
       >

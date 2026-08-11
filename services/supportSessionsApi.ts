@@ -142,9 +142,13 @@ export function mapDtoToSupportMessage(dto: SupportMessageDto): SupportMessage {
 
 /** User resets their own session from WAITING_FOR_AGENT / AGENT_ACTIVE back to AI_HANDLING. */
 export async function returnSessionToAi(sessionId: string): Promise<void> {
+  // silent401: this button is rendered for guests too (any handed-over session).
+  // Without it a guest click hit the JWT-guarded route, 401'd, and the refresh
+  // helper redirected them to /login — the last remaining "support click logs me
+  // out" path.
   await apiFetch<{ ok: boolean }>(
     `${API_ENDPOINTS.support.sessions}/${sessionId}/return-to-ai`,
-    { method: 'POST' },
+    { method: 'POST', silent401: true } as any,
   );
 }
 
