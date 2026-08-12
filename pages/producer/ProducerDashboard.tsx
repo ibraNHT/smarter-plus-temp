@@ -13,7 +13,7 @@ import { Modal } from '../../components/Modal';
 import { ListSkeleton } from '../../components/Loaders';
 import { DashboardSkeleton } from '../../components/skeletons/DashboardSkeleton';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
-import { orderHasService, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
+import { orderHasService, orderIsRetail, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
 import {
   findProducerForUser,
   isProducerPendingApproval,
@@ -1062,10 +1062,14 @@ export const ProducerDashboard: React.FC = () => {
                            <div className="flex items-center mb-2">
                               <Package className="h-4 w-4 text-gray-500 mr-2" />
                               <span className="text-sm font-medium text-gray-900">
-                                 Sold by:{' '}
-                                 <Link to={`/profile/producer/${selectedOrderLive.producerId}`} className="text-blue-600 hover:underline">
-                                    {getProducerDisplayName(selectedOrderLive)}
-                                 </Link>
+                                 {t('order.soldBy')}:{' '}
+                                 {orderIsRetail(selectedOrderLive) ? (
+                                    <span className="text-gray-900">{t('product.atiStoreName')}</span>
+                                 ) : (
+                                    <Link to={`/profile/producer/${selectedOrderLive.producerId}`} className="text-blue-600 hover:underline">
+                                       {getProducerDisplayName(selectedOrderLive)}
+                                    </Link>
+                                 )}
                               </span>
                            </div>
                            {selectedOrderLive.deliveryMethod === 'HOME' && selectedOrderLive.shippingAddress && typeof selectedOrderLive.shippingAddress === 'object' && (

@@ -1737,7 +1737,14 @@ export const ClientProfile: React.FC = () => {
                      {/* Seller */}
                      <div className="bg-gray-50 p-3 rounded-md mb-4">
                         <p className="text-sm font-medium text-gray-900">
-                           {t('order.soldBy')}: <Link to={`/profile/producer/${selectedOrderLive.producerId}`} className="text-primary-600 hover:underline">{getProducerDisplayName(selectedOrderLive)}</Link>
+                           {t('order.soldBy')}:{' '}
+                           {orderIsRetail(selectedOrderLive) ? (
+                              // ATI retail is first-party — there is no producer profile
+                              // or portfolio to open, so show the seller of record as text.
+                              <span className="text-gray-900">{t('product.atiStoreName')}</span>
+                           ) : (
+                              <Link to={`/profile/producer/${selectedOrderLive.producerId}`} className="text-primary-600 hover:underline">{getProducerDisplayName(selectedOrderLive)}</Link>
+                           )}
                         </p>
                      </div>
 
