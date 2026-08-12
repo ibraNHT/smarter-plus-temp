@@ -466,6 +466,17 @@ const translations: Record<string, Record<Language, string>> = {
   // A service line's cartQuantity is a SLOT COUNT, not hours — rendering it with
   // the offer's pricing unit produced "Booked: 7 Hour(s)" for 7 slots of 3h.
   'service.slotsUnit': { en: 'slot(s)', fr: 'créneau(x)' },
+  'dispute.active': { en: 'Dispute in progress', fr: 'Litige en cours' },
+  'dispute.reasonLabel': { en: 'Reason:', fr: 'Motif :' },
+  'dispute.notAvailable': { en: 'Not provided', fr: 'Non fourni' },
+  'dispute.noEvidenceYet': { en: 'No evidence submitted yet.', fr: 'Aucune preuve soumise pour le moment.' },
+  'dispute.youSubmitted': { en: 'You submitted', fr: 'Vous avez soumis' },
+  'dispute.partySubmitted': { en: '{party} submitted', fr: '{party} a soumis' },
+  'dispute.underReview': { en: 'Our team is reviewing this dispute and will contact both parties.', fr: "Notre équipe examine ce litige et contactera les deux parties." },
+  'dispute.producerLabel': { en: 'The seller', fr: 'Le vendeur' },
+  'dispute.clientLabel': { en: 'The buyer', fr: "L'acheteur" },
+  'dispute.uploading': { en: 'Uploading evidence…', fr: 'Envoi des preuves…' },
+  'dispute.submitting': { en: 'Submitting…', fr: 'Envoi…' },
   'order.filesAttached': { en: '{count} file(s) attached', fr: '{count} fichier(s) joint(s)' },
   'order.removeFile': { en: 'Remove file', fr: 'Supprimer le fichier' },
   // Keys referenced by t() but never defined — t() echoes an unknown key verbatim,

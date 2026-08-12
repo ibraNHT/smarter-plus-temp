@@ -391,8 +391,10 @@ interface StoreContextType {
   completeOrder: (orderId: string) => Promise<void>;
   requestOrderCancellation: (orderId: string, reason?: string) => Promise<void>;
   updateAppointment: (orderId: string, bookingDate: string) => Promise<boolean>;
-  reportProblem: (orderId: string, reason: string, files: File[]) => Promise<void>;
-  addDisputeEvidence: (orderId: string, files: File[], note?: string) => Promise<void>;
+  /** Resolves true only when the upload actually persisted — callers keep their
+   *  modal open and show an error when it is false. */
+  reportProblem: (orderId: string, reason: string, files: File[]) => Promise<boolean>;
+  addDisputeEvidence: (orderId: string, files: File[], note?: string) => Promise<boolean>;
   revealContactInfo: (orderId: string) => Promise<void>;
   submitReview: (review: Omit<Review, 'id' | 'createdAt'>) => Promise<void>;
   getAverageRating: (targetId: string) => number;
@@ -3212,7 +3214,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const reportProblem = async (orderId: string, reason: string, files: File[]) => {
+  const reportProblem = async (orderId: string, reason: string, files: File[]): Promise<boolean> => {
     const formData = new FormData();
     formData.append('reason', reason);
     files.forEach(f => formData.append('files', f));
@@ -3223,14 +3225,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.DISPUTE, disputeReason: reason, disputeEvidence: evidence } : o));
       bustCache(['orders']);
       if (user) addNotification(user.id, 'Dispute opened.', 'WARNING');
+      return true;
     } catch (error) {
       logApiFailure('Failed to report problem', error);
       addNotification(user!.id, 'Failed to report problem. Please try again.', 'ERROR');
+      return false;
     }
   };
 
-  const addDisputeEvidence = async (orderId: string, files: File[], note?: string) => {
-    if (!user || files.length === 0) return;
+  const addDisputeEvidence = async (orderId: string, files: File[], note?: string): Promise<boolean> => {
+    if (!user || files.length === 0) return false;
     // Append evidence to an already-open dispute (used by the producer, and by
     // the buyer to add more). Persists via the same endpoint as reportProblem.
     // `note` carries this party's own account of the dispute — the API stores it
@@ -3247,9 +3251,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, disputeEvidence: [...(o.disputeEvidence || []), ...evidence] } : o));
       bustCache(['orders']);
       addNotification(user.id, 'Evidence uploaded successfully', 'SUCCESS');
+      return true;
     } catch (error) {
       logApiFailure('Failed to upload evidence', error);
       addNotification(user.id, 'Failed to upload evidence. Please try again.', 'ERROR');
+      return false;
     }
   };
 

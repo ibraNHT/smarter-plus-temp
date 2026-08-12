@@ -90,6 +90,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
   const [disputeFiles, setDisputeFiles] = useState<File[]>([]);
+  const [submittingDispute, setSubmittingDispute] = useState(false);
 
   const [showPaymentRecap, setShowPaymentRecap] = useState(false);
   const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
@@ -160,14 +161,21 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
       if (parsed.success) return {};
       return { disputeReason: parsed.error.issues[0]?.message || t('order.invalidReason') };
     },
-    onSubmit: (values, { setFieldError }) => {
-      if (disputeOrderId) {
-        if (disputeFiles.length === 0) {
-          setFieldError('disputeReason', t('order.disputeFileRequired'));
-          return;
-        }
-        reportProblem(disputeOrderId, values.disputeReason, disputeFiles);
-        setShowDisputeModal(false);
+    onSubmit: async (values, { setFieldError }) => {
+      if (!disputeOrderId || submittingDispute) return;
+      if (disputeFiles.length === 0) {
+        setFieldError('disputeReason', t('order.disputeFileRequired'));
+        return;
+      }
+      // Awaited so the modal stays up (with a spinner) for the length of the
+      // multipart upload instead of closing immediately and leaving the report
+      // to land silently — and so a failed upload does not look like a success.
+      setSubmittingDispute(true);
+      try {
+        const ok = await reportProblem(disputeOrderId, values.disputeReason, disputeFiles);
+        if (ok) setShowDisputeModal(false);
+      } finally {
+        setSubmittingDispute(false);
       }
     },
   });
@@ -595,11 +603,16 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
             />
           </div>
           <div className="flex justify-end gap-3 pt-4">
-            <button type="button" onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">
+            <button type="button" disabled={submittingDispute} onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:opacity-60">
               {t('form.cancel')}
             </button>
-            <button type="submit" className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700">
-              {t('order.submitReport')}
+            <button
+              type="submit"
+              disabled={submittingDispute}
+              className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2"
+            >
+              {submittingDispute && <Loader2 className="h-4 w-4 animate-spin" />}
+              {submittingDispute ? t('dispute.submitting') : t('order.submitReport')}
             </button>
           </div>
         </form>

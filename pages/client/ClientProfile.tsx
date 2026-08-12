@@ -39,6 +39,7 @@ import { showAppToast } from '../../services/appToast';
 import { buildClientReferralLink } from '../../utils/referralLink';
 import { ServiceAppointmentPicker } from '../../components/ServiceAppointmentPicker';
 import { EvidenceFilePreviews } from '../../components/EvidenceFilePreviews';
+import { DisputeSummary } from '../../components/DisputeSummary';
 
 import { MARKETPLACE_CATEGORIES } from '../../data/categories';
 
@@ -194,6 +195,7 @@ export const ClientProfile: React.FC = () => {
    const [showDisputeModal, setShowDisputeModal] = useState(false);
    const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
    const [disputeFiles, setDisputeFiles] = useState<File[]>([]);
+   const [submittingDispute, setSubmittingDispute] = useState(false);
 
    const [showPaymentRecap, setShowPaymentRecap] = useState(false);
    const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
@@ -306,14 +308,20 @@ export const ClientProfile: React.FC = () => {
          if (parsed.success) return {};
          return { disputeReason: parsed.error.issues[0]?.message || t('validation.disputeReasonMin') };
       },
-      onSubmit: (values, { setFieldError }) => {
-         if (disputeOrderId) {
-            if (disputeFiles.length === 0) {
-               setFieldError('disputeReason', t('order.disputeFileRequired'));
-               return;
-            }
-            reportProblem(disputeOrderId, values.disputeReason, disputeFiles);
-            setShowDisputeModal(false);
+      onSubmit: async (values, { setFieldError }) => {
+         if (!disputeOrderId || submittingDispute) return;
+         if (disputeFiles.length === 0) {
+            setFieldError('disputeReason', t('order.disputeFileRequired'));
+            return;
+         }
+         // Awaited: the modal used to close the instant submit was pressed, while
+         // the files were still uploading, so a failure was invisible.
+         setSubmittingDispute(true);
+         try {
+            const ok = await reportProblem(disputeOrderId, values.disputeReason, disputeFiles);
+            if (ok) setShowDisputeModal(false);
+         } finally {
+            setSubmittingDispute(false);
          }
       },
    });
@@ -1735,6 +1743,18 @@ export const ClientProfile: React.FC = () => {
                         <p className="text-xs text-gray-500 mt-2">{t('dash.orderPlaced')}: {new Date(selectedOrderLive.createdAt).toLocaleString()}</p>
                      </div>
 
+                     {/* Dispute recap — the buyer opens the dispute but previously saw
+                         nothing back: no reason echoed, no evidence, no sign the seller
+                         had responded. Same panel the seller sees. */}
+                     {selectedOrderLive.status === OrderStatus.DISPUTE && (
+                        <DisputeSummary
+                           order={selectedOrderLive}
+                           viewerId={user?.id}
+                           otherPartyLabel={t('dispute.producerLabel')}
+                           className="mb-4"
+                        />
+                     )}
+
                      {/* Seller */}
                      <div className="bg-gray-50 p-3 rounded-md mb-4">
                         <p className="text-sm font-medium text-gray-900">
@@ -1905,7 +1925,13 @@ export const ClientProfile: React.FC = () => {
                            <p className="text-xs text-gray-400 mt-1">{t('order.uploadFilesHint')}</p>
                            <EvidenceFilePreviews files={disputeFiles} onRemove={(i) => setDisputeFiles(prev => prev.filter((_, idx) => idx !== i))} />
                         </div>
-                        <div className="flex justify-end gap-3 pt-4"><button type="button" onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">{t('form.cancel')}</button><button type="submit" className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700">{t('order.submitReport')}</button></div>
+                        <div className="flex justify-end gap-3 pt-4">
+                           <button type="button" disabled={submittingDispute} onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:opacity-60">{t('form.cancel')}</button>
+                           <button type="submit" disabled={submittingDispute} className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2">
+                              {submittingDispute && <Loader2 className="h-4 w-4 animate-spin" />}
+                              {submittingDispute ? t('dispute.submitting') : t('order.submitReport')}
+                           </button>
+                        </div>
                      </form>
          </Modal>
 

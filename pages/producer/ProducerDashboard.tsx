@@ -3,9 +3,10 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { EvidenceFilePreviews } from '../../components/EvidenceFilePreviews';
+import { DisputeSummary } from '../../components/DisputeSummary';
 import { ProducerStatus, OrderStatus, Order, OfferType, Review } from '../../types';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2, ShoppingBag } from 'lucide-react';
+import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2, ShoppingBag, Loader2 } from 'lucide-react';
 import { BuyerOrderFlowsProvider, BuyerOrderActions, BuyerPurchaseOrdersSection, BuyerPurchaseProducerContact, isOrderAsBuyer } from '../../components/BuyerOrderFlows';
 import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
@@ -90,6 +91,7 @@ export const ProducerDashboard: React.FC = () => {
    const [showEvidenceModal, setShowEvidenceModal] = useState(false);
    const [evidenceOrderId, setEvidenceOrderId] = useState<string | null>(null);
    const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+   const [uploadingEvidence, setUploadingEvidence] = useState(false);
    const [evidenceNote, setEvidenceNote] = useState('');
    const [orderActionBusy, setOrderActionBusy] = useState<string | null>(null);
 
@@ -409,11 +411,19 @@ export const ProducerDashboard: React.FC = () => {
       setShowEvidenceModal(true);
    };
 
-   const handleEvidenceUpload = (e: React.FormEvent) => {
+   const handleEvidenceUpload = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (evidenceOrderId && evidenceFiles.length > 0) {
-         addDisputeEvidence(evidenceOrderId, evidenceFiles, evidenceNote);
-         setShowEvidenceModal(false);
+      // Was fire-and-forget: the modal closed instantly while the multipart
+      // upload was still running, so the only feedback was the order status
+      // changing by itself a while later. Now the button shows progress and the
+      // modal only closes once the upload has actually persisted.
+      if (!evidenceOrderId || evidenceFiles.length === 0 || uploadingEvidence) return;
+      setUploadingEvidence(true);
+      try {
+         const ok = await addDisputeEvidence(evidenceOrderId, evidenceFiles, evidenceNote);
+         if (ok) setShowEvidenceModal(false);
+      } finally {
+         setUploadingEvidence(false);
       }
    };
 
@@ -1161,25 +1171,12 @@ export const ProducerDashboard: React.FC = () => {
 
                      {/* Dispute Info if any */}
                      {selectedOrderLive.status === OrderStatus.DISPUTE && (
-                        <div className="bg-red-50 p-3 rounded-md mb-4 border border-red-200">
-                           <h4 className="text-sm font-bold text-red-800 mb-2 flex items-center"><AlertTriangle className="h-4 w-4 mr-2" /> {t('dash.disputeActive')}</h4>
-                           <p className="text-sm text-red-700 mb-2"><span className="font-semibold">{t('dash.reasonLabel')}</span> {selectedOrderLive.disputeReason || t('dash.notAvailable')}</p>
-                           {selectedOrderLive.disputeEvidence && selectedOrderLive.disputeEvidence.length > 0 && (
-                              <div>
-                                 <p className="text-xs font-bold text-red-800 mb-1">{t('dash.evidenceUploaded')}</p>
-                                 <ul className="list-disc ml-4">
-                                    {selectedOrderLive.disputeEvidence.map(ev => (
-                                       <li key={ev.id} className="text-xs text-red-600">
-                                          {ev.fileName} ({ev.uploaderId === user?.id ? t('dash.you') : t('dash.clientLabel')})
-                                          {ev.note ? (
-                                             <span className="block text-red-700 italic whitespace-pre-wrap">{ev.note}</span>
-                                          ) : null}
-                                       </li>
-                                    ))}
-                                 </ul>
-                              </div>
-                           )}
-                        </div>
+                        <DisputeSummary
+                           order={selectedOrderLive}
+                           viewerId={user?.id}
+                           otherPartyLabel={t('dispute.clientLabel')}
+                           className="mb-4"
+                        />
                      )}
 
                      {/* Items / scheduled services */}
@@ -1316,10 +1313,10 @@ export const ProducerDashboard: React.FC = () => {
          </Modal>
 
          {/* Evidence Upload Modal */}
-         <Modal open={showEvidenceModal} onClose={() => setShowEvidenceModal(false)} maxWidth="lg" zIndex={50} panelClassName="p-4 sm:p-6">
+         <Modal open={showEvidenceModal} onClose={() => { if (!uploadingEvidence) setShowEvidenceModal(false); }} maxWidth="lg" zIndex={50} panelClassName="p-4 sm:p-6">
                      <div className="flex justify-between items-center mb-4">
                         <h3 className="text-lg font-bold text-gray-900">{t('dash.uploadEvidence')}</h3>
-                        <button onClick={() => setShowEvidenceModal(false)}><X className="h-5 w-5 text-gray-400" /></button>
+                        <button type="button" disabled={uploadingEvidence} onClick={() => setShowEvidenceModal(false)}><X className="h-5 w-5 text-gray-400" /></button>
                      </div>
 
                      <form onSubmit={handleEvidenceUpload}>
@@ -1377,7 +1374,14 @@ export const ProducerDashboard: React.FC = () => {
                         </div>
 
                         <div className="flex justify-end">
-                           <button type="submit" className="px-4 py-2 text-white bg-primary-600 rounded-md text-sm hover:bg-primary-700">{t('dash.upload')}</button>
+                           <button
+                              type="submit"
+                              disabled={uploadingEvidence || evidenceFiles.length === 0}
+                              className="px-4 py-2 text-white bg-primary-600 rounded-md text-sm hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                           >
+                              {uploadingEvidence && <Loader2 className="h-4 w-4 animate-spin" />}
+                              {uploadingEvidence ? t('dispute.uploading') : t('dash.upload')}
+                           </button>
                         </div>
                      </form>
          </Modal>
