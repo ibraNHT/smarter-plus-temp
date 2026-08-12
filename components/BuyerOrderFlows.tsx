@@ -23,6 +23,7 @@ import { showAppToast } from '../services/appToast';
 import { Modal } from './Modal';
 import { ConfirmModal } from './ConfirmModal';
 import { ServiceAppointmentPicker } from './ServiceAppointmentPicker';
+import { EvidenceFilePreviews } from './EvidenceFilePreviews';
 import { Order, OrderStatus, UserSession, MarketType } from '../types';
 import { offerImageInBox } from '../utils/offerImageDisplay';
 import { PAYMENTS_ENABLED } from '../utils/featureFlags';
@@ -588,6 +589,10 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
                                           }}
             />
             <p className="text-xs text-gray-400 mt-1">{t('order.uploadFilesHint')}</p>
+            <EvidenceFilePreviews
+              files={disputeFiles}
+              onRemove={(i) => setDisputeFiles((prev) => prev.filter((_, idx) => idx !== i))}
+            />
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <button type="button" onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">

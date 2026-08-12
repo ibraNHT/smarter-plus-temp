@@ -38,6 +38,7 @@ import { z } from 'zod';
 import { showAppToast } from '../../services/appToast';
 import { buildClientReferralLink } from '../../utils/referralLink';
 import { ServiceAppointmentPicker } from '../../components/ServiceAppointmentPicker';
+import { EvidenceFilePreviews } from '../../components/EvidenceFilePreviews';
 
 import { MARKETPLACE_CATEGORIES } from '../../data/categories';
 
@@ -1898,7 +1899,12 @@ export const ClientProfile: React.FC = () => {
                      <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2"><h3 className="text-lg font-bold text-gray-900">{t('order.reportProblem')}</h3><button onClick={() => setShowDisputeModal(false)}><X className="h-5 w-5 text-gray-400" /></button></div>
                      <form onSubmit={disputeFormik.handleSubmit} className="space-y-4">
                         <div><label className="block text-sm font-medium text-gray-700 mb-1">{t('order.reason')}</label><textarea name="disputeReason" required rows={3} className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" value={disputeFormik.values.disputeReason} onChange={disputeFormik.handleChange} onBlur={disputeFormik.handleBlur} placeholder={t('order.disputePlaceholder')} />{disputeFormik.touched.disputeReason && disputeFormik.errors.disputeReason ? <p className="text-xs text-red-600 mt-1">{disputeFormik.errors.disputeReason}</p> : null}</div>
-                        <div><label className="block text-sm font-medium text-gray-700 mb-1">{t('order.uploadFiles')}</label><input type="file" multiple accept="image/*,application/pdf" className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100" onChange={handleDisputeFileChange} /></div>
+                        <div>
+                           <label className="block text-sm font-medium text-gray-700 mb-1">{t('order.uploadFiles')}</label>
+                           <input type="file" multiple accept="image/*,application/pdf" className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100" onChange={handleDisputeFileChange} />
+                           <p className="text-xs text-gray-400 mt-1">{t('order.uploadFilesHint')}</p>
+                           <EvidenceFilePreviews files={disputeFiles} onRemove={(i) => setDisputeFiles(prev => prev.filter((_, idx) => idx !== i))} />
+                        </div>
                         <div className="flex justify-end gap-3 pt-4"><button type="button" onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">{t('form.cancel')}</button><button type="submit" className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700">{t('order.submitReport')}</button></div>
                      </form>
          </Modal>

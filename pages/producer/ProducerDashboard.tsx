@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
+import { EvidenceFilePreviews } from '../../components/EvidenceFilePreviews';
 import { ProducerStatus, OrderStatus, Order, OfferType, Review } from '../../types';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2, ShoppingBag } from 'lucide-react';
@@ -1369,14 +1370,10 @@ export const ProducerDashboard: React.FC = () => {
                                  <p className="text-xs text-gray-500">JPG, PNG, PDF up to 10MB — up to 3 files</p>
                               </div>
                            </div>
-                           {evidenceFiles.length > 0 && (
-                              <div className="mt-2">
-                                 <p className="text-xs font-bold text-gray-700">{t('dash.filesSelected', { count: evidenceFiles.length })}</p>
-                                 <ul className="list-disc ml-4">
-                                    {evidenceFiles.map((f, i) => <li key={i} className="text-xs text-gray-600">{f.name}</li>)}
-                                 </ul>
-                              </div>
-                           )}
+                           <EvidenceFilePreviews
+                              files={evidenceFiles}
+                              onRemove={(i: number) => setEvidenceFiles(prev => prev.filter((_, idx) => idx !== i))}
+                           />
                         </div>
 
                         <div className="flex justify-end">

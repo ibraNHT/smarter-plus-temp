@@ -466,6 +466,8 @@ const translations: Record<string, Record<Language, string>> = {
   // A service line's cartQuantity is a SLOT COUNT, not hours — rendering it with
   // the offer's pricing unit produced "Booked: 7 Hour(s)" for 7 slots of 3h.
   'service.slotsUnit': { en: 'slot(s)', fr: 'créneau(x)' },
+  'order.filesAttached': { en: '{count} file(s) attached', fr: '{count} fichier(s) joint(s)' },
+  'order.removeFile': { en: 'Remove file', fr: 'Supprimer le fichier' },
   // Keys referenced by t() but never defined — t() echoes an unknown key verbatim,
   // so each of these was rendering raw text (or a raw key) to users.
   'auth.loginRequired': { en: 'Please sign in to continue.', fr: 'Veuillez vous connecter pour continuer.' },
