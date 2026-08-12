@@ -413,7 +413,12 @@ export const AtiStore: React.FC = () => {
                                       size="card"
                                       className={`${offerImageInBox} group-hover:opacity-90 transition-opacity`}
                                     />
-                                    <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">{t('market.atiChoice')}</div>
+                                    {/* z-[3] is required, not cosmetic: OfferImage renders its <img> with
+                                        `relative z-[2]`, so a badge left at the default z-index is painted
+                                        UNDER the photo. The carousel copy below already had it; this
+                                        expanded "See All" grid did not, which is why the tag vanished
+                                        exactly when a category was expanded. */}
+                                    <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded z-[3]">{t('market.atiChoice')}</div>
                                   </div>
                                   <div className="flex-1 p-3 space-y-2 flex flex-col">
                                     <h3 className="text-sm font-medium text-gray-900 line-clamp-2 h-10">{offer.title}</h3>
