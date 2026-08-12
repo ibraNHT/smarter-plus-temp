@@ -185,11 +185,11 @@ export function formatMoney(
   const explicitDigits = opts?.maximumFractionDigits;
   let digits = explicitDigits ?? (ZERO_DECIMAL.has(currency) ? 0 : 2);
   // XAF has no minor unit in circulation, so whole numbers suit ordinary amounts —
-  // but a percentage-derived surcharge is legitimately fractional. Rounding 0.32
-  // to "0" told the customer a fee they ARE charged does not exist (16% of 2 XAF),
-  // so reveal decimals when whole-number rounding would erase the value entirely.
-  // Anything >= 0.5 is unaffected.
-  if (explicitDigits == null && digits === 0 && value !== 0 && Math.abs(value) < 0.5) {
+  // but percentage-derived amounts are legitimately fractional. Rounding them hides
+  // money the customer is actually charged: a 16% fee of 2.4 showed as "2" while the
+  // order total beside it showed 17.4, so the column did not add up. Reveal decimals
+  // whenever rounding would change the number; whole amounts are untouched.
+  if (explicitDigits == null && digits === 0 && !Number.isInteger(value)) {
     digits = 2;
   }
   const formatted = value.toLocaleString(undefined, {
