@@ -181,7 +181,15 @@ export const ChatPage: React.FC = () => {
          return latestResolvedTimestamp == null || ts > latestResolvedTimestamp;
       });
    })();
-   const canInitiateFirstProposal = isProducerDashboardUser(user) || hasExistingProposalInCurrentRound;
+   // A round is opened by the SELLER — the owner of this listing — not by any
+   // producer account. Keeping this on account type let a producer who is BUYING
+   // open a round, which the API now rejects; the UI would have offered a button
+   // that always failed. (Declared here rather than reusing `listingOffer` below,
+   // which is defined further down the component.)
+   const chatListingOffer = activeChat?.offerId ? getOfferById(activeChat.offerId) ?? null : null;
+   const iOwnChatListing =
+      !!chatListingOffer && !!user?.producerId && chatListingOffer.producerId === user.producerId;
+   const canInitiateFirstProposal = iOwnChatListing || hasExistingProposalInCurrentRound;
 
    const getUserSide = useCallback((senderId: string): 'CLIENT' | 'PRODUCER' | 'UNKNOWN' => {
       const isClient = clients.some((c) => c.id === senderId || c.userId === senderId);
