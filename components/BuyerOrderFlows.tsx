@@ -603,13 +603,13 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
             />
           </div>
           <div className="flex justify-end gap-3 pt-4">
-            <button type="button" disabled={submittingDispute} onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:opacity-60">
+            <button type="button" disabled={submittingDispute} onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:cursor-not-allowed">
               {t('form.cancel')}
             </button>
             <button
               type="submit"
               disabled={submittingDispute}
-              className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2"
+              className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700 disabled:cursor-not-allowed inline-flex items-center gap-2"
             >
               {submittingDispute && <Loader2 className="h-4 w-4 animate-spin" />}
               {submittingDispute ? t('dispute.submitting') : t('order.submitReport')}

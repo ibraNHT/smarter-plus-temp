@@ -4,6 +4,7 @@ import { useTranslation } from '../../services/i18nContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { EvidenceFilePreviews } from '../../components/EvidenceFilePreviews';
 import { DisputeSummary } from '../../components/DisputeSummary';
+import { useLiveOrders } from '../../hooks/useLiveOrders';
 import { ProducerStatus, OrderStatus, Order, OfferType, Review } from '../../types';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2, ShoppingBag, Loader2 } from 'lucide-react';
@@ -88,6 +89,10 @@ export const ProducerDashboard: React.FC = () => {
    const [comment, setComment] = useState('');
 
    // Evidence Upload State
+   // New orders and buyer-side transitions arrive without any local trigger, so
+   // the dashboard polls while it is on screen instead of waiting for a refresh.
+   useLiveOrders();
+
    const [showEvidenceModal, setShowEvidenceModal] = useState(false);
    const [evidenceOrderId, setEvidenceOrderId] = useState<string | null>(null);
    const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
@@ -1376,8 +1381,8 @@ export const ProducerDashboard: React.FC = () => {
                         <div className="flex justify-end">
                            <button
                               type="submit"
-                              disabled={uploadingEvidence || evidenceFiles.length === 0}
-                              className="px-4 py-2 text-white bg-primary-600 rounded-md text-sm hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                              disabled={uploadingEvidence}
+                              className="px-4 py-2 text-white bg-primary-600 rounded-md text-sm hover:bg-primary-700 disabled:cursor-not-allowed inline-flex items-center gap-2"
                            >
                               {uploadingEvidence && <Loader2 className="h-4 w-4 animate-spin" />}
                               {uploadingEvidence ? t('dispute.uploading') : t('dash.upload')}

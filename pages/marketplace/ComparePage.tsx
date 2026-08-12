@@ -4,7 +4,7 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Star, X, ShoppingCart, Check, XCircle } from 'lucide-react';
-import { OfferType } from '../../types';
+import { MarketType, OfferType } from '../../types';
 import { comparePageAddQuantity, effectiveMinOrder } from '../../utils/offerCart';
 import { ComparePageSkeleton } from '../../components/skeletons/ComparePageSkeleton';
 import { OfferImage } from '../../components/OfferImage';
@@ -59,6 +59,9 @@ export const ComparePage: React.FC = () => {
       </div>
     );
   }
+
+  const allOffersAreAti =
+     selectedOffers.length > 0 && selectedOffers.every(o => o.marketType === MarketType.ATI);
 
   const getProducerName = (producerId: string) => {
      const p = producers.find(prod => prod.id === producerId);
@@ -151,14 +154,23 @@ export const ComparePage: React.FC = () => {
                       </td>
                    ))}
                 </tr>
-                <tr>
-                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-500 bg-gray-50">{t('compare.producer')}</td>
-                   {selectedOffers.map(offer => (
-                      <td key={offer.id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                         {getProducerName(offer.producerId)}
-                      </td>
-                   ))}
-                </tr>
+                {/* Producer row is hidden when everything being compared comes from the
+                    ATI store: those offers are first-party, so `getProducerName` resolves
+                    to the staff member who created the listing — an internal name that
+                    must never surface to buyers. In a mixed comparison the row stays (the
+                    marketplace offers need it) but ATI columns show the store of record. */}
+                {!allOffersAreAti && (
+                   <tr>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-500 bg-gray-50">{t('compare.producer')}</td>
+                      {selectedOffers.map(offer => (
+                         <td key={offer.id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {offer.marketType === MarketType.ATI
+                               ? t('product.atiStoreName')
+                               : getProducerName(offer.producerId)}
+                         </td>
+                      ))}
+                   </tr>
+                )}
                 <tr>
                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-500 bg-gray-50">{t('compare.rating')}</td>
                    {selectedOffers.map(offer => {

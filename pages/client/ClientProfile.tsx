@@ -15,6 +15,7 @@ import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Modal } from '../../components/Modal';
 import { SectionLoader, ListSkeleton } from '../../components/Loaders';
+import { useLiveOrders } from '../../hooks/useLiveOrders';
 import { ClientProfileSkeleton } from '../../components/skeletons/ClientProfileSkeleton';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { LocationMapPicker } from '../../components/LocationMapPicker';
@@ -85,6 +86,10 @@ export const ClientProfile: React.FC = () => {
    // Only the data the active tab actually renders is fetched. Switching
    // tabs (or hard-reloading on a deep-linked tab) fires just that tab's
    // refreshers; the React Query cache makes subsequent visits instant.
+   // Live status while the buyer is on the orders tab — the seller's transitions
+   // (in transit, delivered) have no local trigger here.
+   useLiveOrders(activeTab === 'orders' ? 25_000 : 120_000);
+
    // `tabLoading` is local so each tab shows its own scoped loader.
    const [tabLoading, setTabLoading] = useState(true);
    useEffect(() => {
@@ -1926,8 +1931,8 @@ export const ClientProfile: React.FC = () => {
                            <EvidenceFilePreviews files={disputeFiles} onRemove={(i) => setDisputeFiles(prev => prev.filter((_, idx) => idx !== i))} />
                         </div>
                         <div className="flex justify-end gap-3 pt-4">
-                           <button type="button" disabled={submittingDispute} onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:opacity-60">{t('form.cancel')}</button>
-                           <button type="submit" disabled={submittingDispute} className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2">
+                           <button type="button" disabled={submittingDispute} onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:cursor-not-allowed">{t('form.cancel')}</button>
+                           <button type="submit" disabled={submittingDispute} className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700 disabled:cursor-not-allowed inline-flex items-center gap-2">
                               {submittingDispute && <Loader2 className="h-4 w-4 animate-spin" />}
                               {submittingDispute ? t('dispute.submitting') : t('order.submitReport')}
                            </button>
