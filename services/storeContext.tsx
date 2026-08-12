@@ -3800,15 +3800,20 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           // If an agent already picked up the session in the meantime, skip the
           // "connecting…" placeholder entirely.
           if (supportSessionStatusRef.current === 'AGENT_ACTIVE') return;
-          setSupportMessages((prev) => [
-            ...prev,
-            {
-              id: `s-connecting-${Date.now()}`,
-              sender: 'AGENT',
-              text: 'Connecting you with a support agent…',
-              timestamp: new Date().toISOString(),
-            },
-          ]);
+          setSupportMessages((prev) => {
+            // Only ever one "connecting…" line — it was appended on every retry
+            // and every re-escalation, so the thread filled with duplicates.
+            if (prev.some((m) => m.id.startsWith('s-connecting-'))) return prev;
+            return [
+              ...prev,
+              {
+                id: `s-connecting-${Date.now()}`,
+                sender: 'AGENT',
+                text: 'Connecting you with a support agent…',
+                timestamp: new Date().toISOString(),
+              },
+            ];
+          });
         }, 1000);
       }
     } catch (e) {
@@ -3898,15 +3903,18 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }
       setIsHandedOver(true);
       setSupportSessionStatus('WAITING_FOR_AGENT');
-      setSupportMessages((prev) => [
-        ...prev,
-        {
-          id: `s-connecting-${Date.now()}`,
-          sender: 'AGENT',
-          text: 'Connecting you with a support agent… They will reply right here shortly.',
-          timestamp: new Date().toISOString(),
-        },
-      ]);
+      setSupportMessages((prev) => {
+        if (prev.some((m) => m.id.startsWith('s-connecting-'))) return prev;
+        return [
+          ...prev,
+          {
+            id: `s-connecting-${Date.now()}`,
+            sender: 'AGENT',
+            text: 'Connecting you with a support agent… They will reply right here shortly.',
+            timestamp: new Date().toISOString(),
+          },
+        ];
+      });
     } catch (e) {
       logApiFailure('Failed to request a human agent', e);
       if (user) addNotification(user.id, 'Could not reach an agent. Please try again.', 'ERROR');

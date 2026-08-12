@@ -69,9 +69,14 @@ export const generateSupportResponse = async (
 
   } catch (error) {
     logApiFailure("Error calling support backend:", error);
+    // A transport failure is NOT an escalation. Returning handover:true flipped the
+    // widget into "waiting for an agent" on any transient error — and because the
+    // guest paths error more often, guests got stuck there with a "Connecting you
+    // with a support agent…" line appended on every retry, even though the bot was
+    // replying fine. Surface the error and stay in bot mode.
     return {
       text: "Connection error. Please try again later.",
-      handover: true,
+      handover: false,
       sessionId: ''
     };
   }
