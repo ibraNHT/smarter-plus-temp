@@ -762,6 +762,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const notificationFetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchInFlightRef = useRef<boolean>(false);
   const globalPollInFlightRef = useRef<boolean>(false);
+  // `debouncedLightFetch` ([] deps) and the global poll ([user?.id] deps) are
+  // created before mapOrderRow/refreshOrders exist and must not capture a stale
+  // render's copy — route both through refs assigned on every render.
+  const mapOrderRowRef = useRef<(o: any) => any>((o: any) => o);
+  const refreshOrdersRef = useRef<(opts?: { force?: boolean }) => Promise<void>>(async () => {});
   const debouncedLightFetch = useCallback(() => {
     if (notificationFetchTimer.current) clearTimeout(notificationFetchTimer.current);
     notificationFetchTimer.current = setTimeout(async () => {
@@ -794,7 +799,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             orderEndpoints.map((ep) => apiFetch<any[]>(ep, { silent401: true } as any).catch((e) => { on401(e); return []; })),
           );
           const merged = Array.from(new Map(orderResults.flat().map((o: any) => [o.id, o])).values());
-          setOrders(merged.map((o: any) => ({ ...o, items: Array.isArray(o.orderItems || o.items) ? (o.orderItems || o.items).map((item: any) => ({ ...item, cartQuantity: item.cartQuantity || item.quantity || 1, id: item.offerId || item.id })) : [] })));
+          // Must go through the same mapper as refreshOrders(): this inline version
+          // skipped normalizeOrderStatus and the receipt/cancellation defaults, so a
+          // socket-triggered refresh could replace correctly-normalised orders with
+          // raw rows whose status the UI does not recognise.
+          setOrders(merged.map(mapOrderRowRef.current));
         }
       } catch { /* ignore */ } finally {
         fetchInFlightRef.current = false;
@@ -1162,6 +1171,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
         // Use the dedup-aware refresher; it skips if cache is still fresh.
         await refreshNotifications();
+        // Orders are polled here again. They were dropped on the assumption that
+        // the `notification` socket event covers them, but that made a producer's
+        // incoming orders depend entirely on the WebSocket being up — if the
+        // socket never connected or silently dropped (proxy without an upgrade
+        // header, sleeping tab, flaky network) new orders only appeared after a
+        // manual page refresh, which is the "sometimes it shows, sometimes not"
+        // report. force:true because a 60s poll wanting fresh data is exactly the
+        // case the stale-cache window would swallow.
+        await refreshOrdersRef.current({ force: true });
       } catch {
         // ignore background polling errors
       } finally {
@@ -1218,6 +1236,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }))
       : [],
   });
+
+  mapOrderRowRef.current = mapOrderRow;
 
   const mapProducerRow = (p: any): ProducerProfile => {
     const displayName =
@@ -1605,6 +1625,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     );
     if (Array.isArray(data)) setOrders(data.map(mapOrderRow));
   };
+
+  refreshOrdersRef.current = refreshOrders;
 
   const refreshWallet = async (opts?: { force?: boolean }) => {
     const u = userRef.current;
@@ -2099,6 +2121,23 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     useSessionStore.getState().setUser(data.user);
     localStorage.setItem('currentUser', JSON.stringify(data.user));
     userRef.current = data.user;
+    // The support widget's state belonged to the GUEST that was here a moment ago.
+    // Logging in makes `user` truthy, which stops the guest poll (it requires
+    // !user) while the authenticated poll runs against the guest session id — an
+    // id this user does not own, so every fetch comes back empty and the status
+    // never moves. The widget froze on "Waiting for an agent…" from the guest
+    // conversation. A signed-in user starts a fresh session with the bot; the
+    // guest thread stays with the guest email on the agent's side.
+    setSupportSessionId(null);
+    setIsHandedOver(false);
+    setSupportSessionStatus('AI_HANDLING');
+    setSupportMessages([]);
+    setGuestEmail(null);
+    setGuestName(null);
+    try {
+      localStorage.removeItem('supportSessionId');
+      localStorage.removeItem('guestEmail');
+    } catch { /* noop */ }
     await hydrateMarketplaceSession();
 
     const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
