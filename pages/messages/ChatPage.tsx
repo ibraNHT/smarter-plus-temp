@@ -10,6 +10,7 @@ import { ListSkeleton } from '../../components/Loaders';
 import { Modal } from '../../components/Modal';
 import { ServiceAppointmentPicker } from '../../components/ServiceAppointmentPicker';
 import { useCurrency } from '../../contexts/CurrencyContext';
+import { unitLabel } from '../../utils/unitLabel';
 
 export const ChatPage: React.FC = () => {
    const { chatId } = useParams<{ chatId: string }>();
@@ -669,7 +670,7 @@ export const ChatPage: React.FC = () => {
 
    const listingOffer = activeChat?.offerId ? getOfferById(activeChat.offerId) ?? null : null;
    const isServiceListing = String(listingOffer?.type ?? '').toUpperCase() === OfferType.SERVICE;
-   const listingUnitLabel = listingOffer ? t(`unit.${listingOffer.unit}`) : '';
+   const listingUnitLabel = listingOffer ? unitLabel(t, listingOffer.unit) : '';
    const maxPricePerUnit =
       listingOffer != null
          ? (() => {

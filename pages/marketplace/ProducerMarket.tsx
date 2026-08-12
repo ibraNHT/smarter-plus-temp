@@ -41,6 +41,7 @@ import {
   buildOfferShareText,
   buildOfferShareUrl,
 } from "../../utils/offerShare";
+import { unitLabel } from '../../utils/unitLabel';
 
 export const ProducerMarket: React.FC = () => {
   const {
@@ -504,7 +505,7 @@ export const ProducerMarket: React.FC = () => {
             <div className="mt-auto flex flex-col gap-1 pt-2 md:pt-3 border-t border-gray-100 shrink-0 sm:flex-row sm:items-end sm:justify-between sm:gap-2">
               <div className="min-w-0">
                 <p className="text-[10px] md:text-xs text-gray-400 truncate">
-                  {t("market.per")} {t(`unit.${offer.unit}`)}
+                  {t("market.per")} {unitLabel(t, offer.unit)}
                 </p>
                 <p className="text-sm md:text-lg font-bold text-primary-700 leading-tight">
                   {formatXaf(offer.price)}
@@ -515,7 +516,7 @@ export const ProducerMarket: React.FC = () => {
                   {t("market.available")}
                 </p>
                 <p className="text-xs md:text-sm font-semibold text-gray-900 truncate">
-                  {offer.quantity} {t(`unit.${offer.unit}`)}
+                  {offer.quantity} {unitLabel(t, offer.unit)}
                 </p>
               </div>
             </div>

@@ -327,6 +327,13 @@ const translations: Record<string, Record<Language, string>> = {
   'unit.DAY': { en: 'Day', fr: 'Jour' },
   'unit.HECTARE': { en: 'Hectare', fr: 'Hectare' },
   'unit.JOB': { en: 'Job/Task', fr: 'Tâche' },
+  'unit.G': { en: 'Gram (g)', fr: 'Gramme (g)' },
+  'unit.PACK': { en: 'Pack', fr: 'Paquet' },
+  'unit.PLASTIC BAG': { en: 'Plastic bag', fr: 'Sachet plastique' },
+  'unit.BOTTLES': { en: 'Bottle', fr: 'Bouteille' },
+  'unit.CANS': { en: 'Can', fr: 'Boîte de conserve' },
+  'unit.LITRES': { en: 'Liter', fr: 'Litre' },
+  'unit.BOXES': { en: 'Box', fr: 'Carton' },
 
   // Marketplaces
   'market.searchPlaceholder': { en: 'Search products...', fr: 'Rechercher des produits...' },

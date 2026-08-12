@@ -16,6 +16,7 @@ import { MARKETPLACE_CATEGORIES, isServiceCategory } from '../../data/categories
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { BASE_CURRENCY, SUPPORTED_CURRENCIES, currencyLabel } from '../../utils/formatMoney';
 import { z } from 'zod';
+import { unitLabel } from '../../utils/unitLabel';
 
 const SERVICE_UNITS = new Set<UnitOfMeasure>([
   UnitOfMeasure.HOUR,
@@ -739,7 +740,7 @@ export const CreateOffer: React.FC = () => {
                        ? SERVICE_UNITS.has(u as UnitOfMeasure)
                        : !SERVICE_UNITS.has(u as UnitOfMeasure),
                    )
-                   .map(u => <option key={u} value={u}>{t(`unit.${u}`)}</option>)}
+                   .map(u => <option key={u} value={u}>{unitLabel(t, u)}</option>)}
                </select>
              </div>
 

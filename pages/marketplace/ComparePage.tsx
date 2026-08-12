@@ -14,6 +14,7 @@ import { showAppToast } from '../../services/appToast';
 import { SEO } from '../../components/SEO';
 import { SEO_PAGE_META } from '../../services/seo/seoConfig';
 import { useCurrency } from '../../contexts/CurrencyContext';
+import { unitLabel } from '../../utils/unitLabel';
 
 export const ComparePage: React.FC = () => {
   const { compareList, offers, producers, getAverageRating, removeFromCompare, addToCart, clearCart, clearCompare, refreshOffers, refreshProducers } = useStore();
@@ -142,7 +143,7 @@ export const ComparePage: React.FC = () => {
                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-500 bg-gray-50">{t('compare.unit')}</td>
                    {selectedOffers.map(offer => (
                       <td key={offer.id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                         {t(`unit.${offer.unit}`)}
+                         {unitLabel(t, offer.unit)}
                       </td>
                    ))}
                 </tr>
@@ -150,7 +151,7 @@ export const ComparePage: React.FC = () => {
                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-500 bg-gray-50">{t('compare.minOrder')}</td>
                    {selectedOffers.map(offer => (
                       <td key={offer.id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                         {effectiveMinOrder(offer)} {t(`unit.${offer.unit}`)}
+                         {effectiveMinOrder(offer)} {unitLabel(t, offer.unit)}
                       </td>
                    ))}
                 </tr>

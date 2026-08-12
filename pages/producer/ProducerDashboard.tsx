@@ -23,6 +23,7 @@ import {
   resolveManagedProducerProfileId,
 } from '../../utils/producerAccountStatus';
 import { isProducerDashboardUser, isManagerSession, producerAccountUserId } from '../../services/producerSession';
+import { unitLabel } from '../../utils/unitLabel';
 
 export const ProducerDashboard: React.FC = () => {
    const { user, getProducerOffers, deleteOffer, producers, clients, orders, offers, confirmOrder, rejectOrder, startDelivery, markOrderDelivered, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating, pickupPoints, refreshOrders, refreshOffers, refreshProducers, refreshClients } = useStore();
@@ -1219,7 +1220,7 @@ export const ProducerDashboard: React.FC = () => {
                                        {item.type === OfferType.SERVICE ? (
                                           <>
                                              <p className="text-xs text-gray-600 mt-1">
-                                                {t('service.bookedQty')}: {item.cartQuantity} {t('service.slotsUnit')} · {formatXaf(item.price)} / {t(`unit.${item.unit}`)}
+                                                {t('service.bookedQty')}: {item.cartQuantity} {t('service.slotsUnit')} · {formatXaf(item.price)} / {unitLabel(t, item.unit)}
                                              </p>
                                              {item.bookingDate && (
                                                 <p className="text-xs text-purple-800 font-semibold mt-1 flex items-center gap-1">

@@ -28,6 +28,7 @@ import {
   buildOfferShareText,
   buildOfferShareUrl,
 } from '../../utils/offerShare';
+import { unitLabel } from '../../utils/unitLabel';
 
 /** Parse `YYYY-MM-DD` from `<input type="date">` as a local calendar day (avoids UTC weekday shifts). */
 function parseLocalYmd(ymd: string): Date {
@@ -654,7 +655,7 @@ export const ProductDetails: React.FC = () => {
 
                 <div className="flex items-baseline flex-wrap mb-6 pb-6 border-b border-gray-100 gap-x-2">
                   <span className="text-3xl sm:text-4xl font-bold text-primary-600 break-words">{formatXaf(offer.price)}</span>
-                  <span className="text-gray-500 font-medium">/ {t(`unit.${offer.unit}`)}</span>
+                  <span className="text-gray-500 font-medium">/ {unitLabel(t, offer.unit)}</span>
                 </div>
 
                 <div className="prose prose-sm text-gray-600 mb-8">
@@ -667,15 +668,15 @@ export const ProductDetails: React.FC = () => {
                     <div className="flex items-center text-sm text-gray-500 mb-1">
                       <Package className="h-4 w-4 mr-2" /> {offer.type === OfferType.SERVICE ? t('product.capacity') : t('product.stock')}
                     </div>
-                    <p className="font-bold text-gray-900">{offer.quantity} {t(`unit.${offer.unit}`)}</p>
+                    <p className="font-bold text-gray-900">{offer.quantity} {unitLabel(t, offer.unit)}</p>
                   </div>
                   <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
                     <div className="flex items-center text-sm text-gray-500 mb-1">
                       <AlertCircle className="h-4 w-4 mr-2" /> {t('product.limits')}
                     </div>
-                    <p className="text-xs text-gray-700">{t('product.minPrefix')} <strong>{minOrder}</strong> {t(`unit.${offer.unit}`)}</p>
+                    <p className="text-xs text-gray-700">{t('product.minPrefix')} <strong>{minOrder}</strong> {unitLabel(t, offer.unit)}</p>
                     {maxOrder < offer.quantity && (
-                      <p className="text-xs text-gray-700">{t('product.maxPrefix')} <strong>{maxOrder}</strong> {t(`unit.${offer.unit}`)}</p>
+                      <p className="text-xs text-gray-700">{t('product.maxPrefix')} <strong>{maxOrder}</strong> {unitLabel(t, offer.unit)}</p>
                     )}
                   </div>
                 </div>

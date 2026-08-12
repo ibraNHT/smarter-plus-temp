@@ -25,6 +25,7 @@ import { displayNameTruncateClass } from "../../utils/displayName";
 import { canonicalizeCategoryList } from "../../data/categories";
 import { SEO } from "../../components/SEO";
 import { buildProducerProfileSchema } from "../../services/seo/schemaBuilders";
+import { unitLabel } from '../../utils/unitLabel';
 
 function mapReviewRow(r: any): Review {
   const pic = r.reviewerProfileImageUrl;
@@ -433,7 +434,7 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
                               {offer.title}
                             </p>
                             <p className="text-xs text-gray-500 truncate">
-                              {formatXaf(offer.price)} / {t(`unit.${offer.unit}`)}
+                              {formatXaf(offer.price)} / {unitLabel(t, offer.unit)}
                             </p>
                           </div>
                         </div>

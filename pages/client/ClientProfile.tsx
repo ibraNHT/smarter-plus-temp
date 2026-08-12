@@ -43,6 +43,7 @@ import { EvidenceFilePreviews } from '../../components/EvidenceFilePreviews';
 import { DisputeSummary } from '../../components/DisputeSummary';
 
 import { MARKETPLACE_CATEGORIES } from '../../data/categories';
+import { unitLabel } from '../../utils/unitLabel';
 
 const PRODUCTION_TYPES = MARKETPLACE_CATEGORIES;
 
@@ -1803,7 +1804,7 @@ export const ClientProfile: React.FC = () => {
                                        {item.type === OfferType.SERVICE ? (
                                           <>
                                              <p className="text-xs text-gray-600 mt-1">
-                                                {t('service.bookedQty')}: {item.cartQuantity ?? item.quantity ?? 1} {t('service.slotsUnit')} · {formatXaf(item.price ?? 0)} / {t(`unit.${item.unit}`)}
+                                                {t('service.bookedQty')}: {item.cartQuantity ?? item.quantity ?? 1} {t('service.slotsUnit')} · {formatXaf(item.price ?? 0)} / {unitLabel(t, item.unit)}
                                              </p>
                                              {item.bookingDate && (
                                                 <p className="text-xs text-purple-800 font-semibold mt-1 flex items-center gap-1">
