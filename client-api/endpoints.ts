@@ -153,6 +153,9 @@ export const API_ENDPOINTS = {
       `/api/support/sessions/${sessionId}/request-agent`,
     guestRequestAgent: (sessionId: string) =>
       `/api/support/guest/sessions/${sessionId}/request-agent`,
+    /** Guest returns their session to the AI bot (no auth; guestEmail in body). */
+    guestReturnToAi: (sessionId: string) =>
+      `/api/support/guest/sessions/${sessionId}/return-to-ai`,
     guestSessionMessagesPost: (sessionId: string) =>
       `/api/support/guest/sessions/${sessionId}/messages`,
     guestSessionMessages: (sessionId: string, guestEmail: string) =>

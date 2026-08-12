@@ -3842,8 +3842,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (returningToAi || !supportSessionId) return;
     setReturningToAi(true);
     try {
-      const { returnSessionToAi } = await import('./supportSessionsApi');
-      await returnSessionToAi(supportSessionId);
+      // Guests must use the guest route — the authenticated one 401s for them,
+      // which is why "Back to AgriBot" appeared to do nothing while the same
+      // button worked instantly for a signed-in user.
+      const { returnSessionToAi, returnGuestSessionToAi } = await import('./supportSessionsApi');
+      if (!!user && !!getToken()) {
+        await returnSessionToAi(supportSessionId);
+      } else if (guestEmail) {
+        await returnGuestSessionToAi(supportSessionId, guestEmail);
+      }
       setIsHandedOver(false);
       setSupportSessionStatus('AI_HANDLING');
       setSupportMessages((prev) => [

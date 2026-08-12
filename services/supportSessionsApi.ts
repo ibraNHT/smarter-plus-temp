@@ -162,6 +162,20 @@ export async function requestSupportAgent(
   );
 }
 
+/** Guest returns their session to the AI bot. Guests have no JWT, so the
+ *  authenticated return-to-ai route 401s for them and their "Back to AgriBot"
+ *  button did nothing — the widget stayed stuck on "waiting for an agent". */
+export async function returnGuestSessionToAi(
+  sessionId: string,
+  guestEmail: string,
+): Promise<{ ok: boolean; status: string }> {
+  return apiPost<{ ok: boolean; status: string }>(
+    API_ENDPOINTS.support.guestReturnToAi(sessionId),
+    { guestEmail },
+    { silent401: true },
+  );
+}
+
 /** Guest escalates their session to a human agent (guestEmail must match session). */
 export async function requestGuestSupportAgent(
   sessionId: string,
