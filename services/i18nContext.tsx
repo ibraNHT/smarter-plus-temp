@@ -723,7 +723,7 @@ const translations: Record<string, Record<Language, string>> = {
   'otp.verify': { en: 'Verify', fr: 'Vérifier' },
   'otp.verifyTitle': { en: 'Verify with OTP', fr: 'Vérifier avec OTP' },
   'otp.requestNewCode': { en: 'Request new code', fr: 'Demander un nouveau code' },
-  'otp.enterCode': { en: 'Enter the 6-digit code sent to your registered phone number.', fr: 'Entrez le code à 6 chiffres envoyé à votre numéro enregistré.' },
+  'otp.enterCode': { en: 'Enter the 6-digit code sent to your registered email address.', fr: 'Entrez le code à 6 chiffres envoyé à votre adresse e-mail enregistrée.' },
 
   // Orders
   'order.id': { en: 'Order ID', fr: 'ID Commande' },
@@ -807,7 +807,7 @@ const translations: Record<string, Record<Language, string>> = {
   'profile.newPassword': { en: 'New Password', fr: 'Nouveau mot de passe' },
   'profile.confirmNewPassword': { en: 'Confirm New Password', fr: 'Confirmer le nouveau mot de passe' },
   'profile.passwordVerificationHint': { en: 'We will verify your current password first, then send a code to your phone and email.', fr: 'Nous vérifierons d’abord votre mot de passe actuel, puis enverrons un code à votre téléphone et à votre e-mail.' },
-  'profile.otpVerificationHint': { en: 'Enter the 6-digit code sent to your registered phone and email.', fr: 'Entrez le code à 6 chiffres envoyé à votre téléphone et votre e-mail enregistrés.' },
+  'profile.otpVerificationHint': { en: 'Enter the 6-digit code sent to your registered email address.', fr: 'Entrez le code à 6 chiffres envoyé à votre adresse e-mail enregistrée.' },
   'profile.otpCodePlaceholder': { en: '000000', fr: '000000' },
   'profile.otpCodeRequired': { en: 'Enter the 6-digit code from your phone or email.', fr: 'Entrez le code à 6 chiffres envoyé à votre téléphone ou e-mail.' },
   'profile.checking': { en: 'Checking…', fr: 'Vérification…' },
