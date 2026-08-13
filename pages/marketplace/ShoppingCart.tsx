@@ -423,7 +423,13 @@ export const ShoppingCart: React.FC = () => {
       );
       if (ok) {
         setShowRecap(false);
-        navigate('/');
+        // Send the buyer straight to their orders, NOT the homepage. Retail is
+        // pay-upfront but placing the order does not pay for it, and dropping the
+        // customer on the landing page left the order sitting unpaid with nothing
+        // prompting them — which is how unpaid orders reached the retail board in
+        // the first place (client walkthrough, 2026-08-12). The orders tab is where
+        // the Pay Now button lives.
+        navigate('/client/profile?tab=orders');
       }
     } finally {
       setOrderPlacing(false);
