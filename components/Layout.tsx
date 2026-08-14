@@ -81,19 +81,19 @@ export const Sidebar = ({ page, setPage, isOpen, setIsOpen, user, logout, t, can
           </button>
           {/* Show the translator there for mobile devices only */}
           <div className="lg:hidden mb-2 flex items-center gap-6 w-auto">
-            <button onClick={logout} className="w-full flex items-center px-4 py-4 my-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
+            {/* <button onClick={logout} className="w-full flex items-center px-4 py-4 my-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
               <LogOut className="w-5 h-5 mr-3" />
               {t('logout')}
-            </button>
+            </button> */}
             <select value={t('lang')} onChange={e => t.setLang(e.target.value)} className="w-full bg-gray-100 dark:bg-gray-700 border-none rounded-md text-sm p-2 mb-4 text-gray-900 dark:text-white">
               <option value="en">EN</option>
               <option value="fr">FR</option>
             </select>
           </div>
-          {/* <button onClick={logout} className="w-full flex items-center px-4 py-0 mb-4 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
+          <button onClick={logout} className="w-full flex items-center px-4 py-0 mb-4 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
             <LogOut className="w-5 h-5 mr-3" />
             {t('logout')}
-          </button> */}
+          </button>
         </div>
       </aside>
     </>

@@ -815,9 +815,14 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
   }
 };
 
+export const convertCurrency = (amount: number, currencyCode: string) => {
+  const currency = CURRENCIES[currencyCode as keyof typeof CURRENCIES] || CURRENCIES.XAF;
+  return amount * currency.rate;
+};
+
 export const formatCurrency = (amount: number, currencyCode: string) => {
   const currency = CURRENCIES[currencyCode as keyof typeof CURRENCIES] || CURRENCIES.XAF;
-  const converted = amount * currency.rate;
+  const converted = convertCurrency(amount, currencyCode);
   return new Intl.NumberFormat('fr-FR', {
     style: 'currency',
     currency: currency.code,

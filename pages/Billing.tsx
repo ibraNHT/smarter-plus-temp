@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Input } from '../components/UI';
 import { apiFetch } from '../hooks/useAppData';
+import { formatCurrency } from '../constants';
 
-export default function Billing({ t, user, refreshUser }: any) {
+export default function Billing({ t, user, refreshUser, currency }: any) {
   const [subscription, setSubscription] = useState<any>(null);
   const [plans, setPlans] = useState<any[]>([]);
   const [assignedCoupons, setAssignedCoupons] = useState<any[]>([]);
@@ -209,7 +210,7 @@ export default function Billing({ t, user, refreshUser }: any) {
             )}
             {appliedCoupon?.valid && (
               <p className="text-sm text-green-500 mt-2">
-                {appliedCoupon.message} ({appliedCoupon.originalAmount?.toLocaleString()} → {appliedCoupon.finalAmount?.toLocaleString()} XAF)
+                {appliedCoupon.message} ({formatCurrency(appliedCoupon.originalAmount ?? 0, currency)} → {formatCurrency(appliedCoupon.finalAmount ?? 0, currency)})
               </p>
             )}
           </div>
@@ -226,16 +227,17 @@ export default function Billing({ t, user, refreshUser }: any) {
               return (
                 <div key={p.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 flex flex-col">
                   <h3 className="font-semibold">{p.name}</h3>
-                  <p className="text-2xl font-bold mt-2">
+                  <p className="text-xl font-bold mt-2">
                     {showDiscount ? (
                       <>
-                        <span className="text-base line-through text-gray-500 mr-2">{total.toLocaleString()}</span>
-                        {Number(appliedCoupon.finalAmount).toLocaleString()}
+                        <span className="text-base line-through text-gray-500 mr-2">{formatCurrency(total, currency)}</span>
+                        {formatCurrency(Number(appliedCoupon.finalAmount), currency)}
                       </>
                     ) : (
-                      total.toLocaleString()
-                    )}{' '}
-                    <span className="text-sm font-normal">XAF</span>
+                      formatCurrency(total, currency)
+                    )}
+                    {/* Add the XAF amount in paranthesis if the selected currency is not XAF */}
+                    {currency !== 'XAF' && ` (${formatCurrency(p.monthlyPriceXaf || 0, 'XAF')})`}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
                     {p.maxUsers == null ? t('unlimitedUsers') : `${p.maxUsers} ${t('userManagement')}`}
