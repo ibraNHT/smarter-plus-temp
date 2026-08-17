@@ -102,7 +102,9 @@ export const RegisterProducer: React.FC = () => {
 
   const registerProducerSchema = z.object({
     type: z.enum(['BUSINESS', 'INDIVIDUAL']),
-    name: z.string().trim().min(2, t('validation.farmNameRequired')),
+    // Only BUSINESS accounts type a trading name; an individual's name IS their
+    // first + last name, so this is validated conditionally in superRefine below.
+    name: z.string(),
     email: z.string().trim().email(t('validation.emailRequired')),
     password: z.string().min(1, t('validation.passwordRequired')).regex(PASSWORD_RULE, t('form.passwordRequirements')),
     confirmPassword: z.string().min(1, t('validation.confirmPassword')),
@@ -121,6 +123,9 @@ export const RegisterProducer: React.FC = () => {
     }
     if (!values.taxIdentificationNumber.trim()) {
       ctx.addIssue({ code: 'custom', path: ['taxIdentificationNumber'], message: t('validation.taxIdRequired') });
+    }
+    if (values.type === 'BUSINESS' && values.name.trim().length < 2) {
+      ctx.addIssue({ code: 'custom', path: ['name'], message: t('validation.farmNameRequired') });
     }
     // Individual producers must provide personal identity details that
     // differentiate them from a business (business producers don't fill these).
@@ -198,7 +203,13 @@ export const RegisterProducer: React.FC = () => {
       const fullPhone = buildRegisterPhone(values.phoneCode, values.phone);
       const result = await registerProducer({
         type: values.type,
-        name: values.name,
+        // An individual producer has no separate trading name — the client asked us
+        // to stop asking for one, since it is simply their own name. Mirrors
+        // ProducerProfile, which already derives the display name this way.
+        name:
+          values.type === 'INDIVIDUAL'
+            ? `${values.firstName.trim()} ${values.lastName.trim()}`.trim()
+            : values.name,
         email: values.email,
         phone: fullPhone,
         description: values.description,
@@ -477,6 +488,7 @@ export const RegisterProducer: React.FC = () => {
             </>
           )}
 
+          {formik.values.type === 'BUSINESS' && (
           <div className="sm:col-span-6">
             <label htmlFor="name" className="block text-sm font-medium text-gray-700">{t('form.farmName')}</label>
             <div className="mt-1">
@@ -490,6 +502,7 @@ export const RegisterProducer: React.FC = () => {
               <FieldError formik={formik} name="name" />
             </div>
           </div>
+          )}
 
           {/* NIU and certificates required for ALL producer types */}
           <div className="sm:col-span-6">
