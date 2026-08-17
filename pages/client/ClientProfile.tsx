@@ -267,9 +267,18 @@ export const ClientProfile: React.FC = () => {
       },
       onSubmit: async (values) => {
          if (!user || !currentClient?.id) return;
+         // An individual producer has no separate trading name — it is simply their
+         // own name, so send first + last rather than leaving it undefined and
+         // relying on a server-side fallback. Same rule as RegisterProducer and
+         // ProducerProfile, so a producer is named consistently however they
+         // were created.
+         const individualName = `${(currentClient.firstName ?? '').trim()} ${(currentClient.lastName ?? '').trim()}`.trim()
+            || currentClient.name
+            || user.displayName
+            || user.name;
          const ok = await upgradeClientToProducer(currentClient.id, {
             type: values.type,
-            name: values.type === 'BUSINESS' ? values.farmName : undefined,
+            name: values.type === 'BUSINESS' ? values.farmName.trim() : individualName,
             description: values.description,
             productionTypes: values.productionTypes,
             taxIdentificationNumber: values.taxIdentificationNumber || undefined,
