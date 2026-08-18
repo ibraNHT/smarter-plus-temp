@@ -1,9 +1,9 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 
-export const LEGAL_EFFECTIVE_DATE_EN = '3 June 2026';
-export const LEGAL_EFFECTIVE_DATE_FR = '3 juin 2026';
-export const LEGAL_VERSION = '1.0';
+export const LEGAL_EFFECTIVE_DATE_EN = '16 August 2026';
+export const LEGAL_EFFECTIVE_DATE_FR = '16 août 2026';
+export const LEGAL_VERSION = '1.1';
 
 export type LegalDocumentMeta = {
   effectiveDateLabel: string;
@@ -29,7 +29,7 @@ export const LegalDocumentLayout: React.FC<Props> = ({
   meta,
   children,
 }) => (
-  <div className="bg-gray-50 min-h-screen py-8 sm:py-12 md:py-16">
+  <div className="agm-selectable bg-gray-50 min-h-screen py-8 sm:py-12 md:py-16">
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="bg-white p-5 sm:p-8 md:p-12 rounded-lg shadow-sm">
         <div className="flex items-start mb-6 sm:mb-8 border-b border-gray-200 pb-4 sm:pb-6 gap-3 sm:gap-4">

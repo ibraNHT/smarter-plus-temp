@@ -3,6 +3,7 @@ import { Smartphone, X } from 'lucide-react';
 import { usePwaInstall } from '../contexts/PwaInstallContext';
 import { useTranslation } from '../services/i18nContext';
 import { useStoreOptional } from '../services/storeContext';
+import { isNativeApp } from '../services/nativePlatform';
 
 /** Bottom banner for Chrome install prompt + high-intent / iOS tips. */
 export const InstallAppBanner: React.FC = () => {
@@ -19,14 +20,15 @@ export const InstallAppBanner: React.FC = () => {
   const { t } = useTranslation();
   const store = useStoreOptional();
   const compareCount = store?.compareList?.length ?? 0;
+  if (isNativeApp()) return null;
 
   const showChromeBanner = canInstall && (!bannerDismissed || intentForced);
   const visible = showChromeBanner || showIosTip;
   if (!visible) return null;
 
   const bottomOffset = compareCount > 0
-    ? 'calc(max(0.75rem, env(safe-area-inset-bottom)) + 5rem)'
-    : 'max(0.75rem, env(safe-area-inset-bottom))';
+    ? 'calc(var(--agm-tabbar, 0px) + max(0.75rem, env(safe-area-inset-bottom)) + 5rem)'
+    : 'calc(var(--agm-tabbar, 0px) + max(0.75rem, env(safe-area-inset-bottom)))';
 
   const intentBody =
     intentSource === 'favorite'

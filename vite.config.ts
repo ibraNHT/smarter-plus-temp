@@ -6,14 +6,29 @@ const isVercel = process.env.VERCEL === '1';
 const enablePwaOnVercel = process.env.ENABLE_PWA_ON_VERCEL === 'true';
 const disablePwa = process.env.DISABLE_PWA === 'true';
 const enablePwa = !disablePwa && (!isVercel || enablePwaOnVercel);
+const isNativeBuild = process.env.VITE_NATIVE === 'true';
+
+const stripGtagOnNative = {
+  name: 'strip-gtag-native',
+  transformIndexHtml(html: string) {
+    if (!isNativeBuild) return html;
+    return html.replace(
+      /\s*<!-- Google tag \(gtag\.js\) -->[\s\S]*?gtag\('config', 'AW-18245780548'\);\s*<\/script>/,
+      '',
+    );
+  },
+};
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const proxyTarget =
-    env.VITE_API_PROXY_TARGET || env.VITE_API_BASE_URL || 'http://localhost:4040';
+    env.VITE_API_PROXY_TARGET || env.VITE_API_BASE_URL || 'http://localhost:3000';
 
   return {
+    define: {
+      'import.meta.env.VITE_NATIVE': JSON.stringify(isNativeBuild ? 'true' : ''),
+    },
     server: {
       proxy: {
         '^/api/(?!.*\\.(?:ts|tsx|js|jsx|mjs|cjs|map|json)$)': {
@@ -35,6 +50,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [
+      stripGtagOnNative,
       react(),
       ...(enablePwa
         ? [

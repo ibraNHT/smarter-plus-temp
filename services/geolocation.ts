@@ -1,3 +1,6 @@
+import { Geolocation } from '@capacitor/geolocation';
+import { isNativeApp } from './nativePlatform';
+
 /** Default map center (Cameroon) when no coordinates yet */
 export const DEFAULT_MAP_CENTER = { lat: 4.0511, lng: 9.7679 };
 
@@ -7,7 +10,20 @@ export type ReverseGeocodeResult = {
   region: string;
 };
 
-export function requestBrowserLocation(): Promise<{ lat: number; lng: number }> {
+export async function requestBrowserLocation(): Promise<{ lat: number; lng: number }> {
+  if (isNativeApp()) {
+    const perm = await Geolocation.requestPermissions();
+    const loc = perm.location ?? perm.coarseLocation;
+    if (loc === 'denied') {
+      throw new Error('Location access denied');
+    }
+    const pos = await Geolocation.getCurrentPosition({
+      enableHighAccuracy: true,
+      timeout: 20_000,
+    });
+    return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  }
+
   return new Promise((resolve, reject) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       reject(new Error('Geolocation is not supported in this browser.'));

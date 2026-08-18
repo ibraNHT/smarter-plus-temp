@@ -1,12 +1,14 @@
 /** Path-style referral URLs for BrowserRouter (never hash routes). */
 
+import { getPublicWebOrigin } from '../services/nativePlatform';
+
 export function buildClientReferralLink(referralCode: string, origin?: string): string {
-  const base = (origin ?? (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
+  const base = (origin ?? getPublicWebOrigin()).replace(/\/$/, '');
   return `${base}/register/client?ref=${encodeURIComponent(referralCode.trim())}`;
 }
 
 export function buildProducerReferralLink(referralCode: string, origin?: string): string {
-  const base = (origin ?? (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
+  const base = (origin ?? getPublicWebOrigin()).replace(/\/$/, '');
   // Choice page preserves ref into /register/client and /register/producer
   return `${base}/register?ref=${encodeURIComponent(referralCode.trim())}`;
 }

@@ -118,7 +118,7 @@ const DocSlot: React.FC<DocSlotProps> = ({
           >
             <FileText className="h-5 w-5 shrink-0 text-red-500" />
             <span className="truncate flex-1">{documentFileLabel(url)}</span>
-            <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <ExternalLink className="h-3.5 w-3.5 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" />
           </a>
         )
       ) : (

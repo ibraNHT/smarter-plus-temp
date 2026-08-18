@@ -5,8 +5,11 @@
  * attaches the JWT Authorization header when a token is present.
  */
 
+import { resolveApiBaseUrl } from './nativePlatform';
+import { nativeStorageGet, nativeStorageRemove, nativeStorageSet } from './nativeStorage';
+
 // In dev, use same origin so Vite proxy forwards /api to the backend (avoids CORS).
-export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? '' : 'http://localhost:3000');
+export const BASE_URL = resolveApiBaseUrl();
 const TOKEN_KEY = 'authToken';
 const REFRESH_TOKEN_KEY = 'refreshToken';
 
@@ -14,24 +17,24 @@ const REFRESH_TOKEN_KEY = 'refreshToken';
 // but nothing writes those anymore, so any value there is a stale/expired leftover.
 // Reading it after logout caused a spurious 401 → forceLogoutRedirect on the next
 // login (looked like a reload; needed a second login). clearToken() also purges them.
-export const getToken = (): string | null => localStorage.getItem(TOKEN_KEY);
+export const getToken = (): string | null => nativeStorageGet(TOKEN_KEY);
 
-export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token);
+export const setToken = (token: string) => nativeStorageSet(TOKEN_KEY, token);
 export const clearToken = () => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    nativeStorageRemove(TOKEN_KEY);
+    nativeStorageRemove(REFRESH_TOKEN_KEY);
     // Purge legacy token keys too. They are never written anymore, so if present
     // they are stale/expired leftovers; leaving them behind made logout incomplete
     // and produced a 401 → forced re-login on the next attempt.
-    localStorage.removeItem('token');
-    localStorage.removeItem('accessToken');
+    nativeStorageRemove('token');
+    nativeStorageRemove('accessToken');
     // Also drop cached session user — anything reading `currentUser` will see
     // the logged-out state immediately on next render.
-    try { localStorage.removeItem('currentUser'); } catch { /* noop */ }
+    try { nativeStorageRemove('currentUser'); } catch { /* noop */ }
 };
 
-export const getRefreshToken = (): string | null => localStorage.getItem(REFRESH_TOKEN_KEY);
-export const setRefreshToken = (token: string) => localStorage.setItem(REFRESH_TOKEN_KEY, token);
+export const getRefreshToken = (): string | null => nativeStorageGet(REFRESH_TOKEN_KEY);
+export const setRefreshToken = (token: string) => nativeStorageSet(REFRESH_TOKEN_KEY, token);
 
 /**
  * Hard log-out used when the refresh token itself fails (the session is dead).
@@ -45,16 +48,16 @@ export const forceLogoutRedirect = (): void => {
     if (typeof window === 'undefined') return;
     // Tell other tabs to clear their in-memory session immediately.
     try { window.dispatchEvent(new Event('agm:session-expired')); } catch { /* noop */ }
+    const path = `${window.location.pathname || ''}${window.location.search || ''}`;
     const hash = window.location.hash || '';
-    if (hash === '#/login' || hash.startsWith('#/login?')) return;
-    // Preserve the page user was trying to reach so we can redirect post-login if desired.
+    if (path === '/login' || path.startsWith('/login?') || hash === '#/login' || hash.startsWith('#/login?')) return;
     try {
-        const intended = `${window.location.pathname}${window.location.hash}`;
-        if (intended && !intended.startsWith('/login')) {
+        const intended = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+        if (intended && !intended.startsWith('/login') && intended !== '#/login') {
             sessionStorage.setItem('postLoginRedirect', intended);
         }
     } catch { /* noop */ }
-    window.location.hash = '#/login';
+    window.location.replace('/login');
 };
 
 const buildHeaders = (extra?: Record<string, string>): Record<string, string> => {

@@ -26,6 +26,7 @@ import { canonicalizeCategoryList } from "../../data/categories";
 import { SEO } from "../../components/SEO";
 import { buildProducerProfileSchema } from "../../services/seo/schemaBuilders";
 import { unitLabel } from '../../utils/unitLabel';
+import { ReportBlockControl } from '../../components/ReportBlockControl';
 
 function mapReviewRow(r: any): Review {
   const pic = r.reviewerProfileImageUrl;
@@ -62,6 +63,7 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
     refreshClients,
     refreshOffers,
     loadPublicProfileById,
+    user,
   } = useStore();
   const { t, language } = useTranslation();
   const { formatXaf } = useCurrency();
@@ -330,7 +332,14 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
             </div>
 
             {/* Rating Badge */}
-            <div className="flex flex-col sm:items-end">
+            <div className="flex flex-col sm:items-end gap-2">
+              {profileData.userId && profileData.userId !== user?.id ? (
+                <ReportBlockControl
+                  targetType="USER"
+                  targetId={profileData.userId}
+                  blockUserIdValue={profileData.userId}
+                />
+              ) : null}
               <div className="flex items-center bg-yellow-50 px-3 py-1 rounded-lg border border-yellow-100">
                 <Star className="w-5 h-5 text-yellow-400 fill-current mr-1" />
                 <span className="text-xl font-bold text-yellow-700">

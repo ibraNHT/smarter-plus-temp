@@ -10,8 +10,8 @@ import {
 } from './LegalDocumentLayout';
 
 const SUPPORT_EMAIL = (
-  <a href="mailto:helpdesk@aheteici.com" className="text-primary-600 hover:underline">
-    helpdesk@aheteici.com
+  <a href="mailto:helpdesk@acheteici.com" className="text-primary-600 hover:underline">
+    helpdesk@acheteici.com
   </a>
 );
 
@@ -599,9 +599,16 @@ export const TermsAndConditionsFr: React.FC<Props> = ({ title, meta }) => (
           <a href="/privacy" className="text-primary-600 hover:underline">
             Politique de Confidentialité
           </a>
-          . Nous pouvons conserver des données relatives à la sécurité des comptes, aux conversations de support, aux
+          . Cela inclut la localisation utilisée pour préremplir l'adresse de livraison, les photos que vous
+          téléversez, les paiements portefeuille via Tranzak pour des biens physiques, et le stockage natif des jetons
+          de session. Nous pouvons conserver des données relatives à la sécurité des comptes, aux conversations de support, aux
           commandes et transactions, aux preuves de litige et aux journaux d'audit selon les besoins pour fournir la
-          Plateforme, assurer la conformité, prévenir la fraude et tenir des registres.
+          Plateforme, assurer la conformité, prévenir la fraude et tenir des registres. Vous pouvez supprimer votre
+          compte dans l'application via Profil → Sécurité, ou demander la suppression sur le web à{' '}
+          <a href="/account-deletion" className="text-primary-600 hover:underline">
+            /account-deletion
+          </a>
+          .
         </LegalParagraph>
       </LegalSection>
 

@@ -81,6 +81,11 @@ export const SEO_PAGE_META: Record<string, { title: string; description: string;
     description:
       'Privacy policy for AgriMarket Connect on acheteici.com. Learn how we protect your data on Africa\'s trusted agri marketplace.',
   },
+  accountDeletion: {
+    title: 'Delete Your AgriMarket Connect Account',
+    description:
+      'Request deletion of your AgriMarket Connect (Achète Tout Ici) account and associated personal data. In-app steps and a web request form for Google Play.',
+  },
   register: {
     title: 'Create Your Account',
     description:

@@ -5,12 +5,13 @@ import {
   forceLogoutRedirect,
   getToken,
 } from '../services/apiService';
+import { nativeStorageGet } from '../services/nativeStorage';
 
 const TOKEN_KEYS = ['authToken', 'token', 'accessToken'] as const;
 
 const readToken = (): string | null => {
   for (const key of TOKEN_KEYS) {
-    const value = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    const value = nativeStorageGet(key);
     if (value) return value;
   }
   return null;

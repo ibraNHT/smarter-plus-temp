@@ -7,6 +7,7 @@ import { OfferType, UnitOfMeasure, MarketType, Offer } from '../../types';
 import { generateProductDescription } from '../../services/geminiService';
 import { uploadOfferImage } from '../../services/uploadService';
 import { apiFetch } from '../../services/apiService';
+import { nativeStorageGet, nativeStorageSet, nativeStorageRemove } from '../../services/nativeStorage';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 import { offerImageInBox, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
 import NumberStepper from '../../components/NumberStepper';
@@ -46,7 +47,7 @@ const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000; // discard drafts older than a day
 
 function readNewOfferDraft(): NewOfferDraft | null {
   try {
-    const raw = localStorage.getItem(NEW_OFFER_DRAFT_KEY);
+    const raw = nativeStorageGet(NEW_OFFER_DRAFT_KEY);
     if (!raw) return null;
     const draft = JSON.parse(raw) as NewOfferDraft;
     if (!draft || typeof draft !== 'object' || !draft.formData) return null;
@@ -59,7 +60,7 @@ function readNewOfferDraft(): NewOfferDraft | null {
 
 function writeNewOfferDraft(draft: Omit<NewOfferDraft, 'savedAt'>): void {
   try {
-    localStorage.setItem(NEW_OFFER_DRAFT_KEY, JSON.stringify({ ...draft, savedAt: Date.now() }));
+    nativeStorageSet(NEW_OFFER_DRAFT_KEY, JSON.stringify({ ...draft, savedAt: Date.now() }));
   } catch {
     /* storage full/unavailable — draft persistence is best-effort */
   }
@@ -67,7 +68,7 @@ function writeNewOfferDraft(draft: Omit<NewOfferDraft, 'savedAt'>): void {
 
 function clearNewOfferDraft(): void {
   try {
-    localStorage.removeItem(NEW_OFFER_DRAFT_KEY);
+    nativeStorageRemove(NEW_OFFER_DRAFT_KEY);
   } catch {
     /* ignore */
   }

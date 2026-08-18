@@ -10,8 +10,8 @@ import {
 } from './LegalDocumentLayout';
 
 const SUPPORT_EMAIL = (
-  <a href="mailto:helpdesk@aheteici.com" className="text-primary-600 hover:underline">
-    helpdesk@aheteici.com
+  <a href="mailto:helpdesk@acheteici.com" className="text-primary-600 hover:underline">
+    helpdesk@acheteici.com
   </a>
 );
 
@@ -48,14 +48,19 @@ export const PrivacyPolicyEn: React.FC<Props> = ({ title, meta }) => (
           items={[
             <>Agrimarket Connect marketplace services (producer-client transactions),</>,
             <>Agrimarket Connect retail store services,</>,
-            <>related customer support features (including AI-assisted support),</>,
+              <>related customer support features (including AI-assisted support via Google Gemini through our servers),</>,
             <>notification and account security services,</>,
-            <>connected web interfaces and API interactions used to provide those services.</>,
+            <>connected web interfaces, native iOS and Android applications, and API interactions used to provide those services.</>,
           ]}
         />
         <LegalParagraph>
           This Policy does not apply to third-party websites or services that we do not control, even where
-          links are provided on the Platform.
+          links are provided on the Platform. Native apps and the website share this Policy. A dedicated
+          account-deletion resource for Google Play is at{' '}
+          <a href="/account-deletion" className="text-primary-600 hover:underline">
+            acheteici.com/account-deletion
+          </a>
+          .
         </LegalParagraph>
       </LegalSection>
 
@@ -89,6 +94,22 @@ export const PrivacyPolicyEn: React.FC<Props> = ({ title, meta }) => (
           />
         </LegalSubSection>
 
+        <LegalSubSection title="3.2.1 Location and Device Permissions">
+          <LegalParagraph>
+            When you tap “use my location” during registration or profile setup we collect approximate or precise GPS
+            coordinates to fill your delivery address. We do not track your location in the background. Camera and photo
+            library access are used only when you choose to upload a profile photo, listing image, identity document, or
+            dispute evidence.
+          </LegalParagraph>
+          <LegalList
+            items={[
+              <>GPS / device location (when you request address autofill)</>,
+              <>Photos and documents you upload (stored with Cloudinary and/or our API)</>,
+              <>Session tokens on native apps stored in encrypted on-device Preferences (not only browser localStorage)</>,
+            ]}
+          />
+        </LegalSubSection>
+
         <LegalSubSection title="3.3 Order and Transaction Data">
           <LegalList
             items={[
@@ -113,7 +134,7 @@ export const PrivacyPolicyEn: React.FC<Props> = ({ title, meta }) => (
         <LegalSubSection title="3.5 Support, Dispute, and Communication Data">
           <LegalList
             items={[
-              <>Support session messages (including AI assistant and human support interactions)</>,
+              <>Support session messages (including AI assistant (Google Gemini) and human support interactions)</>,
               <>Support guest identifiers where guest support is used (e.g., guest email/name)</>,
               <>Dispute records and dispute evidence uploads</>,
               <>Notification records (in-app and event-triggered notifications)</>,
@@ -229,6 +250,13 @@ export const PrivacyPolicyEn: React.FC<Props> = ({ title, meta }) => (
           ]}
         />
         <LegalParagraph>We do not sell personal data as &ldquo;data brokerage&rdquo; where prohibited by law.</LegalParagraph>
+        <LegalParagraph>
+          Processors we currently use include Cloudinary (media uploads), Google Maps / Places (address search),
+          OpenStreetMap / Nominatim (map tiles and reverse geocoding), Tranzak (wallet top-up for physical goods),
+          Google Gemini (AI customer support, after in-app consent), and
+          Socket.IO infrastructure for in-app notifications and chat. The public website may load a Google Ads
+          conversion tag. Native iOS and Android store binaries do not include that advertising tag.
+        </LegalParagraph>
       </LegalSection>
 
       <LegalSection title="8. Cookies and Tracking Technologies">
@@ -338,7 +366,12 @@ export const PrivacyPolicyEn: React.FC<Props> = ({ title, meta }) => (
           ]}
         />
         <LegalParagraph>
-          To exercise rights, contact: {SUPPORT_EMAIL}. We may request verification before acting on requests.
+          To exercise rights, contact: {SUPPORT_EMAIL}. If you have an account, you can also delete it in-app from
+          Profile → Security → Delete account, or request deletion on the web at{' '}
+          <a href="/account-deletion" className="text-primary-600 hover:underline">
+            /account-deletion
+          </a>
+          . We may request verification before acting on requests.
         </LegalParagraph>
       </LegalSection>
 

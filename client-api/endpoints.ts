@@ -14,6 +14,8 @@ export const API_ENDPOINTS = {
     forgotPassword: "/api/auth/forgot-password",
     forgotPasswordVerifyOtp: "/api/auth/forgot-password/verify-otp",
     resetPassword: "/api/auth/reset-password",
+    /** Authenticated irreversible account deletion (Apple 5.1.1(v) / Play). */
+    deleteAccount: "/api/auth/account",
   },
   otp: {
     request: "/api/otp/request",
@@ -130,6 +132,10 @@ export const API_ENDPOINTS = {
     create: "/api/portfolios",
     update: (id: string) => `/api/portfolios/${id}`,
     remove: (id: string) => `/api/portfolios/${id}`,
+  },
+  reports: {
+    /** UGC report (Apple 1.2 / Play). Backend may 404 until deployed — UI falls back to email. */
+    create: "/api/reports",
   },
   pickupPoints: {
     list: "/api/pickup-points",

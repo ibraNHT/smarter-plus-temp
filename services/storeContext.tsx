@@ -24,6 +24,7 @@ export type SupportSessionStatus =
   | 'AGENT_ACTIVE'
   | 'CLOSED';
 import { apiFetch, apiUpload, setToken, clearToken, getToken, getRefreshToken, setRefreshToken, isRefreshOnCooldown, attemptTokenRefresh } from './apiService';
+import { nativeStorageGet, nativeStorageRemove, nativeStorageSet } from './nativeStorage';
 import { normalizeRegisterPhoneFull } from '../utils/registerPhone';
 import { resolveOfferImageSrc } from '../utils/offerImageDisplay';
 import { logApiFailure } from './apiDebug';
@@ -495,13 +496,13 @@ const getOrdersEndpointsForUser = (activeUser?: UserSession | null): string[] =>
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserSession | null>(() => {
     if (typeof window === 'undefined') return null;
-    const savedUser = localStorage.getItem('currentUser');
+    const savedUser = nativeStorageGet('currentUser');
     if (!savedUser) return null;
     try {
       const parsedUser = JSON.parse(savedUser);
       if (!isWebAppAllowedRole(parsedUser?.role)) {
         clearToken();
-        localStorage.removeItem('currentUser');
+        nativeStorageRemove('currentUser');
         return null;
       }
       return parsedUser;
@@ -521,7 +522,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [cart, setCart] = useState<CartItem[]>(() => {
     if (typeof window === 'undefined') return [];
     try {
-      const raw = localStorage.getItem('cart');
+      const raw = nativeStorageGet('cart');
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : [];
@@ -585,13 +586,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   useEffect(() => {
     useSessionStore.getState().setUser(user);
-    const savedGuestEmail = localStorage.getItem('guestEmail');
+    const savedGuestEmail = nativeStorageGet('guestEmail');
     if (savedGuestEmail) setGuestEmail(savedGuestEmail);
     // Restore a GUEST support session across reloads so agent-reply polling resumes
     // (guests have no socket; the 5s poll needs the sessionId + handed-over flag).
     if (!getToken()) {
-      const savedSupportSessionId = localStorage.getItem('supportSessionId');
-      const savedGuestEmail = localStorage.getItem('guestEmail');
+      const savedSupportSessionId = nativeStorageGet('supportSessionId');
+      const savedGuestEmail = nativeStorageGet('guestEmail');
       // Only restore a session we can prove is a GUEST one. A session saved while
       // signed in has no guestEmail; replaying it on the guest endpoints returns
       // 403 forever, and nothing downstream ever clears it. Drop it instead.
@@ -599,14 +600,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setSupportSessionId(savedSupportSessionId);
         setIsHandedOver(true);
       } else if (savedSupportSessionId) {
-        try { localStorage.removeItem('supportSessionId'); } catch { /* noop */ }
+        try { nativeStorageRemove('supportSessionId'); } catch { /* noop */ }
       }
     }
 
     let cancelled = false;
     (async () => {
       const hasStoredSession = Boolean(
-        getToken() || getRefreshToken() || localStorage.getItem('currentUser'),
+        getToken() || getRefreshToken() || nativeStorageGet('currentUser'),
       );
       if (hasStoredSession) {
         await attemptTokenRefresh();
@@ -641,7 +642,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const token = getToken();
     if (isWebAppSessionBlocked(token, user)) {
       clearToken();
-      localStorage.removeItem('currentUser');
+      nativeStorageRemove('currentUser');
       setUser(null);
       useSessionStore.getState().clear();
     }
@@ -674,7 +675,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setIsHandedOver(false);
       setSupportSessionStatus('AI_HANDLING');
       setSupportMessages([]);
-      try { localStorage.removeItem('supportSessionId'); } catch { /* noop */ }
+      try { nativeStorageRemove('supportSessionId'); } catch { /* noop */ }
     };
     window.addEventListener('agm:session-expired', onSessionExpired);
     return () => window.removeEventListener('agm:session-expired', onSessionExpired);
@@ -686,19 +687,19 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // session, which the guest endpoints reject with 403.
   useEffect(() => {
     if (!user && supportSessionId && guestEmail) {
-      localStorage.setItem('supportSessionId', supportSessionId);
+      nativeStorageSet('supportSessionId', supportSessionId);
     } else {
       // Unconditional else — the (!user && id && !guestEmail) case previously
       // matched neither branch and left a poisoned id in place.
-      localStorage.removeItem('supportSessionId');
+      nativeStorageRemove('supportSessionId');
     }
   }, [user, supportSessionId, guestEmail]);
 
   // ─── DEBOUNCED CART SYNC ───────────────────────────────────────────────────
   useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(cart));
-    if (guestEmail) localStorage.setItem('guestEmail', guestEmail);
-    else localStorage.removeItem('guestEmail');
+    nativeStorageSet('cart', JSON.stringify(cart));
+    if (guestEmail) nativeStorageSet('guestEmail', guestEmail);
+    else nativeStorageRemove('guestEmail');
 
     // `sync-cart` REPLACES the server cart (deleteMany + createMany server-side),
     // so an empty push is destructive. On a fresh device the local cart starts
@@ -1074,7 +1075,29 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
       })();
     });
+    const onAppState = (event: Event) => {
+      const isActive = Boolean((event as CustomEvent<{ isActive?: boolean }>).detail?.isActive);
+      if (!isActive) {
+        socket.disconnect();
+        return;
+      }
+      void (async () => {
+        await attemptTokenRefresh({ silent: true });
+        const nextToken = getToken();
+        if (nextToken) socket.auth = { token: nextToken };
+        socket.connect();
+        void queryClient.invalidateQueries();
+      })();
+    };
+    const onNetwork = (event: Event) => {
+      const connected = (event as CustomEvent<{ connected?: boolean }>).detail?.connected;
+      if (connected === true) onAppState(new CustomEvent('agm:app-state', { detail: { isActive: true } }));
+    };
+    window.addEventListener('agm:app-state', onAppState);
+    window.addEventListener('agm:network', onNetwork);
     return () => {
+      window.removeEventListener('agm:app-state', onAppState);
+      window.removeEventListener('agm:network', onNetwork);
       socket.disconnect();
       socketRef.current = null;
       setRealtimeConnected(false);
@@ -1403,7 +1426,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     userRef.current = next;
     setUser(next);
     useSessionStore.getState().setUser(next);
-    localStorage.setItem('currentUser', JSON.stringify(next));
+    nativeStorageSet('currentUser', JSON.stringify(next));
     bustCache(QK.orders(producerAccountUserId(next), next.role, next.clientId));
     return true;
   };
@@ -1558,7 +1581,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             setUser((prev) => {
               if (!prev) return prev;
               const next = { ...prev, clientId: me.id };
-              localStorage.setItem('currentUser', JSON.stringify(next));
+              nativeStorageSet('currentUser', JSON.stringify(next));
               return next;
             });
           }
@@ -2096,7 +2119,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       userRef.current = merged;
       setUser(merged);
       useSessionStore.getState().setUser(merged);
-      localStorage.setItem('currentUser', JSON.stringify(merged));
+      nativeStorageSet('currentUser', JSON.stringify(merged));
       return merged;
     } catch {
       return userRef.current;
@@ -2109,7 +2132,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   ) => {
     if (!isWebAppAllowedRole(data.user?.role)) {
       clearToken();
-      localStorage.removeItem('currentUser');
+      nativeStorageRemove('currentUser');
       throw new Error('This account is not supported in WebApp. Please use Admin Panel.');
     }
     const jwtToken = data.accessToken || data.token;
@@ -2121,7 +2144,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
     setUser(data.user);
     useSessionStore.getState().setUser(data.user);
-    localStorage.setItem('currentUser', JSON.stringify(data.user));
+    nativeStorageSet('currentUser', JSON.stringify(data.user));
     userRef.current = data.user;
     // The support widget's state belonged to the GUEST that was here a moment ago.
     // Logging in makes `user` truthy, which stops the guest poll (it requires
@@ -2137,12 +2160,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setGuestEmail(null);
     setGuestName(null);
     try {
-      localStorage.removeItem('supportSessionId');
-      localStorage.removeItem('guestEmail');
+      nativeStorageRemove('supportSessionId');
+      nativeStorageRemove('guestEmail');
     } catch { /* noop */ }
     await hydrateMarketplaceSession();
 
-    const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
+    const localCart = JSON.parse(nativeStorageGet('cart') || '[]');
     if (localCart.length > 0) {
       // A non-empty local cart deliberately wins on login (the user just added
       // these items on this device), and this push makes the server match it.
@@ -2189,7 +2212,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return { success: true, message: 'Logged in successfully.' };
     } catch (err: any) {
       clearToken();
-      localStorage.removeItem('currentUser');
+      nativeStorageRemove('currentUser');
       useSessionStore.getState().clear();
       return { success: false, message: err.message || 'Login failed.' };
     }
@@ -2213,7 +2236,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setIsHandedOver(false);
     setSupportSessionStatus('AI_HANDLING');
     setSupportMessages([]);
-    try { localStorage.removeItem('supportSessionId'); } catch { /* noop */ }
+    try { nativeStorageRemove('supportSessionId'); } catch { /* noop */ }
     useSessionStore.getState().clear();
     setMyReferrals(null);
     setReviews([]);
@@ -2221,7 +2244,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     // The next session must re-read the server cart before it is allowed to
     // overwrite it (see cartHydratedRef).
     cartHydratedRef.current = false;
-    localStorage.removeItem('currentUser');
+    nativeStorageRemove('currentUser');
     // Drop session-scoped data so the next login/register does not reconcile against a huge
     // in-memory graph from the previous user (slower updates, brief wrong-user flash).
     setOrders([]);
@@ -2354,7 +2377,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (producerProfile?.id) {
         setUser(mergedUser);
         useSessionStore.getState().setUser(mergedUser);
-        localStorage.setItem('currentUser', JSON.stringify(mergedUser));
+        nativeStorageSet('currentUser', JSON.stringify(mergedUser));
         upsertProducerInStore({
           id: producerProfile.id,
           userId: session.user.id,
@@ -2454,7 +2477,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (clientProfile?.id) {
         setUser(mergedUser);
         useSessionStore.getState().setUser(mergedUser);
-        localStorage.setItem('currentUser', JSON.stringify(mergedUser));
+        nativeStorageSet('currentUser', JSON.stringify(mergedUser));
         upsertClientInStore({
           id: clientProfile.id,
           userId: session.user.id,
@@ -2493,7 +2516,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setToken(data.token);
       setUser(data.user);
       useSessionStore.getState().setUser(data.user);
-      localStorage.setItem('currentUser', JSON.stringify(data.user));
+      nativeStorageSet('currentUser', JSON.stringify(data.user));
       setPendingRegistration(null);
       return true;
     } catch {
@@ -2586,7 +2609,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         };
         setUser(nextUser);
         useSessionStore.getState().setUser(nextUser);
-        localStorage.setItem('currentUser', JSON.stringify(nextUser));
+        nativeStorageSet('currentUser', JSON.stringify(nextUser));
       }
       bustCache(QK.producers());
       if (user) addNotification(user.id, 'Profile updated', 'SUCCESS');
@@ -2668,7 +2691,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       };
       setUser(nextUser);
       useSessionStore.getState().setUser(nextUser);
-      localStorage.setItem('currentUser', JSON.stringify(nextUser));
+      nativeStorageSet('currentUser', JSON.stringify(nextUser));
       await fetchData(nextUser);
       return true;
     } catch (error) {
@@ -2780,7 +2803,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         };
         setUser(nextUser);
         useSessionStore.getState().setUser(nextUser);
-        localStorage.setItem('currentUser', JSON.stringify(nextUser));
+        nativeStorageSet('currentUser', JSON.stringify(nextUser));
       }
       bustCache(QK.clients());
       if (user) addNotification(user.id, 'Profile updated', 'SUCCESS');
@@ -3032,7 +3055,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setUser(prev => {
           if (!prev) return prev;
           const next = { ...prev, clientId: saved.clientId };
-          localStorage.setItem('currentUser', JSON.stringify(next));
+          nativeStorageSet('currentUser', JSON.stringify(next));
           return next;
         });
       }

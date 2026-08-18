@@ -13,6 +13,7 @@ import { useFormik } from 'formik';
 import { z } from 'zod';
 import { showAppToast, dismissAppToast } from '../../services/appToast';
 import { PAYMENTS_ENABLED } from '../../utils/featureFlags';
+import { openExternalUrl } from '../../services/nativeBrowser';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { BASE_CURRENCY } from '../../utils/formatMoney';
 
@@ -151,7 +152,8 @@ export const WalletDashboard: React.FC = () => {
         if (result.merchantRef) {
           sessionStorage.setItem('pendingTopUpRef', result.merchantRef);
         }
-        window.location.href = result.paymentUrl;
+        await openExternalUrl(result.paymentUrl);
+        setLoading(false);
         return;
       }
       setLoading(false);

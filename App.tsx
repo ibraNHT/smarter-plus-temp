@@ -21,6 +21,7 @@ import { PwaInstallProvider } from './contexts/PwaInstallContext';
 import { CurrencyProvider } from './contexts/CurrencyContext';
 import { InstallAppBanner } from './components/InstallAppBanner';
 import { ProducerPendingBanner } from './components/ProducerPendingBanner';
+import { NativeRuntime } from './components/NativeRuntime';
 import { getToken } from './services/apiService';
 import { isWebAppSessionBlocked } from './services/authRoles';
 import { isProducerDashboardUser } from './services/producerSession';
@@ -68,6 +69,9 @@ const Partners = lazy(() =>
 );
 const Terms = lazy(() => import('./pages/footer/Legal').then((m) => ({ default: m.Terms })));
 const Privacy = lazy(() => import('./pages/footer/Legal').then((m) => ({ default: m.Privacy })));
+const AccountDeletion = lazy(() =>
+  import('./pages/footer/AccountDeletion').then((m) => ({ default: m.AccountDeletion })),
+);
 const HelpCenterIndex = lazy(() =>
   import('./pages/footer/helpCenter/HelpCenterIndex').then((m) => ({ default: m.HelpCenterIndex })),
 );
@@ -195,7 +199,7 @@ const AppShell: React.FC = () => {
   const authFullscreen = AUTH_FULLSCREEN_PREFIXES.some((p) => location.pathname.startsWith(p));
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans flex flex-col overflow-x-hidden">
+    <div className="min-h-screen bg-gray-50 font-sans flex flex-col overflow-x-hidden pb-[var(--agm-tabbar,0px)]">
       {!authFullscreen && <Navbar />}
       {!authFullscreen && <ProducerPendingBanner />}
       {!authFullscreen && <InstallAppBanner />}
@@ -248,6 +252,7 @@ const AppShell: React.FC = () => {
                 <Route path="/partners" element={<Partners />} />
                 <Route path="/terms" element={<Terms />} />
                 <Route path="/privacy" element={<Privacy />} />
+                <Route path="/account-deletion" element={<AccountDeletion />} />
 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
@@ -267,6 +272,7 @@ const App: React.FC = () => {
         <CurrencyProvider>
           <PwaInstallProvider>
             <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <NativeRuntime />
               <AppShell />
             </Router>
           </PwaInstallProvider>
