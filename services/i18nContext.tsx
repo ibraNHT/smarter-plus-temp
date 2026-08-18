@@ -1,5 +1,6 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { nativeStorageGet, nativeStorageSet } from './nativeStorage';
 
 type Language = 'en' | 'fr';
 
@@ -55,6 +56,7 @@ const translations: Record<string, Record<Language, string>> = {
   'footer.link.faq': { en: 'FAQ', fr: 'FAQ' },
   'footer.link.terms': { en: 'Terms & Conditions', fr: 'Conditions Générales' },
   'footer.link.privacy': { en: 'Privacy Policy', fr: 'Politique de Confidentialité' },
+  'footer.link.accountDeletion': { en: 'Delete account', fr: 'Supprimer le compte' },
   'footer.rights': { en: 'All rights reserved.', fr: 'Tous droits réservés.' },
   'footer.exploreHelp': { en: 'Need a hand?', fr: 'Besoin d’aide ?' },
   'footer.exploreBlog': { en: 'Latest from the blog', fr: 'Dernières du blog' },
@@ -823,6 +825,86 @@ const translations: Record<string, Record<Language, string>> = {
   'profile.tabs.reputation': { en: 'My Reputation', fr: 'Ma Réputation' },
   'profile.update': { en: 'Update Profile', fr: 'Mettre à jour' },
   'profile.password': { en: 'Change Password', fr: 'Changer le mot de passe' },
+  'profile.deleteAccount': { en: 'Delete account', fr: 'Supprimer le compte' },
+  'profile.deleteAccountTitle': { en: 'Delete your account?', fr: 'Supprimer votre compte ?' },
+  'profile.deleteAccountBody': {
+    en: 'You can permanently delete your account and associated personal data from this screen. This cannot be undone.',
+    fr: 'Vous pouvez supprimer définitivement votre compte et les données personnelles associées depuis cet écran. Cette action est irréversible.',
+  },
+  'profile.deleteAccountConfirm': {
+    en: 'This permanently deletes your account, profile, and personal data. Orders needed for legal or dispute records may be retained in anonymized form. Type-confirm by tapping Delete account.',
+    fr: 'Cela supprime définitivement votre compte, votre profil et vos données personnelles. Les commandes nécessaires aux obligations légales ou aux litiges peuvent être conservées sous forme anonymisée. Confirmez en appuyant sur Supprimer le compte.',
+  },
+  'profile.deleteAccountSuccess': { en: 'Your account has been deleted.', fr: 'Votre compte a été supprimé.' },
+  'profile.deleteAccountFailed': {
+    en: 'We could not delete the account. Please try again or contact support.',
+    fr: 'Impossible de supprimer le compte. Réessayez ou contactez le support.',
+  },
+  'accountDeletion.title': { en: 'Delete your AgriMarket Connect account', fr: 'Supprimer votre compte AgriMarket Connect' },
+  'accountDeletion.subtitle': {
+    en: 'This page is the Google Play and web resource for AgriMarket Connect (Achète Tout Ici) account and data deletion requests.',
+    fr: 'Cette page est la ressource web Google Play d’AgriMarket Connect (Achète Tout Ici) pour demander la suppression du compte et des données.',
+  },
+  'accountDeletion.inAppTitle': { en: 'Delete in the app', fr: 'Supprimer dans l’application' },
+  'accountDeletion.inAppBody': {
+    en: 'If you have the iOS or Android app (or are signed in on the website), you can delete the account immediately:',
+    fr: 'Si vous avez l’application iOS ou Android (ou êtes connecté sur le site), vous pouvez supprimer le compte immédiatement :',
+  },
+  'accountDeletion.stepSignIn': { en: 'Sign in.', fr: 'Connectez-vous.' },
+  'accountDeletion.stepProfile': { en: 'Open My Profile.', fr: 'Ouvrez Mon profil.' },
+  'accountDeletion.stepSecurity': { en: 'Open Security → Delete account and confirm.', fr: 'Ouvrez Sécurité → Supprimer le compte et confirmez.' },
+  'accountDeletion.webTitle': { en: 'Request deletion by email', fr: 'Demander la suppression par e-mail' },
+  'accountDeletion.webBody': {
+    en: 'You can also request deletion without the app. Submit the form to email helpdesk@acheteici.com. We verify the request, then delete or irreversibly anonymize account data. We confirm by email. Orders kept for tax or disputes may be retained in anonymized form.',
+    fr: 'Vous pouvez aussi demander la suppression sans l’application. Le formulaire envoie un e-mail à helpdesk@acheteici.com. Après vérification, nous supprimons ou anonymisons les données. Nous confirmons par e-mail. Les commandes conservées pour des obligations fiscales ou des litiges peuvent l’être sous forme anonymisée.',
+  },
+  'accountDeletion.email': { en: 'Email on the account', fr: 'E-mail du compte' },
+  'accountDeletion.phone': { en: 'Phone (optional)', fr: 'Téléphone (facultatif)' },
+  'accountDeletion.details': { en: 'Anything else we should know (optional)', fr: 'Précisions (facultatif)' },
+  'accountDeletion.submit': { en: 'Email deletion request', fr: 'Envoyer la demande' },
+  'accountDeletion.sent': {
+    en: 'Your mail app should have opened. If it did not, write to helpdesk@acheteici.com with subject “account deletion request”.',
+    fr: 'Votre application e-mail devrait s’être ouverte. Sinon, écrivez à helpdesk@acheteici.com avec l’objet « demande de suppression de compte ».',
+  },
+  'accountDeletion.retain': {
+    en: 'Questions about what we keep for legal reasons: see the Privacy Policy or write to',
+    fr: 'Questions sur les conservations légales : voir la Politique de confidentialité ou écrire à',
+  },
+  'report.action': { en: 'Report', fr: 'Signaler' },
+  'report.title': { en: 'Report this content?', fr: 'Signaler ce contenu ?' },
+  'report.body': {
+    en: 'We review reports and remove content that breaks our rules. Blocking hides that person in your chats on this device.',
+    fr: 'Nous examinons les signalements et retirons le contenu contraire aux règles. Le blocage masque cette personne dans vos discussions sur cet appareil.',
+  },
+  'report.submit': { en: 'Submit report', fr: 'Envoyer le signalement' },
+  'report.success': { en: 'Thanks. We received your report.', fr: 'Merci. Nous avons reçu votre signalement.' },
+  'report.failed': { en: 'We could not send the report. Try again or email helpdesk.', fr: 'Impossible d’envoyer le signalement. Réessayez ou écrivez au support.' },
+  'report.reasonLabel': { en: 'Reason', fr: 'Motif' },
+  'report.reason.spam': { en: 'Spam or advertising', fr: 'Spam ou publicité' },
+  'report.reason.harassment': { en: 'Harassment or hate', fr: 'Harcèlement ou haine' },
+  'report.reason.scam': { en: 'Scam or fraud', fr: 'Arnaque ou fraude' },
+  'report.reason.illegal': { en: 'Illegal or unsafe listing', fr: 'Annonce illégale ou dangereuse' },
+  'report.reason.other': { en: 'Other', fr: 'Autre' },
+  'report.notes': { en: 'More detail (optional)', fr: 'Précisions (facultatif)' },
+  'report.alsoBlock': { en: 'Also block this user in my chats', fr: 'Bloquer aussi cette personne dans mes discussions' },
+  'support.aiConsentTitle': { en: 'AI support', fr: 'Assistance IA' },
+  'support.aiConsentBody': {
+    en: 'AgriBot uses a third-party AI model (Google Gemini) through our servers to answer support questions. Messages you send here can include personal details. You can ask for a human agent after you start.',
+    fr: 'AgriBot utilise un modèle d’IA tiers (Google Gemini) via nos serveurs pour répondre. Vos messages peuvent contenir des données personnelles. Vous pourrez demander un agent humain ensuite.',
+  },
+  'support.aiConsentCheck': {
+    en: 'I agree to send my support messages to AgriMarket and its AI provider (Google Gemini) to get help.',
+    fr: 'J’accepte d’envoyer mes messages d’assistance à AgriMarket et à son fournisseur d’IA (Google Gemini) pour obtenir de l’aide.',
+  },
+  'support.aiConsentContinue': { en: 'Continue to support chat', fr: 'Continuer vers l’assistance' },
+  'offline.banner': {
+    en: 'You’re offline — the marketplace needs a connection.',
+    fr: 'Vous êtes hors ligne — le marché nécessite une connexion.',
+  },
+  'validation.mustBe18': {
+    en: 'You must be at least 18 years old to create an account.',
+    fr: 'Vous devez avoir au moins 18 ans pour créer un compte.',
+  },
   'profile.currentPassword': { en: 'Current Password', fr: 'Mot de passe actuel' },
   'profile.newPassword': { en: 'New Password', fr: 'Nouveau mot de passe' },
   'profile.confirmNewPassword': { en: 'Confirm New Password', fr: 'Confirmer le nouveau mot de passe' },
@@ -2118,7 +2200,7 @@ const LANGUAGE_STORAGE_KEY = 'agm_language';
 function readStoredLanguage(): Language {
   if (typeof window === 'undefined') return 'en';
   try {
-    const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    const saved = nativeStorageGet(LANGUAGE_STORAGE_KEY);
     if (saved === 'fr' || saved === 'en') return saved;
   } catch {
     /* storage unavailable (private mode / blocked) — fall through to default */
@@ -2135,7 +2217,7 @@ export const I18nProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
     try {
-      localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+      nativeStorageSet(LANGUAGE_STORAGE_KEY, lang);
     } catch {
       /* best-effort: keep the in-memory switch working even if we can't store it */
     }

@@ -11,6 +11,7 @@ import { ProductDetailsSkeleton } from '../../components/skeletons/ProductDetail
 import { ServiceSlotsSkeleton } from '../../components/Loaders';
 import { Spinner } from '../../components/Spinner';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { ReportBlockControl } from '../../components/ReportBlockControl';
 import { OfferImage } from '../../components/OfferImage';
 import { offerImageHero, offerImageInBox, offerImageThumb, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
 import { getOfferImageUrls } from '../../utils/offerImages';
@@ -20,6 +21,7 @@ import { isProducerDashboardUser } from '../../services/producerSession';
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 import { showAppToast } from '../../services/appToast';
+import { nativeShareOrCopy } from '../../services/nativeShare';
 import { usePwaInstall } from '../../contexts/PwaInstallContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import {
@@ -470,16 +472,9 @@ export const ProductDetails: React.FC = () => {
       rating: productRating > 0 ? productRating : null,
       producerName: producerDisplayName,
     });
-    const shareData = {
-      title: offer.title,
-      text,
-      url: shareUrl,
-    };
     try {
-      if (typeof navigator !== 'undefined' && navigator.share) {
-        await navigator.share(shareData);
-      } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(`${text}\n${shareUrl}`);
+      const result = await nativeShareOrCopy({ title: offer.title, text, url: shareUrl });
+      if (result === 'copied') {
         showAppToast(t('product.linkCopied'), 'SUCCESS');
       }
     } catch {
@@ -633,6 +628,14 @@ export const ProductDetails: React.FC = () => {
                     >
                       <Share2 className="h-5 w-5" />
                     </button>
+                    {offer && producer?.userId && producer.userId !== user?.id ? (
+                      <ReportBlockControl
+                        compact
+                        targetType="OFFER"
+                        targetId={offer.id}
+                        blockUserIdValue={producer.userId}
+                      />
+                    ) : null}
 
                     {isNegotiationAllowed && (
                       <span className="inline-flex items-center px-2 py-1 rounded bg-blue-100 text-blue-800 text-xs font-bold">
@@ -1107,7 +1110,7 @@ export const ProductDetails: React.FC = () => {
       {/* Sticky mobile CTA */}
       <div
         className="md:hidden fixed left-0 right-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur-sm px-3 py-2.5 flex gap-2 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]"
-        style={{ bottom: 'env(safe-area-inset-bottom)' }}
+        style={{ bottom: 'var(--agm-tabbar, env(safe-area-inset-bottom))' }}
       >
         {canContactSeller && (
           <button

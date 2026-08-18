@@ -42,6 +42,7 @@ const ROUTES = [
   '/faq',
   '/terms',
   '/privacy',
+  '/account-deletion',
   '/blog',
   '/jobs',
   '/partners',

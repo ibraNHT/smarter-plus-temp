@@ -1,5 +1,6 @@
 
 import React, { useState, useLayoutEffect, useRef } from 'react';
+import { nativeStorageGet, nativeStorageSet } from '../services/nativeStorage';
 import { useStoreOptional } from '../services/storeContext';
 import { Notification } from '../types';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
@@ -21,7 +22,7 @@ const loadSeenToastIds = (userId?: string): Set<string> => {
   const key = getSeenToastStorageKey(userId);
   if (!key) return new Set();
   try {
-    const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+    const parsed = JSON.parse(nativeStorageGet(key) || '[]');
     if (!Array.isArray(parsed)) return new Set();
     return new Set(parsed.map((id) => String(id)));
   } catch {
@@ -35,7 +36,7 @@ const persistSeenToastIds = (userId: string, ids: Set<string>) => {
   if (!key) return;
   // Keep storage bounded.
   const bounded = Array.from(ids).slice(-500);
-  localStorage.setItem(key, JSON.stringify(bounded));
+  nativeStorageSet(key, JSON.stringify(bounded));
 };
 
 export const ToastContainer: React.FC = () => {

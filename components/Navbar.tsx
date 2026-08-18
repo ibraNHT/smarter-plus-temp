@@ -11,7 +11,8 @@ import { getToken } from '../services/apiService';
 import { isWebAppSessionBlocked } from '../services/authRoles';
 import { LogoutConfirmModal } from './LogoutConfirmModal';
 import { ConfirmModal } from './ConfirmModal';
-import { LogOut, Sprout, ShoppingBasket, Tractor, ShoppingCart, Globe, Bell, X, User, MessageCircle, ChevronDown, Download, CheckCheck, Trash2, Menu, Wallet } from 'lucide-react';
+import { MobileTabBar } from './MobileTabBar';
+import { LogOut, Sprout, ShoppingBasket, Tractor, ShoppingCart, Globe, Bell, X, User, MessageCircle, ChevronDown, Download, CheckCheck, Trash2 } from 'lucide-react';
 
 const marketplaceVisible = (user: { role?: UserRole } | null) =>
   !user || user.role === UserRole.CLIENT || isProducerDashboardUser(user);
@@ -28,7 +29,6 @@ export const Navbar: React.FC = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showClearNotifsConfirm, setShowClearNotifsConfirm] = useState(false);
   const [notifToDelete, setNotifToDelete] = useState<string | null>(null);
   const [landingNavSolid, setLandingNavSolid] = useState(false);
@@ -36,11 +36,17 @@ export const Navbar: React.FC = () => {
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
   const isLandingHeroNav = location.pathname === '/' && !user && !staffWrongApp;
-  const landingOverlay = isLandingHeroNav && !landingNavSolid && !mobileMenuOpen;
+  const landingOverlay = isLandingHeroNav && !landingNavSolid;
+  const inChatThread = /^\/messages\/[^/]+/.test(location.pathname);
 
-  // Close mobile menu when route changes.
   useEffect(() => {
-    setMobileMenuOpen(false);
+    const show = !staffWrongApp && !inChatThread;
+    document.documentElement.classList.toggle('agm-tabbar-visible', show);
+    return () => document.documentElement.classList.remove('agm-tabbar-visible');
+  }, [staffWrongApp, inChatThread]);
+
+  // Close overlay menus when route changes.
+  useEffect(() => {
     setShowNotifications(false);
     setProfileMenuOpen(false);
   }, [location.pathname]);
@@ -254,10 +260,9 @@ export const Navbar: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-1 sm:gap-2 md:gap-3 flex-shrink-0">
-            {/* Language Toggle - hidden on xs to save space; available in mobile menu */}
             <button
               onClick={toggleLanguage}
-              className={`hidden sm:flex items-center px-2 py-1 rounded-md transition-colors ${iconBtnClass}`}
+              className={`flex items-center px-2 py-1 rounded-md transition-colors ${iconBtnClass}`}
               aria-label={`Switch language. Current: ${language.toUpperCase()}`}
             >
               <Globe className="h-5 w-5 mr-1" />
@@ -281,7 +286,7 @@ export const Navbar: React.FC = () => {
                 {/* Messages Link */}
                 <Link
                   to="/messages"
-                  className="relative p-2 text-gray-600 hover:text-primary-600 focus:outline-none agm-nav-icon"
+                  className="relative hidden md:inline-flex p-2 text-gray-600 hover:text-primary-600 focus:outline-none agm-nav-icon"
                   title={unreadChatTotal > 0 ? `${t('nav.messages')} (${unreadChatTotal})` : t('nav.messages')}
                   aria-label={
                     unreadChatTotal > 0
@@ -392,7 +397,7 @@ export const Navbar: React.FC = () => {
 
                 {/* Profile menu: profile link + Install app (after banner dismiss) */}
                 {(user.role === UserRole.CLIENT || isProducerDashboardUser(user)) && (
-                  <div className="relative" ref={profileMenuRef}>
+                  <div className="relative hidden md:block" ref={profileMenuRef}>
                     <button
                       type="button"
                       onClick={() => setProfileMenuOpen((o) => !o)}
@@ -485,7 +490,7 @@ export const Navbar: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setLogoutConfirmOpen(true)}
-                  className="hidden sm:inline-flex p-2 text-gray-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50 agm-nav-icon"
+                  className="inline-flex p-2 text-gray-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50 agm-nav-icon"
                   title={t('nav.logout')}
                   aria-label={t('nav.logout')}
                 >
@@ -493,7 +498,7 @@ export const Navbar: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <div className="hidden sm:flex items-center space-x-2">
+              <div className="hidden md:flex items-center space-x-2">
                 <Link to="/login" className={`px-2 sm:px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap ${landingOverlay ? 'text-white/90 hover:text-white' : 'text-gray-600 hover:text-gray-900'}`}>
                   {t('nav.login')}
                 </Link>
@@ -503,97 +508,11 @@ export const Navbar: React.FC = () => {
               </div>
             )}
 
-            {/* Mobile hamburger toggle */}
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen((o) => !o)}
-              className={`md:hidden inline-flex items-center justify-center p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 ${iconBtnClass}`}
-              aria-expanded={mobileMenuOpen}
-              aria-label="Toggle menu"
-            >
-              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
           </div>
         </div>
-
-        {/* Mobile menu drawer (collapses below header) */}
-        {mobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 pt-2 pb-3 max-h-[calc(100dvh-4rem)] overflow-y-auto agm-mobile-menu-in">
-            <div className="flex flex-col space-y-1">
-              {marketplaceVisible(user) && (
-                <>
-                  <Link to="/market/producers" className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    <Tractor className="h-5 w-5 text-primary-600" /> {t('nav.producerMarket')}
-                  </Link>
-                  <Link to="/market/ati" className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    <ShoppingBasket className="h-5 w-5 text-blue-600" /> {t('nav.atiStore')}
-                  </Link>
-                </>
-              )}
-              {user && (
-                <>
-                  <Link to="/messages" className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">
-                    <MessageCircle className="h-5 w-5" /> {t('nav.messages')}
-                    {unreadChatTotal > 0 && (
-                      <span className="ml-auto bg-red-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
-                        {unreadChatTotal > 99 ? '99+' : unreadChatTotal}
-                      </span>
-                    )}
-                  </Link>
-                  {(user.role === UserRole.CLIENT || isProducerDashboardUser(user)) && (
-                    <Link to="/wallet" className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">
-                      <Wallet className="h-5 w-5" /> {t('nav.wallet')}
-                    </Link>
-                  )}
-                  <Link
-                    to={user.role === UserRole.CLIENT ? '/client/profile' : '/producer/profile/info'}
-                    className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
-                  >
-                    <User className="h-5 w-5" /> {t('nav.profile')}
-                  </Link>
-                </>
-              )}
-              <button
-                type="button"
-                onClick={() => { toggleLanguage(); }}
-                className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50 text-left"
-              >
-                <Globe className="h-5 w-5" /> <span className="uppercase">{language === 'en' ? 'FR' : 'EN'}</span>
-              </button>
-              {!user && (
-                <div className="flex gap-2 px-3 pt-2">
-                  <Link to="/login" className="flex-1 text-center text-gray-700 px-3 py-2 rounded-md text-sm font-medium border border-gray-200 hover:bg-gray-50">
-                    {t('nav.login')}
-                  </Link>
-                  <Link to="/register" className="flex-1 text-center bg-primary-600 text-white hover:bg-primary-700 px-3 py-2 rounded-md text-sm font-medium shadow-sm">
-                    {t('nav.signup')}
-                  </Link>
-                </div>
-              )}
-              {canInstall && (
-                <button
-                  type="button"
-                  onClick={() => { setMobileMenuOpen(false); void promptInstall(); }}
-                  className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-md text-base font-medium text-primary-700 hover:bg-primary-50 border border-primary-200 mt-2"
-                >
-                  <Download className="h-5 w-5 flex-shrink-0" />
-                  {t('pwa.installMenu')}
-                </button>
-              )}
-              {user && (
-                <button
-                  type="button"
-                  onClick={() => { setMobileMenuOpen(false); setLogoutConfirmOpen(true); }}
-                  className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-md text-base font-medium text-red-600 hover:bg-red-50 mt-2"
-                >
-                  <LogOut className="h-5 w-5" /> {t('nav.logout')}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </nav>
+    {!inChatThread && <MobileTabBar user={user} unreadChatTotal={unreadChatTotal} />}
     <LogoutConfirmModal
       open={logoutConfirmOpen}
       onClose={() => setLogoutConfirmOpen(false)}

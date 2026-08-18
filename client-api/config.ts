@@ -1,2 +1,3 @@
-export const getApiBaseUrl = (): string =>
-  import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? '' : 'http://localhost:3000');
+import { resolveApiBaseUrl } from '../services/nativePlatform';
+
+export const getApiBaseUrl = (): string => resolveApiBaseUrl();

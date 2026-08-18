@@ -18,6 +18,7 @@ import {
 import { FieldError, inputErrorClasses, showFieldError } from '../../components/FieldError';
 import { RegisterPhoneOtpModal } from '../../components/RegisterPhoneOtpModal';
 import { buildRegisterPhone } from '../../utils/registerPhone';
+import { isAtLeastAge, maxDobForAge } from '../../utils/ageGate';
 import { SEO } from '../../components/SEO';
 import { SEO_PAGE_META } from '../../services/seo/seoConfig';
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
@@ -133,7 +134,8 @@ export const RegisterProducer: React.FC = () => {
       if (!values.firstName.trim()) ctx.addIssue({ code: 'custom', path: ['firstName'], message: 'First name is required.' });
       if (!values.lastName.trim()) ctx.addIssue({ code: 'custom', path: ['lastName'], message: 'Last name is required.' });
       if (!values.gender) ctx.addIssue({ code: 'custom', path: ['gender'], message: 'Gender is required.' });
-      if (!values.dateOfBirth) ctx.addIssue({ code: 'custom', path: ['dateOfBirth'], message: 'Date of birth is required.' });
+      if (!values.dateOfBirth) ctx.addIssue({ code: 'custom', path: ['dateOfBirth'], message: t('validation.dobRequired') });
+      else if (!isAtLeastAge(values.dateOfBirth)) ctx.addIssue({ code: 'custom', path: ['dateOfBirth'], message: t('validation.mustBe18') });
     }
   });
   // console.log('🔄 RegisterProducer rendered with translations:', t('form.security'));
@@ -479,6 +481,7 @@ export const RegisterProducer: React.FC = () => {
                 <input type="date" required
                   className="mt-1 focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
                   name="dateOfBirth"
+                  max={maxDobForAge()}
                   value={formik.values.dateOfBirth}
                   onChange={formik.handleChange}
                   onBlur={formik.handleBlur}

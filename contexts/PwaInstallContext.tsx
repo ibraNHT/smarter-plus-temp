@@ -7,6 +7,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { nativeStorageGet, nativeStorageRemove, nativeStorageSet } from '../services/nativeStorage';
+import { isNativeApp } from '../services/nativePlatform';
 
 const PWA_INSTALL_DISMISSED_KEY = 'agrimarket_pwa_install_banner_dismissed';
 const PWA_INTENT_NUDGED_KEY = 'agrimarket_pwa_intent_nudged';
@@ -58,10 +60,11 @@ function isIosSafari(): boolean {
 }
 
 export function PwaInstallProvider({ children }: { children: ReactNode }) {
+  const native = isNativeApp();
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstalled, setIsInstalled] = useState(() => getIsStandalone());
+  const [isInstalled, setIsInstalled] = useState(() => native || getIsStandalone());
   const [bannerDismissed, setBannerDismissed] = useState(
-    () => typeof localStorage !== 'undefined' && localStorage.getItem(PWA_INSTALL_DISMISSED_KEY) === '1'
+    () => native || nativeStorageGet(PWA_INSTALL_DISMISSED_KEY) === '1'
   );
   const [intentForced, setIntentForced] = useState(false);
   const [intentSource, setIntentSource] = useState<PwaNudgeSource | null>(null);
@@ -77,7 +80,7 @@ export function PwaInstallProvider({ children }: { children: ReactNode }) {
       setDeferredPrompt(null);
       setIntentForced(false);
       try {
-        localStorage.removeItem(PWA_INSTALL_DISMISSED_KEY);
+      nativeStorageRemove(PWA_INSTALL_DISMISSED_KEY);
       } catch {
         /* ignore */
       }
@@ -95,7 +98,7 @@ export function PwaInstallProvider({ children }: { children: ReactNode }) {
 
   const dismissBanner = useCallback(() => {
     try {
-      localStorage.setItem(PWA_INSTALL_DISMISSED_KEY, '1');
+      nativeStorageSet(PWA_INSTALL_DISMISSED_KEY, '1');
     } catch {
       /* ignore */
     }
@@ -125,7 +128,7 @@ export function PwaInstallProvider({ children }: { children: ReactNode }) {
   }, [deferredPrompt]);
 
   const nudgeInstall = useCallback((source: PwaNudgeSource) => {
-    if (getIsStandalone()) return;
+    if (isNativeApp() || getIsStandalone()) return;
     try {
       const nudged = sessionStorage.getItem(PWA_INTENT_NUDGED_KEY);
       if (nudged) return;
@@ -137,8 +140,9 @@ export function PwaInstallProvider({ children }: { children: ReactNode }) {
     setIntentForced(true);
   }, []);
 
-  const canInstall = Boolean(deferredPrompt) && !isInstalled;
+  const canInstall = !native && Boolean(deferredPrompt) && !isInstalled;
   const showIosTip =
+    !native &&
     !isInstalled &&
     !iosTipDismissed &&
     intentForced &&

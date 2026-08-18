@@ -20,8 +20,8 @@ export const CompareWidget: React.FC = () => {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl z-40 px-3 py-3 sm:p-4 animate-slide-up agm-compare-bar"
-      style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      className="fixed left-0 right-0 bg-white border-t border-gray-200 shadow-2xl z-40 px-3 pt-3 pb-0 sm:px-4 sm:pt-4 animate-slide-up agm-compare-bar"
+      style={{ bottom: 'var(--agm-tabbar, 0px)' }}
     >
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
 

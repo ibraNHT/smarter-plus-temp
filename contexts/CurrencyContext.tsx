@@ -21,6 +21,7 @@ import {
   type SupportedCurrency,
 } from '../utils/formatMoney';
 import { useStoreOptional } from '../services/storeContext';
+import { nativeStorageGet, nativeStorageSet } from '../services/nativeStorage';
 
 const STORAGE_KEY = 'agm.preferredCurrency';
 /** Refresh live FX about once per session hour (provider updates daily). */
@@ -49,7 +50,7 @@ const CurrencyContext = createContext<CurrencyContextValue | null>(null);
 
 function readStoredCurrency(): string {
   try {
-    const v = localStorage.getItem(STORAGE_KEY);
+    const v = nativeStorageGet(STORAGE_KEY);
     if (v && SUPPORTED_CURRENCIES.includes(v as SupportedCurrency)) return v;
   } catch {
     /* ignore */
@@ -59,12 +60,12 @@ function readStoredCurrency(): string {
 
 function patchLocalSessionCurrency(code: string) {
   try {
-    const raw = localStorage.getItem('currentUser');
+    const raw = nativeStorageGet('currentUser');
     if (!raw) return;
     const u = JSON.parse(raw);
     if (u && typeof u === 'object') {
       u.preferredCurrency = code;
-      localStorage.setItem('currentUser', JSON.stringify(u));
+      nativeStorageSet('currentUser', JSON.stringify(u));
     }
   } catch {
     /* ignore */
@@ -137,7 +138,7 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const code = pref.toUpperCase();
       setCurrencyState(code);
       try {
-        localStorage.setItem(STORAGE_KEY, code);
+        nativeStorageSet(STORAGE_KEY, code);
       } catch {
         /* ignore */
       }
@@ -150,7 +151,7 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (!SUPPORTED_CURRENCIES.includes(next as SupportedCurrency)) return;
       setCurrencyState(next);
       try {
-        localStorage.setItem(STORAGE_KEY, next);
+        nativeStorageSet(STORAGE_KEY, next);
       } catch {
         /* ignore */
       }

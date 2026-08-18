@@ -29,3 +29,17 @@ exports/
 branch_structure.json
 temp_auto_push.bat
 temp_interactive_push.bat
+
+# Native signing / local machine files (commit ios/ and android/ project folders)
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+android/local.properties
+android/.gradle/
+android/**/build/
+android/captures/
+android/.cxx/
+ios/App/Pods/
+ios/App/output/
+ios/DerivedData/

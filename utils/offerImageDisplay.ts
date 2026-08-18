@@ -46,6 +46,8 @@ const API_ORIGINS = (() => {
       bases.add(raw.replace(/\/$/, ''));
     }
   }
+  bases.add('http://localhost:3000');
+  bases.add('http://127.0.0.1:3000');
   bases.add('http://localhost:4040');
   bases.add('http://127.0.0.1:4040');
   return bases;
@@ -54,7 +56,7 @@ const API_ORIGINS = (() => {
 /**
  * Safe <img src> for offer photos.
  *
- * Local API uploads return absolute URLs like http://localhost:4040/uploads/offers/x.png
+ * Local API uploads return absolute URLs like http://localhost:3000/uploads/offers/x.png
  * while the Vite app runs on :5173. Helmet sets Cross-Origin-Resource-Policy on the API,
  * so the browser blocks those images (ERR_BLOCKED_BY_RESPONSE.NotSameOrigin) even at HTTP 200.
  *

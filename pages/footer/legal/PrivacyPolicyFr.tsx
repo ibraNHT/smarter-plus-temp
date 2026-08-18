@@ -10,8 +10,8 @@ import {
 } from './LegalDocumentLayout';
 
 const SUPPORT_EMAIL = (
-  <a href="mailto:helpdesk@aheteici.com" className="text-primary-600 hover:underline">
-    helpdesk@aheteici.com
+  <a href="mailto:helpdesk@acheteici.com" className="text-primary-600 hover:underline">
+    helpdesk@acheteici.com
   </a>
 );
 
@@ -48,14 +48,19 @@ export const PrivacyPolicyFr: React.FC<Props> = ({ title, meta }) => (
         items={[
           <>les services marketplace d'Agrimarket Connect (transactions producteur-client),</>,
           <>les services boutique retail d'Agrimarket Connect,</>,
-          <>les fonctionnalités de support client associées (y compris le support assisté par IA),</>,
+          <>les fonctionnalités de support client associées (y compris le support assisté par IA via Google Gemini sur nos serveurs),</>,
           <>les services de notification et de sécurité de compte,</>,
-          <>les interfaces web connectées et interactions API utilisées pour fournir ces services.</>,
+          <>les interfaces web connectées, les applications iOS et Android, et les interactions API utilisées pour fournir ces services.</>,
         ]}
       />
       <LegalParagraph>
         Cette Politique ne s'applique pas aux sites web ou services tiers que nous ne contrôlons pas, même lorsque
-        des liens sont fournis sur la Plateforme.
+        des liens sont fournis sur la Plateforme. Les applications natives et le site partagent cette Politique. La
+        ressource web Google Play pour la suppression de compte est{' '}
+        <a href="/account-deletion" className="text-primary-600 hover:underline">
+          acheteici.com/account-deletion
+        </a>
+        .
       </LegalParagraph>
     </LegalSection>
 
@@ -89,6 +94,15 @@ export const PrivacyPolicyFr: React.FC<Props> = ({ title, meta }) => (
         />
       </LegalSubSection>
 
+      <LegalSubSection title="3.2.1 Localisation et permissions de l'appareil">
+        <LegalParagraph>
+          Lorsque vous choisissez « utiliser ma position » à l'inscription ou dans le profil, nous collectons des
+          coordonnées GPS approximatives ou précises pour préremplir votre adresse de livraison. Nous ne suivons pas
+          votre position en arrière-plan. La caméra et la photothèque sont utilisées uniquement lorsque vous
+          téléversez une photo de profil, une image d'annonce, une pièce d'identité ou une preuve de litige.
+        </LegalParagraph>
+      </LegalSubSection>
+
       <LegalSubSection title="3.3 Données de Commande et de Transaction">
         <LegalList
           items={[
@@ -113,7 +127,7 @@ export const PrivacyPolicyFr: React.FC<Props> = ({ title, meta }) => (
       <LegalSubSection title="3.5 Données de Support, Litige et Communication">
         <LegalList
           items={[
-            <>Messages de session de support (y compris interactions avec assistant IA et support humain)</>,
+            <>Messages de session de support (y compris interactions avec l'assistant IA Google Gemini et le support humain)</>,
             <>Identifiants de support invité lorsque le support invité est utilisé (par ex. email/nom invité)</>,
             <>Enregistrements de litige et preuves téléversées</>,
             <>Enregistrements de notifications (notifications in-app et déclenchées par événement)</>,
@@ -243,6 +257,14 @@ export const PrivacyPolicyFr: React.FC<Props> = ({ title, meta }) => (
       <LegalParagraph>
         Nous ne vendons pas de données personnelles en tant que « courtier de données » lorsque la loi l'interdit.
       </LegalParagraph>
+      <LegalParagraph>
+        Les sous-traitants actuellement utilisés comprennent Cloudinary (médias), Google Maps / Places (recherche
+        d'adresse), OpenStreetMap / Nominatim (cartes et géocodage inverse), Tranzak (rechargement du portefeuille
+        pour des biens physiques), Google Gemini (support IA, après consentement dans l'application) et
+        l'infrastructure Socket.IO pour les notifications et le chat. Le site web public
+        peut charger une balise Google Ads. Les applications iOS et Android du store n'incluent pas cette balise
+        publicitaire.
+      </LegalParagraph>
     </LegalSection>
 
     <LegalSection title="8. Cookies et Technologies de Suivi">
@@ -364,7 +386,12 @@ export const PrivacyPolicyFr: React.FC<Props> = ({ title, meta }) => (
         ]}
       />
       <LegalParagraph>
-        Pour exercer vos droits, contactez : {SUPPORT_EMAIL}. Nous pouvons demander une vérification avant de traiter
+        Pour exercer vos droits, contactez : {SUPPORT_EMAIL}. Si vous avez un compte, vous pouvez aussi le supprimer
+        dans l'application via Profil → Sécurité → Supprimer le compte, ou demander la suppression sur le web à{' '}
+        <a href="/account-deletion" className="text-primary-600 hover:underline">
+          /account-deletion
+        </a>
+        . Nous pouvons demander une vérification avant de traiter
         les demandes.
       </LegalParagraph>
     </LegalSection>

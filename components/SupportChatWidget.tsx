@@ -1,5 +1,7 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { nativeStorageGet, nativeStorageSet } from '../services/nativeStorage';
+import { useNativeBackHandler } from '../hooks/useNativeBackHandler';
 import { useStoreOptional } from '../services/storeContext';
 import { useTranslation } from '../services/i18nContext';
 import { X, Send, Headphones, Bot, User, Check, Clock, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
@@ -29,10 +31,19 @@ export const SupportChatWidget: React.FC = () => {
   // Draggable launcher (closed FAB): persisted so it can be moved off the
   // chat composer's "Send" button. Uses pointer events (mouse + touch).
   const FAB_POS_KEY = 'agm_support_fab_pos';
+  const AI_CONSENT_KEY = 'agm_ai_support_consent_v1';
+  const [aiConsented, setAiConsented] = useState(() => {
+    try {
+      return nativeStorageGet(AI_CONSENT_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [aiConsentChecked, setAiConsentChecked] = useState(false);
   const fabRef = useRef<HTMLButtonElement>(null);
   const [fabPosition, setFabPosition] = useState<{ top: number; left: number } | null>(() => {
     try {
-      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(FAB_POS_KEY) : null;
+      const raw = typeof localStorage !== 'undefined' ? nativeStorageGet(FAB_POS_KEY) : null;
       if (raw) {
         const p = JSON.parse(raw);
         if (typeof p?.top === 'number' && typeof p?.left === 'number') return p;
@@ -63,7 +74,7 @@ export const SupportChatWidget: React.FC = () => {
     const clamped = clampToViewport(rect.top, rect.left, fabRef.current);
     setFabPosition(clamped);
     try {
-      localStorage.setItem(FAB_POS_KEY, JSON.stringify(clamped));
+      nativeStorageSet(FAB_POS_KEY, JSON.stringify(clamped));
     } catch {
       /* ignore */
     }
@@ -145,7 +156,7 @@ export const SupportChatWidget: React.FC = () => {
         if (!prev) return prev;
         const clamped = clampToViewport(prev.top, prev.left, fabRef.current);
         if (clamped.top === prev.top && clamped.left === prev.left) return prev;
-        try { localStorage.setItem(FAB_POS_KEY, JSON.stringify(clamped)); } catch { /* ignore */ }
+        try { nativeStorageSet(FAB_POS_KEY, JSON.stringify(clamped)); } catch { /* ignore */ }
         return clamped;
       });
     };
@@ -186,6 +197,11 @@ export const SupportChatWidget: React.FC = () => {
     };
   }, [isSupportChatOpen]);
   const toggleSupportChat = store?.toggleSupportChat ?? (() => {});
+  const closeSupportOnBack = useCallback(() => {
+    toggleSupportChat();
+    return true;
+  }, [toggleSupportChat]);
+  useNativeBackHandler(isSupportChatOpen, closeSupportOnBack);
   const supportMessages = store?.supportMessages ?? [];
   const supportAiTyping = store?.supportAiTyping ?? false;
   const supportChatSending = store?.supportChatSending ?? false;
@@ -232,11 +248,11 @@ export const SupportChatWidget: React.FC = () => {
   }, [supportMessages, isSupportChatOpen, supportAiTyping]);
 
   useEffect(() => {
-    if (isSupportChatOpen && !showGuestForm && inputRef.current) {
+    if (isSupportChatOpen && aiConsented && !showGuestForm && inputRef.current) {
       const t = setTimeout(() => inputRef.current?.focus(), 150);
       return () => clearTimeout(t);
     }
-  }, [isSupportChatOpen, showGuestForm]);
+  }, [isSupportChatOpen, showGuestForm, aiConsented]);
 
   const widgetDragStartRef = useRef({ x: 0, y: 0 });
   const widgetMovedRef = useRef(false);
@@ -299,6 +315,7 @@ export const SupportChatWidget: React.FC = () => {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!aiConsented) return;
     const text = inputText.trim();
     if (!text || composerDisabled) return;
     setInputText('');
@@ -307,6 +324,7 @@ export const SupportChatWidget: React.FC = () => {
 
   const handleSubmitGuestForm = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!aiConsented) return;
     setFormEmailError('');
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!guestEmailInput.trim()) {
@@ -322,8 +340,8 @@ export const SupportChatWidget: React.FC = () => {
 
   const dockBottom =
     compareCount > 0
-      ? 'calc(max(1rem, env(safe-area-inset-bottom)) + 5rem)'
-      : 'max(1rem, env(safe-area-inset-bottom))';
+      ? 'calc(var(--agm-tabbar, 0px) + max(1rem, env(safe-area-inset-bottom)) + 5rem)'
+      : 'calc(var(--agm-tabbar, 0px) + max(1rem, env(safe-area-inset-bottom)))';
 
   const widgetStyle: React.CSSProperties = {
     maxHeight: 'min(560px, calc(100dvh - 5rem))',
@@ -418,6 +436,34 @@ export const SupportChatWidget: React.FC = () => {
             <X className="h-5 w-5" />
           </button>
         </div>
+
+        {!aiConsented ? (
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 bg-gray-50">
+            <h4 className="text-sm font-semibold text-gray-900">{t('support.aiConsentTitle')}</h4>
+            <p className="text-sm text-gray-600">{t('support.aiConsentBody')}</p>
+            <label className="flex items-start gap-2 text-sm text-gray-800">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                checked={aiConsentChecked}
+                onChange={(e) => setAiConsentChecked(e.target.checked)}
+              />
+              <span>{t('support.aiConsentCheck')}</span>
+            </label>
+            <button
+              type="button"
+              disabled={!aiConsentChecked}
+              onClick={() => {
+                nativeStorageSet(AI_CONSENT_KEY, '1');
+                setAiConsented(true);
+              }}
+              className="w-full bg-blue-600 text-white py-2.5 px-3 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+            >
+              {t('support.aiConsentContinue')}
+            </button>
+          </div>
+        ) : (
+          <>
 
         {/* Messages.
             `min-h-0` is load-bearing: a flex child defaults to `min-height:auto`,
@@ -717,6 +763,8 @@ export const SupportChatWidget: React.FC = () => {
               )}
             </button>
           </form>
+        )}
+          </>
         )}
       </div>
     </>

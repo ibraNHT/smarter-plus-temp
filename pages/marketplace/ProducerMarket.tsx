@@ -37,6 +37,7 @@ import { findProducerForUser } from "../../utils/producerAccountStatus";
 import { usePwaInstall } from "../../contexts/PwaInstallContext";
 import { useCurrency } from "../../contexts/CurrencyContext";
 import { showAppToast } from "../../services/appToast";
+import { nativeShareOrCopy } from "../../services/nativeShare";
 import {
   buildOfferShareText,
   buildOfferShareUrl,
@@ -399,13 +400,10 @@ export const ProducerMarket: React.FC = () => {
               });
               const data = { title: offer.title, text, url };
               try {
-                if (typeof navigator !== "undefined" && navigator.share)
-                  await navigator.share(data);
-                else if (
-                  typeof navigator !== "undefined" &&
-                  navigator.clipboard
-                )
-                  await navigator.clipboard.writeText(`${text}\n${url}`);
+                const result = await nativeShareOrCopy(data);
+                if (result === "copied") {
+                  showAppToast(t("product.linkCopied"), "SUCCESS");
+                }
               } catch {
                 /* share sheet dismissed / clipboard blocked — no action needed */
               }

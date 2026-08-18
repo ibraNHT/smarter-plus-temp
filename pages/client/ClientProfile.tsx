@@ -11,6 +11,7 @@ import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, 
 import { useUpdateClientProfileMutation } from '../../client-api/hooks/useUpdateClientProfileMutation';
 import { SEO } from '../../components/SEO';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
+import { DeleteAccountSection } from '../../components/DeleteAccountSection';
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Modal } from '../../components/Modal';
@@ -1019,7 +1020,7 @@ export const ClientProfile: React.FC = () => {
                   <button onClick={() => setActiveTab('security')} className={`${activeTab === 'security' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
                      <Shield className={`${activeTab === 'security' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.security')}</span>
                   </button>
-                  <button type="button" onClick={() => setLogoutConfirmOpen(true)} className="hidden lg:flex text-red-600 hover:bg-red-50 group rounded-md px-3 py-2 items-center text-sm font-medium w-full transition-colors mt-4 pt-4 border-t border-gray-200">
+                  <button type="button" onClick={() => setLogoutConfirmOpen(true)} className="flex text-red-600 hover:bg-red-50 group rounded-md px-3 py-2 items-center text-sm font-medium w-full transition-colors mt-4 pt-4 border-t border-gray-200">
                      <LogOut className="flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> <span className="truncate">{t('nav.logout')}</span>
                   </button>
                </nav>
@@ -1544,6 +1545,7 @@ export const ClientProfile: React.FC = () => {
                      <div className="mt-4">
                         <button onClick={() => setShowPasswordModal(true)} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-300 transition-colors w-full sm:w-auto">{t('profile.password')}</button>
                      </div>
+                     <DeleteAccountSection />
                   </div>
                )}
             </div>

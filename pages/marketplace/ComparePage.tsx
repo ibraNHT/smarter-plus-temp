@@ -118,7 +118,7 @@ export const ComparePage: React.FC = () => {
                       <th key={offer.id} scope="col" className="px-6 py-3 text-left text-sm font-bold text-gray-900 min-w-[250px] relative group">
                          <button 
                            onClick={() => removeFromCompare(offer.id)}
-                           className="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                           className="absolute top-2 right-2 text-gray-400 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                          >
                             <X className="h-5 w-5" />
                          </button>

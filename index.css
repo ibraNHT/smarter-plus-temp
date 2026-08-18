@@ -21,6 +21,65 @@ body {
   padding-top: env(safe-area-inset-top);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Remove 300ms double-tap zoom delay without disabling pinch-zoom. */
+a,
+button,
+[role='button'],
+input,
+select,
+textarea,
+label,
+summary {
+  touch-action: manipulation;
+}
+
+/*
+ * Native chrome: no accidental text selection on tools/nav.
+ * Legal copy, chat, inputs, and .agm-selectable stay selectable for a11y.
+ */
+html.agm-native nav,
+html.agm-native header,
+html.agm-native button,
+html.agm-native [role='button'],
+html.agm-native img,
+html.agm-native svg,
+html.agm-native .agm-chrome-nosel {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+html.agm-native input,
+html.agm-native textarea,
+html.agm-native select,
+html.agm-native [contenteditable='true'],
+html.agm-native .agm-selectable,
+html.agm-native .agm-chat-message {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/*
+ * Native first screen: the web landing hero uses primary-950 + a heavy
+ * overlay that reads as a black phone on a small viewport (~78vh).
+ */
+html.agm-native .agm-landing-hero {
+  min-height: 56vh;
+  background-color: rgb(22 101 52);
+}
+
+html.agm-native .agm-landing-hero-overlay {
+  background-color: transparent;
+  background-image: linear-gradient(
+    to top,
+    rgb(6 78 36 / 0.5),
+    rgb(20 83 45 / 0.22),
+    rgb(255 255 255 / 0.02)
+  ) !important;
 }
 
 #root {
@@ -148,6 +207,20 @@ body {
   }
 }
 
+:root {
+  --agm-tabbar: 0px;
+}
+
+@media (max-width: 767px) {
+  html.agm-tabbar-visible:not(.agm-keyboard-open) {
+    --agm-tabbar: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+html.agm-keyboard-open .agm-tab-bar {
+  display: none;
+}
+
 /* Body-level padding to keep page content above the floating
    bottom widgets (Install banner, Compare bar, support chat) on small screens.
    Pages can override on a per-route basis. */
@@ -157,7 +230,7 @@ body {
 
 /* Floating action stack — multiple bottom-pinned widgets stack cleanly. */
 .bottom-stack {
-  bottom: max(0.75rem, env(safe-area-inset-bottom));
+  bottom: calc(var(--agm-tabbar, 0px) + max(0.75rem, env(safe-area-inset-bottom)));
 }
 
 /* Full-height chat shell that accounts for the sticky navbar (h-16) on every
@@ -165,6 +238,21 @@ body {
 .agm-chat-shell {
   height: calc(100vh - 4rem);
   height: calc(100dvh - 4rem);
+}
+
+.agm-compare-bar {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+@media (max-width: 767px) {
+  .agm-chat-shell {
+    height: calc(100vh - 4rem - var(--agm-tabbar, 0px));
+    height: calc(100dvh - 4rem - var(--agm-tabbar, 0px));
+  }
+
+  html.agm-tabbar-visible:not(.agm-keyboard-open) .agm-compare-bar {
+    padding-bottom: 0.75rem;
+  }
 }
 
 /* ---------------------------------------------------------------

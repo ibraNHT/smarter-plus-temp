@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
+import { useNativeBackHandler } from '../hooks/useNativeBackHandler';
 import { useTranslation } from '../services/i18nContext';
 
 export type ModalMaxWidth = 'sm' | 'md' | 'lg' | 'xl' | '2xl';
@@ -46,6 +47,15 @@ export const Modal: React.FC<ModalProps> = ({
 }) => {
   const { t } = useTranslation();
   useLockBodyScroll(open);
+
+  const handleNativeBack = useCallback(() => {
+    if (onClose) {
+      onClose();
+      return true;
+    }
+    return false;
+  }, [onClose]);
+  useNativeBackHandler(open && Boolean(onClose), handleNativeBack);
 
   useEffect(() => {
     if (!open || !onClose) return;

@@ -17,6 +17,7 @@ import {
 import { FieldError, inputErrorClasses, showFieldError } from '../../components/FieldError';
 import { RegisterPhoneOtpModal } from '../../components/RegisterPhoneOtpModal';
 import { buildRegisterPhone } from '../../utils/registerPhone';
+import { isAtLeastAge, maxDobForAge } from '../../utils/ageGate';
 import { SEO } from '../../components/SEO';
 import { SEO_PAGE_META } from '../../services/seo/seoConfig';
 
@@ -94,7 +95,7 @@ export const RegisterClient: React.FC = () => {
       firstName: z.string().trim().min(2, t('validation.firstNameRequired')),
       lastName: z.string().trim().min(2, t('validation.lastNameRequired')),
       gender: z.string().min(1, t('validation.genderRequired')),
-      dateOfBirth: z.string().min(1, t('validation.dobRequired')),
+      dateOfBirth: z.string().min(1, t('validation.dobRequired')).refine((ymd) => isAtLeastAge(ymd), t('validation.mustBe18')),
       email: z.string().trim().email(t('validation.emailRequired')),
       password: z.string().min(1, t('validation.passwordRequired')).regex(PASSWORD_RULE, t('form.passwordRequirements')),
       confirmPassword: z.string().min(1, t('validation.confirmPassword')),
@@ -321,6 +322,7 @@ export const RegisterClient: React.FC = () => {
             <input type="date" required
               className="mt-1 focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
               name="dateOfBirth"
+              max={maxDobForAge()}
               value={formik.values.dateOfBirth}
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}

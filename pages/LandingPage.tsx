@@ -64,7 +64,7 @@ export const LandingPage: React.FC = () => {
       />
 
       {/* Brand-first full-bleed hero */}
-      <div className="relative min-h-[78vh] sm:min-h-[85vh] flex items-end sm:items-center bg-primary-950 overflow-hidden">
+      <div className="agm-landing-hero relative min-h-[78vh] sm:min-h-[85vh] flex items-end sm:items-center bg-primary-950 overflow-hidden">
         <div className="absolute inset-0">
           <picture>
             <source
@@ -82,7 +82,7 @@ export const LandingPage: React.FC = () => {
               fetchPriority="high"
             />
           </picture>
-          <div className="absolute inset-0 bg-gradient-to-t from-primary-950 via-primary-950/75 to-primary-900/40" />
+          <div className="agm-landing-hero-overlay absolute inset-0 bg-gradient-to-t from-primary-950 via-primary-950/75 to-primary-900/40" />
         </div>
 
         <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-14 pt-28 sm:py-24 lg:py-28">
