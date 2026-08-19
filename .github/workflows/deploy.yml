@@ -1,4 +1,4 @@
-name: Deploy Frontend (Prod/Staging)
+name: Deploy Frontend Plus (Prod/Staging)
 
 on:
   push:
@@ -8,30 +8,25 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-frontend-${{ github.ref_name }}
+  group: deploy-frontend-plus-${{ github.ref_name }}
   cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
-  APP_PATH: /var/www/ATI-smarter-panel-frontend-enterprise
+  APP_PATH: /var/www/ATI-smarter-panel-frontend-plus
 
 jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Lint
-        run: npx eslint . --ignore-pattern "dev-dist/" --ignore-pattern "scripts/" --ignore-pattern "dist/" --ignore-pattern "build/" --ignore-pattern "node_modules/"
-      - name: Test
-        run: npm run test:run
+      - run: npm ci
+      - run: npx eslint . --ignore-pattern "dev-dist/" --ignore-pattern "scripts/" --ignore-pattern "dist/" --ignore-pattern "build/" --ignore-pattern "node_modules/"
+      - run: npm run test:run
 
   build-and-push:
     needs: quality
@@ -40,21 +35,16 @@ jobs:
       contents: read
       packages: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Prepare image name
-        id: prep
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - id: prep
         run: echo "repo_lower=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v6
         with:
           context: .
           push: true
@@ -70,31 +60,34 @@ jobs:
       packages: read
     environment:
       name: ${{ github.ref_name == 'prod' && 'production' || 'staging' }}
-      url: ${{ github.ref_name == 'prod' && 'https://app.smarterworkspace.cloud' || 'https://staging.smarterworkspace.cloud' }}
+      url: ${{ github.ref_name == 'prod' && 'https://app.smarterpanel.cloud' || 'https://appstaging.smarterpanel.cloud' }}
     steps:
-      - name: Set deployment config
-        id: vars
-        shell: bash
+      - id: vars
         run: |
           echo "repo_lower=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-          echo "container_name=smarter-panel-${{ github.ref_name }}-web" >> "$GITHUB_OUTPUT"
+          echo "container_name=smarter-panel-plus-${{ github.ref_name }}-web" >> "$GITHUB_OUTPUT"
           echo "host_port=3013" >> "$GITHUB_OUTPUT"
-      - name: Deploy to VPS via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ github.ref_name == 'prod' && secrets.VPS_PROD_HOST || secrets.VPS_STAGING_HOST }}
-          username: root
+          username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
-          envs: REGISTRY,APP_PATH
+          envs: REGISTRY,APP_PATH,VPS_USER
           script_stop: true
           script: |
             set -eu
+
             TAG="${{ github.ref_name }}"
             REPO_LOWER="${{ steps.vars.outputs.repo_lower }}"
             CONTAINER_NAME="${{ steps.vars.outputs.container_name }}"
             HOST_PORT="${{ steps.vars.outputs.host_port }}"
             FULL_IMAGE="$REGISTRY/$REPO_LOWER:$TAG"
             ENV_FILE="$APP_PATH/.env"
+
+            # Ensure application directory exists and is owned by deploy user
+            mkdir -p "$APP_PATH"
+            chown -R "$VPS_USER":"$VPS_USER" "$APP_PATH"
+
             test -s "$ENV_FILE"
             grep -Eq '^VITE_API_URL=https?://' "$ENV_FILE" || {
               echo "VITE_API_URL is missing or invalid in $ENV_FILE." >&2
@@ -104,21 +97,26 @@ jobs:
               echo "VITE_UPLOAD_API_URL is missing or invalid in $ENV_FILE." >&2
               exit 1
             }
+
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
             docker pull "$FULL_IMAGE"
+
             PORT_OWNER=$(docker ps --filter "publish=$HOST_PORT" --format '{{.Names}}' | head -n 1)
             if [ -n "$PORT_OWNER" ] && [ "$PORT_OWNER" != "$CONTAINER_NAME" ]; then
               echo "Host port $HOST_PORT is already used by $PORT_OWNER." >&2
               exit 1
             fi
+
             docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
             docker rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
+
             docker run -d \
               --name "$CONTAINER_NAME" \
               --restart unless-stopped \
               -p "127.0.0.1:$HOST_PORT:3013" \
               --env-file "$ENV_FILE" \
               "$FULL_IMAGE"
+
             for attempt in $(seq 1 12); do
               STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER_NAME")
               if [ "$STATUS" = "healthy" ]; then
@@ -130,5 +128,6 @@ jobs:
               fi
               sleep 5
             done
+
             docker logs --tail 100 "$CONTAINER_NAME"
             exit 1
