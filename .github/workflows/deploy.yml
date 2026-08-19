@@ -24,7 +24,6 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: npm ci
       - name: Lint (ignore warnings and problematic rules)
         run: |
           npx eslint . \
@@ -39,6 +38,33 @@ jobs:
             --rule '@typescript-eslint/no-empty-object-type: off' \
             --max-warnings 0
       - run: npm run test:run
+        - name: Checkout repository
+          uses: actions/checkout@v4
+
+        - name: Setup Node.js (use LTS) and enable npm cache
+          uses: actions/setup-node@v4
+          with:
+            node-version: '20'
+            cache: 'npm'
+
+        - name: Install dependencies (strict)
+          run: |
+            set -euo pipefail
+            # Try a clean CI install. If it fails it's most often because
+            # package.json and package-lock.json are out of sync.
+            if npm ci; then
+              echo "npm ci succeeded"
+            else
+              echo "ERROR: 'npm ci' failed. This usually means package.json and package-lock.json are out of sync."
+              echo "Run 'npm install' locally, commit the updated package-lock.json, then re-run the workflow."
+              exit 1
+            fi
+
+        - name: Lint
+          run: npx eslint . --ignore-pattern "dev-dist/" --ignore-pattern "scripts/" --ignore-pattern "dist/" --ignore-pattern "build/" --ignore-pattern "node_modules/"
+
+        - name: Run tests
+          run: npm run test:run
 
   build-and-push:
     needs: quality
