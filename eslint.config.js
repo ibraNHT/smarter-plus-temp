@@ -1,4 +1,5 @@
 import js from '@eslint/js';
+import importPlugin from 'eslint-plugin-import';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
@@ -12,6 +13,7 @@ export default tseslint.config(
   {
     files: ['**/*.{ts,tsx}'],
     plugins: {
+      import: importPlugin,
       'jsx-a11y': jsxA11y,
       react,
       'react-hooks': reactHooks,
