@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { normalizePermissions } from './types';
+import { convertCurrency } from './constants';
+
+describe('convertCurrency', () => {
+  it('converts XAF amounts to the selected dashboard currency', () => {
+    expect(convertCurrency(1000, 'USD')).toBeCloseTo(1.65, 5);
+    expect(convertCurrency(1000, 'EUR')).toBeCloseTo(1.52, 5);
+    expect(convertCurrency(1000, 'XAF')).toBe(1000);
+  });
+});
 
 describe('normalizePermissions', () => {
   it('returns empty array for undefined', () => {

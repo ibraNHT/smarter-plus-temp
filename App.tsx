@@ -1,4 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import { useAuth, useData, hydrateOfflineBlobUrls } from './hooks/useAppData';
 import { Sidebar, Header } from './components/Layout';
 import { SupportWidget } from './components/SupportWidget';
@@ -7,6 +8,10 @@ import { Spinner } from './components/UI';
 import { NotificationProvider } from './context/NotificationContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import MarketingPage from './marketing-page/MarketingPage';
+import HelpCenterPage from './marketing-page/components/HelpCenterPage';
+import PrivacyPolicyPage from './marketing-page/components/PrivacyPolicyPage';
+import TermsPage from './marketing-page/components/TermsPage';
 
 import Login from './pages/Login';
 import ChangePassword from './pages/ChangePassword';
@@ -229,11 +234,22 @@ const MainApp = () => {
 export default function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider>
-        <NotificationProvider>
-          <MainApp />
-        </NotificationProvider>
-      </ThemeProvider>
+      <Routes>
+        <Route path="/home" element={<MarketingPage />} />
+        <Route path="/help" element={<HelpCenterPage />} />
+        <Route path="/privacy" element={<PrivacyPolicyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route
+          path="*"
+          element={
+            <ThemeProvider>
+              <NotificationProvider>
+                <MainApp />
+              </NotificationProvider>
+            </ThemeProvider>
+          }
+        />
+      </Routes>
     </ErrorBoundary>
   );
 }

@@ -5,9 +5,9 @@ This guide walks you through deploying **ATI Smarter Panel** (frontend + backend
 | Placeholder | Replace with |
 |-------------|--------------|
 | `YOUR_SERVER_IP` | Your VPS IP (e.g. `123.45.67.89`) |
-| `your-domain.com` | Your domain (e.g. `smarterworkspace.cloud`) |
-| `api.your-domain.com` | API subdomain (e.g. `api.smarterworkspace.cloud`) |
-| `app.your-domain.com` | App subdomain (e.g. `app.smarterworkspace.cloud`) or use same domain |
+| `your-domain.com` | Your domain (e.g. `smarterpanel.cloud`) |
+| `api.your-domain.com` | API subdomain (e.g. `api.smarterpanel.cloud`) |
+| `app.your-domain.com` | App subdomain (e.g. `app.smarterpanel.cloud`) or use same domain |
 
 You do **not** need to share your IP or domain in chat; use this doc and fill in the values on your side.
 
@@ -109,8 +109,8 @@ Set at least:
 - `PORT=3000` (or `5002` if you prefer; Nginx will proxy to this port)
 - `JWT_SECRET` – long random string (≥ 32 characters)
 - `DATABASE_URL` – e.g. `postgresql://user:password@localhost:5432/smarter_panel`
-- `FRONTEND_ORIGIN` – e.g. `https://app.smarterworkspace.cloud` or `https://your-domain.com` (no trailing slash; add multiple origins comma-separated if needed)
-- `PUBLIC_API_URL` – e.g. `https://api.smarterworkspace.cloud` (for Swagger “Try it out”)
+ - `FRONTEND_ORIGIN` – e.g. `https://app.smarterpanel.cloud` or `https://your-domain.com` (no trailing slash; add multiple origins comma-separated if needed)
+ - `PUBLIC_API_URL` – e.g. `https://api.smarterpanel.cloud` (for Swagger “Try it out”)
 
 Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X`).
 
@@ -158,8 +158,8 @@ nano .env.production
 Contents (replace with your real API base URL):
 
 ```env
-VITE_API_URL=https://api.smarterworkspace.cloud/api
-VITE_UPLOAD_API_URL=https://api.smarterworkspace.cloud
+VITE_API_URL=https://api.smarterpanel.cloud/api
+VITE_UPLOAD_API_URL=https://api.smarterpanel.cloud
 ```
 
 If API is on the same server and you use a single domain:
@@ -270,8 +270,8 @@ Then rebuild the frontend and reload Nginx.
 
 ### Option B – Two subdomains (e.g. `app.` + `api.`)
 
-- `https://app.smarterworkspace.cloud` → frontend
-- `https://api.smarterworkspace.cloud` → backend
+- `https://app.smarterpanel.cloud` → frontend
+- `https://api.smarterpanel.cloud` → backend
 
 **Site 1 – Frontend**
 
@@ -446,10 +446,10 @@ NODE_OPTIONS="--max-old-space-size=4096" npm run build
 
 | Layer | What must be correct |
 |-------|----------------------|
-| **Frontend → API** | Built with `VITE_API_URL` pointing at your API (e.g. `https://api.smarterworkspace.cloud/api`). All auth and data requests go to that URL. |
-| **Frontend → Uploads** | `VITE_UPLOAD_API_URL` points at the same host as the API (e.g. `https://api.smarterworkspace.cloud`). Profile pictures and documents use `/upload/profile-picture` and `/upload/document`. |
+| **Frontend → API** | Built with `VITE_API_URL` pointing at your API (e.g. `https://api.smarterpanel.cloud/api`). All auth and data requests go to that URL. |
+| **Frontend → Uploads** | `VITE_UPLOAD_API_URL` points at the same host as the API (e.g. `https://api.smarterpanel.cloud`). Profile pictures and documents use `/upload/profile-picture` and `/upload/document`. |
 | **Backend → DB** | `DATABASE_URL` in backend `.env` is correct. Migrations applied (`prisma migrate deploy` or SQL run for AuditLog etc.). No “table does not exist” errors. |
-| **Backend → CORS** | `FRONTEND_ORIGIN` in backend `.env` exactly matches the frontend origin (e.g. `https://app.smarterworkspace.cloud`). No trailing slash. Multiple origins comma-separated if needed. |
+| **Backend → CORS** | `FRONTEND_ORIGIN` in backend `.env` exactly matches the frontend origin (e.g. `https://app.smarterpanel.cloud`). No trailing slash. Multiple origins comma-separated if needed. |
 | **Nginx → Backend** | `/api` and `/upload` proxy to the Node app (e.g. `127.0.0.1:3000`). Same host as in `VITE_*` so cookies and auth work when on same domain. |
 | **Static files** | Frontend `dist/` is served by Nginx; backend `uploads/` (profile_pictures, documents) exist and are writable. Backend creates them at startup if missing. |
 
