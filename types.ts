@@ -40,6 +40,7 @@ export interface OrganizationSummary {
   industry?: string | null;
   description?: string | null;
   logoUrl?: string | null;
+  currency?: string | null;
   profileCompletedAt?: string | null;
 }
 
@@ -95,6 +96,7 @@ export interface Location {
   id: string;
   en: string;
   fr: string;
+  currency?: string | null;
 }
 
 export interface Transaction {

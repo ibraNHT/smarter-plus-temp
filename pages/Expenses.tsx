@@ -2,14 +2,16 @@ import React, { useMemo, useState } from 'react';
 import { useNotification } from '@/context/NotificationContext';
 import { useData, useSubmit } from '../hooks/useAppData';
 import { Card, Input, Button, Select, SuggestInput } from '../components/UI';
-import { formatCurrency, getTranslated, isDateWithinLimit, isLockedAfter24Hours } from '../constants';
+import { getTranslated, isDateWithinLimit, isLockedAfter24Hours } from '../constants';
+import { useCurrency } from '../context/CurrencyContext';
 import { Trash2 } from 'lucide-react';
 
-export default function Expenses({ t, locationId, user, currency, lang }: any) {
+export default function Expenses({ t, locationId, user, lang }: any) {
     const { data: expenses, loading } = useData('expenses', locationId);
     const { data: categories } = useData('expense_categories');
     const { data: expenseDescriptions = [] } = useData('expense_descriptions');
     const { add, remove, submitting } = useSubmit('expenses');
+    const { formatMoney, bookCurrencyFor, workingCurrency } = useCurrency();
     
     const [desc, setDesc] = useState('');
     const [amount, setAmount] = useState('');
@@ -112,7 +114,7 @@ export default function Expenses({ t, locationId, user, currency, lang }: any) {
                                 ...categories.map((c: any) => ({ value: c.id, label: getTranslated(c, lang) }))
                             ]}
                         />
-                        <Input label={t('amount')} type="number" value={amount} onChange={setAmount} required />
+                        <Input label={`${t('amount')} (${workingCurrency})`} type="number" value={amount} onChange={setAmount} required />
                         <Input label={t('date')} type="date" value={date} onChange={setDate} required />
                         <Button type="submit" disabled={submitting} className="w-full">{t('add')}</Button>
                     </form>
@@ -139,7 +141,7 @@ export default function Expenses({ t, locationId, user, currency, lang }: any) {
                                         <td className="py-3">{item.date}</td>
                                         <td className="py-3">{item.description}</td>
                                         <td className="py-3">{getTranslated(cat, lang)}</td>
-                                        <td className="py-3 text-right text-red-400">{formatCurrency(item.amount, currency)}</td>
+                                        <td className="py-3 text-right text-red-400">{formatMoney(item.amount, bookCurrencyFor(item))}</td>
                                         <td className="py-3 text-right">
                                             <button
                                             onClick={() => openRemoveModal(item.id, item)}

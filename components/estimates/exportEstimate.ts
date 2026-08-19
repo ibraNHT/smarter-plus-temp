@@ -1,12 +1,15 @@
 import * as XLSX from 'xlsx';
-import { formatCurrency } from '../../constants';
 import type { Estimate, EstimateLineItem } from '../../types';
 
 function lineItemsOf(estimate: Estimate): EstimateLineItem[] {
   return Array.isArray(estimate.lineItems) ? estimate.lineItems : [];
 }
 
-export function estimateToPlainText(estimate: Estimate, currency: string): string {
+type FormatMoney = (amount: number, fromCode?: string) => string;
+type ToDisplay = (amount: number, fromCode?: string) => number;
+
+export function estimateToPlainText(estimate: Estimate, formatMoney: FormatMoney): string {
+  const from = estimate.currency;
   const lines = lineItemsOf(estimate);
   const rows = [
     `${estimate.businessName}`,
@@ -27,12 +30,12 @@ export function estimateToPlainText(estimate: Estimate, currency: string): strin
     'Line items:',
     ...lines.map(
       (li, i) =>
-        `${i + 1}. ${li.description} — ${li.quantity}${li.unit ? ' ' + li.unit : ''} × ${formatCurrency(li.unitPrice, currency)} = ${formatCurrency(li.lineTotal, currency)}`
+        `${i + 1}. ${li.description} — ${li.quantity}${li.unit ? ' ' + li.unit : ''} × ${formatMoney(li.unitPrice, from)} = ${formatMoney(li.lineTotal, from)}`
     ),
     '',
-    `Subtotal: ${formatCurrency(estimate.subtotal, currency)}`,
-    estimate.taxRate != null ? `Tax (${estimate.taxRate}%): ${formatCurrency(estimate.taxAmount, currency)}` : '',
-    `Total: ${formatCurrency(estimate.total, currency)}`,
+    `Subtotal: ${formatMoney(estimate.subtotal, from)}`,
+    estimate.taxRate != null ? `Tax (${estimate.taxRate}%): ${formatMoney(estimate.taxAmount, from)}` : '',
+    `Total: ${formatMoney(estimate.total, from)}`,
     '',
     estimate.notes ? `Notes: ${estimate.notes}` : '',
     estimate.terms ? `Terms: ${estimate.terms}` : '',
@@ -40,7 +43,12 @@ export function estimateToPlainText(estimate: Estimate, currency: string): strin
   return rows.join('\n').trim();
 }
 
-export function downloadEstimateCsv(estimate: Estimate, currency: string) {
+export function downloadEstimateCsv(
+  estimate: Estimate,
+  toDisplay: ToDisplay,
+  displayCurrency: string
+) {
+  const from = estimate.currency;
   const lines = lineItemsOf(estimate);
   const escape = (v: unknown) => {
     const s = String(v ?? '');
@@ -57,11 +65,11 @@ export function downloadEstimateCsv(estimate: Estimate, currency: string) {
     ['Customer', estimate.customerName],
     ['Issue Date', String(estimate.issueDate || '').slice(0, 10)],
     ['Valid Until', estimate.validUntil ? String(estimate.validUntil).slice(0, 10) : ''],
-    ['Currency', currency],
-    ['Subtotal', estimate.subtotal],
+    ['Currency', displayCurrency],
+    ['Subtotal', toDisplay(estimate.subtotal, from)],
     ['Tax Rate', estimate.taxRate ?? ''],
-    ['Tax Amount', estimate.taxAmount],
-    ['Total', estimate.total],
+    ['Tax Amount', toDisplay(estimate.taxAmount, from)],
+    ['Total', toDisplay(estimate.total, from)],
     [],
     ['Description', 'Quantity', 'Unit', 'Unit Price', 'Line Total'],
   ];
@@ -69,8 +77,8 @@ export function downloadEstimateCsv(estimate: Estimate, currency: string) {
     li.description,
     li.quantity,
     li.unit ?? '',
-    li.unitPrice,
-    li.lineTotal,
+    toDisplay(li.unitPrice, from),
+    toDisplay(li.lineTotal, from),
   ]);
   const csv = [...headerMeta, ...itemRows].map((row) => row.map(escape).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });

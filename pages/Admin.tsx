@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useData, useSubmit, apiFetch } from '../hooks/useAppData';
 import { Card, Input, Select, MultiSelectBox, Button, Tabs, Checkbox, TempPasswordModal, Modal } from '../components/UI';
-import { getTranslated } from '../constants';
+import { getTranslated, CURRENCY_CODES } from '../constants';
 import { PERMISSIONS, normalizePermissions } from '../types';
 import { useNotification } from '../context/NotificationContext';
 import { API_URL } from '../env';
@@ -553,16 +553,24 @@ const RoleManagement = ({ t, roles }: any) => {
 };
 
 // --- Sub-Component: Config Management (Locations, Categories, Types) ---
-const ConfigList = ({ title, data, collection, t, lang }: any) => {
-    const { add, remove } = useSubmit(collection);
+const ConfigList = ({ title, data, collection, t, lang, user }: any) => {
+    const { add, remove, update } = useSubmit(collection);
     const [en, setEn] = useState('');
     const [fr, setFr] = useState('');
+    const isLocations = collection === 'locations';
+    const orgCurrency = user?.organization?.currency || 'XAF';
+    const [currency, setCurrency] = useState(orgCurrency);
+
+    useEffect(() => {
+        setCurrency(orgCurrency);
+    }, [orgCurrency]);
 
     const handleAdd = async (e: React.FormEvent) => {
         e.preventDefault();
         const id = en.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now().toString().slice(-4);
-        await add({ en, fr }, id);
+        await add({ en, fr, ...(isLocations ? { currency } : {}) }, id);
         setEn(''); setFr('');
+        if (isLocations) setCurrency(orgCurrency);
     };
 
     return (
@@ -570,13 +578,36 @@ const ConfigList = ({ title, data, collection, t, lang }: any) => {
             <form onSubmit={handleAdd} className="space-y-2 mb-4">
                 <Input placeholder={t('name')} value={en} onChange={setEn} required />
                 <Input placeholder={t('nameFr')} value={fr} onChange={setFr} required />
+                {isLocations && (
+                    <Select
+                        label={t('locationCurrency')}
+                        value={currency}
+                        onChange={setCurrency}
+                        options={CURRENCY_CODES.map((code) => ({ value: code, label: code }))}
+                    />
+                )}
                 <Button type="submit" className="w-full">{t('add')}</Button>
             </form>
+            {isLocations && <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t('locationCurrencyHint')}</p>}
             <div className="max-h-60 overflow-y-auto space-y-2">
                 {data.map((item: any) => (
-                    <div key={item.id} className="flex justify-between p-2 bg-gray-100 dark:bg-gray-700 rounded text-sm">
-                        <span>{getTranslated(item, lang)}</span>
-                        <button onClick={() => { if (confirm('Delete?')) remove(item.id); }} className="text-red-400"><Trash2 size={14} /></button>
+                    <div key={item.id} className="flex justify-between gap-2 p-2 bg-gray-100 dark:bg-gray-700 rounded text-sm items-center">
+                        <span className="min-w-0 truncate">{getTranslated(item, lang)}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                            {isLocations && (
+                                <select
+                                    value={item.currency || orgCurrency}
+                                    onChange={(e) => update(item.id, { currency: e.target.value })}
+                                    className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded text-xs p-1"
+                                    aria-label={t('locationCurrency')}
+                                >
+                                    {CURRENCY_CODES.map((code) => (
+                                        <option key={code} value={code}>{code}</option>
+                                    ))}
+                                </select>
+                            )}
+                            <button type="button" onClick={() => { if (confirm('Delete?')) remove(item.id); }} className="text-red-400"><Trash2 size={14} /></button>
+                        </div>
                     </div>
                 ))}
             </div>

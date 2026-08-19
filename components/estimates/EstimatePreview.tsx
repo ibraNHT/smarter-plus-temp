@@ -1,15 +1,16 @@
 import React from 'react';
-import { formatCurrency } from '../../constants';
 import { getAbsoluteImageUrl } from '../../hooks/useAppData';
+import { useCurrency } from '../../context/CurrencyContext';
 import type { Estimate, EstimateLineItem } from '../../types';
 
 type Props = {
   estimate: Estimate;
-  currency: string;
   t: (key: string) => string;
 };
 
-export function EstimatePreview({ estimate, currency, t }: Props) {
+export function EstimatePreview({ estimate, t }: Props) {
+  const { formatMoney } = useCurrency();
+  const from = estimate.currency;
   const lines: EstimateLineItem[] = Array.isArray(estimate.lineItems) ? estimate.lineItems : [];
   const layout = estimate.layout || 'classic';
   const logoUrl = estimate.logoUrl ? getAbsoluteImageUrl(estimate.logoUrl) : '';
@@ -82,8 +83,8 @@ export function EstimatePreview({ estimate, currency, t }: Props) {
                 <td className="py-2 px-2">{li.description}</td>
                 <td className="py-2 px-2 text-right">{li.quantity}</td>
                 <td className="py-2 px-2">{li.unit || '—'}</td>
-                <td className="py-2 px-2 text-right">{formatCurrency(li.unitPrice, currency)}</td>
-                <td className="py-2 px-2 text-right font-medium">{formatCurrency(li.lineTotal, currency)}</td>
+                <td className="py-2 px-2 text-right">{formatMoney(li.unitPrice, from)}</td>
+                <td className="py-2 px-2 text-right font-medium">{formatMoney(li.lineTotal, from)}</td>
               </tr>
             ))}
           </tbody>
@@ -94,17 +95,17 @@ export function EstimatePreview({ estimate, currency, t }: Props) {
         <dl className="text-sm space-y-1 min-w-[12rem]">
           <div className="flex justify-between gap-6">
             <dt className="text-gray-600">{t('subtotal')}</dt>
-            <dd>{formatCurrency(estimate.subtotal, currency)}</dd>
+            <dd>{formatMoney(estimate.subtotal, from)}</dd>
           </div>
           {estimate.taxRate != null && Number(estimate.taxRate) > 0 ? (
             <div className="flex justify-between gap-6">
               <dt className="text-gray-600">{t('taxAmount')} ({estimate.taxRate}%)</dt>
-              <dd>{formatCurrency(estimate.taxAmount, currency)}</dd>
+              <dd>{formatMoney(estimate.taxAmount, from)}</dd>
             </div>
           ) : null}
           <div className="flex justify-between gap-6 pt-2 border-t font-bold text-base" style={{ borderColor: 'var(--est-primary)', color: 'var(--est-primary)' }}>
             <dt>{t('total')}</dt>
-            <dd>{formatCurrency(estimate.total, currency)}</dd>
+            <dd>{formatMoney(estimate.total, from)}</dd>
           </div>
         </dl>
       </div>

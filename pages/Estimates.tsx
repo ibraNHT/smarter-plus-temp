@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useNotification } from '@/context/NotificationContext';
 import { useData, useStorage, useSubmit, getAbsoluteImageUrl } from '../hooks/useAppData';
 import { Card, Input, Button } from '../components/UI';
-import { formatCurrency } from '../constants';
+import { useCurrency } from '../context/CurrencyContext';
 import { EstimatePreview } from '../components/estimates/EstimatePreview';
 import { downloadEstimateCsv, downloadEstimateXlsx, estimateToPlainText } from '../components/estimates/exportEstimate';
 import { FALLBACK_SYSTEM_TEMPLATES } from '../components/estimates/systemTemplates';
@@ -91,7 +91,7 @@ const computeTotals = (lines: LineDraft[], taxRateStr: string) => {
   return { lineItems: normalized, subtotal, taxRate: taxRate != null && Number.isFinite(taxRate) ? taxRate : null, taxAmount, total };
 };
 
-const blankForm = (currency: string, user: any): FormState => ({
+const blankForm = (user: any): FormState => ({
   number: nextEstimateNumber(),
   title: '',
   status: 'draft',
@@ -159,7 +159,8 @@ const statusLabel = (status: string, t: (k: string) => string) => {
   return map[status] || status;
 };
 
-export default function Estimates({ t, locationId, user, currency, lang }: any) {
+export default function Estimates({ t, locationId, user }: any) {
+  const { formatMoney, toDisplay, displayCurrency, workingCurrency } = useCurrency();
   const { data: estimates = [], loading } = useData('estimates', locationId);
   const { data: templates = [] } = useData('estimate_templates');
   const { add, update, remove, submitting } = useSubmit('estimates');
@@ -168,10 +169,18 @@ export default function Estimates({ t, locationId, user, currency, lang }: any) 
   const { showNotification } = useNotification();
 
   const [view, setView] = useState<'list' | 'editor'>('list');
-  const [form, setForm] = useState<FormState>(() => blankForm(currency, user));
+  const [form, setForm] = useState<FormState>(() => blankForm(user));
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showPreview, setShowPreview] = useState(true);
+
+  const bookCurrency = useMemo(() => {
+    if (form.id) {
+      const existing = (estimates as Estimate[]).find((e) => e.id === form.id);
+      if (existing?.currency) return existing.currency;
+    }
+    return workingCurrency;
+  }, [form.id, estimates, workingCurrency]);
 
   const hasPermissionFor = (action: string) => {
     const permissionMap: Record<string, string> = {
@@ -239,14 +248,14 @@ export default function Estimates({ t, locationId, user, currency, lang }: any) 
       validUntil: form.validUntil || null,
       notes: form.notes || null,
       terms: form.terms || null,
-      currency,
+      currency: bookCurrency,
       subtotal: totals.subtotal,
       taxRate: totals.taxRate,
       taxAmount: totals.taxAmount,
       total: totals.total,
       lineItems: totals.lineItems,
     }),
-    [form, totals, locationId, user, currency, t]
+    [form, totals, locationId, user, bookCurrency, t]
   );
 
   const openNew = () => {
@@ -258,7 +267,7 @@ export default function Estimates({ t, locationId, user, currency, lang }: any) 
       showNotification('You do not have permission to add estimates.', 'error');
       return;
     }
-    setForm(blankForm(currency, user));
+    setForm(blankForm(user));
     setView('editor');
   };
 
@@ -336,7 +345,7 @@ export default function Estimates({ t, locationId, user, currency, lang }: any) 
       validUntil: form.validUntil ? new Date(form.validUntil).toISOString() : null,
       notes: form.notes.trim() || null,
       terms: form.terms.trim() || null,
-      currency,
+      currency: bookCurrency,
       subtotal,
       taxRate,
       taxAmount,
@@ -437,14 +446,14 @@ export default function Estimates({ t, locationId, user, currency, lang }: any) 
   };
 
   const exportEstimate = (est: Estimate, kind: 'csv' | 'xlsx' | 'pdf' | 'text') => {
-    if (kind === 'csv') downloadEstimateCsv(est, currency);
+    if (kind === 'csv') downloadEstimateCsv(est, toDisplay, displayCurrency);
     else if (kind === 'xlsx') downloadEstimateXlsx(est);
     else if (kind === 'pdf') {
       openEdit(est);
       setShowPreview(true);
       setTimeout(() => window.print(), 300);
     } else if (kind === 'text') {
-      navigator.clipboard?.writeText(estimateToPlainText(est, currency)).then(
+      navigator.clipboard?.writeText(estimateToPlainText(est, formatMoney)).then(
         () => showNotification('Copied', 'success'),
         () => showNotification('Copy failed', 'error')
       );
@@ -469,7 +478,7 @@ export default function Estimates({ t, locationId, user, currency, lang }: any) 
                 {t('archiveAsTemplate')}
               </Button>
             )}
-            <Button variant="secondary" onClick={() => downloadEstimateCsv(previewEstimate, currency)}>
+            <Button variant="secondary" onClick={() => downloadEstimateCsv(previewEstimate, toDisplay, displayCurrency)}>
               {t('exportCsv')}
             </Button>
             <Button variant="secondary" onClick={() => downloadEstimateXlsx(previewEstimate)}>
@@ -478,7 +487,7 @@ export default function Estimates({ t, locationId, user, currency, lang }: any) 
             <Button
               variant="secondary"
               onClick={() => {
-                navigator.clipboard?.writeText(estimateToPlainText(previewEstimate, currency));
+                navigator.clipboard?.writeText(estimateToPlainText(previewEstimate, formatMoney));
                 showNotification('Copied', 'success');
               }}
             >
@@ -607,7 +616,7 @@ export default function Estimates({ t, locationId, user, currency, lang }: any) 
                       <Input label={t('unit')} value={line.unit} onChange={(v: string) => setLine(line.key, { unit: v })} />
                     </div>
                     <div className="col-span-4 md:col-span-2">
-                      <Input label={t('unitPrice')} type="number" value={line.unitPrice} onChange={(v: string) => setLine(line.key, { unitPrice: v })} />
+                      <Input label={`${t('unitPrice')} (${bookCurrency})`} type="number" value={line.unitPrice} onChange={(v: string) => setLine(line.key, { unitPrice: v })} />
                     </div>
                     <div className="col-span-12 md:col-span-1 pb-4">
                       <Button
@@ -635,10 +644,10 @@ export default function Estimates({ t, locationId, user, currency, lang }: any) 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
                   <Input label={t('taxRate')} type="number" value={form.taxRate} onChange={(v: string) => setForm({ ...form, taxRate: v })} />
                   <div className="text-sm text-gray-600 dark:text-gray-300 self-center">
-                    {t('subtotal')}: <strong>{formatCurrency(totals.subtotal, currency)}</strong>
+                    {t('subtotal')}: <strong>{formatMoney(totals.subtotal, bookCurrency)}</strong>
                   </div>
                   <div className="text-sm text-gray-900 dark:text-white self-center">
-                    {t('total')}: <strong>{formatCurrency(totals.total, currency)}</strong>
+                    {t('total')}: <strong>{formatMoney(totals.total, bookCurrency)}</strong>
                   </div>
                 </div>
               </div>
@@ -675,7 +684,7 @@ export default function Estimates({ t, locationId, user, currency, lang }: any) 
 
           {showPreview && (
             <div className="xl:sticky xl:top-4 self-start">
-              <EstimatePreview estimate={previewEstimate} currency={currency} t={t} />
+              <EstimatePreview estimate={previewEstimate} t={t} />
             </div>
           )}
         </div>
@@ -739,7 +748,7 @@ export default function Estimates({ t, locationId, user, currency, lang }: any) 
                     <td className="py-2 pr-2">{est.title}</td>
                     <td className="py-2 pr-2">{est.customerName}</td>
                     <td className="py-2 pr-2">{statusLabel(est.status, t)}</td>
-                    <td className="py-2 pr-2 text-right">{formatCurrency(est.total, currency)}</td>
+                    <td className="py-2 pr-2 text-right">{formatMoney(est.total, est.currency)}</td>
                     <td className="py-2 pr-2">
                       <div className="flex flex-wrap gap-1">
                         <button type="button" className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title={t('edit')} onClick={() => openEdit(est)}>

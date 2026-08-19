@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, DollarSign, Coins, Warehouse, Users, FileText, ClipboardPen, Shield, LogOut, Menu, ClipboardList, Bell, Sun, Moon, CreditCard, Building2
 } from 'lucide-react';
-import { getTranslated } from '../constants';
+import { getTranslated, CURRENCY_CODES } from '../constants';
 import { getAbsoluteImageUrl, apiFetch } from '../hooks/useAppData';
 import { useTheme } from '../context/ThemeContext';
+import { useCurrency } from '../context/CurrencyContext';
 
 export const Sidebar = ({ page, setPage, isOpen, setIsOpen, user, logout, t, canAccessPage }: any) => {
   const allNavItems = [
@@ -118,8 +119,9 @@ function playNotificationSound() {
   }
 }
 
-export const Header = ({ setIsOpen, lang, setLang, currency, setCurrency, locations, locId, setLocId, t, isGlobalAdmin, hasMultiLoc, canViewNotifications }: any) => {
+export const Header = ({ setIsOpen, lang, setLang, locations, locId, setLocId, t, isGlobalAdmin, hasMultiLoc, canViewNotifications }: any) => {
   const { theme, toggleTheme } = useTheme();
+  const { displayCurrency, setDisplayCurrency, workingCurrency } = useCurrency();
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<Array<{ id: string; type: string; title: string; message?: string | null; createdAt: string; readAt?: string | null; location?: { id: string; en: string; fr: string }; actor?: { firstName: string; lastName: string } }>>([]);
@@ -283,11 +285,16 @@ export const Header = ({ setIsOpen, lang, setLang, currency, setCurrency, locati
             ))}
           </select>
         )}
-        <select value={currency} onChange={e => setCurrency(e.target.value)} className="bg-gray-100 dark:bg-gray-700 border-none rounded-md text-sm p-2 text-gray-900 dark:text-white">
-          <option value="XAF">XAF</option>
-          <option value="USD">USD</option>
-          <option value="CAD">CAD</option>
-          <option value="EUR">EUR</option>
+        <select
+          value={displayCurrency}
+          onChange={e => setDisplayCurrency(e.target.value)}
+          title={t('displayCurrency')}
+          aria-label={t('displayCurrency')}
+          className="bg-gray-100 dark:bg-gray-700 border-none rounded-md text-sm p-2 text-gray-900 dark:text-white"
+        >
+          {CURRENCY_CODES.map((code) => (
+            <option key={code} value={code}>{code === workingCurrency ? `${code} ★` : code}</option>
+          ))}
         </select>
         <select value={lang} onChange={e => setLang(e.target.value)} className="hidden lg:block bg-gray-100 dark:bg-gray-700 border-none rounded-md text-sm p-2 text-gray-900 dark:text-white">
           <option value="en">EN</option>

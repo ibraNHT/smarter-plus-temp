@@ -1,21 +1,29 @@
 import React, { useMemo } from 'react';
 import { DollarSign, Coins, Warehouse, TrendingUp, AlertTriangle } from 'lucide-react';
 import { useData } from '../hooks/useAppData';
-import { formatCurrency, isInventoryLossReason } from '../constants';
+import { isInventoryLossReason } from '../constants';
 import { Card, Spinner } from '../components/UI';
+import { useCurrency } from '../context/CurrencyContext';
 import type { InventoryEvent, InventoryItem } from '../types';
 
-export default function Dashboard({ t, currency, locationId }: any) {
+export default function Dashboard({ t, locationId }: any) {
+  const { formatMoney, toDisplay, bookCurrencyFor, displayCurrency } = useCurrency();
   const { data: income = [], loading: l1 } = useData('income', locationId);
   const { data: expenses = [], loading: l2 } = useData('expenses', locationId);
   const { data: inventory = [], loading: l3 } = useData('inventory', locationId);
   const { data: events = [], loading: l4 } = useData('inventory_events', locationId);
 
-  const totalIncome = useMemo(() => income.reduce((acc: number, curr: any) => acc + curr.amount, 0), [income]);
-  const totalExpenses = useMemo(() => expenses.reduce((acc: number, curr: any) => acc + curr.amount, 0), [expenses]);
+  const totalIncome = useMemo(
+    () => income.reduce((acc: number, curr: any) => acc + toDisplay(curr.amount, bookCurrencyFor(curr)), 0),
+    [income, toDisplay, bookCurrencyFor]
+  );
+  const totalExpenses = useMemo(
+    () => expenses.reduce((acc: number, curr: any) => acc + toDisplay(curr.amount, bookCurrencyFor(curr)), 0),
+    [expenses, toDisplay, bookCurrencyFor]
+  );
   const inventoryVal = useMemo(
-    () => inventory.reduce((acc: number, curr: InventoryItem) => acc + (curr.value * curr.quantity), 0),
-    [inventory]
+    () => inventory.reduce((acc: number, curr: InventoryItem) => acc + toDisplay(curr.value * curr.quantity, bookCurrencyFor(curr)), 0),
+    [inventory, toDisplay, bookCurrencyFor]
   );
   const net = totalIncome - totalExpenses;
 
@@ -30,10 +38,10 @@ export default function Dashboard({ t, currency, locationId }: any) {
       .reduce((a, e) => {
         const item = list.find((i) => i.id === e.inventoryId);
         const unit = (e as any).unitValue ?? item?.value ?? 0;
-        return a + unit * (Number(e.quantity) || 0);
+        return a + toDisplay(unit * (Number(e.quantity) || 0), bookCurrencyFor(item || e));
       }, 0);
     return { unitsLost, lossValue, availableValue: inventoryVal };
-  }, [inventory, events, inventoryVal]);
+  }, [inventory, events, inventoryVal, toDisplay, bookCurrencyFor]);
 
   if (l1 || l2 || l3 || l4) return <Spinner />;
 
@@ -53,10 +61,10 @@ export default function Dashboard({ t, currency, locationId }: any) {
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">{t('dashboard')}</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Stat label={t('totalIncome')} val={formatCurrency(totalIncome, currency)} icon={DollarSign} color="bg-green-500" />
-        <Stat label={t('totalExpenses')} val={formatCurrency(totalExpenses, currency)} icon={Coins} color="bg-red-500" />
-        <Stat label={t('netBalance')} val={formatCurrency(net, currency)} icon={TrendingUp} color="bg-blue-500" />
-        <Stat label={t('inventoryValue')} val={formatCurrency(inventoryVal, currency)} icon={Warehouse} color="bg-yellow-500" />
+        <Stat label={t('totalIncome')} val={formatMoney(totalIncome, displayCurrency)} icon={DollarSign} color="bg-green-500" />
+        <Stat label={t('totalExpenses')} val={formatMoney(totalExpenses, displayCurrency)} icon={Coins} color="bg-red-500" />
+        <Stat label={t('netBalance')} val={formatMoney(net, displayCurrency)} icon={TrendingUp} color="bg-blue-500" />
+        <Stat label={t('inventoryValue')} val={formatMoney(inventoryVal, displayCurrency)} icon={Warehouse} color="bg-yellow-500" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -68,11 +76,11 @@ export default function Dashboard({ t, currency, locationId }: any) {
             <div className="space-y-2 flex-1">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600 dark:text-gray-400">{t('inventoryAvailableValue')}</span>
-                <span className="font-semibold text-green-400">{formatCurrency(inventoryHealth.availableValue, currency)}</span>
+                <span className="font-semibold text-green-400">{formatMoney(inventoryHealth.availableValue, displayCurrency)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600 dark:text-gray-400">{t('inventoryLossValue')}</span>
-                <span className="font-semibold text-red-400">{formatCurrency(inventoryHealth.lossValue, currency)}</span>
+                <span className="font-semibold text-red-400">{formatMoney(inventoryHealth.lossValue, displayCurrency)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600 dark:text-gray-400">{t('inventoryUnitsLost')}</span>
@@ -94,7 +102,7 @@ export default function Dashboard({ t, currency, locationId }: any) {
                      <p className="text-xs text-gray-600 dark:text-gray-400">{item.date}</p>
                    </div>
                    <span className={item.source ? 'text-green-400' : 'text-red-400'}>
-                     {item.source ? '+' : '-'} {formatCurrency(item.amount, currency)}
+                     {item.source ? '+' : '-'} {formatMoney(item.amount, bookCurrencyFor(item))}
                    </span>
                 </div>
               ))}

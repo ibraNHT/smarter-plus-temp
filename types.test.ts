@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { normalizePermissions } from './types';
-import { convertCurrency } from './constants';
+import { convertAmount, FALLBACK_USD_RATES } from './lib/exchangeRates';
 
-describe('convertCurrency', () => {
-  it('converts XAF amounts to the selected dashboard currency', () => {
-    expect(convertCurrency(1000, 'USD')).toBeCloseTo(1.65, 5);
-    expect(convertCurrency(1000, 'EUR')).toBeCloseTo(1.52, 5);
-    expect(convertCurrency(1000, 'XAF')).toBe(1000);
+describe('convertAmount', () => {
+  it('converts using USD-base rates without mutating the stored amount', () => {
+    expect(convertAmount(50, 'CAD', 'CAD', FALLBACK_USD_RATES)).toBe(50);
+    expect(convertAmount(50, 'CAD', 'XAF', FALLBACK_USD_RATES)).toBeCloseTo(50 * FALLBACK_USD_RATES.XAF / FALLBACK_USD_RATES.CAD, 5);
   });
 });
 

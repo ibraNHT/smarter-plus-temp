@@ -1,12 +1,23 @@
 
 import type { InventoryEventReason, InventoryItem, InventoryStatus } from './types';
+import { convertAmount } from './lib/exchangeRates';
 
 export const CURRENCIES = {
-  XAF: { code: 'XAF', rate: 1, symbol: 'FCFA', precision: 0 },
-  USD: { code: 'USD', rate: 0.00165, symbol: '$ US', precision: 2 },
-  CAD: { code: 'CAD', rate: 0.00225, symbol: '$ CAD', precision: 2 },
-  EUR: { code: 'EUR', rate: 0.00152, symbol: '€', precision: 2 },
-};
+  XAF: { code: 'XAF', symbol: 'FCFA', precision: 0 },
+  XOF: { code: 'XOF', symbol: 'CFA', precision: 0 },
+  NGN: { code: 'NGN', symbol: '₦', precision: 2 },
+  USD: { code: 'USD', symbol: '$ US', precision: 2 },
+  CAD: { code: 'CAD', symbol: '$ CAD', precision: 2 },
+  EUR: { code: 'EUR', symbol: '€', precision: 2 },
+  GBP: { code: 'GBP', symbol: '£', precision: 2 },
+} as const;
+
+export type CurrencyCode = keyof typeof CURRENCIES;
+
+export const CURRENCY_CODES = Object.keys(CURRENCIES) as CurrencyCode[];
+
+export const isSupportedCurrency = (value: unknown): value is CurrencyCode =>
+  typeof value === 'string' && value in CURRENCIES;
 
 export const TRANSLATIONS: Record<string, Record<string, string>> = {
   en: {
@@ -50,6 +61,11 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     orgProfileSaved: "Organization profile saved",
     orgLogoHint: "Upload your organization logo (optional).",
     orgSectionIdentity: "Identity",
+    workingCurrency: "Working currency",
+    workingCurrencyHint: "Amounts you enter are stored in this currency. The header dropdown only converts for display using live rates.",
+    locationCurrency: "Location currency",
+    locationCurrencyHint: "Each site books amounts in its own currency. New locations default to the organization working currency.",
+    displayCurrency: "Display currency",
     orgSectionContact: "Contact",
     orgSectionAddress: "Address",
     industry: "Industry",
@@ -452,6 +468,11 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     orgProfileSaved: "Profil organisation enregistré",
     orgLogoHint: "Téléverser le logo de l'organisation (optionnel).",
     orgSectionIdentity: "Identité",
+    workingCurrency: "Devise de travail",
+    workingCurrencyHint: "Les montants saisis sont enregistrés dans cette devise. Le sélecteur de l’en-tête ne convertit que l’affichage avec des taux en direct.",
+    locationCurrency: "Devise du site",
+    locationCurrencyHint: "Chaque site enregistre les montants dans sa propre devise. Les nouveaux sites héritent de la devise de l’organisation.",
+    displayCurrency: "Devise d’affichage",
     orgSectionContact: "Contact",
     orgSectionAddress: "Adresse",
     industry: "Secteur d'activité",
@@ -815,14 +836,15 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
   }
 };
 
-export const convertCurrency = (amount: number, currencyCode: string) => {
-  const currency = CURRENCIES[currencyCode as keyof typeof CURRENCIES] || CURRENCIES.XAF;
-  return amount * currency.rate;
-};
-
-export const formatCurrency = (amount: number, currencyCode: string) => {
-  const currency = CURRENCIES[currencyCode as keyof typeof CURRENCIES] || CURRENCIES.XAF;
-  const converted = convertCurrency(amount, currencyCode);
+export const formatCurrency = (
+  amount: number,
+  displayCode: string,
+  fromCode?: string,
+  rates?: Record<string, number> | null
+) => {
+  const currency = CURRENCIES[(displayCode as CurrencyCode)] || CURRENCIES.XAF;
+  const from = fromCode || displayCode;
+  const converted = convertAmount(amount, from, currency.code, rates);
   return new Intl.NumberFormat('fr-FR', {
     style: 'currency',
     currency: currency.code,
