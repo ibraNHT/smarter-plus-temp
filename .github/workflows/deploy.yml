@@ -58,7 +58,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-    environment:
+        environment:
       name: ${{ github.ref_name == 'prod' && 'production' || 'staging' }}
       url: ${{ github.ref_name == 'prod' && 'https://app.smarterpanel.cloud' || 'https://appstaging.smarterpanel.cloud' }}
     steps:
