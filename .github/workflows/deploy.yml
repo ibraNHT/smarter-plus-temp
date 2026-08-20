@@ -29,7 +29,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install   # remplace npm ci pour éviter le décalage de lockfile
+        run: npm install
 
       - name: Lint
         run: |
@@ -150,23 +150,22 @@ jobs:
           fi
           echo "✅ SSH private key is valid."
 
-      # ----- TEST DE CONNEXION SSH (facultatif mais rassurant) -----
+      # ----- TEST DE CONNEXION SSH (utilisateur deployer) -----
       - name: Test SSH connection
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ github.ref_name == 'prod' && secrets.VPS_PROD_HOST || secrets.VPS_STAGING_HOST }}
-          username: root
+          username: deployer          # ← Changé de root à deployer
           key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
-          # Si ta clé a une passphrase, décommente la ligne suivante et ajoute le secret correspondant :
-          # passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
-          script: echo "SSH connection successful."
+          # passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}   # décommenter si nécessaire
+          script: echo "SSH connection successful with user deployer."
 
       # ----- DÉPLOIEMENT EFFECTIF -----
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ github.ref_name == 'prod' && secrets.VPS_PROD_HOST || secrets.VPS_STAGING_HOST }}
-          username: root
+          username: deployer          # ← Changé de root à deployer
           key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
           # passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
           envs: REGISTRY,APP_PATH
