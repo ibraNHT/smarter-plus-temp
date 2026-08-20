@@ -12,7 +12,7 @@ RUN npm run build
 FROM node:22-alpine AS production
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
-    PORT=3015                # ← modifié
+    PORT=3015
 WORKDIR /app
 
 COPY --chown=node:node --from=build /app/dist ./dist
