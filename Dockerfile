@@ -21,5 +21,5 @@ COPY --chown=node:node server.mjs ./server.mjs
 USER node
 EXPOSE 3015                  # ← modifié
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:3015/health || exit 1   # ← modifié
+  CMD wget -qO- http://127.0.0.1:3015/health || exit 1
 CMD ["node", "server.mjs"]
