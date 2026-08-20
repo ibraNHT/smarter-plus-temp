@@ -21,16 +21,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
-
       - name: Install dependencies
         run: npm install
-
       - name: Lint
         run: |
           npx eslint . \
@@ -41,7 +38,6 @@ jobs:
             --ignore-pattern "node_modules/" \
             --rule '@typescript-eslint/ban-ts-comment: off' \
             --rule '@typescript-eslint/no-empty-object-type: off'
-
       - name: Test
         run: npm run test:run
 
@@ -54,10 +50,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
       - name: Create server.mjs if missing
         run: |
           if [ ! -f server.mjs ]; then
@@ -92,18 +86,15 @@ jobs:
           });
           EOF
           fi
-
       - name: Prepare image name
         id: prep
         run: echo "repo_lower=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
@@ -133,7 +124,7 @@ jobs:
           echo "container_name=smarter-panel-plus-${{ github.ref_name }}-web" >> "$GITHUB_OUTPUT"
           echo "host_port=3013" >> "$GITHUB_OUTPUT"
 
-      # ----- VÉRIFICATION DE LA CLÉ SSH -----
+      # ----- VÉRIFICATION DE LA CLÉ SSH (optionnelle) -----
       - name: Validate SSH private key
         run: |
           if [ -z "${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}" ]; then
@@ -150,22 +141,23 @@ jobs:
           fi
           echo "✅ SSH private key is valid."
 
-      # ----- TEST DE CONNEXION SSH (utilisateur deployer) -----
+      # ----- TEST DE CONNEXION SSH (rassurant) -----
       - name: Test SSH connection
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ github.ref_name == 'prod' && secrets.VPS_PROD_HOST || secrets.VPS_STAGING_HOST }}
-          username: deployer          # ← Changé de root à deployer
+          username: root
           key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
-          # passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}   # décommenter si nécessaire
-          script: echo "SSH connection successful with user deployer."
+          # Si ta clé a une passphrase, décommente la ligne suivante :
+          # passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
+          script: echo "SSH connection successful."
 
-      # ----- DÉPLOIEMENT EFFECTIF -----
+      # ----- DÉPLOIEMENT EFFECTIF (script corrigé) -----
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ github.ref_name == 'prod' && secrets.VPS_PROD_HOST || secrets.VPS_STAGING_HOST }}
-          username: deployer          # ← Changé de root à deployer
+          username: root
           key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
           # passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
           envs: REGISTRY,APP_PATH
@@ -193,12 +185,15 @@ jobs:
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
             docker pull "$FULL_IMAGE"
 
+            # ---- GESTION DU PORT : on arrête tout conteneur existant ----
             PORT_OWNER=$(docker ps --filter "publish=$HOST_PORT" --format '{{.Names}}' | head -n 1)
             if [ -n "$PORT_OWNER" ] && [ "$PORT_OWNER" != "$CONTAINER_NAME" ]; then
-              echo "Host port $HOST_PORT is already used by $PORT_OWNER." >&2
-              exit 1
+              echo "Host port $HOST_PORT is already used by $PORT_OWNER. Stopping and removing it."
+              docker stop "$PORT_OWNER" >/dev/null 2>&1 || true
+              docker rm "$PORT_OWNER" >/dev/null 2>&1 || true
             fi
 
+            # On s'assure que le nouveau conteneur n'existe pas
             docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
             docker rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
