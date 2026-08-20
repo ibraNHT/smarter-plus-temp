@@ -3,7 +3,6 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-# Use npm install instead of ci – it will automatically sync the lockfile
 RUN --mount=type=cache,target=/root/.npm npm install --ignore-scripts
 
 FROM deps AS build
@@ -20,10 +19,7 @@ COPY --chown=node:node --from=build /app/dist ./dist
 COPY --chown=node:node server.mjs ./server.mjs
 
 USER node
-
 EXPOSE 3013
-
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1:3013/health || exit 1
-
 CMD ["node", "server.mjs"]
