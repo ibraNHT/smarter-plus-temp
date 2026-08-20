@@ -52,6 +52,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
       - name: Create server.mjs if missing
         run: |
           if [ ! -f server.mjs ]; then
@@ -61,6 +62,12 @@ jobs:
           import { extname } from 'path';
 
           const server = createServer(async (req, res) => {
+            if (req.url === '/health') {
+              res.writeHead(200, { 'Content-Type': 'text/plain' });
+              res.end('OK');
+              return;
+            }
+
             try {
               let filePath = '.' + req.url;
               if (filePath === './') filePath = './dist/index.html';
@@ -86,6 +93,7 @@ jobs:
           });
           EOF
           fi
+
       - name: Prepare image name
         id: prep
         run: echo "repo_lower=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
@@ -122,9 +130,8 @@ jobs:
         run: |
           echo "repo_lower=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
           echo "container_name=smarter-panel-plus-${{ github.ref_name }}-web" >> "$GITHUB_OUTPUT"
-          echo "host_port=3013" >> "$GITHUB_OUTPUT"
+          echo "host_port=3015" >> "$GITHUB_OUTPUT"     # 👈 Nouveau port
 
-      # ----- VÉRIFICATION DE LA CLÉ SSH (optionnelle) -----
       - name: Validate SSH private key
         run: |
           if [ -z "${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}" ]; then
@@ -141,18 +148,15 @@ jobs:
           fi
           echo "✅ SSH private key is valid."
 
-      # ----- TEST DE CONNEXION SSH (rassurant) -----
       - name: Test SSH connection
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ github.ref_name == 'prod' && secrets.VPS_PROD_HOST || secrets.VPS_STAGING_HOST }}
           username: root
           key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
-          # Si ta clé a une passphrase, décommente la ligne suivante :
           # passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
           script: echo "SSH connection successful."
 
-      # ----- DÉPLOIEMENT EFFECTIF (script corrigé) -----
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -185,7 +189,6 @@ jobs:
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
             docker pull "$FULL_IMAGE"
 
-            # ---- GESTION DU PORT : on arrête tout conteneur existant ----
             PORT_OWNER=$(docker ps --filter "publish=$HOST_PORT" --format '{{.Names}}' | head -n 1)
             if [ -n "$PORT_OWNER" ] && [ "$PORT_OWNER" != "$CONTAINER_NAME" ]; then
               echo "Host port $HOST_PORT is already used by $PORT_OWNER. Stopping and removing it."
@@ -193,7 +196,6 @@ jobs:
               docker rm "$PORT_OWNER" >/dev/null 2>&1 || true
             fi
 
-            # On s'assure que le nouveau conteneur n'existe pas
             docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
             docker rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
