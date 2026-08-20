@@ -60,7 +60,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ===== NEW STEP: create missing server.mjs =====
+      # Ensure server.mjs exists (falls back to a minimal static server)
       - name: Create server.mjs if missing
         run: |
           if [ ! -f server.mjs ]; then
