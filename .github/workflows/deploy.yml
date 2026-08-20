@@ -30,7 +30,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install   # now works because lockfile is updated
+        run: npm install   # changed from npm ci to fix lockfile mismatch
 
       - name: Lint
         run: |
