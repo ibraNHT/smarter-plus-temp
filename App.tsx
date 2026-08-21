@@ -4,6 +4,7 @@ import { useAuth, useData, hydrateOfflineBlobUrls } from './hooks/useAppData';
 import { Sidebar, Header } from './components/Layout';
 import { SupportWidget } from './components/SupportWidget';
 import { TRANSLATIONS } from './constants';
+import { CurrencyProvider } from './context/CurrencyContext';
 import { Spinner } from './components/UI';
 import { NotificationProvider } from './context/NotificationContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -55,7 +56,6 @@ const MainApp = () => {
   } = useAuth();
   const [page, setPage] = useState('dashboard');
   const [lang, setLang] = useState('en');
-  const [currency, setCurrency] = useState('XAF');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [locationId, setLocationId] = useState<string | null>(null);
   const [orgProfileDone, setOrgProfileDone] = useState(false);
@@ -173,9 +173,14 @@ const MainApp = () => {
   }
 
   const userWithRole = user ? { ...user, role: currentUserRole } : user;
-  const commonProps = { t, lang, currency, locationId: effectiveLocationId, user: userWithRole, isGlobalAdmin, isLocationAdmin };
+  const commonProps = { t, lang, locationId: effectiveLocationId, user: userWithRole, isGlobalAdmin, isLocationAdmin };
 
   return (
+    <CurrencyProvider
+      orgCurrency={user.organization?.currency}
+      locationId={effectiveLocationId}
+      locations={locations || []}
+    >
     <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white font-inter">
       <Sidebar
         page={page}
@@ -201,8 +206,6 @@ const MainApp = () => {
           setIsOpen={setSidebarOpen}
           lang={lang}
           setLang={setLang}
-          currency={currency}
-          setCurrency={setCurrency}
           locations={selectableLocations}
           locId={effectiveLocationId}
           setLocId={setLocationId}
@@ -230,6 +233,7 @@ const MainApp = () => {
         <SupportWidget t={t} />
       </div>
     </div>
+    </CurrencyProvider>
   );
 };
 

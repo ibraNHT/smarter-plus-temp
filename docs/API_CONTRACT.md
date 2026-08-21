@@ -33,7 +33,7 @@ All requests use the base URL from `VITE_API_URL`. Auth uses either `Authorizati
 | PUT | `/update-password` | `{ oldPassword, newPassword }` | Success |
 | PATCH | `/profile` | `{ profilePicUrl? }` | Updated user |
 | GET | `/organization` | — | Organization profile |
-| PATCH | `/organization` | `{ name?, legalName?, address?, phone?, taxId?, logoUrl? }` | Updated org; sets `profileCompletedAt` when required fields filled |
+| PATCH | `/organization` | `{ name?, legalName?, address?, phone?, taxId?, logoUrl?, currency? }` | Updated org; `currency` is the working/book currency (`XAF` \| `XOF` \| `NGN` \| `USD` \| `CAD` \| `EUR` \| `GBP`). Amounts on income, expenses, and inventory are stored in the location’s currency (or this org default). The header display currency is client-only and converts with live USD-base rates. Sets `profileCompletedAt` when required fields filled |
 | GET/POST | `/invites` | POST `{ email, roleId, locationIds? }` | Invite create / list (sends email with accept link) |
 | POST | `/invites/:id/resend` | — | Regenerate token and resend invite email |
 | POST | `/invites/accept/start` | `{ token, password, firstName?, lastName? }` | OTP for invite |
@@ -86,8 +86,8 @@ The app uses generic collection names; your backend must expose them under the s
 
 | Method | Path | Notes |
 |--------|------|--------|
-| GET | `/:collection` | Returns array. Collections: `users`, `roles`, `locations`, `income`, `expenses`, `inventory`, `inventory_events`, `staff`, `expense_categories`, `inventory_types`, `positions`, `income_sources`, `expense_descriptions`, `storage_places`, `estimates`, `estimate_templates`. |
-| POST | `/:collection` | Body: JSON object. Creating `users`/`locations` is gated by subscription limits. |
+| GET | `/:collection` | Returns array. Collections: `users`, `roles`, `locations`, `income`, `expenses`, `inventory`, `inventory_events`, `staff`, `expense_categories`, `inventory_types`, `positions`, `income_sources`, `expense_descriptions`, `storage_places`, `estimates`, `estimate_templates`. `locations` include `currency` (book currency for that site; omitted/invalid values fall back to org `currency`). New locations default to the organization working currency. |
+| POST | `/:collection` | Body: JSON object. Creating `users`/`locations` is gated by subscription limits. `POST /locations` accepts `{ en, fr, currency? }`; omitted `currency` defaults to the organization working currency. `PUT /locations/:id` may update `en`, `fr`, and `currency`. |
 | PUT | `/:collection/:id` | Body: JSON object. |
 | DELETE | `/:collection/:id` | — |
 | DELETE | `/staff_documents/:id` | Delete a staff document by id. |
@@ -121,7 +121,7 @@ Standalone professional quotes (no auto-convert to income in this phase).
 
 | Collection | Notes |
 |------------|--------|
-| `estimates` | Location-scoped. `GET` includes `lineItems` (ordered) and optional `template`. `POST`/`PUT` accept nested `lineItems[]` (`description`, `quantity`, `unit`, `unitPrice`, `lineTotal`, `sortOrder`); server replaces line items on update when the array is sent. Fields include branding (`logoUrl`, `primaryColor`, `accentColor`, `layout`), customer/business block, `issueDate`, `validUntil`, tax/totals, `status` (`draft` \| `sent` \| `accepted` \| `rejected` \| `archived`). |
+| `estimates` | Location-scoped. `GET` includes `lineItems` (ordered) and optional `template`. `POST`/`PUT` accept nested `lineItems[]` (`description`, `quantity`, `unit`, `unitPrice`, `lineTotal`, `sortOrder`); server replaces line items on update when the array is sent. Fields include branding (`logoUrl`, `primaryColor`, `accentColor`, `layout`), customer/business block, `issueDate`, `validUntil`, tax/totals, `status` (`draft` \| `sent` \| `accepted` \| `rejected` \| `archived`), and `currency` (book currency for stored amounts; defaults to the location then org working currency if omitted). Preview/CSV convert for display; stored numbers are not rewritten when the header display currency changes. |
 | `estimate_templates` | System industry templates (`isSystem: true`, `locationId` null) plus user-archived templates (`isSystem: false`, `locationId`/`userId` set). `defaultLineItems` is returned as a JSON array. |
 
 Permissions: `perm_viewEstimates`, `perm_addEstimates`, `perm_updateEstimates`, `perm_deleteEstimates`, `perm_manageEstimateTemplates`.

@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useData, apiFetch } from '../hooks/useAppData';
 import { Card, Button, Select } from '../components/UI';
-import { formatCurrency, getTranslated, isInventoryLossReason } from '../constants';
+import { getTranslated, isInventoryLossReason } from '../constants';
+import { useCurrency } from '../context/CurrencyContext';
 import { FileDown, FileSpreadsheet, TrendingUp, TrendingDown, Wallet, Package, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
@@ -35,7 +36,8 @@ const formatCompactAmount = (value: number | string) => {
   return `${sign}${abs}`;
 };
 
-export default function Reports({ t, locationId, currency, lang }: any) {
+export default function Reports({ t, locationId, lang }: any) {
+  const { formatMoney, toDisplay, bookCurrencyFor, displayCurrency } = useCurrency();
   const { data: income = [] } = useData('income', locationId);
   const { data: expenses = [] } = useData('expenses', locationId);
   const { data: inventory = [] } = useData('inventory', locationId);
@@ -86,26 +88,43 @@ export default function Reports({ t, locationId, currency, lang }: any) {
     }
   }, [preset]);
 
-  const filterByLocation = (arr: any[]) => {
+  const filterByLocation = useCallback((arr: any[]) => {
     if (!arr?.length) return [];
     if (targetLocationId === 'all') return arr;
     return arr.filter((i: any) => i.locationId === targetLocationId);
-  };
+  }, [targetLocationId]);
 
-  const inDateRange = (dateStr: string) => {
+  const inDateRange = useCallback((dateStr: string) => {
     const d = new Date(dateStr);
     const from = new Date(dateFrom);
     const to = new Date(dateTo);
     to.setHours(23, 59, 59, 999);
     return d >= from && d <= to;
-  };
+  }, [dateFrom, dateTo]);
 
-  const filteredIncome = useMemo(() => filterByLocation(income).filter((i: any) => inDateRange(i.date)), [income, targetLocationId, dateFrom, dateTo]);
-  const filteredExpenses = useMemo(() => filterByLocation(expenses).filter((e: any) => inDateRange(e.date)), [expenses, targetLocationId, dateFrom, dateTo]);
-  const filteredInventory = useMemo(() => filterByLocation(inventory), [inventory, targetLocationId]);
+  const inDisplay = useCallback(
+    (item: any, amount?: number) => toDisplay(amount ?? item.amount, bookCurrencyFor(item)),
+    [toDisplay, bookCurrencyFor]
+  );
+
+  const filteredIncome = useMemo(
+    () => filterByLocation(income).filter((i: any) => inDateRange(i.date)).map((i: any) => ({ ...i, amount: inDisplay(i) })),
+    [income, filterByLocation, inDateRange, inDisplay]
+  );
+  const filteredExpenses = useMemo(
+    () => filterByLocation(expenses).filter((e: any) => inDateRange(e.date)).map((e: any) => ({ ...e, amount: inDisplay(e) })),
+    [expenses, filterByLocation, inDateRange, inDisplay]
+  );
+  const filteredInventory = useMemo(
+    () => filterByLocation(inventory).map((i: any) => ({
+      ...i,
+      value: toDisplay(i.value ?? 0, bookCurrencyFor(i)),
+    })),
+    [inventory, filterByLocation, toDisplay, bookCurrencyFor]
+  );
   const filteredEvents = useMemo(
     () => filterByLocation(inventoryEvents).filter((e: any) => inDateRange(e.createdAt || e.date)),
-    [inventoryEvents, targetLocationId, dateFrom, dateTo]
+    [inventoryEvents, filterByLocation, inDateRange]
   );
 
   const totalIncome = useMemo(() => filteredIncome.reduce((a: number, i: any) => a + i.amount, 0), [filteredIncome]);
@@ -121,11 +140,12 @@ export default function Reports({ t, locationId, currency, lang }: any) {
       stolen: { units: 0, value: 0 },
     };
     let lossValue = 0;
+    const locInv = filterByLocation(inventory);
     losses.forEach((e: any) => {
-      const item = filteredInventory.find((i: any) => i.id === e.inventoryId);
+      const item = locInv.find((i: any) => i.id === e.inventoryId);
       const unit = e.unitValue ?? item?.value ?? 0;
       const qty = Number(e.quantity) || 0;
-      const val = unit * qty;
+      const val = toDisplay(unit * qty, bookCurrencyFor(item || e));
       lossValue += val;
       if (byReason[e.reason]) {
         byReason[e.reason].units += qty;
@@ -133,7 +153,7 @@ export default function Reports({ t, locationId, currency, lang }: any) {
       }
     });
     return { lossValue, byReason, losses };
-  }, [filteredEvents, filteredInventory]);
+  }, [filteredEvents, inventory, filterByLocation, toDisplay, bookCurrencyFor]);
 
   const lossesByReasonData = useMemo(() => {
     return (['damaged', 'expired', 'stolen'] as const)
@@ -207,8 +227,8 @@ export default function Reports({ t, locationId, currency, lang }: any) {
         return matchYear && d.getMonth() === Number(selectedMonth);
       });
     }
-    const totalInc = baseIncome.reduce((a: number, b: any) => a + b.amount, 0);
-    const totalExp = baseExpenses.reduce((a: number, b: any) => a + b.amount, 0);
+    const totalInc = baseIncome.reduce((a: number, b: any) => a + inDisplay(b), 0);
+    const totalExp = baseExpenses.reduce((a: number, b: any) => a + inDisplay(b), 0);
     setForecast({
       income: totalInc / 12,
       expense: totalExp / 12,
@@ -216,21 +236,21 @@ export default function Reports({ t, locationId, currency, lang }: any) {
       locationName: targetLocationId === 'all' ? t('allLocations') : getTranslated(locations.find((l: any) => l.id === targetLocationId), lang),
     });
     let data = [
-      ...baseIncome.map((i: any) => ({ ...i, type: 'income' })),
-      ...baseExpenses.map((e: any) => ({ ...e, type: 'expense' })),
+      ...baseIncome.map((i: any) => ({ ...i, type: 'income', amount: inDisplay(i) })),
+      ...baseExpenses.map((e: any) => ({ ...e, type: 'expense', amount: inDisplay(e) })),
     ];
     if (metric === 'income') data = data.filter((d: any) => d.type === 'income');
     else if (metric === 'expenses') data = data.filter((d: any) => d.type === 'expense');
     else if (metric === 'inventory') {
       data = inventoryLossStats.losses.map((e: any) => {
-        const item = filteredInventory.find((i: any) => i.id === e.inventoryId);
+        const item = inventory.find((i: any) => i.id === e.inventoryId);
         const unit = e.unitValue ?? item?.value ?? 0;
         return {
           date: (e.createdAt || e.date || '').slice(0, 10),
           type: 'inventory',
           description: `${t(`inventoryReason_${e.reason}`)} — ${item?.name || e.inventoryId} × ${e.quantity}`,
           source: t(`inventoryReason_${e.reason}`),
-          amount: unit * (Number(e.quantity) || 0),
+          amount: toDisplay(unit * (Number(e.quantity) || 0), bookCurrencyFor(item || e)),
           locationId: e.locationId,
         };
       });
@@ -352,7 +372,7 @@ export default function Reports({ t, locationId, currency, lang }: any) {
         {label && <p className="text-gray-700 dark:text-gray-300 font-medium mb-1">{label}</p>}
         {payload.map((p: any) => (
           <p key={p.dataKey} style={{ color: p.color }}>
-            {p.name}: {typeof p.value === 'number' ? formatCurrency(p.value, currency) : p.value}
+            {p.name}: {typeof p.value === 'number' ? formatMoney(p.value, displayCurrency) : p.value}
           </p>
         ))}
       </div>
@@ -439,14 +459,14 @@ export default function Reports({ t, locationId, currency, lang }: any) {
           <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 text-sm mb-1">
             <TrendingUp className="w-4 h-4" /> {t('totalIncome')}
           </div>
-          <p className="text-xl font-bold text-green-400">{formatCurrency(totalIncome, currency)}</p>
+          <p className="text-xl font-bold text-green-400">{formatMoney(totalIncome, displayCurrency)}</p>
           <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">{filteredIncome.length} {t('income').toLowerCase()}</p>
         </Card>
         <Card className="p-4 border-l-4 border-red-500">
           <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 text-sm mb-1">
             <TrendingDown className="w-4 h-4" /> {t('totalExpenses')}
           </div>
-          <p className="text-xl font-bold text-red-400">{formatCurrency(totalExpenses, currency)}</p>
+          <p className="text-xl font-bold text-red-400">{formatMoney(totalExpenses, displayCurrency)}</p>
           <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">{filteredExpenses.length} {t('expenses').toLowerCase()}</p>
         </Card>
         <Card className="p-4 border-l-4 border-blue-500">
@@ -454,21 +474,21 @@ export default function Reports({ t, locationId, currency, lang }: any) {
             <Wallet className="w-4 h-4" /> {t('netBalance')}
           </div>
           <p className={`text-xl font-bold ${netBalance >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>
-            {formatCurrency(netBalance, currency)}
+            {formatMoney(netBalance, displayCurrency)}
           </p>
         </Card>
         <Card className="p-4 border-l-4 border-purple-500">
           <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 text-sm mb-1">
             <Package className="w-4 h-4" /> {t('inventoryAvailableValue')}
           </div>
-          <p className="text-xl font-bold text-purple-400">{formatCurrency(inventoryValue, currency)}</p>
+          <p className="text-xl font-bold text-purple-400">{formatMoney(inventoryValue, displayCurrency)}</p>
           <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">{filteredInventory.length} items</p>
         </Card>
         <Card className="p-4 border-l-4 border-orange-500">
           <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 text-sm mb-1">
             <AlertTriangle className="w-4 h-4" /> {t('inventoryLossValue')}
           </div>
-          <p className="text-xl font-bold text-orange-400">{formatCurrency(inventoryLossStats.lossValue, currency)}</p>
+          <p className="text-xl font-bold text-orange-400">{formatMoney(inventoryLossStats.lossValue, displayCurrency)}</p>
           <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
             {t('inventoryDamagedUnits')} {inventoryLossStats.byReason.damaged.units} · {t('inventoryExpiredUnits')} {inventoryLossStats.byReason.expired.units} · {t('inventoryStolenUnits')} {inventoryLossStats.byReason.stolen.units}
           </p>
@@ -517,7 +537,7 @@ export default function Reports({ t, locationId, currency, lang }: any) {
                           <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(v: number) => formatCurrency(v, currency)} />
+                      <Tooltip formatter={(v: number) => formatMoney(v, displayCurrency)} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -542,7 +562,7 @@ export default function Reports({ t, locationId, currency, lang }: any) {
                           <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(v: number) => formatCurrency(v, currency)} />
+                      <Tooltip formatter={(v: number) => formatMoney(v, displayCurrency)} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -658,16 +678,16 @@ export default function Reports({ t, locationId, currency, lang }: any) {
                   <td className="py-2">{item.date}</td>
                   <td className="py-2">{item.source || item.description}</td>
                   <td className={`py-2 text-right ${item.type === 'income' ? 'text-green-400' : item.type === 'inventory' ? 'text-orange-400' : 'text-red-400'}`}>
-                    {item.type === 'income' ? '+' : '-'} {formatCurrency(item.amount, currency)}
+                    {item.type === 'income' ? '+' : '-'} {formatMoney(item.amount, displayCurrency)}
                   </td>
                 </tr>
               ))}
               <tr className="font-bold border-t-2 border-gray-300 dark:border-gray-600">
                 <td className="py-4" colSpan={2}>Total</td>
                 <td className="py-4 text-right">
-                  {formatCurrency(
+                  {formatMoney(
                     reportData.reduce((acc: number, curr: any) => acc + (curr.type === 'income' ? curr.amount : -curr.amount), 0),
-                    currency
+                    displayCurrency
                   )}
                 </td>
               </tr>
@@ -683,16 +703,16 @@ export default function Reports({ t, locationId, currency, lang }: any) {
           <div className="space-y-3">
             <div className="p-3 bg-gray-100/80 dark:bg-gray-700/50 rounded border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-600 dark:text-gray-400 uppercase">Proj. Monthly Income</p>
-              <p className="text-xl font-bold text-green-400">{formatCurrency(forecast.income, currency)}</p>
+              <p className="text-xl font-bold text-green-400">{formatMoney(forecast.income, displayCurrency)}</p>
             </div>
             <div className="p-3 bg-gray-100/80 dark:bg-gray-700/50 rounded border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-600 dark:text-gray-400 uppercase">Proj. Monthly Expense</p>
-              <p className="text-xl font-bold text-red-400">{formatCurrency(forecast.expense, currency)}</p>
+              <p className="text-xl font-bold text-red-400">{formatMoney(forecast.expense, displayCurrency)}</p>
             </div>
             <div className="border-t border-gray-300 dark:border-gray-600 pt-3">
               <p className="text-xs text-gray-600 dark:text-gray-400 uppercase">Proj. Net</p>
               <p className={`text-2xl font-bold ${forecast.net >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>
-                {formatCurrency(forecast.net, currency)}
+                {formatMoney(forecast.net, displayCurrency)}
               </p>
             </div>
           </div>

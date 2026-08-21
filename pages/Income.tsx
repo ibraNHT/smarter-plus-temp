@@ -2,10 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { useNotification } from '@/context/NotificationContext';
 import { useData, useSubmit } from '../hooks/useAppData';
 import { Card, Input, Button, SuggestInput } from '../components/UI';
-import { formatCurrency, getTranslated, isDateWithinLimit, isLockedAfter24Hours } from '../constants';
+import { getTranslated, isDateWithinLimit, isLockedAfter24Hours } from '../constants';
+import { useCurrency } from '../context/CurrencyContext';
 import { Trash2 } from 'lucide-react';
 
-export default function Income({ t, locationId, user, currency, lang }: any) {
+export default function Income({ t, locationId, user, lang }: any) {
+  const { formatMoney, bookCurrencyFor, workingCurrency } = useCurrency();
   const { data: income, loading } = useData('income', locationId);
   const { data: incomeSources = [] } = useData('income_sources');
   const { add, remove, submitting } = useSubmit('income');
@@ -114,7 +116,7 @@ export default function Income({ t, locationId, user, currency, lang }: any) {
             <Card title={t('addIncome')}>
                 <form onSubmit={handleSubmit}>
                     <SuggestInput label={t('source')} value={source} onChange={setSource} options={sourceOptions} listId="income-source-list" required />
-                    <Input label={t('amount')} type="number" value={amount} onChange={setAmount} required />
+                    <Input label={`${t('amount')} (${workingCurrency})`} type="number" value={amount} onChange={setAmount} required />
                     <Input label={t('date')} type="date" value={date} onChange={setDate} required />
                     <Input label={t('description')} value={description} onChange={setDescription} />
                     <Button type="submit" disabled={submitting} className="w-full">{t('add')}</Button>
@@ -138,7 +140,7 @@ export default function Income({ t, locationId, user, currency, lang }: any) {
                                 <tr key={item.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
                                     <td className="py-3">{item.date}</td>
                                     <td className="py-3">{item.source}</td>
-                                    <td className="py-3 text-right text-green-400">{formatCurrency(item.amount, currency)}</td>
+                                    <td className="py-3 text-right text-green-400">{formatMoney(item.amount, bookCurrencyFor(item))}</td>
                                     <td className="py-3 text-right">
                                         <button
                                         onClick={() => openRemoveModal(item.id, item)}
