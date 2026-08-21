@@ -410,6 +410,198 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     templateArchived: "Saved as template",
     pickTemplate: "Start from template",
     blankEstimate: "Blank estimate",
+
+        // Marketing / Navigation
+    navDescription: "Description",
+    navPartners: "Our partners",
+    navFeatures: "Features",
+    navTestimonials: "Testimonials",
+    navFaq: "FAQ",
+    navBlog: "Blog",
+    getStarted: "Get started",
+    getItNow: "Get it now",
+    trustedBy: "Trusted by the best companies",
+
+    // Hero
+    heroTitle: "Your new business companion ",
+    heroHighlight: "SMARTER PANEL",
+    heroSubtitle:
+      "SMARTER PANEL is a comprehensive HR and Accounting management dashboard for business operations. Features include income/expense tracking, inventory management, staff administration, and financial reporting.",
+
+    // Highlights
+    highlightsTitle: "Highlights",
+    highlightsDesc:
+      "Explore why our product stands out: adaptability, durability, user-friendly design, and innovation. Enjoy reliable customer support and precision in every detail.",
+    highlightAdaptableTitle: "Adaptable performance",
+    highlightAdaptableDesc:
+      "Our product effortlessly adjusts to your needs, boosting efficiency and simplifying your tasks.",
+    highlightBuiltToLastTitle: "Built to last",
+    highlightBuiltToLastDesc:
+      "Experience unmatched durability that goes above and beyond with lasting investment.",
+    highlightUserExperienceTitle: "Great user experience",
+    highlightUserExperienceDesc:
+      "Integrate our product into your routine with an intuitive and easy-to-use interface.",
+    highlightInnovativeTitle: "Innovative functionality",
+    highlightInnovativeDesc:
+      "Stay ahead with features that set new standards, addressing your evolving needs better than the rest.",
+    highlightSupportTitle: "Reliable support",
+    highlightSupportDesc:
+      "Count on our responsive customer support, offering assistance that goes beyond the purchase.",
+    highlightPrecisionTitle: "Precision in every detail",
+    highlightPrecisionDesc:
+      "Enjoy a meticulously crafted product where small touches make a significant impact on your overall experience.",
+
+    // Features
+    featuresTitle: "Product features",
+    featuresDesc:
+      "Provide a brief overview of the key features of the product. For example, you could list the number of features, their types or benefits, and add-ons.",
+    featureDashboardTitle: "Dashboard overview, financials, HR, operations and more features capabilities",
+    featureDashboardDesc:
+      "Our solution give users easy acces tools to manage their activity, from financials to operations, all in one place.",
+    featureOfflineTitle: "Offline functionality integration",
+    featureOfflineDesc:
+      "Our product could provide offline functionality, allowing users to continue working even when they are not connected to the internet.",
+    featureDevicesTitle: "Available for all devices",
+    featureDevicesDesc:
+      "This item could let users know the product is available on all platforms, such as web, mobile, and desktop.",
+
+    // Testimonials
+    testimonialsTitle: "Testimonials",
+    testimonialsDesc:
+      "See what our customers love about our products. Discover how we excel in efficiency, durability, and satisfaction. Join us for quality, innovation, and reliable support.",
+    testimonial1Name: "Remy Sharp",
+    testimonial1Occupation: "Senior Engineer",
+    testimonial1Text:
+      "I absolutely love how versatile this product is! Whether I'm tackling work projects or indulging in my favorite hobbies, it seamlessly adapts to my changing needs. Its intuitive design has truly enhanced my daily routine, making tasks more efficient and enjoyable.",
+    testimonial2Name: "Travis Howard",
+    testimonial2Occupation: "Lead Product Designer",
+    testimonial2Text:
+      "One of the standout features of this product is the exceptional customer support. In my experience, the team behind this product has been quick to respond and incredibly helpful. It's reassuring to know that they stand firmly behind their product.",
+    testimonial3Name: "Cindy Baker",
+    testimonial3Occupation: "CTO",
+    testimonial3Text:
+      "The level of simplicity and user-friendliness in this product has significantly simplified my life. I appreciate the creators for delivering a solution that not only meets but exceeds user expectations.",
+    testimonial4Name: "Julia Stewart",
+    testimonial4Occupation: "Senior Engineer",
+    testimonial4Text:
+      "I appreciate the attention to detail in the design of this product. The small touches make a big difference, and it's evident that the creators focused on delivering a premium experience.",
+    testimonial5Name: "John Smith",
+    testimonial5Occupation: "Product Designer",
+    testimonial5Text:
+      "I've tried other similar products, but this one stands out for its innovative features. It's clear that the makers put a lot of thought into creating a solution that truly addresses user needs.",
+    testimonial6Name: "Daniel Wolf",
+    testimonial6Occupation: "CDO",
+    testimonial6Text:
+      "The quality of this product exceeded my expectations. It's durable, well-designed, and built to last. Definitely worth the investment!",
+
+    // Pricing
+    pricingTitle: "Pricing",
+    pricingDesc: "Chooze the subscription plan that's right for you and your team.",
+    planFreeTitle: "Free",
+    // planFreeDescription: ["1 user included", "1 location included", "Unlimited storage", "Report download", "Email support", "24/7 customer support"],
+    planStarterTitle: "Starter",
+    // planStarterDescription: ["2 users included", "2 locations included", "Unlimited storage", "Help center access", "report download", "Email support", "24/7 customer support"],
+    planGrowthTitle: "Growth",
+    // planGrowthDescription: ["5 users included", "3 locations included", "Unlimited storage", "Report download", "Help center access", "Priority email support", "Best deals", "24/7 customer support"],
+    planEnterpriseTitle: "Enterprise",
+    // planEnterpriseDescription: ["Unlimited users", "Unlimited locations", "unlimited storage", "Help center access priority", "Dedicated team", "Report download", "Phone & email support", "Priority email support", "24/7 customer support"],
+    // In TRANSLATIONS.en
+    planFreeDescription: "1 user included\n1 location included\nUnlimited storage\nReport download\nEmail support\n24/7 customer support",
+    planStarterDescription: "2 users included\n2 locations included\nUnlimited storage\nHelp center access\nreport download\nEmail support\n24/7 customer support",
+    planGrowthDescription: "5 users included\n3 locations included\nUnlimited storage\nReport download\nHelp center access\nPriority email support\nBest deals\n24/7 customer support",
+    planEnterpriseDescription: "Unlimited users\nUnlimited locations\nunlimited storage\nHelp center access priority\nDedicated team\nReport download\nPhone & email support\nPriority email support\n24/7 customer support",
+    planFreeButton: "Sign up for free",
+    planStarterButton: "Get started",
+    planGrowthButton: "Start now",
+    planEnterpriseButton: "Go smarter",
+    perMonth: "/ month",
+
+    // FAQ
+    faqTitle: "Frequently asked questions",
+    faqQuestion1: "How do I sign in? What is the OTP flow?",
+    faqAnswer1:
+      "Sign in with your email and password, then verify using the one-time code sent to your email. Use the <strong>Resend code</strong> button if the code does not arrive. The app uses email OTP rather than password-only authentication for added security.",
+    faqQuestion2: "I didn't receive an OTP or invite email — what should I do?",
+    faqAnswer2:
+      "Check your spam/junk folder and confirm the email is correct. Ask the sender to resend the invite or code. If the app shows SMTP or delivery errors, contact support or your organization administrator.",
+    faqQuestion3: "How does offline mode and syncing work?",
+    faqAnswer3:
+      "The PWA can queue certain creates, updates and uploads in the browser (IndexedDB) while offline. When you reconnect the queued actions are synced to the server. Avoid clearing site data until sync completes to prevent data loss.",
+    faqQuestion4: "Where can I find the Privacy Policy and Terms? How do I request data deletion?",
+    faqAnswer4:
+      "Privacy Policy and Terms links are available in the footer and on the Help Center. For data export or deletion requests contact the privacy contact listed on the Privacy Policy page (or email the organization owner/admin to initiate the request).",
+
+    // Footer
+    footerDescription: "Smarter Panel is a powerful and user-friendly platform that helps businesses streamline their operations.",
+    footerProduct: "Product",
+    footerDescriptionLink: "Description",
+    footerFeaturesLink: "Features",
+    footerTestimonialsLink: "Testimonials",
+    footerPricingLink: "Pricing",
+    footerHelpCenter: "Help Center",
+    footerFaq: "FAQs",
+    footerCompany: "Company",
+    footerAboutUs: "About us",
+    footerCareers: "Careers",
+    footerPress: "Press",
+    footerPrivacyPolicy: "Privacy Policy",
+    footerTermsOfService: "Terms of Service",
+    footerCopyright: "Copyright © {year} Smarter Panel",
+    and: "and the",
+
+    // Help Center page
+    helpTitle: "Help Center — Smarter Panel",
+    helpIntro:
+      "Practical guide to using Smarter Panel. Below are topics to help you get started, troubleshoot common issues, and understand product limits and rules. For privacy and legal terms see the links at the bottom of the page.",
+    helpGettingStartedTitle: "Getting started",
+    helpGettingStartedText:
+      "Create an organization from the login screen, set a password (min 6 chars) and verify using the code sent to your email. Complete the organization and personal profiles as prompted.",
+    helpSignInTitle: "Sign in, OTP, and password reset",
+    helpSignInText:
+      "Smarter Panel uses email one-time codes (OTP) for login, signup and password reset. If you don’t receive a code check spam/junk and use the resend button. In dev environments a dev OTP may be shown on screen when SMTP is not configured.",
+    helpInvitationsTitle: "Invitations",
+    helpInvitationsText:
+      "Admins invite users from Admin → Users. Invitees accept using the link or token in the email, set a password, then verify using an email code.",
+    helpOfflineTitle: "Offline mode",
+    helpOfflineText:
+      "The PWA supports offline queues for some creates/updates/uploads. If you work offline, items are queued in the browser (IndexedDB) and synchronized when connectivity returns. Clearing site data can remove unsynced work.",
+    helpSupportTitle: "Support",
+    helpSupportText:
+      "Use the floating Support chat in the app or email our support team at {email}.",
+    helpDocLink: "For the full documentation see the ",
+
+    // Privacy Policy page
+    privacyTitle: "Privacy Policy — Smarter Panel",
+    privacyIntro:
+      "This page summarizes how Smarter Panel collects and processes data. This is a product-facing draft — have legal review for production.",
+    privacyWhatCollectTitle: "What we collect",
+    privacyWhatCollectText:
+      "We collect account/profile data, organization data, operational business data (income, expenses, inventory, HR), billing and support communications, authentication data (OTP and tokens), and client-side caches for offline support.",
+    privacyWhyProcessTitle: "Why we process data",
+    privacyWhyProcessText:
+      "To provide and secure the Service, support onboarding, billing, offline continuity, and legal compliance. We do not sell your personal information.",
+    privacySharingTitle: "Sharing",
+    privacySharingText:
+      "We share data with your organization, our payment processor, email providers, hosting infrastructure, and when required by law.",
+    privacyRetentionTitle: "Retention & deletion",
+    privacyRetentionText:
+      "Active data is retained while your organization uses the Service. Device caches persist until cleared. Contact privacy for export or deletion requests.",
+    privacyContact: "Contact: {email}",
+
+    // Terms page
+    termsTitle: "Terms and Conditions — Smarter Panel",
+    termsIntro:
+      "These terms govern access and use of Smarter Panel. This is a product draft and should be reviewed by legal before publishing.",
+    termsAccountsTitle: "Accounts and eligibility",
+    termsAccountsText:
+      "Organizations and owner accounts are responsible for profiles, users, subscriptions and compliance with these Terms.",
+    termsSubscriptionsTitle: "Subscriptions and billing",
+    termsSubscriptionsText:
+      "Plans may limit users and locations. Owners manage billing and can upgrade or renew through the Billing UI. Checkout may use a third party payment provider.",
+    termsRulesTitle: "Product rules",
+    termsRulesText:
+      "The product enforces practical rules such as 7-day date limits and 24-hour edit/delete locks on many records to reduce fraud and errors.",
+    termsContact: "Contact legal: {email}",
   },
   fr: {
     loginWelcome: "Smarter Panel",
@@ -812,6 +1004,180 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     templateArchived: "Enregistré comme modèle",
     pickTemplate: "Partir d'un modèle",
     blankEstimate: "Devis vierge",
+    // Marketing / Navigation
+    navDescription: "Description",
+    navPartners: "Nos partenaires",
+    navFeatures: "Fonctionnalités",
+    navTestimonials: "Témoignages",
+    navFaq: "FAQ",
+    navBlog: "Blog",
+    getStarted: "Commencer",
+    getItNow: "Obtenez-le maintenant",
+    trustedBy: "Approuvé par les meilleures entreprises",
+
+    // Hero
+    heroTitle: "Votre&nbsp;nouveau&nbsp;compagnon&nbsp;d'affaires&nbsp;",
+    heroHighlight: "SMARTER&nbsp;PANEL",
+    heroSubtitle:
+      "SMARTER PANEL est un tableau de bord de gestion RH et comptable complet pour les opérations commerciales. Fonctionnalités : suivi des revenus/dépenses, gestion des stocks, administration du personnel et rapports financiers.",
+
+    // Highlights
+    highlightsTitle: "Points forts",
+    highlightsDesc:
+      "Découvrez pourquoi notre produit se démarque : adaptabilité, durabilité, conception conviviale et innovation. Profitez d'un support client fiable et d'une précision dans chaque détail.",
+    highlightAdaptableTitle: "Performance adaptable",
+    highlightAdaptableDesc:
+      "Notre produit s'adapte facilement à vos besoins, augmentant l'efficacité et simplifiant vos tâches.",
+    highlightBuiltToLastTitle: "Conçu pour durer",
+    highlightBuiltToLastDesc:
+      "Vivez une durabilité inégalée qui va au-delà avec un investissement durable.",
+    highlightUserExperienceTitle: "Excellente expérience utilisateur",
+    highlightUserExperienceDesc:
+      "Intégrez notre produit dans votre routine avec une interface intuitive et facile à utiliser.",
+    highlightInnovativeTitle: "Fonctionnalité innovante",
+    highlightInnovativeDesc:
+      "Gardez une longueur d'avance avec des fonctionnalités qui établissent de nouvelles normes, répondant mieux à vos besoins évolutifs.",
+    highlightSupportTitle: "Support fiable",
+    highlightSupportDesc:
+      "Comptez sur notre service client réactif, offrant une assistance qui va au-delà de l'achat.",
+    highlightPrecisionTitle: "Précision dans chaque détail",
+    highlightPrecisionDesc:
+      "Profitez d'un produit méticuleusement conçu où les petites touches ont un impact significatif sur votre expérience globale.",
+
+    // Features
+    featuresTitle: "Fonctionnalités du produit",
+    featuresDesc:
+      "Donnez un aperçu des principales fonctionnalités du produit. Par exemple, vous pouvez lister le nombre de fonctionnalités, leurs types ou avantages, et les ajouts.",
+    featureDashboardTitle: "Vue d'ensemble du tableau de bord, finances, RH, opérations et plus encore",
+    featureDashboardDesc:
+      "Notre solution donne aux utilisateurs un accès facile à des outils pour gérer leur activité, des finances aux opérations, le tout en un seul endroit.",
+    featureOfflineTitle: "Intégration de la fonctionnalité hors ligne",
+    featureOfflineDesc:
+      "Notre produit pourrait fournir une fonctionnalité hors ligne, permettant aux utilisateurs de continuer à travailler même lorsqu'ils ne sont pas connectés à Internet.",
+    featureDevicesTitle: "Disponible sur tous les appareils",
+    featureDevicesDesc:
+      "Cet élément permet aux utilisateurs de savoir que le produit est disponible sur toutes les plateformes, telles que le web, mobile et bureau.",
+
+    // Testimonials
+    testimonialsTitle: "Témoignages",
+    testimonialsDesc:
+      "Découvrez ce que nos clients aiment à propos de nos produits. Découvrez comment nous excellons en matière d'efficacité, de durabilité et de satisfaction. Rejoignez-nous pour la qualité, l'innovation et un support fiable.",
+    testimonial1Name: "Remy Sharp",
+    testimonial1Occupation: "Ingénieur senior",
+    testimonial1Text:
+      "J'adore la polyvalence de ce produit ! Que je m'attaque à des projets professionnels ou à mes loisirs préférés, il s'adapte parfaitement à mes besoins changeants. Sa conception intuitive a vraiment amélioré ma routine quotidienne, rendant les tâches plus efficaces et agréables.",
+    testimonial2Name: "Travis Howard",
+    testimonial2Occupation: "Lead Product Designer",
+    testimonial2Text:
+      "L'une des caractéristiques remarquables de ce produit est le support client exceptionnel. D'après mon expérience, l'équipe derrière ce produit a été rapide à répondre et incroyablement utile. C'est rassurant de savoir qu'ils soutiennent fermement leur produit.",
+    testimonial3Name: "Cindy Baker",
+    testimonial3Occupation: "CTO",
+    testimonial3Text:
+      "Le niveau de simplicité et de convivialité de ce produit a considérablement simplifié ma vie. J'apprécie les créateurs pour avoir livré une solution qui répond non seulement mais dépasse les attentes des utilisateurs.",
+    testimonial4Name: "Julia Stewart",
+    testimonial4Occupation: "Ingénieur senior",
+    testimonial4Text:
+      "J'apprécie l'attention portée aux détails dans la conception de ce produit. Les petites touches font une grande différence, et il est évident que les créateurs se sont concentrés sur la fourniture d'une expérience premium.",
+    testimonial5Name: "John Smith",
+    testimonial5Occupation: "Product Designer",
+    testimonial5Text:
+      "J'ai essayé d'autres produits similaires, mais celui-ci se démarque par ses fonctionnalités innovantes. Il est clair que les fabricants ont mis beaucoup de réflexion dans la création d'une solution qui répond vraiment aux besoins des utilisateurs.",
+    testimonial6Name: "Daniel Wolf",
+    testimonial6Occupation: "CDO",
+    testimonial6Text:
+      "La qualité de ce produit a dépassé mes attentes. Il est durable, bien conçu et construit pour durer. Cela vaut vraiment l'investissement !",
+
+    // Pricing
+    pricingTitle: "Tarifs",
+    pricingDesc: "Choisissez le forfait qui vous convient, à vous et à votre équipe.",
+    planFreeTitle: "Gratuit",
+    // planFreeDescription: ["1 utilisateur inclus", "1 site inclus", "Stockage illimité", "Téléchargement de rapports", "Assistance par e-mail", "Support client 24/7"],
+    planStarterTitle: "Démarrage",
+    // planStarterDescription: ["2 utilisateurs inclus", "2 sites inclus", "Stockage illimité", "Accès au centre d'aide", "Téléchargement de rapports", "Assistance par e-mail", "Support client 24/7"],
+    planGrowthTitle: "Croissance",
+    // planGrowthDescription: ["5 utilisateurs inclus", "3 sites inclus", "Stockage illimité", "Téléchargement de rapports", "Accès au centre d'aide", "Assistance e-mail prioritaire", "Meilleures offres", "Support client 24/7"],
+    planEnterpriseTitle: "Entreprise",
+    // planEnterpriseDescription: ["Utilisateurs illimités", "Sites illimités", "Stockage illimité", "Accès prioritaire au centre d'aide", "Équipe dédiée", "Téléchargement de rapports", "Assistance téléphonique et e-mail", "Assistance e-mail prioritaire", "Support client 24/7"],
+    // In TRANSLATIONS.fr
+    planFreeDescription: "1 utilisateur inclus\n1 site inclus\nStockage illimité\nTéléchargement de rapports\nAssistance par e-mail\nSupport client 24/7",
+    planStarterDescription: "2 utilisateurs inclus\n2 sites inclus\nStockage illimité\nAccès au centre d'aide\nTéléchargement de rapports\nAssistance par e-mail\nSupport client 24/7",
+    planGrowthDescription: "5 utilisateurs inclus\n3 sites inclus\nStockage illimité\nTéléchargement de rapports\nAccès au centre d'aide\nAssistance e-mail prioritaire\nMeilleures offres\nSupport client 24/7",
+    planEnterpriseDescription: "Utilisateurs illimités\nSites illimités\nStockage illimité\nAccès prioritaire au centre d'aide\nÉquipe dédiée\nTéléchargement de rapports\nAssistance téléphonique et e-mail\nAssistance e-mail prioritaire\nSupport client 24/7",
+    planFreeButton: "S'inscrire gratuitement",
+    planStarterButton: "Commencer",
+    planGrowthButton: "Commencer maintenant",
+    planEnterpriseButton: "Devenir plus intelligent",
+    perMonth: "/ mois",
+
+    // FAQ
+    faqTitle: "Questions fréquemment posées",
+    faqQuestion1: "Comment se connecter ? Quel est le flux OTP ?",
+    faqAnswer1:
+      "Connectez-vous avec votre e-mail et votre mot de passe, puis vérifiez à l'aide du code unique envoyé à votre e-mail. Utilisez le bouton <strong>Renvoyer le code</strong> si le code n'arrive pas. L'application utilise l'OTP par e-mail plutôt qu'une authentification par mot de passe seul pour une sécurité accrue.",
+    faqQuestion2: "Je n'ai pas reçu d'OTP ou d'e-mail d'invitation — que dois-je faire ?",
+    faqAnswer2:
+      "Vérifiez votre dossier spam/courrier indésirable et confirmez que l'e-mail est correct. Demandez à l'expéditeur de renvoyer l'invitation ou le code. Si l'application affiche des erreurs SMTP ou de livraison, contactez le support ou l'administrateur de votre organisation.",
+    faqQuestion3: "Comment fonctionnent le mode hors ligne et la synchronisation ?",
+    faqAnswer3:
+      "La PWA peut mettre en file d'attente certaines créations, mises à jour et téléchargements dans le navigateur (IndexedDB) en mode hors ligne. Lorsque vous vous reconnectez, les actions en file d'attente sont synchronisées avec le serveur. Évitez d'effacer les données du site jusqu'à ce que la synchronisation soit terminée pour éviter la perte de données.",
+    faqQuestion4: "Où puis-je trouver la politique de confidentialité et les conditions ? Comment demander la suppression des données ?",
+    faqAnswer4:
+      "Les liens vers la politique de confidentialité et les conditions sont disponibles dans le pied de page et dans le centre d'aide. Pour les demandes d'exportation ou de suppression de données, contactez le contact de confidentialité indiqué sur la page de politique de confidentialité (ou envoyez un e-mail au propriétaire/administrateur de l'organisation pour lancer la demande).",
+
+    // Footer
+    footerDescription: "Smarter Panel est une plateforme puissante et conviviale qui aide les entreprises à rationaliser leurs opérations.",
+    footerProduct: "Produit",
+    footerDescriptionLink: "Description",
+    footerFeaturesLink: "Fonctionnalités",
+    footerTestimonialsLink: "Témoignages",
+    footerPricingLink: "Tarifs",
+    footerHelpCenter: "Centre d'aide",
+    footerFaq: "FAQ",
+    footerCompany: "Entreprise",
+    footerAboutUs: "À propos de nous",
+    footerCareers: "Carrières",
+    footerPress: "Presse",
+    footerPrivacyPolicy: "Politique de confidentialité",
+    footerTermsOfService: "Conditions d'utilisation",
+    footerCopyright: "Copyright © {year} Smarter Panel",
+    and: "et les",
+
+    // In TRANSLATIONS.fr
+    helpTitle: "Centre d'aide — Smarter Panel",
+    helpIntro: "Guide pratique d'utilisation de Smarter Panel. Vous trouverez ci-dessous des sujets pour vous aider à démarrer, résoudre les problèmes courants et comprendre les limites et règles du produit. Pour les conditions de confidentialité et légales, consultez les liens en bas de page.",
+    helpGettingStartedTitle: "Premiers pas",
+    helpGettingStartedText: "Créez une organisation depuis l'écran de connexion, définissez un mot de passe (6 caractères min.) et vérifiez à l'aide du code envoyé à votre e-mail. Complétez les profils d'organisation et personnel comme demandé.",
+    helpSignInTitle: "Connexion, OTP et réinitialisation du mot de passe",
+    helpSignInText: "Smarter Panel utilise des codes à usage unique (OTP) par e-mail pour la connexion, l'inscription et la réinitialisation du mot de passe. Si vous ne recevez pas de code, vérifiez les spams/courriers indésirables et utilisez le bouton de renvoi. Dans les environnements de développement, un OTP de développement peut être affiché à l'écran lorsque SMTP n'est pas configuré.",
+    helpInvitationsTitle: "Invitations",
+    helpInvitationsText: "Les administrateurs invitent des utilisateurs depuis Admin → Utilisateurs. Les invités acceptent via le lien ou le jeton dans l'e-mail, définissent un mot de passe, puis vérifient à l'aide d'un code e-mail.",
+    helpOfflineTitle: "Mode hors ligne",
+    helpOfflineText: "La PWA prend en charge les files d'attente hors ligne pour certaines créations/mises à jour/téléchargements. Si vous travaillez hors ligne, les éléments sont mis en file d'attente dans le navigateur (IndexedDB) et synchronisés lorsque la connectivité revient. L'effacement des données du site peut supprimer le travail non synchronisé.",
+    helpSupportTitle: "Support",
+    helpSupportText: "Utilisez le chat de support flottant dans l'application ou envoyez un e-mail à notre équipe de support à {email}.",
+    helpDocLink: "Pour la documentation complète, consultez la ",
+
+    privacyTitle: "Politique de confidentialité — Smarter Panel",
+    privacyIntro: "Cette page résume comment Smarter Panel collecte et traite les données. Ceci est un brouillon orienté produit — faites-le réviser par un juriste avant la mise en production.",
+    privacyWhatCollectTitle: "Ce que nous collectons",
+    privacyWhatCollectText: "Nous collectons les données de compte/profil, les données d'organisation, les données opérationnelles de l'entreprise (revenus, dépenses, stocks, RH), les communications de facturation et de support, les données d'authentification (OTP et jetons) et les caches côté client pour le support hors ligne.",
+    privacyWhyProcessTitle: "Pourquoi nous traitons les données",
+    privacyWhyProcessText: "Pour fournir et sécuriser le Service, soutenir l'intégration, la facturation, la continuité hors ligne et la conformité légale. Nous ne vendons pas vos informations personnelles.",
+    privacySharingTitle: "Partage",
+    privacySharingText: "Nous partageons les données avec votre organisation, notre processeur de paiement, nos fournisseurs d'e-mail, notre infrastructure d'hébergement et lorsque la loi l'exige.",
+    privacyRetentionTitle: "Conservation et suppression",
+    privacyRetentionText: "Les données actives sont conservées pendant que votre organisation utilise le Service. Les caches des appareils persistent jusqu'à leur effacement. Contactez la confidentialité pour les demandes d'exportation ou de suppression.",
+    privacyContact: "Contact : {email}",
+
+    termsTitle: "Conditions générales — Smarter Panel",
+    termsIntro: "Ces conditions régissent l'accès et l'utilisation de Smarter Panel. Ceci est un brouillon de produit et doit être révisé par un juriste avant publication.",
+    termsAccountsTitle: "Comptes et éligibilité",
+    termsAccountsText: "Les organisations et les comptes propriétaires sont responsables des profils, des utilisateurs, des abonnements et du respect de ces conditions.",
+    termsSubscriptionsTitle: "Abonnements et facturation",
+    termsSubscriptionsText: "Les forfaits peuvent limiter les utilisateurs et les sites. Les propriétaires gèrent la facturation et peuvent mettre à niveau ou renouveler via l'interface de facturation. Le paiement peut utiliser un fournisseur tiers.",
+    termsRulesTitle: "Règles du produit",
+    termsRulesText: "Le produit applique des règles pratiques telles que des limites de date de 7 jours et des verrous de modification/suppression de 24 heures sur de nombreux enregistrements pour réduire la fraude et les erreurs.",
+    termsContact: "Contact légal : {email}",
   }
 };
 

@@ -13,6 +13,8 @@ import HelpCenterPage from './marketing-page/components/HelpCenterPage';
 import PrivacyPolicyPage from './marketing-page/components/PrivacyPolicyPage';
 import TermsPage from './marketing-page/components/TermsPage';
 
+import { MarketingLangProvider } from './marketing-page/MarketingLangContext';
+
 import Login from './pages/Login';
 import ChangePassword from './pages/ChangePassword';
 import OrgProfile from './pages/OrgProfile';
@@ -235,10 +237,40 @@ export default function App() {
   return (
     <ErrorBoundary>
       <Routes>
-        <Route path="/home" element={<MarketingPage />} />
-        <Route path="/help" element={<HelpCenterPage />} />
-        <Route path="/privacy" element={<PrivacyPolicyPage />} />
-        <Route path="/terms" element={<TermsPage />} />
+        {/* Marketing pages – now wrapped with the provider */}
+        <Route
+          path="/home"
+          element={
+            <MarketingLangProvider>
+              <MarketingPage />
+            </MarketingLangProvider>
+          }
+        />
+        <Route
+          path="/help"
+          element={
+            <MarketingLangProvider>
+              <HelpCenterPage />
+            </MarketingLangProvider>
+          }
+        />
+        <Route
+          path="/privacy"
+          element={
+            <MarketingLangProvider>
+              <PrivacyPolicyPage />
+            </MarketingLangProvider>
+          }
+        />
+        <Route
+          path="/terms"
+          element={
+            <MarketingLangProvider>
+              <TermsPage />
+            </MarketingLangProvider>
+          }
+        />
+        {/* Main app routes – unchanged */}
         <Route
           path="*"
           element={
