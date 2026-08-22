@@ -23,6 +23,18 @@ To request a withdrawal:
 4. Submit request.
 
 Requests are reviewed by admin and may be approved or rejected.
+When a producer withdraws wallet funds:
+
+2% Tranzak fee is added on top
+Wallet debit = amount + 2%
+Producer receives the requested amount
+Example for a 10,000 XAF cart:
+
+Buyer pays: 10,600 (10,000 + 600)
+Producer receives: 9,100 (10,000 - 9%)
+Withdraw request: 9,100
+Withdraw debit: 9,100 + 2% = 9,282
+So, for the producer to receive the requested amount of 9,100, they must have at least 9,282 in their wallet.
 
 ## Common withdrawal blockers
 
