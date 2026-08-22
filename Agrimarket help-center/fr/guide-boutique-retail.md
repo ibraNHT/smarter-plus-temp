@@ -16,6 +16,7 @@ La boutique retail couvre les offres ATI et peut suivre des règles différentes
 4. Appliquez un coupon retail éligible.
 5. Confirmez le checkout.
 6. L'acheteur paie : sous-total + 4 %
+   
 Exemple pour un panier de 10 000 XAF :
 
 L'acheteur paie : 10,000 + 4% = 10,000 + 400 = 10,400
