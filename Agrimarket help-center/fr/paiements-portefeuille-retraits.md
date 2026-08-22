@@ -23,17 +23,23 @@ Pour demander un retrait :
 4. Soumettez la demande.
 
 La demande est revue par l’admin (approbation/rejet).
+
 Lorsqu'un producteur retire des fonds de son portefeuille :
 
 Des frais Tranzak de 2 % sont ajoutés.
+
 Débit du portefeuille = montant + 2 %
+
 Le producteur reçoit le montant demandé.
 
 Exemple pour un panier de 10 000 XAF :
 
 L'acheteur paie : 10 600 (10 000 + 600)
+
 Le producteur reçoit : 9 100 (10 000 - 9 %)
+
 Demande de retrait : 9 100
+
 Débit du retrait : 9 100 + 2 % = 9 282
 
 Ainsi, pour recevoir le montant demandé de 9 100, le producteur doit disposer d'au moins 9 282 XAF dans son portefeuille.
