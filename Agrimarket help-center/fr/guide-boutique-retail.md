@@ -15,12 +15,18 @@ La boutique retail couvre les offres ATI et peut suivre des règles différentes
 3. Choisissez livraison ou retrait (point de retrait parfois obligatoire).
 4. Appliquez un coupon retail éligible.
 5. Confirmez le checkout.
+6. L'acheteur paie : sous-total + 4 %
+Exemple pour un panier de 10 000 XAF :
+
+L'acheteur paie : 10,000 + 4% = 10,000 + 400 = 10,400
+La commission de la plateforme est toujours de 0 XAF.
 
 ## Coupons en retail
 
 - Le coupon doit accepter le canal `RETAIL` (ou `BOTH`).
 - Certains coupons imposent un minimum de commande ou un quota par utilisateur.
 - La validation serveur décide du résultat final.
+- L'acheteur paie : sous-total + 4 % − réduction du coupon
 
 ## En cas de problème
 
