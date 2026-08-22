@@ -51,3 +51,21 @@ Do not mark status actions inaccurately.
 - Respond to order actions quickly.
 - Keep proof of delivery/fulfillment.
 - Use support channels early if issues arise.
+
+  ## 7) Fees calculation
+
+- All percentages are taken from the line-item subtotal (sum of item prices × quantities), before coupons.
+
+Formulas:
+
+Buyer pays: subtotal + 6% − coupon discount
+Producer nets: subtotal − 9%
+Platform keeps: the buyer’s 6% plus the producer’s 9%
+Example for a 10,000 XAF cart:
+
+Buyer pays: 10,600 (10,000 + 600)
+Producer receives: 9100
+Platform: 1,500 (600 + 900)
+Coupons reduce the buyer’s total only. The service fee is still computed on the pre-discount subtotal; the discount is then subtracted from the subtotal + service fee.
+
+Negotiated chat orders use the same marketplace rates on the agreed price.
