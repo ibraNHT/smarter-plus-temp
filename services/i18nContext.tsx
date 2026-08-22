@@ -689,7 +689,7 @@ const translations: Record<string, Record<Language, string>> = {
   'dash.items': { en: 'Items', fr: 'Articles' },
   'dash.mixedOrderHint': { en: 'Includes products and services', fr: 'Inclut produits et services' },
   'dash.orderValue': { en: 'Order value', fr: 'Valeur de la commande' },
-  'dash.producerPayoutHint': { en: 'Your payout is this amount minus the 5% platform commission.', fr: 'Votre versement correspond à ce montant moins la commission de 5% de la plateforme.' },
+  'dash.producerPayoutHint': { en: 'Your payout is this amount minus the 9% platform commission.', fr: 'Votre versement correspond à ce montant moins la commission de 9% de la plateforme.' },
   'dash.close': { en: 'Close', fr: 'Fermer' },
   'dash.availability': { en: 'Availability', fr: 'Disponibilité' },
   'dash.rateClient': { en: 'Rate Client', fr: 'Noter le Client' },
