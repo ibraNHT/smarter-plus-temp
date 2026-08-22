@@ -411,7 +411,7 @@ const translations: Record<string, Record<Language, string>> = {
     fr: 'Votre service est dans le panier. Choisissez la livraison ci-dessous, puis appuyez sur « Passer la commande » pour finaliser.',
   },
   'cart.subtotal': { en: 'Subtotal', fr: 'Sous-total' },
-  'cart.serviceFee': { en: 'Service Fee (16%)', fr: 'Frais de service (16%)' },
+  'cart.serviceFee': { en: 'Service Fee (6%)', fr: 'Frais de service (6%)' },
   'cart.serviceFeeRetail': { en: 'Service Fee (4%)', fr: 'Frais de service (4%)' },
   'cart.selectDeliveryTime': { en: 'Delivery time', fr: 'Heure de livraison' },
   'cart.selectDeliveryMethodWarning': { en: 'Please select a valid delivery method and address or pickup point.', fr: 'Veuillez choisir un mode de livraison et une adresse ou un point de retrait valides.' },
@@ -730,8 +730,8 @@ const translations: Record<string, Record<Language, string>> = {
   'wallet.amountMin': { en: 'Amount must be at least 100 XAF.', fr: 'Le montant doit être d’au moins 100 XAF.' },
   'wallet.withdrawAmountMin': { en: 'Enter a valid amount (min 100 XAF).', fr: 'Entrez un montant valide (min. 100 XAF).' },
   'wallet.amountFeeLimit': {
-    en: 'Amount + 1.5% fee ({total} XAF) cannot exceed your balance of {balance} XAF.',
-    fr: 'Le montant + frais de 1,5 % ({total} XAF) ne peut pas dépasser votre solde de {balance} XAF.',
+    en: 'Amount + 2% fee ({total} XAF) cannot exceed your balance of {balance} XAF.',
+    fr: 'Le montant + frais de 2 % ({total} XAF) ne peut pas dépasser votre solde de {balance} XAF.',
   },
   'wallet.startPaymentFailed': { en: 'Could not start payment.', fr: 'Impossible de démarrer le paiement.' },
   'wallet.noTx': { en: 'No transactions yet.', fr: 'Aucune transaction.' },
@@ -1945,8 +1945,8 @@ const translations: Record<string, Record<Language, string>> = {
   fr: 'Vous recevez',
 },
 'wallet.tranzakFee': {
-  en: 'Tranzak fee (1.5%)',
-  fr: 'Frais Tranzak (1,5 %)',
+  en: 'Tranzak fee (2%)',
+  fr: 'Frais Tranzak (2%)',
 },
 'wallet.deductedFromWallet': {
   en: 'Deducted from wallet',
