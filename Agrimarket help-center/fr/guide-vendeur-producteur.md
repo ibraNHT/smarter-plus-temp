@@ -50,3 +50,22 @@ N’effectuez pas de changement de statut inexact.
 - Répondez vite aux actions de commande.
 - Conservez des preuves de livraison/réalisation.
 - Contactez le support tôt en cas de problème.
+
+  ## 7) Calcul des frais
+
+- Tous les pourcentages sont calculés à partir du sous-total de chaque article (somme des prix des articles × quantités), avant application des coupons.
+
+Formules :
+
+Paiement de l’acheteur : sous-total + 6 % − remise du coupon
+Recevoir du producteur : sous-total − 9 %
+La plateforme conserve : les 6 % de l’acheteur plus les 9 % du producteur
+
+Exemple pour un panier de 10 000 XAF :
+
+Paiement de l’acheteur : 10 600 (10 000 + 600)
+Recevoir du producteur : 9 100
+Plateforme : 1 500 (600 + 900)
+Les coupons réduisent uniquement le total payé par l’acheteur. Les frais de service sont toujours calculés sur le sous-total avant réduction ; la réduction est ensuite soustraite du sous-total majoré des frais de service.
+
+Les commandes négociées par chat utilisent les mêmes tarifs que ceux du marché sur le prix convenu.
