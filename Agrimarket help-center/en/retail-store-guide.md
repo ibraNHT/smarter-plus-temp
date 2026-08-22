@@ -16,6 +16,7 @@ The Retail Store covers ATI retail offers and uses rules that may differ from ma
 4. Apply coupon (retail-eligible only).
 5. Confirm checkout.
 6. Buyer pays: subtotal + 4%
+   
 Example for a 10,000 XAF cart:
 
 Buyer pays: 10,000 + 4% = 10,000 + 400 = 10,400
