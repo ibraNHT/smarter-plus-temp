@@ -180,7 +180,7 @@ jobs:
           host: ${{ github.ref_name == 'prod' && secrets.VPS_PROD_HOST || secrets.VPS_STAGING_HOST }}
           username: deployer
           key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
-          envs: REGISTRY,APP_PATH,VITE_API_URL,VITE_UPLOAD_API_URL
+          envs: REGISTRY,APP_PATH
           script_stop: true
           debug: true
           script: |
@@ -198,13 +198,14 @@ jobs:
             echo "📁 Preparation du répertoire $APP_PATH..."
             mkdir -p "$APP_PATH"
 
-            # Fonction robuste pour mettre à jour ou ajouter une variable (avec awk)
+            # Fonction robuste pour mettre à jour ou ajouter une variable
             set_or_add_var() {
               local var="$1"
               local value="$2"
               local file="$3"
               if grep -q "^${var}=" "$file"; then
-                sudo awk -v var="$var" -v val="$value" 'BEGIN{FS=OFS="="} $1==var {$2=val; print} $1!=var {print}' "$file" | sudo tee "$file" >/dev/null
+                # Utiliser sudo et un sub-shell pour écrire le contenu modifié
+                sudo sh -c "awk -v var='$var' -v val='$value' 'BEGIN{FS=OFS=\"=\"} \$1==var {\$2=val; print} \$1!=var {print}' \"$file\" > \"${file}.tmp\" && mv \"${file}.tmp\" \"$file\""
               else
                 echo "${var}=${value}" | sudo tee -a "$file" >/dev/null
               fi
@@ -213,12 +214,13 @@ jobs:
             echo "📝 Configuration du fichier .env..."
             if [ ! -f "$ENV_FILE" ] || [ ! -s "$ENV_FILE" ]; then
               echo "⚠️  $ENV_FILE est manquant ou vide. Création avec les valeurs de base."
-              sudo touch "$ENV_FILE"
-              sudo chown $USER:$USER "$ENV_FILE"
-              echo "VITE_API_URL=$VITE_API_URL" | sudo tee "$ENV_FILE" >/dev/null
-              echo "VITE_UPLOAD_API_URL=$VITE_UPLOAD_API_URL" | sudo tee -a "$ENV_FILE" >/dev/null
-              echo "VITE_USE_MOCKS=false" | sudo tee -a "$ENV_FILE" >/dev/null
-              echo "VITE_USE_HTTPONLY_COOKIES=false" | sudo tee -a "$ENV_FILE" >/dev/null
+              sudo tee "$ENV_FILE" >/dev/null <<EOF
+            VITE_API_URL=$VITE_API_URL
+            VITE_UPLOAD_API_URL=$VITE_UPLOAD_API_URL
+            VITE_USE_MOCKS=false
+            VITE_USE_HTTPONLY_COOKIES=false
+            EOF
+              sudo chown deployer:deployer "$ENV_FILE"
             else
               echo "✅ Fichier .env existant. Mise à jour des URLs API..."
               set_or_add_var "VITE_API_URL" "$VITE_API_URL" "$ENV_FILE"
