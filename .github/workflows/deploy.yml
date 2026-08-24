@@ -132,8 +132,14 @@ jobs:
           echo "repo_lower=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
           echo "container_name=smarter-panel-plus-${{ github.ref_name }}-web" >> "$GITHUB_OUTPUT"
           echo "host_port=3015" >> "$GITHUB_OUTPUT"
+          if [[ "${{ github.ref_name }}" == "prod" ]]; then
+            echo "api_url=https://api.smarterpanel.cloud/api" >> "$GITHUB_OUTPUT"
+            echo "upload_url=https://api.smarterpanel.cloud/upload" >> "$GITHUB_OUTPUT"
+          else
+            echo "api_url=https://apistaging.smarterpanel.cloud/api" >> "$GITHUB_OUTPUT"
+            echo "upload_url=https://apistaging.smarterpanel.cloud/upload" >> "$GITHUB_OUTPUT"
+          fi
 
-      # ----- TEST DE CONNECTIVITÉ -----
       - name: Check VPS reachability
         run: |
           HOST="${{ github.ref_name == 'prod' && secrets.VPS_PROD_HOST || secrets.VPS_STAGING_HOST }}"
@@ -144,7 +150,6 @@ jobs:
           fi
           echo "✅ VPS reachable on port 22."
 
-      # ----- VALIDATION DE LA CLÉ SSH -----
       - name: Validate SSH private key
         run: |
           if [ -z "${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}" ]; then
@@ -161,26 +166,23 @@ jobs:
           fi
           echo "✅ SSH private key is valid."
 
-      # ----- TEST DE CONNEXION SSH (avec utilisateur deployer) -----
       - name: Test SSH connection
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ github.ref_name == 'prod' && secrets.VPS_PROD_HOST || secrets.VPS_STAGING_HOST }}
-          username: deployer                     # ← CHANGEMENT ICI
+          username: deployer
           key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
-          # passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
           script: echo "SSH connection successful."
 
-      # ----- DÉPLOIEMENT EFFECTIF (avec utilisateur deployer) -----
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ github.ref_name == 'prod' && secrets.VPS_PROD_HOST || secrets.VPS_STAGING_HOST }}
-          username: deployer                     # ← CHANGEMENT ICI
+          username: deployer
           key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
-          # passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
-          envs: REGISTRY,APP_PATH
+          envs: REGISTRY,APP_PATH,VITE_API_URL,VITE_UPLOAD_API_URL
           script_stop: true
+          debug: true
           script: |
             set -eu
 
@@ -190,16 +192,44 @@ jobs:
             HOST_PORT="${{ steps.vars.outputs.host_port }}"
             FULL_IMAGE="$REGISTRY/$REPO_LOWER:$TAG"
             ENV_FILE="$APP_PATH/.env"
+            VITE_API_URL="${{ steps.vars.outputs.api_url }}"
+            VITE_UPLOAD_API_URL="${{ steps.vars.outputs.upload_url }}"
 
-            test -s "$ENV_FILE"
-            grep -Eq '^VITE_API_URL=https?://' "$ENV_FILE" || {
-              echo "VITE_API_URL is missing or invalid in $ENV_FILE." >&2
-              exit 1
+            echo "📁 Preparation du répertoire $APP_PATH..."
+            mkdir -p "$APP_PATH"
+
+            # Fonction robuste pour mettre à jour ou ajouter une variable (avec awk)
+            set_or_add_var() {
+              local var="$1"
+              local value="$2"
+              local file="$3"
+              if grep -q "^${var}=" "$file"; then
+                sudo awk -v var="$var" -v val="$value" 'BEGIN{FS=OFS="="} $1==var {$2=val; print} $1!=var {print}' "$file" | sudo tee "$file" >/dev/null
+              else
+                echo "${var}=${value}" | sudo tee -a "$file" >/dev/null
+              fi
             }
-            grep -Eq '^VITE_UPLOAD_API_URL=https?://' "$ENV_FILE" || {
-              echo "VITE_UPLOAD_API_URL is missing or invalid in $ENV_FILE." >&2
-              exit 1
-            }
+
+            echo "📝 Configuration du fichier .env..."
+            if [ ! -f "$ENV_FILE" ] || [ ! -s "$ENV_FILE" ]; then
+              echo "⚠️  $ENV_FILE est manquant ou vide. Création avec les valeurs de base."
+              sudo touch "$ENV_FILE"
+              sudo chown $USER:$USER "$ENV_FILE"
+              echo "VITE_API_URL=$VITE_API_URL" | sudo tee "$ENV_FILE" >/dev/null
+              echo "VITE_UPLOAD_API_URL=$VITE_UPLOAD_API_URL" | sudo tee -a "$ENV_FILE" >/dev/null
+              echo "VITE_USE_MOCKS=false" | sudo tee -a "$ENV_FILE" >/dev/null
+              echo "VITE_USE_HTTPONLY_COOKIES=false" | sudo tee -a "$ENV_FILE" >/dev/null
+            else
+              echo "✅ Fichier .env existant. Mise à jour des URLs API..."
+              set_or_add_var "VITE_API_URL" "$VITE_API_URL" "$ENV_FILE"
+              set_or_add_var "VITE_UPLOAD_API_URL" "$VITE_UPLOAD_API_URL" "$ENV_FILE"
+              # S'assurer que les autres variables sont présentes
+              grep -q '^VITE_USE_MOCKS=' "$ENV_FILE" || echo "VITE_USE_MOCKS=false" | sudo tee -a "$ENV_FILE" >/dev/null
+              grep -q '^VITE_USE_HTTPONLY_COOKIES=' "$ENV_FILE" || echo "VITE_USE_HTTPONLY_COOKIES=false" | sudo tee -a "$ENV_FILE" >/dev/null
+            fi
+
+            echo "✅ Contenu final de $ENV_FILE :"
+            cat "$ENV_FILE"
 
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
             docker pull "$FULL_IMAGE"
@@ -223,8 +253,10 @@ jobs:
 
             for attempt in $(seq 1 12); do
               STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER_NAME")
+              echo "Tentative $attempt : statut = $STATUS"
               if [ "$STATUS" = "healthy" ]; then
                 docker image prune -f
+                echo "✅ Déploiement frontend réussi !"
                 exit 0
               fi
               if [ "$STATUS" = "unhealthy" ] || [ "$STATUS" = "exited" ]; then
@@ -233,5 +265,6 @@ jobs:
               sleep 5
             done
 
+            echo "❌ Le conteneur n'est pas devenu healthy. Logs récents :"
             docker logs --tail 100 "$CONTAINER_NAME"
             exit 1
