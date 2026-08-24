@@ -299,7 +299,7 @@ export default function Pricing({ lang, currency = 'XAF' }: PricingProps) {
     },
     {
       title: t('planStarterTitle'),
-      price: 9970,
+      price: 10000,
       description: t('planStarterDescription').split('\n'),
       buttonText: t('planStarterButton'),
       buttonVariant: 'outlined' as const,
@@ -308,7 +308,7 @@ export default function Pricing({ lang, currency = 'XAF' }: PricingProps) {
     {
       title: t('planGrowthTitle'),
       subheader: 'Promotional offer',
-      price: 19980,
+      price: 20000,
       description: t('planGrowthDescription').split('\n'),
       buttonText: t('planGrowthButton'),
       buttonVariant: 'contained' as const,
@@ -316,7 +316,7 @@ export default function Pricing({ lang, currency = 'XAF' }: PricingProps) {
     },
     {
       title: t('planEnterpriseTitle'),
-      price: 49760,
+      price: 50000,
       description: t('planEnterpriseDescription').split('\n'),
       buttonText: t('planEnterpriseButton'),
       buttonVariant: 'contained' as const,

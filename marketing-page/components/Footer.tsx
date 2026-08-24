@@ -338,13 +338,15 @@
 
 
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
+// import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 import IconButton from '@mui/material/IconButton';
 import Link from '@mui/material/Link';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import GitHubIcon from '@mui/icons-material/GitHub';
+// import GitHubIcon from '@mui/icons-material/GitHub';
+import FacebookIcon from '@mui/icons-material/Facebook';
+import InstagramIcon from '@mui/icons-material/Instagram';
 import LinkedInIcon from '@mui/icons-material/LinkedIn';
 import TwitterIcon from '@mui/icons-material/X';
 import { Landmark } from 'lucide-react';
@@ -487,14 +489,18 @@ export default function Footer({ lang }: FooterProps) {
           useFlexGap
           sx={{ justifyContent: 'center', color: 'text.secondary' }}
         >
-          <IconButton color="inherit" size="small" href="https://github.com/mui" aria-label="GitHub">
-            <GitHubIcon fontSize="small" />
+          {/* Open links in new tabs */}
+          <IconButton color="inherit" size="small" onClick={() => window.open('https://www.facebook.com/acheteTI', '_blank')} aria-label="Facebook">
+            <FacebookIcon fontSize="small" />
           </IconButton>
-          <IconButton color="inherit" size="small" href="https://x.com/MaterialUI" aria-label="X">
+          <IconButton color="inherit" size="small" onClick={() => window.open('https://www.linkedin.com/company/achete-tout-ici-sarl', '_blank')} aria-label="LinkedIn">
+            <LinkedInIcon fontSize="small" />
+          </IconButton>
+          <IconButton color="inherit" size="small" onClick={() => window.open('https://x.com/AcheteTI', '_blank')} aria-label="X">
             <TwitterIcon fontSize="small" />
           </IconButton>
-          <IconButton color="inherit" size="small" href="https://www.linkedin.com/company/mui/" aria-label="LinkedIn">
-            <LinkedInIcon fontSize="small" />
+          <IconButton color="inherit" size="small" onClick={() => window.open('https://www.instagram.com/achete_tout_ici?igsi=MTE1dDg5aGNsYWc0&utm_source=qr', '_blank')} aria-label="Instagram">
+            <InstagramIcon fontSize="small" />
           </IconButton>
         </Stack>
         <Box sx={{ display: { sm: 'inline' }, mx: 0.5, opacity: 0.5 }}>
