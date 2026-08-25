@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Input, Button, Card } from '../components/UI';
+import { Input, Button, Card, Select } from '../components/UI';
+import { CURRENCY_CODES } from '../constants';
 import { apiFetch, useStorage, getAbsoluteImageUrl } from '../hooks/useAppData';
 import { Building2, Upload } from 'lucide-react';
 
@@ -17,6 +18,7 @@ type OrgFormState = {
   postalCode: string;
   description: string;
   logoUrl: string;
+  currency: string;
 };
 
 const emptyForm = (): OrgFormState => ({
@@ -33,6 +35,7 @@ const emptyForm = (): OrgFormState => ({
   postalCode: '',
   description: '',
   logoUrl: '',
+  currency: 'XAF',
 });
 
 /** Full organization profile form — used as onboarding gate and as editable settings page. */
@@ -64,6 +67,7 @@ export default function OrgProfile({ t, onComplete, refreshUser, onLogout, embed
           postalCode: org.postalCode || '',
           description: org.description || '',
           logoUrl: org.logoUrl || '',
+          currency: org.currency || 'XAF',
         });
       })
       .catch((err: any) => setError(err.message || 'Failed to load organization'))
@@ -135,7 +139,15 @@ export default function OrgProfile({ t, onComplete, refreshUser, onLogout, embed
           <Input label={t('legalName')} value={form.legalName} onChange={setField('legalName')} required />
           <Input label={t('industry')} value={form.industry} onChange={setField('industry')} required />
           <Input label={t('taxId')} value={form.taxId} onChange={setField('taxId')} />
+          <Select
+            label={t('workingCurrency')}
+            value={form.currency}
+            onChange={setField('currency')}
+            options={CURRENCY_CODES.map((code) => ({ value: code, label: code }))}
+            required
+          />
         </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2 mb-4">{t('workingCurrencyHint')}</p>
         <Input label={t('orgDescription')} value={form.description} onChange={setField('description')} />
       </div>
 

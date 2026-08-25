@@ -3,7 +3,6 @@ import { useNotification } from '@/context/NotificationContext';
 import { useData, useSubmit, useStorage, apiFetch, invalidateCollection, getAbsoluteImageUrl } from '../hooks/useAppData';
 import { Card, Input, Button, Select, SuggestInput } from '../components/UI';
 import {
-  formatCurrency,
   getTranslated,
   isLockedAfter24Hours,
   deriveInventoryStatus,
@@ -11,6 +10,7 @@ import {
   isExpiringSoon,
   isInventoryLossReason,
 } from '../constants';
+import { useCurrency } from '../context/CurrencyContext';
 import type { InventoryEventReason, InventoryItem, InventoryStatus } from '../types';
 import { Edit2, Trash2, AlertTriangle, ImageIcon } from 'lucide-react';
 
@@ -23,7 +23,8 @@ const STATUS_BADGE: Record<InventoryStatus, string> = {
 
 const LOSS_REASONS: InventoryEventReason[] = ['damaged', 'expired', 'stolen'];
 
-export default function Inventory({ t, locationId, user, currency, lang }: any) {
+export default function Inventory({ t, locationId, user, lang }: any) {
+  const { formatMoney, bookCurrencyFor, workingCurrency, toDisplay, displayCurrency } = useCurrency();
   const { data: items, loading } = useData('inventory', locationId);
   const { data: events = [] } = useData('inventory_events', locationId);
   const { data: types } = useData('inventory_types');
@@ -82,7 +83,10 @@ export default function Inventory({ t, locationId, user, currency, lang }: any) 
   const health = useMemo(() => {
     const list = Array.isArray(items) ? items : [];
     const ev = Array.isArray(events) ? events : [];
-    const availableValue = list.reduce((a: number, i: InventoryItem) => a + (i.value ?? 0) * (i.quantity ?? 0), 0);
+    const availableValue = list.reduce(
+      (a: number, i: InventoryItem) => a + toDisplay((i.value ?? 0) * (i.quantity ?? 0), bookCurrencyFor(i)),
+      0
+    );
     const byReason = (reason: string) =>
       ev.filter((e: any) => e.reason === reason).reduce((a: number, e: any) => a + (Number(e.quantity) || 0), 0);
     const damaged = byReason('damaged');
@@ -93,11 +97,11 @@ export default function Inventory({ t, locationId, user, currency, lang }: any) 
       .reduce((a: number, e: any) => {
         const item = list.find((i: InventoryItem) => i.id === e.inventoryId);
         const unit = e.unitValue ?? item?.value ?? 0;
-        return a + unit * (Number(e.quantity) || 0);
+        return a + toDisplay(unit * (Number(e.quantity) || 0), bookCurrencyFor(item || e));
       }, 0);
     const expiringSoon = list.filter((i: InventoryItem) => isExpiringSoon(i.expiresOn)).length;
     return { availableValue, damaged, expired, stolen, lossValue, expiringSoon };
-  }, [items, events]);
+  }, [items, events, toDisplay, bookCurrencyFor]);
 
   const filteredItems = useMemo(() => {
     let list: InventoryItem[] = Array.isArray(items) ? items : [];
@@ -366,11 +370,11 @@ export default function Inventory({ t, locationId, user, currency, lang }: any) 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <Card className="p-3">
           <p className="text-xs text-gray-600 dark:text-gray-400">{t('inventoryAvailableValue')}</p>
-          <p className="text-lg font-semibold text-green-400">{formatCurrency(health.availableValue, currency)}</p>
+          <p className="text-lg font-semibold text-green-400">{formatMoney(health.availableValue, displayCurrency)}</p>
         </Card>
         <Card className="p-3">
           <p className="text-xs text-gray-600 dark:text-gray-400">{t('inventoryLossValue')}</p>
-          <p className="text-lg font-semibold text-red-400">{formatCurrency(health.lossValue, currency)}</p>
+          <p className="text-lg font-semibold text-red-400">{formatMoney(health.lossValue, displayCurrency)}</p>
         </Card>
         <Card className="p-3">
           <p className="text-xs text-gray-600 dark:text-gray-400">{t('inventoryDamagedUnits')}</p>
@@ -403,7 +407,7 @@ export default function Inventory({ t, locationId, user, currency, lang }: any) 
               <Input label={t('item')} value={name} onChange={setName} required />
               <Select label={t('type')} value={typeId} onChange={setTypeId} required options={typeOptions} />
               <Input label={t('quantity')} type="number" value={qty} onChange={setQty} required />
-              <Input label={t('value')} type="number" value={val} onChange={setVal} required />
+              <Input label={`${t('value')} (${workingCurrency})`} type="number" value={val} onChange={setVal} required />
               <SuggestInput
                 label={t('inventoryStoragePlace')}
                 value={storagePlace}
@@ -524,11 +528,11 @@ export default function Inventory({ t, locationId, user, currency, lang }: any) 
                           </div>
                           <div>
                             <dt className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-500">{t('inventoryUnitValue')}</dt>
-                            <dd className="text-xs tabular-nums text-gray-800 dark:text-gray-200">{formatCurrency(item.value, currency)}</dd>
+                            <dd className="text-xs tabular-nums text-gray-800 dark:text-gray-200">{formatMoney(item.value, bookCurrencyFor(item))}</dd>
                           </div>
                           <div>
                             <dt className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-500">{t('inventoryTotal')}</dt>
-                            <dd className="text-xs font-medium tabular-nums text-blue-500">{formatCurrency(item.value * item.quantity, currency)}</dd>
+                            <dd className="text-xs font-medium tabular-nums text-blue-500">{formatMoney(item.value * item.quantity, bookCurrencyFor(item))}</dd>
                           </div>
                           <div>
                             <dt className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-500">{t('inventoryExpiry')}</dt>
@@ -606,8 +610,8 @@ export default function Inventory({ t, locationId, user, currency, lang }: any) 
                             <td className="py-2.5 px-1.5 align-middle text-[11px] xl:text-xs text-gray-700 dark:text-gray-300 truncate" title={getTranslated(type, lang)}>{getTranslated(type, lang)}</td>
                             <td className="py-2.5 px-1.5 align-middle text-[11px] xl:text-xs text-gray-600 dark:text-gray-400 truncate" title={item.storagePlace || undefined}>{item.storagePlace || '—'}</td>
                             <td className="py-2.5 px-1 align-middle text-xs xl:text-sm text-right tabular-nums text-gray-900 dark:text-white">{item.quantity}</td>
-                            <td className="py-2.5 px-1.5 align-middle text-[11px] xl:text-xs text-right tabular-nums whitespace-nowrap text-gray-700 dark:text-gray-300 border-l border-gray-200/80 dark:border-gray-700/80">{formatCurrency(item.value, currency)}</td>
-                            <td className="py-2.5 px-1.5 align-middle text-[11px] xl:text-xs text-right tabular-nums whitespace-nowrap font-medium text-blue-500">{formatCurrency(item.value * item.quantity, currency)}</td>
+                            <td className="py-2.5 px-1.5 align-middle text-[11px] xl:text-xs text-right tabular-nums whitespace-nowrap text-gray-700 dark:text-gray-300 border-l border-gray-200/80 dark:border-gray-700/80">{formatMoney(item.value, bookCurrencyFor(item))}</td>
+                            <td className="py-2.5 px-1.5 align-middle text-[11px] xl:text-xs text-right tabular-nums whitespace-nowrap font-medium text-blue-500">{formatMoney(item.value * item.quantity, bookCurrencyFor(item))}</td>
                             <td className="py-2.5 px-1.5 align-middle border-l border-gray-200/80 dark:border-gray-700/80">
                               <span className={`inline-block max-w-full truncate px-1.5 py-0.5 rounded border text-[10px] xl:text-[11px] font-medium ${STATUS_BADGE[status]}`} title={t(`inventoryStatus_${status}`)}>
                                 {t(`inventoryStatus_${status}`)}
@@ -677,7 +681,7 @@ export default function Inventory({ t, locationId, user, currency, lang }: any) 
               required
               options={typeOptions}
             />
-            <Input label={t('inventoryUnitValue')} type="number" value={editForm.value} onChange={(v: string) => setEditForm((f) => ({ ...f, value: v }))} required />
+            <Input label={`${t('inventoryUnitValue')} (${workingCurrency})`} type="number" value={editForm.value} onChange={(v: string) => setEditForm((f) => ({ ...f, value: v }))} required />
             <SuggestInput
               label={t('inventoryStoragePlace')}
               value={editForm.storagePlace}
