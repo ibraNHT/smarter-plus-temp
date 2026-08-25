@@ -296,7 +296,6 @@ export default function Pricing({ lang, currency = 'XAF' }: PricingProps) {
       buttonText: t('planFreeButton'),
       buttonVariant: 'outlined' as const,
       buttonColor: 'primary' as const,
-      // buttonColor: 'primary' as const,
     },
     {
       title: t('planStarterTitle'),
