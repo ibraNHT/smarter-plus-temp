@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Landmark, AlertCircle, Sun, Moon } from 'lucide-react';
 import { Input, Button } from '../components/UI';
 import { useTheme } from '../context/ThemeContext';
+import { PwaInstallCta } from '../components/PwaInstallCta';
 
 type AuthMode = 'login' | 'signup' | 'otp' | 'invite' | 'forgot' | 'forgot_reset';
 
@@ -16,6 +17,8 @@ export default function Login({
   forgotPasswordStart,
   forgotPasswordVerify,
   t,
+  lang,
+  setLang,
 }: any) {
   const { theme, toggleTheme } = useTheme();
   const [mode, setMode] = useState<AuthMode>('login');
@@ -214,15 +217,26 @@ export default function Login({
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center px-4 relative">
-      <button
-        type="button"
-        onClick={toggleTheme}
-        className="absolute top-4 right-4 p-2 rounded-md text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700"
-        aria-label={t('themeToggle')}
-        title={theme === 'dark' ? t('lightMode') : t('darkMode')}
-      >
-        {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-      </button>
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        <select
+          value={lang}
+          onChange={(e) => setLang(e.target.value)}
+          className="bg-gray-100 dark:bg-gray-700 border-none rounded-md text-sm p-2 text-gray-900 dark:text-white"
+          aria-label="Language"
+        >
+          <option value="en">EN</option>
+          <option value="fr">FR</option>
+        </select>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="p-2 rounded-md text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700"
+          aria-label={t('themeToggle')}
+          title={theme === 'dark' ? t('lightMode') : t('darkMode')}
+        >
+          {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        </button>
+      </div>
       <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 border border-gray-200 dark:border-gray-700">
         <div className="text-center mb-8">
           <Landmark className="w-16 h-16 text-blue-500 mx-auto mb-4" />
@@ -365,6 +379,8 @@ export default function Login({
             </p>
           </form>
         )}
+
+        <PwaInstallCta t={t} variant="card" />
       </div>
     </div>
   );
