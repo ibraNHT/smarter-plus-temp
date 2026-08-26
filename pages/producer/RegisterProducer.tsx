@@ -18,6 +18,7 @@ import {
 import { FieldError, inputErrorClasses, showFieldError } from '../../components/FieldError';
 import { RegisterPhoneOtpModal } from '../../components/RegisterPhoneOtpModal';
 import { buildRegisterPhone } from '../../utils/registerPhone';
+import { isAtLeastAge, maxDobForAge } from '../../utils/ageGate';
 import { SEO } from '../../components/SEO';
 import { SEO_PAGE_META } from '../../services/seo/seoConfig';
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{4,}$/;
@@ -102,7 +103,9 @@ export const RegisterProducer: React.FC = () => {
 
   const registerProducerSchema = z.object({
     type: z.enum(['BUSINESS', 'INDIVIDUAL']),
-    name: z.string().trim().min(2, t('validation.farmNameRequired')),
+    // Only BUSINESS accounts type a trading name; an individual's name IS their
+    // first + last name, so this is validated conditionally in superRefine below.
+    name: z.string(),
     email: z.string().trim().email(t('validation.emailRequired')),
     password: z.string().min(1, t('validation.passwordRequired')).regex(PASSWORD_RULE, t('form.passwordRequirements')),
     confirmPassword: z.string().min(1, t('validation.confirmPassword')),
@@ -122,13 +125,17 @@ export const RegisterProducer: React.FC = () => {
     if (!values.taxIdentificationNumber.trim()) {
       ctx.addIssue({ code: 'custom', path: ['taxIdentificationNumber'], message: t('validation.taxIdRequired') });
     }
+    if (values.type === 'BUSINESS' && values.name.trim().length < 2) {
+      ctx.addIssue({ code: 'custom', path: ['name'], message: t('validation.farmNameRequired') });
+    }
     // Individual producers must provide personal identity details that
     // differentiate them from a business (business producers don't fill these).
     if (values.type === 'INDIVIDUAL') {
       if (!values.firstName.trim()) ctx.addIssue({ code: 'custom', path: ['firstName'], message: 'First name is required.' });
       if (!values.lastName.trim()) ctx.addIssue({ code: 'custom', path: ['lastName'], message: 'Last name is required.' });
       if (!values.gender) ctx.addIssue({ code: 'custom', path: ['gender'], message: 'Gender is required.' });
-      if (!values.dateOfBirth) ctx.addIssue({ code: 'custom', path: ['dateOfBirth'], message: 'Date of birth is required.' });
+      if (!values.dateOfBirth) ctx.addIssue({ code: 'custom', path: ['dateOfBirth'], message: t('validation.dobRequired') });
+      else if (!isAtLeastAge(values.dateOfBirth)) ctx.addIssue({ code: 'custom', path: ['dateOfBirth'], message: t('validation.mustBe18') });
     }
   });
   // console.log('🔄 RegisterProducer rendered with translations:', t('form.security'));
@@ -161,6 +168,9 @@ export const RegisterProducer: React.FC = () => {
       }
       if (locations.length === 0) {
         nextErrors.locations = t('register.locationsError');
+      }
+      if (values.productionTypes.length === 0) {
+        nextErrors.productionTypes = t('validation.categoriesRequired');
       }
       return nextErrors;
     },
@@ -195,7 +205,13 @@ export const RegisterProducer: React.FC = () => {
       const fullPhone = buildRegisterPhone(values.phoneCode, values.phone);
       const result = await registerProducer({
         type: values.type,
-        name: values.name,
+        // An individual producer has no separate trading name — the client asked us
+        // to stop asking for one, since it is simply their own name. Mirrors
+        // ProducerProfile, which already derives the display name this way.
+        name:
+          values.type === 'INDIVIDUAL'
+            ? `${values.firstName.trim()} ${values.lastName.trim()}`.trim()
+            : values.name,
         email: values.email,
         phone: fullPhone,
         description: values.description,
@@ -421,29 +437,31 @@ export const RegisterProducer: React.FC = () => {
           {formik.values.type === 'INDIVIDUAL' && (
             <>
               <div className="sm:col-span-3">
-                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">{t('profile.firstName')}</label>
-                <input type="text" name="firstName"
+                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">{t('profile.firstName')} <span className="text-red-500">*</span></label>
+                <input type="text" name="firstName" required
                   className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
                   value={formik.values.firstName}
                   onChange={formik.handleChange}
                   onBlur={formik.handleBlur}
+                  placeholder={t('ui.firstNamePlaceholder')}
                 />
                 <FieldError formik={formik} name="firstName" />
               </div>
 
               <div className="sm:col-span-3">
-                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">{t('profile.lastName')}</label>
-                <input type="text" name="lastName"
+                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">{t('profile.lastName')} <span className="text-red-500">*</span></label>
+                <input type="text" name="lastName" required
                   className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
                   value={formik.values.lastName}
                   onChange={formik.handleChange}
                   onBlur={formik.handleBlur}
+                  placeholder={t('ui.lastNamePlaceholder')}
                 />
                 <FieldError formik={formik} name="lastName" />
               </div>
 
               <div className="sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">{t('profile.gender')}</label>
+                <label className="block text-sm font-medium text-gray-700">{t('profile.gender')} <span className="text-red-500">*</span></label>
                 <select
                   className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm text-gray-900"
                   name="gender"
@@ -459,10 +477,11 @@ export const RegisterProducer: React.FC = () => {
               </div>
 
               <div className="sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">{t('profile.dob')}</label>
-                <input type="date"
+                <label className="block text-sm font-medium text-gray-700">{t('profile.dob')} <span className="text-red-500">*</span></label>
+                <input type="date" required
                   className="mt-1 focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
                   name="dateOfBirth"
+                  max={maxDobForAge()}
                   value={formik.values.dateOfBirth}
                   onChange={formik.handleChange}
                   onBlur={formik.handleBlur}
@@ -472,6 +491,7 @@ export const RegisterProducer: React.FC = () => {
             </>
           )}
 
+          {formik.values.type === 'BUSINESS' && (
           <div className="sm:col-span-6">
             <label htmlFor="name" className="block text-sm font-medium text-gray-700">{t('form.farmName')}</label>
             <div className="mt-1">
@@ -480,10 +500,12 @@ export const RegisterProducer: React.FC = () => {
                 value={formik.values.name}
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
+                placeholder={t('ui.farmNamePlaceholder')}
               />
               <FieldError formik={formik} name="name" />
             </div>
           </div>
+          )}
 
           {/* NIU and certificates required for ALL producer types */}
           <div className="sm:col-span-6">
@@ -501,6 +523,7 @@ export const RegisterProducer: React.FC = () => {
               name="taxIdentificationNumber"
               required
               className="mt-1 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
+              placeholder={t('ui.taxIdPlaceholder')}
               value={formik.values.taxIdentificationNumber}
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}
@@ -630,7 +653,9 @@ export const RegisterProducer: React.FC = () => {
 
         {/* Categories (Chips) */}
         <div className="border-t border-gray-200 pt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">{t('form.category')} ({t('register.multiSelect')})</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {t('form.category')} ({t('register.multiSelect')}) <span className="text-red-500">*</span>
+          </label>
           <div className="flex flex-wrap gap-2 mb-3">
             {PRODUCTION_TYPES.map(cat => {
               const isSelected = formik.values.productionTypes.includes(cat);
@@ -650,6 +675,9 @@ export const RegisterProducer: React.FC = () => {
               )
             })}
           </div>
+          {formik.values.productionTypes.length === 0 && formik.submitCount > 0 ? (
+            <p className="text-sm text-red-600 mt-1 font-medium">{t('validation.categoriesRequired')}</p>
+          ) : null}
         </div>
 
         {/* Location Manager */}
@@ -743,7 +771,7 @@ export const RegisterProducer: React.FC = () => {
                     }}
                     className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
                   >
-                    <p className="text-sm text-gray-900">{item.address}</p>
+                    <p className="text-sm text-gray-900 truncate" title={item.address}>{item.address}</p>
                     <p className="text-xs text-gray-500">
                       {[item.city, item.region].filter(Boolean).join(', ')}
                     </p>

@@ -10,8 +10,8 @@ import {
 } from './LegalDocumentLayout';
 
 const SUPPORT_EMAIL = (
-  <a href="mailto:helpdesk@aheteici.com" className="text-primary-600 hover:underline">
-    helpdesk@aheteici.com
+  <a href="mailto:helpdesk@acheteici.com" className="text-primary-600 hover:underline">
+    helpdesk@acheteici.com
   </a>
 );
 
@@ -318,7 +318,7 @@ export const TermsAndConditionsEn: React.FC<Props> = ({ title, meta }) => (
         <LegalParagraph>All orders placed on the platform are subject to fees and service charges. Prices are displayed in the currency supported by the Platform and may be subject to:</LegalParagraph>
         <LegalList
           items={[
-            <>A 16.5% service charge applies to all orders placed on the main marketplace (where applicable);</>,
+            <>A 16% service charge applies to all orders placed on the main marketplace (where applicable);</>,
             <>A 3% service charge applies to all orders placed in the shop (where applicable).</>,
             <> 1.5% withdrawal fee applies. These fees are charged to us by Tranzak for processing your payment.</>,
             <>wallet top-up fee: This is the commission we collect on each order successfully sold by a producer before the funds are deposited into their wallet. We deduct 5% of this amount.</>,
@@ -543,9 +543,19 @@ export const TermsAndConditionsEn: React.FC<Props> = ({ title, meta }) => (
 
       <LegalSection title="19. Privacy and Data">
         <LegalParagraph>
-          We process personal data in accordance with our Privacy Policy (to be provided or published separately). We may
-          retain data related to account security, support conversations, orders and transactions, dispute evidence, and
-          audit logs as necessary for providing the Platform, compliance, fraud prevention, and record-keeping.
+          We process personal data in accordance with our{' '}
+          <a href="/privacy" className="text-primary-600 hover:underline">
+            Privacy Policy
+          </a>
+          , including location used to fill delivery addresses, photos you upload, wallet payments via Tranzak for
+          physical goods, and native app storage of session tokens. We may retain data related to account security,
+          support conversations, orders and transactions, dispute evidence, and audit logs as necessary for providing
+          the Platform, compliance, fraud prevention, and record-keeping. You can delete your account in-app from
+          Profile → Security, or request deletion on the web at{' '}
+          <a href="/account-deletion" className="text-primary-600 hover:underline">
+            /account-deletion
+          </a>
+          .
         </LegalParagraph>
       </LegalSection>
 

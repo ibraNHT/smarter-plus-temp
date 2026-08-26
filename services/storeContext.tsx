@@ -4,7 +4,7 @@ import { ProducerProfile, ClientProfile, Offer, UserSession, UserRole, ProducerS
 import { generateSupportResponse } from './geminiService';
 import {
   getSupportMessages,
-  getGuestSupportMessages,
+  getGuestSupportSnapshot,
   mapDtoToSupportMessage,
   mergeIncomingSupportMessages,
   reconcileServerMessages,
@@ -24,6 +24,7 @@ export type SupportSessionStatus =
   | 'AGENT_ACTIVE'
   | 'CLOSED';
 import { apiFetch, apiUpload, setToken, clearToken, getToken, getRefreshToken, setRefreshToken, isRefreshOnCooldown, attemptTokenRefresh } from './apiService';
+import { nativeStorageGet, nativeStorageRemove, nativeStorageSet } from './nativeStorage';
 import { normalizeRegisterPhoneFull } from '../utils/registerPhone';
 import { resolveOfferImageSrc } from '../utils/offerImageDisplay';
 import { logApiFailure } from './apiDebug';
@@ -364,6 +365,8 @@ interface StoreContextType {
   deleteOffer: (offerId: string) => Promise<{ success: boolean; error?: string }>;
   getProducerOffers: (producerId: string) => Offer[];
   getOfferById: (offerId: string) => Offer | undefined;
+  /** Load one public profile by id into the store (for deep-linked profile pages). */
+  loadPublicProfileById: (role: 'PRODUCER' | 'CLIENT', id: string) => Promise<boolean>;
   getAvailableSlots: (producerId: string, date: Date, durationHours: number) => Date[];
   addToCart: (offer: Offer, quantity: number, bookingDate?: string) => { success: boolean; error?: 'PRODUCER_CONFLICT' | 'OWN_OFFER' | 'DUPLICATE_SERVICE_SLOT' };
   removeFromCart: (offerId: string) => void;
@@ -376,6 +379,8 @@ interface StoreContextType {
     pickupPointId?: string,
     homeDeliveryLocationId?: string,
     homeShippingSnapshot?: PreferredHomeDeliverySnapshot | null,
+    /** ATI retail: "HH:MM" delivery window chosen at checkout. */
+    deliveryTime?: string,
   ) => Promise<boolean>;
   confirmOrder: (orderId: string) => Promise<void>;
   rejectOrder: (orderId: string) => Promise<void>;
@@ -387,8 +392,10 @@ interface StoreContextType {
   completeOrder: (orderId: string) => Promise<void>;
   requestOrderCancellation: (orderId: string, reason?: string) => Promise<void>;
   updateAppointment: (orderId: string, bookingDate: string) => Promise<boolean>;
-  reportProblem: (orderId: string, reason: string, files: File[]) => Promise<void>;
-  addDisputeEvidence: (orderId: string, files: File[]) => Promise<void>;
+  /** Resolves true only when the upload actually persisted — callers keep their
+   *  modal open and show an error when it is false. */
+  reportProblem: (orderId: string, reason: string, files: File[]) => Promise<boolean>;
+  addDisputeEvidence: (orderId: string, files: File[], note?: string) => Promise<boolean>;
   revealContactInfo: (orderId: string) => Promise<void>;
   submitReview: (review: Omit<Review, 'id' | 'createdAt'>) => Promise<void>;
   getAverageRating: (targetId: string) => number;
@@ -489,13 +496,13 @@ const getOrdersEndpointsForUser = (activeUser?: UserSession | null): string[] =>
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserSession | null>(() => {
     if (typeof window === 'undefined') return null;
-    const savedUser = localStorage.getItem('currentUser');
+    const savedUser = nativeStorageGet('currentUser');
     if (!savedUser) return null;
     try {
       const parsedUser = JSON.parse(savedUser);
       if (!isWebAppAllowedRole(parsedUser?.role)) {
         clearToken();
-        localStorage.removeItem('currentUser');
+        nativeStorageRemove('currentUser');
         return null;
       }
       return parsedUser;
@@ -515,7 +522,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [cart, setCart] = useState<CartItem[]>(() => {
     if (typeof window === 'undefined') return [];
     try {
-      const raw = localStorage.getItem('cart');
+      const raw = nativeStorageGet('cart');
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : [];
@@ -534,6 +541,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [pickupPoints, setPickupPoints] = useState<PickupPoint[]>([]);
   const [myReferrals, setMyReferrals] = useState<MyReferralsData | null>(null);
   const initialCatalogLoadDoneRef = useRef(false);
+  // True once the server-side cart has actually been read for this session.
+  // The debounced sync below replaces the whole server cart, so pushing an
+  // empty local cart before this flag is set would silently wipe a cart the
+  // user built on another device. See the guard in the DEBOUNCED CART SYNC effect.
+  const cartHydratedRef = useRef(false);
   const [isInitialCatalogLoading, setIsInitialCatalogLoading] = useState(true);
 
   // Chat State
@@ -574,22 +586,28 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   useEffect(() => {
     useSessionStore.getState().setUser(user);
-    const savedGuestEmail = localStorage.getItem('guestEmail');
+    const savedGuestEmail = nativeStorageGet('guestEmail');
     if (savedGuestEmail) setGuestEmail(savedGuestEmail);
     // Restore a GUEST support session across reloads so agent-reply polling resumes
     // (guests have no socket; the 5s poll needs the sessionId + handed-over flag).
     if (!getToken()) {
-      const savedSupportSessionId = localStorage.getItem('supportSessionId');
-      if (savedSupportSessionId) {
+      const savedSupportSessionId = nativeStorageGet('supportSessionId');
+      const savedGuestEmail = nativeStorageGet('guestEmail');
+      // Only restore a session we can prove is a GUEST one. A session saved while
+      // signed in has no guestEmail; replaying it on the guest endpoints returns
+      // 403 forever, and nothing downstream ever clears it. Drop it instead.
+      if (savedSupportSessionId && savedGuestEmail) {
         setSupportSessionId(savedSupportSessionId);
         setIsHandedOver(true);
+      } else if (savedSupportSessionId) {
+        try { nativeStorageRemove('supportSessionId'); } catch { /* noop */ }
       }
     }
 
     let cancelled = false;
     (async () => {
       const hasStoredSession = Boolean(
-        getToken() || getRefreshToken() || localStorage.getItem('currentUser'),
+        getToken() || getRefreshToken() || nativeStorageGet('currentUser'),
       );
       if (hasStoredSession) {
         await attemptTokenRefresh();
@@ -624,7 +642,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const token = getToken();
     if (isWebAppSessionBlocked(token, user)) {
       clearToken();
-      localStorage.removeItem('currentUser');
+      nativeStorageRemove('currentUser');
       setUser(null);
       useSessionStore.getState().clear();
     }
@@ -642,30 +660,56 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setMyReferrals(null);
       setReviews([]);
       setCart([]);
+      // The next session must re-read the server cart before it is allowed to
+      // overwrite it (see cartHydratedRef).
+      cartHydratedRef.current = false;
       setOrders([]);
       setWithdrawalRequests([]);
       setNotifications([]);
       setChats([]);
       setMessages([]);
       setCompareList([]);
+      // Same reset as logout(): an expired session is still the END of that
+      // session, and leaving the support id behind re-creates the guest 403 bug.
+      setSupportSessionId(null);
+      setIsHandedOver(false);
+      setSupportSessionStatus('AI_HANDLING');
+      setSupportMessages([]);
+      try { nativeStorageRemove('supportSessionId'); } catch { /* noop */ }
     };
     window.addEventListener('agm:session-expired', onSessionExpired);
     return () => window.removeEventListener('agm:session-expired', onSessionExpired);
   }, []);
 
-  // Persist the guest support session id so a page reload resumes agent-reply polling.
+  // Persist the guest support session id so a page reload resumes agent-reply
+  // polling. Requires guestEmail: without it, a session created while signed IN
+  // was being written here at logout and then restored as if it were a guest
+  // session, which the guest endpoints reject with 403.
   useEffect(() => {
-    if (!user && supportSessionId) localStorage.setItem('supportSessionId', supportSessionId);
-    else if (!supportSessionId) localStorage.removeItem('supportSessionId');
-  }, [user, supportSessionId]);
+    if (!user && supportSessionId && guestEmail) {
+      nativeStorageSet('supportSessionId', supportSessionId);
+    } else {
+      // Unconditional else — the (!user && id && !guestEmail) case previously
+      // matched neither branch and left a poisoned id in place.
+      nativeStorageRemove('supportSessionId');
+    }
+  }, [user, supportSessionId, guestEmail]);
 
   // ─── DEBOUNCED CART SYNC ───────────────────────────────────────────────────
   useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(cart));
-    if (guestEmail) localStorage.setItem('guestEmail', guestEmail);
-    else localStorage.removeItem('guestEmail');
+    nativeStorageSet('cart', JSON.stringify(cart));
+    if (guestEmail) nativeStorageSet('guestEmail', guestEmail);
+    else nativeStorageRemove('guestEmail');
 
-    if (user && getToken()) {
+    // `sync-cart` REPLACES the server cart (deleteMany + createMany server-side),
+    // so an empty push is destructive. On a fresh device the local cart starts
+    // empty and this effect fires ~750ms after mount — well before the slower
+    // catalog+cart fetches finish hydrating — which used to wipe the cart the
+    // user had built elsewhere. Only skip the *empty-and-not-yet-hydrated* case:
+    // a non-empty cart always syncs, and once hydrated an empty cart syncs too
+    // (the user genuinely emptied it, and that must persist).
+    const safeToSync = cart.length > 0 || cartHydratedRef.current;
+    if (user && getToken() && safeToSync) {
       const timer = setTimeout(() => {
         apiFetch(API_ENDPOINTS.cart.sync, {
           method: 'POST',
@@ -721,6 +765,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const notificationFetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchInFlightRef = useRef<boolean>(false);
   const globalPollInFlightRef = useRef<boolean>(false);
+  // `debouncedLightFetch` ([] deps) and the global poll ([user?.id] deps) are
+  // created before mapOrderRow/refreshOrders exist and must not capture a stale
+  // render's copy — route both through refs assigned on every render.
+  const mapOrderRowRef = useRef<(o: any) => any>((o: any) => o);
+  const refreshOrdersRef = useRef<(opts?: { force?: boolean }) => Promise<void>>(async () => {});
   const debouncedLightFetch = useCallback(() => {
     if (notificationFetchTimer.current) clearTimeout(notificationFetchTimer.current);
     notificationFetchTimer.current = setTimeout(async () => {
@@ -753,7 +802,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             orderEndpoints.map((ep) => apiFetch<any[]>(ep, { silent401: true } as any).catch((e) => { on401(e); return []; })),
           );
           const merged = Array.from(new Map(orderResults.flat().map((o: any) => [o.id, o])).values());
-          setOrders(merged.map((o: any) => ({ ...o, items: Array.isArray(o.orderItems || o.items) ? (o.orderItems || o.items).map((item: any) => ({ ...item, cartQuantity: item.cartQuantity || item.quantity || 1, id: item.offerId || item.id })) : [] })));
+          // Must go through the same mapper as refreshOrders(): this inline version
+          // skipped normalizeOrderStatus and the receipt/cancellation defaults, so a
+          // socket-triggered refresh could replace correctly-normalised orders with
+          // raw rows whose status the UI does not recognise.
+          setOrders(merged.map(mapOrderRowRef.current));
         }
       } catch { /* ignore */ } finally {
         fetchInFlightRef.current = false;
@@ -1022,7 +1075,29 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
       })();
     });
+    const onAppState = (event: Event) => {
+      const isActive = Boolean((event as CustomEvent<{ isActive?: boolean }>).detail?.isActive);
+      if (!isActive) {
+        socket.disconnect();
+        return;
+      }
+      void (async () => {
+        await attemptTokenRefresh({ silent: true });
+        const nextToken = getToken();
+        if (nextToken) socket.auth = { token: nextToken };
+        socket.connect();
+        void queryClient.invalidateQueries();
+      })();
+    };
+    const onNetwork = (event: Event) => {
+      const connected = (event as CustomEvent<{ connected?: boolean }>).detail?.connected;
+      if (connected === true) onAppState(new CustomEvent('agm:app-state', { detail: { isActive: true } }));
+    };
+    window.addEventListener('agm:app-state', onAppState);
+    window.addEventListener('agm:network', onNetwork);
     return () => {
+      window.removeEventListener('agm:app-state', onAppState);
+      window.removeEventListener('agm:network', onNetwork);
       socket.disconnect();
       socketRef.current = null;
       setRealtimeConnected(false);
@@ -1121,6 +1196,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
         // Use the dedup-aware refresher; it skips if cache is still fresh.
         await refreshNotifications();
+        // Orders are polled here again. They were dropped on the assumption that
+        // the `notification` socket event covers them, but that made a producer's
+        // incoming orders depend entirely on the WebSocket being up — if the
+        // socket never connected or silently dropped (proxy without an upgrade
+        // header, sleeping tab, flaky network) new orders only appeared after a
+        // manual page refresh, which is the "sometimes it shows, sometimes not"
+        // report. force:true because a 60s poll wanting fresh data is exactly the
+        // case the stale-cache window would swallow.
+        await refreshOrdersRef.current({ force: true });
       } catch {
         // ignore background polling errors
       } finally {
@@ -1151,7 +1235,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
    * the mutation. This helper prevents that.
    */
   const bustCache = (queryKey: readonly unknown[]) => {
-    void queryClient.invalidateQueries({ queryKey: queryKey as any, exact: false });
+    return queryClient.invalidateQueries({ queryKey: queryKey as any, exact: false });
   };
 
   // ─── PER-FEATURE REFRESHERS (React Query backed) ───────────────────────────
@@ -1177,6 +1261,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }))
       : [],
   });
+
+  mapOrderRowRef.current = mapOrderRow;
 
   const mapProducerRow = (p: any): ProducerProfile => {
     const displayName =
@@ -1266,33 +1352,51 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         ? row.imageUrls.map((u: string) => resolveOfferImageSrc(u))
         : row.imageUrls,
     });
-    const marketplaceList = (marketplace
-      ? Array.isArray(marketplace)
-        ? marketplace
-        : ((marketplace as any).data ?? [])
-      : []
-    ).map(withDisplayImage);
-    const retailRaw = retail ?? [];
-    const retailList = (Array.isArray(retailRaw) ? retailRaw : []).map((row: any) =>
-      withDisplayImage({
-        ...row,
-        marketType: row.marketType ?? MarketType.ATI,
-        quantity: Number(row.quantity ?? 0),
-        price: Number(row.price ?? 0),
-        isNegotiable: row.isNegotiable ?? false,
-        isDeliveryAvailable: row.isDeliveryAvailable ?? true,
-        minQuantity: Number(row.minQuantity ?? 1),
-        createdAt: row.createdAt ?? new Date().toISOString(),
-      }),
-    );
-    const byId = new Map<string, Offer>();
-    for (const o of marketplaceList) {
-      if (o?.id) byId.set(o.id, o);
-    }
-    for (const o of retailList) {
-      if (o?.id) byId.set(o.id, o);
-    }
-    setOffers(Array.from(byId.values()));
+    // `cached()` swallows fetch errors and returns null (network blip, retry
+    // exhaustion — real conditions on a real network, essentially never seen on
+    // localhost's instant loopback). A null here must NOT be treated as "this
+    // side of the catalog is empty": doing so wiped out every already-known
+    // marketplace or retail offer on the next unconditional setOffers below —
+    // including one just saved a moment ago by createOffer/updateOffer — because
+    // this is called unconditionally on every dashboard/page mount.
+    const marketplaceFetchOk = marketplace !== null;
+    const retailFetchOk = retail !== null;
+    const marketplaceList = marketplaceFetchOk
+      ? (Array.isArray(marketplace) ? marketplace : ((marketplace as any).data ?? [])).map(withDisplayImage)
+      : [];
+    const retailList = retailFetchOk
+      ? (Array.isArray(retail) ? retail : []).map((row: any) =>
+          withDisplayImage({
+            ...row,
+            marketType: row.marketType ?? MarketType.ATI,
+            quantity: Number(row.quantity ?? 0),
+            price: Number(row.price ?? 0),
+            isNegotiable: row.isNegotiable ?? false,
+            isDeliveryAvailable: row.isDeliveryAvailable ?? true,
+            minQuantity: Number(row.minQuantity ?? 1),
+            createdAt: row.createdAt ?? new Date().toISOString(),
+          }),
+        )
+      : [];
+    setOffers((prev) => {
+      const byId = new Map<string, Offer>();
+      // Seed with whatever we already had for any side that failed to fetch,
+      // so a transient failure preserves the last-known-good data instead of
+      // dropping it.
+      if (!marketplaceFetchOk) {
+        for (const o of prev) if (o.marketType !== MarketType.ATI) byId.set(o.id, o);
+      }
+      if (!retailFetchOk) {
+        for (const o of prev) if (o.marketType === MarketType.ATI) byId.set(o.id, o);
+      }
+      for (const o of marketplaceList) {
+        if (o?.id) byId.set(o.id, o);
+      }
+      for (const o of retailList) {
+        if (o?.id) byId.set(o.id, o);
+      }
+      return Array.from(byId.values());
+    });
   };
 
   const syncProducerDashboardSession = (rows: ProducerProfile[]): boolean => {
@@ -1322,7 +1426,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     userRef.current = next;
     setUser(next);
     useSessionStore.getState().setUser(next);
-    localStorage.setItem('currentUser', JSON.stringify(next));
+    nativeStorageSet('currentUser', JSON.stringify(next));
     bustCache(QK.orders(producerAccountUserId(next), next.role, next.clientId));
     return true;
   };
@@ -1414,6 +1518,43 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     });
   };
 
+  /**
+   * Resolve ONE public profile by id from the public list endpoints and add it to
+   * the store. The catalogs the public profile page reads are not guaranteed to
+   * contain the requested profile: `refreshClients` below loads only the viewer's
+   * own buyer profile, and nothing at all for anonymous visitors — so a shared
+   * `/profile/client/:id` link rendered "User not found" for essentially everyone.
+   *
+   * Deliberately does NOT reuse upsertClientInStore/upsertProducerInStore: those
+   * match on session identity, so upserting a third party's profile could
+   * overwrite the viewer's own row. This only ever APPENDS a profile that isn't
+   * present. Returns true when the profile was found.
+   */
+  const loadPublicProfileById = async (
+    role: 'PRODUCER' | 'CLIENT',
+    id: string,
+  ): Promise<boolean> => {
+    if (!id) return false;
+    const endpoint =
+      role === 'PRODUCER' ? API_ENDPOINTS.producers.list : API_ENDPOINTS.clients.list;
+    try {
+      const data = await apiFetch<any>(endpoint, { silent401: true } as any);
+      const rows = Array.isArray(data) ? data : ((data as any)?.data ?? []);
+      const match = rows.find((r: any) => r?.id === id);
+      if (!match) return false;
+      if (role === 'PRODUCER') {
+        const mapped = mapProducerRow(match);
+        setProducers((prev) => (prev.some((p) => p.id === mapped.id) ? prev : [...prev, mapped]));
+      } else {
+        const mapped = mapClientRow(match);
+        setClients((prev) => (prev.some((c) => c.id === mapped.id) ? prev : [...prev, mapped as any]));
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const refreshClients = async (opts?: { force?: boolean }) => {
     if (!getToken()) return;
     const session = userRef.current;
@@ -1440,7 +1581,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             setUser((prev) => {
               if (!prev) return prev;
               const next = { ...prev, clientId: me.id };
-              localStorage.setItem('currentUser', JSON.stringify(next));
+              nativeStorageSet('currentUser', JSON.stringify(next));
               return next;
             });
           }
@@ -1509,6 +1650,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     );
     if (Array.isArray(data)) setOrders(data.map(mapOrderRow));
   };
+
+  refreshOrdersRef.current = refreshOrders;
 
   const refreshWallet = async (opts?: { force?: boolean }) => {
     const u = userRef.current;
@@ -1612,7 +1755,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       opts?.force,
     );
     const rows = payload?.items;
-    if (!Array.isArray(rows) || rows.length === 0) return;
+    // A failed fetch leaves `rows` undefined — stay un-hydrated so the sync
+    // effect keeps refusing to push an empty cart over a server cart we
+    // could not read.
+    if (!Array.isArray(rows)) return;
+    if (rows.length === 0) {
+      // Server cart is genuinely empty: local empty state matches it, so
+      // syncing from here on is safe.
+      cartHydratedRef.current = true;
+      return;
+    }
     // Read offers from the React Query cache (always current after a refresh
     // in the same render cycle, unlike `offers` from useState which is stale
     // inside the same closure). Fall back to component state when missing.
@@ -1626,21 +1778,22 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         ? ((offersList as any).data as Offer[])
         : offers;
     if (offersArr.length === 0) return; // bootstrap will retry on next page mount
-    setCart((prev) => {
-      if (prev.length > 0) return prev;
-      const hydrated = rows
-        .map((row) => {
-          const off = offersArr.find((o: any) => o.id === row.offerId) as Offer | undefined;
-          if (!off) return null;
-          return {
-            ...off,
-            cartQuantity: Math.max(1, Math.floor(Number(row.quantity)) || 1),
-            bookingDate: row.bookingDate ? new Date(row.bookingDate).toISOString() : undefined,
-          } as CartItem;
-        })
-        .filter(Boolean) as CartItem[];
-      return hydrated.length ? hydrated : prev;
-    });
+    const hydrated = rows
+      .map((row) => {
+        const off = offersArr.find((o: any) => o.id === row.offerId) as Offer | undefined;
+        if (!off) return null;
+        return {
+          ...off,
+          cartQuantity: Math.max(1, Math.floor(Number(row.quantity)) || 1),
+          bookingDate: row.bookingDate ? new Date(row.bookingDate).toISOString() : undefined,
+        } as CartItem;
+      })
+      .filter(Boolean) as CartItem[];
+    // Only mark hydrated once local state can actually represent the server
+    // cart. If none of the rows resolved to a known offer we stay un-hydrated
+    // rather than let an empty cart overwrite the server's.
+    if (hydrated.length > 0) cartHydratedRef.current = true;
+    setCart((prev) => (prev.length > 0 ? prev : hydrated.length ? hydrated : prev));
   };
 
   /**
@@ -1839,22 +1992,25 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           { silent401: true } as any,
         ).catch(() => null);
         const rows = cartPayload?.items;
-        if (Array.isArray(rows) && rows.length > 0) {
-          setCart((prev) => {
-            if (prev.length > 0) return prev;
-            const hydrated = rows
-              .map((row) => {
-                const off = offersList.find((o: any) => o.id === row.offerId) as Offer | undefined;
-                if (!off) return null;
-                return {
-                  ...off,
-                  cartQuantity: Math.max(1, Math.floor(Number(row.quantity)) || 1),
-                  bookingDate: row.bookingDate ? new Date(row.bookingDate).toISOString() : undefined,
-                } as CartItem;
-              })
-              .filter(Boolean) as CartItem[];
-            return hydrated.length ? hydrated : prev;
-          });
+        if (Array.isArray(rows) && rows.length === 0) {
+          // Server cart is genuinely empty — local empty state matches it.
+          cartHydratedRef.current = true;
+        } else if (Array.isArray(rows) && rows.length > 0) {
+          const hydrated = rows
+            .map((row) => {
+              const off = offersList.find((o: any) => o.id === row.offerId) as Offer | undefined;
+              if (!off) return null;
+              return {
+                ...off,
+                cartQuantity: Math.max(1, Math.floor(Number(row.quantity)) || 1),
+                bookingDate: row.bookingDate ? new Date(row.bookingDate).toISOString() : undefined,
+              } as CartItem;
+            })
+            .filter(Boolean) as CartItem[];
+          // See refreshCart: only unlock syncing once local state can actually
+          // represent what the server holds.
+          if (hydrated.length > 0) cartHydratedRef.current = true;
+          setCart((prev) => (prev.length > 0 ? prev : hydrated.length ? hydrated : prev));
         }
       }
     } catch (error) {
@@ -1963,7 +2119,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       userRef.current = merged;
       setUser(merged);
       useSessionStore.getState().setUser(merged);
-      localStorage.setItem('currentUser', JSON.stringify(merged));
+      nativeStorageSet('currentUser', JSON.stringify(merged));
       return merged;
     } catch {
       return userRef.current;
@@ -1976,7 +2132,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   ) => {
     if (!isWebAppAllowedRole(data.user?.role)) {
       clearToken();
-      localStorage.removeItem('currentUser');
+      nativeStorageRemove('currentUser');
       throw new Error('This account is not supported in WebApp. Please use Admin Panel.');
     }
     const jwtToken = data.accessToken || data.token;
@@ -1988,18 +2144,42 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
     setUser(data.user);
     useSessionStore.getState().setUser(data.user);
-    localStorage.setItem('currentUser', JSON.stringify(data.user));
+    nativeStorageSet('currentUser', JSON.stringify(data.user));
     userRef.current = data.user;
+    // The support widget's state belonged to the GUEST that was here a moment ago.
+    // Logging in makes `user` truthy, which stops the guest poll (it requires
+    // !user) while the authenticated poll runs against the guest session id — an
+    // id this user does not own, so every fetch comes back empty and the status
+    // never moves. The widget froze on "Waiting for an agent…" from the guest
+    // conversation. A signed-in user starts a fresh session with the bot; the
+    // guest thread stays with the guest email on the agent's side.
+    setSupportSessionId(null);
+    setIsHandedOver(false);
+    setSupportSessionStatus('AI_HANDLING');
+    setSupportMessages([]);
+    setGuestEmail(null);
+    setGuestName(null);
+    try {
+      nativeStorageRemove('supportSessionId');
+      nativeStorageRemove('guestEmail');
+    } catch { /* noop */ }
     await hydrateMarketplaceSession();
 
-    const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
+    const localCart = JSON.parse(nativeStorageGet('cart') || '[]');
     if (localCart.length > 0) {
+      // A non-empty local cart deliberately wins on login (the user just added
+      // these items on this device), and this push makes the server match it.
+      cartHydratedRef.current = true;
       apiFetch(API_ENDPOINTS.cart.sync, {
         method: 'POST',
         silent401: true,
         body: JSON.stringify({ items: localCart.map((i: any) => ({ offerId: i.id, quantity: i.cartQuantity || 1 })) }),
       } as any).catch(() => {});
     }
+    // NOTE: when localCart is empty we deliberately do NOT mark hydrated here —
+    // the server may hold a cart from another device, and fetchData below is
+    // what reads it. Marking it here would let the debounced sync push an empty
+    // cart and wipe it.
 
     // `skipCatalogFetch` avoids a race: an in-flight fetch from here can finish *after* the
     // profile is created and overwrite `clients` / `producers` with stale data. Registration
@@ -2016,12 +2196,23 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const data = await apiFetch<AuthSessionPayload>(API_ENDPOINTS.auth.login, {
         method: 'POST',
         body: JSON.stringify({ identifier, password }),
+        // A 401 here means invalid credentials, not a dead session — there is no
+        // session to refresh yet. Without these, apiFetch treated a failed login
+        // attempt like an expired session: it tried a pointless token refresh
+        // (which itself calls forceLogoutRedirect() whenever /auth/refresh
+        // 401/403s — the common case with no/stale refresh token, bypassing
+        // silent401 entirely), clearing storage and firing the global
+        // session-expired event before this call's own catch block (below) could
+        // show the error — which looked like the page silently reloading with
+        // the form wiped instead of showing "Invalid credentials".
+        silent401: true,
+        skipAuthRefresh: true,
       });
       await establishSession(data);
       return { success: true, message: 'Logged in successfully.' };
     } catch (err: any) {
       clearToken();
-      localStorage.removeItem('currentUser');
+      nativeStorageRemove('currentUser');
       useSessionStore.getState().clear();
       return { success: false, message: err.message || 'Login failed.' };
     }
@@ -2037,11 +2228,23 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
     clearToken();
     setUser(null);
+    // The support conversation belonged to the session that just ended. Leaving
+    // it behind meant the AUTHENTICATED session id got reused on the guest
+    // endpoints, which reject it (no guestEmail / owned by a user) — that was
+    // the "chatbot 403 after logging out" report.
+    setSupportSessionId(null);
+    setIsHandedOver(false);
+    setSupportSessionStatus('AI_HANDLING');
+    setSupportMessages([]);
+    try { nativeStorageRemove('supportSessionId'); } catch { /* noop */ }
     useSessionStore.getState().clear();
     setMyReferrals(null);
     setReviews([]);
     setCart([]);
-    localStorage.removeItem('currentUser');
+    // The next session must re-read the server cart before it is allowed to
+    // overwrite it (see cartHydratedRef).
+    cartHydratedRef.current = false;
+    nativeStorageRemove('currentUser');
     // Drop session-scoped data so the next login/register does not reconcile against a huge
     // in-memory graph from the previous user (slower updates, brief wrong-user flash).
     setOrders([]);
@@ -2106,6 +2309,22 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const registerProducer = async (data: any, password: string): Promise<{ success: boolean; message: string }> => {
     try {
+      // Individual producers must supply real identity details; never silently
+      // substitute placeholders (that is how empty gender/DOB accounts slipped in).
+      // Business producers are organisations and legitimately don't have these.
+      if (data.type === 'INDIVIDUAL') {
+        const missing =
+          !String(data.firstName ?? '').trim() ||
+          !String(data.lastName ?? '').trim() ||
+          !String(data.gender ?? '').trim() ||
+          !String(data.dateOfBirth ?? '').trim();
+        if (missing) {
+          return {
+            success: false,
+            message: 'Please complete all required personal details (first name, last name, gender, date of birth).',
+          };
+        }
+      }
       const producerRegisterBody: Record<string, string> = {
         email: String(data.email ?? '').trim(),
         phone: normalizeRegisterPhone(data.phone),
@@ -2158,7 +2377,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (producerProfile?.id) {
         setUser(mergedUser);
         useSessionStore.getState().setUser(mergedUser);
-        localStorage.setItem('currentUser', JSON.stringify(mergedUser));
+        nativeStorageSet('currentUser', JSON.stringify(mergedUser));
         upsertProducerInStore({
           id: producerProfile.id,
           userId: session.user.id,
@@ -2189,6 +2408,20 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const registerClient = async (data: any, password: string, avatarFile?: File | null): Promise<{ success: boolean; message: string }> => {
     try {
+      // Every client must supply real identity details. Guard here so an empty
+      // field can never be silently replaced with a placeholder (e.g. gender
+      // "OTHER" or today's date) and create an account with junk data.
+      const missing =
+        !String(data.firstName ?? '').trim() ||
+        !String(data.lastName ?? '').trim() ||
+        !String(data.gender ?? '').trim() ||
+        !String(data.dateOfBirth ?? '').trim();
+      if (missing) {
+        return {
+          success: false,
+          message: 'Please complete all required fields (first name, last name, gender, date of birth).',
+        };
+      }
       const clientRegisterBody: Record<string, string> = {
         email: String(data.email ?? '').trim(),
         phone: normalizeRegisterPhone(data.phone),
@@ -2218,9 +2451,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const clientProfile = await apiFetch<{ id: string }>(API_ENDPOINTS.profiles.client, {
         method: 'POST',
         body: JSON.stringify({
-          firstName: data.firstName || "Client",
-          lastName: data.lastName || "",
-          gender: data.gender || "OTHER",
+          firstName: String(data.firstName).trim(),
+          lastName: String(data.lastName).trim(),
+          gender: String(data.gender).trim(),
           dateOfBirth: toIsoDateOfBirthSafe(data.dateOfBirth),
           locations: sanitizeProfileLocationsForApi(data.locations),
         }),
@@ -2244,7 +2477,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (clientProfile?.id) {
         setUser(mergedUser);
         useSessionStore.getState().setUser(mergedUser);
-        localStorage.setItem('currentUser', JSON.stringify(mergedUser));
+        nativeStorageSet('currentUser', JSON.stringify(mergedUser));
         upsertClientInStore({
           id: clientProfile.id,
           userId: session.user.id,
@@ -2283,7 +2516,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setToken(data.token);
       setUser(data.user);
       useSessionStore.getState().setUser(data.user);
-      localStorage.setItem('currentUser', JSON.stringify(data.user));
+      nativeStorageSet('currentUser', JSON.stringify(data.user));
       setPendingRegistration(null);
       return true;
     } catch {
@@ -2376,7 +2609,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         };
         setUser(nextUser);
         useSessionStore.getState().setUser(nextUser);
-        localStorage.setItem('currentUser', JSON.stringify(nextUser));
+        nativeStorageSet('currentUser', JSON.stringify(nextUser));
       }
       bustCache(QK.producers());
       if (user) addNotification(user.id, 'Profile updated', 'SUCCESS');
@@ -2458,7 +2691,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       };
       setUser(nextUser);
       useSessionStore.getState().setUser(nextUser);
-      localStorage.setItem('currentUser', JSON.stringify(nextUser));
+      nativeStorageSet('currentUser', JSON.stringify(nextUser));
       await fetchData(nextUser);
       return true;
     } catch (error) {
@@ -2570,7 +2803,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         };
         setUser(nextUser);
         useSessionStore.getState().setUser(nextUser);
-        localStorage.setItem('currentUser', JSON.stringify(nextUser));
+        nativeStorageSet('currentUser', JSON.stringify(nextUser));
       }
       bustCache(QK.clients());
       if (user) addNotification(user.id, 'Profile updated', 'SUCCESS');
@@ -2623,7 +2856,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(payload),
       });
       setOffers(prev => [...prev, newOffer]);
-      bustCache(QK.offers());
+      await bustCache(QK.offers());
       addNotification(user.id, 'Offer created successfully.', 'SUCCESS');
       return { success: true };
     } catch (err: unknown) {
@@ -2662,7 +2895,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(payload),
       });
       setOffers(prev => prev.map(o => o.id === saved.id ? saved : o));
-      bustCache(QK.offers());
+      await bustCache(QK.offers());
       if (user) addNotification(user.id, 'Offer updated successfully.', 'SUCCESS');
       return { success: true };
     } catch (error: unknown) {
@@ -2693,7 +2926,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         method: 'DELETE',
       });
       setOffers(prev => prev.filter(o => o.id !== offerId));
-      bustCache(QK.offers());
+      await bustCache(QK.offers());
       if (user) addNotification(user.id, 'Offer deleted successfully.', 'SUCCESS');
       return { success: true };
     } catch (error: unknown) {
@@ -2759,6 +2992,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
   const clearCart = () => {
     setCart([]);
+    // Deliberate user action that also clears the server cart below, so local
+    // and server agree from here on.
+    cartHydratedRef.current = true;
     if (user?.id) bustCache(QK.cart(user.id));
     if (user && getToken()) {
       apiFetch(API_ENDPOINTS.cart.clear, {
@@ -2770,7 +3006,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ─── ORDERS ──────────────────────────────────────────────────────────────────
 
-  const placeOrder = async (couponId?: string, _discountAmount: number = 0, deliveryDate?: string, deliveryMethod: 'HOME' | 'PICKUP' = 'HOME', pickupPointId?: string, homeDeliveryLocationId?: string, homeShippingSnapshot?: PreferredHomeDeliverySnapshot | null): Promise<boolean> => {
+  const placeOrder = async (couponId?: string, _discountAmount: number = 0, deliveryDate?: string, deliveryMethod: 'HOME' | 'PICKUP' = 'HOME', pickupPointId?: string, homeDeliveryLocationId?: string, homeShippingSnapshot?: PreferredHomeDeliverySnapshot | null, deliveryTime?: string): Promise<boolean> => {
     if (cart.length === 0 || (!user && !guestEmail)) return false;
 
     const payload = {
@@ -2779,7 +3015,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         quantity: item.cartQuantity,
         bookingDate: item.bookingDate ? new Date(item.bookingDate).toISOString() : undefined,
       })),
-      requestedDeliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : new Date(Date.now() + 86400 * 1000).toISOString(),
+      // requestedDeliveryDate is a full DateTime end to end (Prisma TIMESTAMP(3)),
+      // but the hour was hardcoded to noon, so the customer's chosen delivery
+      // window was never actually sent. Use the picked slot when there is one.
+      requestedDeliveryDate: deliveryDate
+        ? new Date(`${deliveryDate}T${deliveryTime || '12:00'}:00`).toISOString()
+        : new Date(Date.now() + 3 * 86400 * 1000).toISOString(),
       deliveryMethod,
       pickupPointId: pickupPointId || undefined,
       couponId: couponId || undefined,
@@ -2814,7 +3055,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setUser(prev => {
           if (!prev) return prev;
           const next = { ...prev, clientId: saved.clientId };
-          localStorage.setItem('currentUser', JSON.stringify(next));
+          nativeStorageSet('currentUser', JSON.stringify(next));
           return next;
         });
       }
@@ -2996,7 +3237,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const reportProblem = async (orderId: string, reason: string, files: File[]) => {
+  const reportProblem = async (orderId: string, reason: string, files: File[]): Promise<boolean> => {
     const formData = new FormData();
     formData.append('reason', reason);
     files.forEach(f => formData.append('files', f));
@@ -3007,29 +3248,37 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.DISPUTE, disputeReason: reason, disputeEvidence: evidence } : o));
       bustCache(['orders']);
       if (user) addNotification(user.id, 'Dispute opened.', 'WARNING');
+      return true;
     } catch (error) {
       logApiFailure('Failed to report problem', error);
       addNotification(user!.id, 'Failed to report problem. Please try again.', 'ERROR');
+      return false;
     }
   };
 
-  const addDisputeEvidence = async (orderId: string, files: File[]) => {
-    if (!user || files.length === 0) return;
+  const addDisputeEvidence = async (orderId: string, files: File[], note?: string): Promise<boolean> => {
+    if (!user || files.length === 0) return false;
     // Append evidence to an already-open dispute (used by the producer, and by
-    // the buyer to add more). Persists via the same endpoint as reportProblem,
-    // just without a reason. Previously this only mutated local state, so the
-    // admin never received the producer's evidence.
+    // the buyer to add more). Persists via the same endpoint as reportProblem.
+    // `note` carries this party's own account of the dispute — the API stores it
+    // per submission, so an admin can read the rebuttal instead of only seeing
+    // the images. Previously this only mutated local state, so the admin never
+    // received the producer's evidence at all.
     const formData = new FormData();
     files.forEach(f => formData.append('files', f));
+    const trimmedNote = (note ?? '').trim();
+    if (trimmedNote) formData.append('reason', trimmedNote);
     try {
       const result = await apiUpload<DisputeEvidence[] | { evidence: DisputeEvidence[] }>(API_ENDPOINTS.orders.dispute(orderId), formData);
       const evidence = Array.isArray(result) ? result : (result?.evidence ?? []);
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, disputeEvidence: [...(o.disputeEvidence || []), ...evidence] } : o));
       bustCache(['orders']);
       addNotification(user.id, 'Evidence uploaded successfully', 'SUCCESS');
+      return true;
     } catch (error) {
       logApiFailure('Failed to upload evidence', error);
       addNotification(user.id, 'Failed to upload evidence. Please try again.', 'ERROR');
+      return false;
     }
   };
 
@@ -3619,15 +3868,20 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           // If an agent already picked up the session in the meantime, skip the
           // "connecting…" placeholder entirely.
           if (supportSessionStatusRef.current === 'AGENT_ACTIVE') return;
-          setSupportMessages((prev) => [
-            ...prev,
-            {
-              id: `s-connecting-${Date.now()}`,
-              sender: 'AGENT',
-              text: 'Connecting you with a support agent…',
-              timestamp: new Date().toISOString(),
-            },
-          ]);
+          setSupportMessages((prev) => {
+            // Only ever one "connecting…" line — it was appended on every retry
+            // and every re-escalation, so the thread filled with duplicates.
+            if (prev.some((m) => m.id.startsWith('s-connecting-'))) return prev;
+            return [
+              ...prev,
+              {
+                id: `s-connecting-${Date.now()}`,
+                sender: 'AGENT',
+                text: 'Connecting you with a support agent…',
+                timestamp: new Date().toISOString(),
+              },
+            ];
+          });
         }, 1000);
       }
     } catch (e) {
@@ -3661,8 +3915,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (returningToAi || !supportSessionId) return;
     setReturningToAi(true);
     try {
-      const { returnSessionToAi } = await import('./supportSessionsApi');
-      await returnSessionToAi(supportSessionId);
+      // Guests must use the guest route — the authenticated one 401s for them,
+      // which is why "Back to AgriBot" appeared to do nothing while the same
+      // button worked instantly for a signed-in user.
+      const { returnSessionToAi, returnGuestSessionToAi } = await import('./supportSessionsApi');
+      if (!!user && !!getToken()) {
+        await returnSessionToAi(supportSessionId);
+      } else if (guestEmail) {
+        await returnGuestSessionToAi(supportSessionId, guestEmail);
+      }
       setIsHandedOver(false);
       setSupportSessionStatus('AI_HANDLING');
       setSupportMessages((prev) => [
@@ -3691,7 +3952,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setRequestingAgent(true);
     try {
       let sessionId = supportSessionIdRef.current ?? supportSessionId;
-      if (user) {
+      // Branch on the TOKEN, not on `user`: a stale currentUser with no token sent
+    // guests down the authenticated path, which 401s and bounced them to /login.
+    const authed = !!user && !!getToken();
+    if (authed) {
         if (!sessionId) {
           const created = await createOrGetSupportSession();
           sessionId = created.sessionId;
@@ -3707,15 +3971,18 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }
       setIsHandedOver(true);
       setSupportSessionStatus('WAITING_FOR_AGENT');
-      setSupportMessages((prev) => [
-        ...prev,
-        {
-          id: `s-connecting-${Date.now()}`,
-          sender: 'AGENT',
-          text: 'Connecting you with a support agent… They will reply right here shortly.',
-          timestamp: new Date().toISOString(),
-        },
-      ]);
+      setSupportMessages((prev) => {
+        if (prev.some((m) => m.id.startsWith('s-connecting-'))) return prev;
+        return [
+          ...prev,
+          {
+            id: `s-connecting-${Date.now()}`,
+            sender: 'AGENT',
+            text: 'Connecting you with a support agent… They will reply right here shortly.',
+            timestamp: new Date().toISOString(),
+          },
+        ];
+      });
     } catch (e) {
       logApiFailure('Failed to request a human agent', e);
       if (user) addNotification(user.id, 'Could not reach an agent. Please try again.', 'ERROR');
@@ -3724,33 +3991,48 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  // Polling for guest support messages when handed over to agent
+  // Polling for guest support sessions.
+  //
+  // This is a guest's ONLY sync channel — the /notifications socket is JWT-gated,
+  // so nothing an admin does in the Console reaches them any other way. It runs
+  // whenever the widget is open on a guest session (not just after hand-over), so
+  // an admin who picks up or closes a session the guest never escalated still
+  // gets reflected on the guest's side.
   useEffect(() => {
-    if (!isSupportChatOpen || !isHandedOver || user || !supportSessionId || !guestEmail) return;
+    if (!isSupportChatOpen || user || !supportSessionId || !guestEmail) return;
 
     const pollInterval = setInterval(async () => {
       try {
-        const data = await getGuestSupportMessages(supportSessionId, guestEmail);
-        if (data && Array.isArray(data)) {
-          const backendMessages = data.map((msg: any) =>
-            mapDtoToSupportMessage({
-              id: msg.id,
-              sender: msg.sender,
-              text: msg.text,
-              timestamp: msg.timestamp,
-            })
-          );
-          // Server history is authoritative — reconcile (not append) so a guest's
-          // optimistic AI-mode bubbles (temp ids) don't duplicate against their
-          // persisted server copies. Guard empty so an errored poll can't wipe it.
-          if (backendMessages.length > 0) {
-            setSupportMessages((prev) => reconcileServerMessages(prev, backendMessages));
-          }
-          // Guests have no socket — infer "agent connected" from a real agent reply
-          // so the widget stops showing "waiting for an agent".
-          if (backendMessages.some((m) => m.sender === 'AGENT' && !m.internal)) {
-            setSupportSessionStatus('AGENT_ACTIVE');
-          }
+        const { messages, status } = await getGuestSupportSnapshot(supportSessionId, guestEmail);
+        const backendMessages = messages.map((msg: any) =>
+          mapDtoToSupportMessage({
+            id: msg.id,
+            sender: msg.sender,
+            text: msg.text,
+            timestamp: msg.timestamp,
+          })
+        );
+        // Server history is authoritative — reconcile (not append) so a guest's
+        // optimistic AI-mode bubbles (temp ids) don't duplicate against their
+        // persisted server copies. Guard empty so an errored poll can't wipe it.
+        if (backendMessages.length > 0) {
+          setSupportMessages((prev) => reconcileServerMessages(prev, backendMessages));
+        }
+        // Authoritative status from the server — mirrors what the socket's
+        // 'support:session-update' handler does for logged-in users.
+        if (
+          status === 'AI_HANDLING' ||
+          status === 'WAITING_FOR_AGENT' ||
+          status === 'AGENT_ACTIVE' ||
+          status === 'CLOSED'
+        ) {
+          setSupportSessionStatus(status);
+          setIsHandedOver(status === 'WAITING_FOR_AGENT' || status === 'AGENT_ACTIVE');
+        } else if (backendMessages.some((m) => m.sender === 'AGENT' && !m.internal)) {
+          // Fallback for an API that predates the status field: a real agent reply
+          // means someone is on the other end.
+          setSupportSessionStatus('AGENT_ACTIVE');
+          setIsHandedOver(true);
         }
       } catch (err) {
         logApiFailure('Error polling support messages:', err);
@@ -3758,7 +4040,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }, 5000); // Poll every 5 seconds while chat is open
 
     return () => clearInterval(pollInterval);
-  }, [isSupportChatOpen, isHandedOver, user, supportSessionId, guestEmail]);
+  }, [isSupportChatOpen, user, supportSessionId, guestEmail]);
 
   // Polling for authenticated users when handed over to agent.
   // Also re-syncs inbox every 15s to detect if an admin resets the session
@@ -4237,7 +4519,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     fetchMessages,
     startNegotiation,
     sendMessage, retryMessage, emitTyping, respondToProposal,
-    login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, deleteOffer, getProducerOffers, getOfferById,
+    login, logout, registerProducer, registerClient, verifyEmail, updateClientProfile, upgradeClientToProducer, validateProducer, updateProducerProfile, updateProducerAvailability, saveProducerPaymentMethod, deleteProducerPaymentMethod, requestOtp, verifyOtp, createOffer, updateOffer, deleteOffer, getProducerOffers, getOfferById, loadPublicProfileById,
     addToCart, removeFromCart, clearCart, placeOrder, confirmOrder, rejectOrder, cancelOrder, payForOrder, startDelivery, markOrderDelivered, confirmReceipt, completeOrder, requestOrderCancellation, updateAppointment, reportProblem, addDisputeEvidence, revealContactInfo,
     getWallet, fundWallet, initiateTopUp, checkTopUpStatus, requestWithdrawal, markNotificationsAsRead, markNotificationAsRead, deleteNotification, clearNotifications, getAvailableSlots, submitReview, getAverageRating,
     getProducerPortfolios, addPortfolio, updatePortfolio, deletePortfolio,

@@ -181,6 +181,8 @@ export interface PickupPoint {
   region: string;
   city: string;
   address: string; // Detailed description or landmark
+  image?: string; // Optional photo of the location (configured in AgriAdmin)
+  latLng?: { lat: number; lng: number }; // Optional geo coordinates
 }
 
 // SCHEDULING TYPES
@@ -324,6 +326,9 @@ export interface DisputeEvidence {
   fileUrl: string; // Mock URL
   fileType: 'IMAGE' | 'DOCUMENT';
   uploadedAt: string;
+  /** Note the uploading party submitted with this evidence batch. Null on rows
+   *  created before the column existed. */
+  note?: string | null;
 }
 
 // Coupon System
@@ -349,7 +354,7 @@ export interface Order {
 
   // Financials
   subtotal: number; // Items * Price
-  serviceFee: number; // 16.5% buyer commission of Subtotal
+  serviceFee: number; // 16% buyer commission of Subtotal
   discountAmount?: number; // Amount deducted by coupon
   totalAmount: number; // Subtotal + ServiceFee - Discount (what the buyer pays)
   platformCommission?: number; // 5% of Subtotal (Deducted from Producer)

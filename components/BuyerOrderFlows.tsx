@@ -23,13 +23,15 @@ import { showAppToast } from '../services/appToast';
 import { Modal } from './Modal';
 import { ConfirmModal } from './ConfirmModal';
 import { ServiceAppointmentPicker } from './ServiceAppointmentPicker';
-import { Order, OrderStatus, UserSession } from '../types';
+import { EvidenceFilePreviews } from './EvidenceFilePreviews';
+import { Order, OrderStatus, UserSession, MarketType } from '../types';
 import { offerImageInBox } from '../utils/offerImageDisplay';
 import { PAYMENTS_ENABLED } from '../utils/featureFlags';
-import { orderHasService, orderIsServiceOnly, serviceLineCount } from '../utils/orderLabels';
+import { orderHasService, orderIsRetail, orderIsServiceOnly, serviceDurationHoursForOrder, serviceLineCount } from '../utils/orderLabels';
 import {
   canCancelDirectly,
   canLeaveReview,
+  canPayNow,
   canReportProblem,
   canRequestCancellation,
   isActiveOrderStatus,
@@ -88,6 +90,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
   const [disputeFiles, setDisputeFiles] = useState<File[]>([]);
+  const [submittingDispute, setSubmittingDispute] = useState(false);
 
   const [showPaymentRecap, setShowPaymentRecap] = useState(false);
   const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
@@ -158,14 +161,21 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
       if (parsed.success) return {};
       return { disputeReason: parsed.error.issues[0]?.message || t('order.invalidReason') };
     },
-    onSubmit: (values, { setFieldError }) => {
-      if (disputeOrderId) {
-        if (disputeFiles.length === 0) {
-          setFieldError('disputeReason', t('order.disputeFileRequired'));
-          return;
-        }
-        reportProblem(disputeOrderId, values.disputeReason, disputeFiles);
-        setShowDisputeModal(false);
+    onSubmit: async (values, { setFieldError }) => {
+      if (!disputeOrderId || submittingDispute) return;
+      if (disputeFiles.length === 0) {
+        setFieldError('disputeReason', t('order.disputeFileRequired'));
+        return;
+      }
+      // Awaited so the modal stays up (with a spinner) for the length of the
+      // multipart upload instead of closing immediately and leaving the report
+      // to land silently — and so a failed upload does not look like a success.
+      setSubmittingDispute(true);
+      try {
+        const ok = await reportProblem(disputeOrderId, values.disputeReason, disputeFiles);
+        if (ok) setShowDisputeModal(false);
+      } finally {
+        setSubmittingDispute(false);
       }
     },
   });
@@ -250,10 +260,9 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
   };
 
   const rescheduleOrder = rescheduleOrderId ? orders.find((o) => o.id === rescheduleOrderId) ?? null : null;
-  const rescheduleServiceItem = rescheduleOrder
-    ? (rescheduleOrder.items || []).find((it: any) => String(it.type ?? '').toUpperCase() === 'SERVICE')
-    : null;
-  const rescheduleDurationHours = Math.max(1, Number((rescheduleServiceItem as any)?.serviceDuration ?? 1) || 1);
+  const rescheduleDurationHours = rescheduleOrder
+    ? serviceDurationHoursForOrder(rescheduleOrder, offers)
+    : 1;
 
   const renderActions = useCallback(
     (order: Order, size: ActionSize = 'sm', afterAction?: () => void) => {
@@ -267,7 +276,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
 
       return (
         <>
-          {PAYMENTS_ENABLED && order.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT && (
+          {PAYMENTS_ENABLED && canPayNow(order) && (
             <button
               type="button"
               onClick={wrap(() => initiatePayment(order.id))}
@@ -432,7 +441,7 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
                 <span className="font-medium">{formatXaf(payOrder.subtotal)}</span>
               </div>
               <div className="flex justify-between text-gray-600">
-                <span>{t('cart.serviceFee')}</span>
+                <span>{t(payOrder.items?.some(i => i.marketType === MarketType.ATI) ? 'cart.serviceFeeRetail' : 'cart.serviceFee')}</span>
                 <span className="font-medium">{formatXaf(payOrder.serviceFee)}</span>
               </div>
               {(payOrder.discountAmount ?? 0) > 0 && (
@@ -570,16 +579,40 @@ export function BuyerOrderFlowsProvider({ children }: { children: React.ReactNod
               multiple
               accept="image/*,application/pdf"
               className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
-              onChange={(e) => e.target.files && setDisputeFiles(Array.from(e.target.files).slice(0, 3))}
+              onChange={(e) => {
+                                             // Append rather than replace: a FileList only holds the
+                                             // LAST dialog's picks, so clicking three times kept just
+                                             // one file. Dedupe by name+size+mtime, cap at the API's 3.
+                                             const picked = Array.from(e.target.files ?? []);
+                                             if (picked.length) {
+                                                setDisputeFiles(prev => {
+                                                   const merged = [...prev];
+                                                   for (const f of picked) {
+                                                      if (!merged.some(x => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) merged.push(f);
+                                                   }
+                                                   return merged.slice(0, 3);
+                                                });
+                                             }
+                                             e.target.value = '';
+                                          }}
             />
             <p className="text-xs text-gray-400 mt-1">{t('order.uploadFilesHint')}</p>
+            <EvidenceFilePreviews
+              files={disputeFiles}
+              onRemove={(i) => setDisputeFiles((prev) => prev.filter((_, idx) => idx !== i))}
+            />
           </div>
           <div className="flex justify-end gap-3 pt-4">
-            <button type="button" onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">
+            <button type="button" disabled={submittingDispute} onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:cursor-not-allowed">
               {t('form.cancel')}
             </button>
-            <button type="submit" className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700">
-              {t('order.submitReport')}
+            <button
+              type="submit"
+              disabled={submittingDispute}
+              className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700 disabled:cursor-not-allowed inline-flex items-center gap-2"
+            >
+              {submittingDispute && <Loader2 className="h-4 w-4 animate-spin" />}
+              {submittingDispute ? t('dispute.submitting') : t('order.submitReport')}
             </button>
           </div>
         </form>
@@ -803,6 +836,9 @@ export function BuyerPurchaseProducerContact({ order }: { order: Order }) {
   const { producers, revealContactInfo } = useStore();
 
   if (order.status !== OrderStatus.IN_TRANSIT) return null;
+  // ATI retail orders are sold by the platform, not by a producer — there is no
+  // seller profile to reveal, so the whole block is hidden for them.
+  if (orderIsRetail(order)) return null;
 
   const getProducerContact = (producerId: string) => {
     const p = producers.find((prod) => prod.id === producerId) as any;

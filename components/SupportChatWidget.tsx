@@ -1,5 +1,7 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { nativeStorageGet, nativeStorageSet } from '../services/nativeStorage';
+import { useNativeBackHandler } from '../hooks/useNativeBackHandler';
 import { useStoreOptional } from '../services/storeContext';
 import { useTranslation } from '../services/i18nContext';
 import { X, Send, Headphones, Bot, User, Check, Clock, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
@@ -29,10 +31,19 @@ export const SupportChatWidget: React.FC = () => {
   // Draggable launcher (closed FAB): persisted so it can be moved off the
   // chat composer's "Send" button. Uses pointer events (mouse + touch).
   const FAB_POS_KEY = 'agm_support_fab_pos';
+  const AI_CONSENT_KEY = 'agm_ai_support_consent_v1';
+  const [aiConsented, setAiConsented] = useState(() => {
+    try {
+      return nativeStorageGet(AI_CONSENT_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [aiConsentChecked, setAiConsentChecked] = useState(false);
   const fabRef = useRef<HTMLButtonElement>(null);
   const [fabPosition, setFabPosition] = useState<{ top: number; left: number } | null>(() => {
     try {
-      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(FAB_POS_KEY) : null;
+      const raw = typeof localStorage !== 'undefined' ? nativeStorageGet(FAB_POS_KEY) : null;
       if (raw) {
         const p = JSON.parse(raw);
         if (typeof p?.top === 'number' && typeof p?.left === 'number') return p;
@@ -63,7 +74,7 @@ export const SupportChatWidget: React.FC = () => {
     const clamped = clampToViewport(rect.top, rect.left, fabRef.current);
     setFabPosition(clamped);
     try {
-      localStorage.setItem(FAB_POS_KEY, JSON.stringify(clamped));
+      nativeStorageSet(FAB_POS_KEY, JSON.stringify(clamped));
     } catch {
       /* ignore */
     }
@@ -93,6 +104,15 @@ export const SupportChatWidget: React.FC = () => {
     fabDraggingRef.current = true;
     fabMovedRef.current = false;
     document.body.style.userSelect = 'none';
+    // Default dock uses `right`/`bottom`. Switch to `left`/`top` immediately so a
+    // later left assignment cannot sit alongside right — that pair compresses the
+    // circle as you drag toward the right edge.
+    const docked = { top: rect.top, left: rect.left };
+    setFabPosition(docked);
+    el.style.left = `${docked.left}px`;
+    el.style.top = `${docked.top}px`;
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
   };
 
   const handleFabPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -101,10 +121,13 @@ export const SupportChatWidget: React.FC = () => {
     const dy = e.clientY - fabPointerStartRef.current.y;
     if (!fabMovedRef.current && Math.hypot(dx, dy) < FAB_DRAG_THRESHOLD_PX) return;
     fabMovedRef.current = true;
-    const left = e.clientX - fabOffsetRef.current.x;
-    const top = e.clientY - fabOffsetRef.current.y;
-    fabRef.current.style.left = `${left}px`;
-    fabRef.current.style.top = `${top}px`;
+    const next = clampToViewport(
+      e.clientY - fabOffsetRef.current.y,
+      e.clientX - fabOffsetRef.current.x,
+      fabRef.current,
+    );
+    fabRef.current.style.left = `${next.left}px`;
+    fabRef.current.style.top = `${next.top}px`;
     fabRef.current.style.right = 'auto';
     fabRef.current.style.bottom = 'auto';
   };
@@ -133,7 +156,7 @@ export const SupportChatWidget: React.FC = () => {
         if (!prev) return prev;
         const clamped = clampToViewport(prev.top, prev.left, fabRef.current);
         if (clamped.top === prev.top && clamped.left === prev.left) return prev;
-        try { localStorage.setItem(FAB_POS_KEY, JSON.stringify(clamped)); } catch { /* ignore */ }
+        try { nativeStorageSet(FAB_POS_KEY, JSON.stringify(clamped)); } catch { /* ignore */ }
         return clamped;
       });
     };
@@ -142,7 +165,43 @@ export const SupportChatWidget: React.FC = () => {
   }, []);
 
   const isSupportChatOpen = store?.isSupportChatOpen ?? false;
+
+  // Keep a dragged widget fully on-screen. Dragging clamps against the widget's
+  // height at drop time only, so afterwards anything that shortens the viewport
+  // (rotation, the mobile browser's collapsing URL bar, the on-screen keyboard)
+  // or grows the widget (a handover banner appearing) leaves its bottom — the
+  // composer and send button — below the fold, unreachable because the panel is
+  // position:fixed. A ResizeObserver covers the content-growth case, which no
+  // window event reports.
+  useEffect(() => {
+    if (!isSupportChatOpen) return;
+    const reclamp = () => {
+      setPosition((prev) => {
+        if (!prev) return prev;
+        const next = clampToViewport(prev.top, prev.left, widgetRef.current);
+        return next.top === prev.top && next.left === prev.left ? prev : next;
+      });
+    };
+    reclamp();
+    window.addEventListener('resize', reclamp);
+    window.addEventListener('orientationchange', reclamp);
+    window.visualViewport?.addEventListener('resize', reclamp);
+    const observer =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(reclamp) : null;
+    if (widgetRef.current && observer) observer.observe(widgetRef.current);
+    return () => {
+      window.removeEventListener('resize', reclamp);
+      window.removeEventListener('orientationchange', reclamp);
+      window.visualViewport?.removeEventListener('resize', reclamp);
+      observer?.disconnect();
+    };
+  }, [isSupportChatOpen]);
   const toggleSupportChat = store?.toggleSupportChat ?? (() => {});
+  const closeSupportOnBack = useCallback(() => {
+    toggleSupportChat();
+    return true;
+  }, [toggleSupportChat]);
+  useNativeBackHandler(isSupportChatOpen, closeSupportOnBack);
   const supportMessages = store?.supportMessages ?? [];
   const supportAiTyping = store?.supportAiTyping ?? false;
   const supportChatSending = store?.supportChatSending ?? false;
@@ -189,11 +248,11 @@ export const SupportChatWidget: React.FC = () => {
   }, [supportMessages, isSupportChatOpen, supportAiTyping]);
 
   useEffect(() => {
-    if (isSupportChatOpen && !showGuestForm && inputRef.current) {
+    if (isSupportChatOpen && aiConsented && !showGuestForm && inputRef.current) {
       const t = setTimeout(() => inputRef.current?.focus(), 150);
       return () => clearTimeout(t);
     }
-  }, [isSupportChatOpen, showGuestForm]);
+  }, [isSupportChatOpen, showGuestForm, aiConsented]);
 
   const widgetDragStartRef = useRef({ x: 0, y: 0 });
   const widgetMovedRef = useRef(false);
@@ -256,6 +315,7 @@ export const SupportChatWidget: React.FC = () => {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!aiConsented) return;
     const text = inputText.trim();
     if (!text || composerDisabled) return;
     setInputText('');
@@ -264,6 +324,7 @@ export const SupportChatWidget: React.FC = () => {
 
   const handleSubmitGuestForm = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!aiConsented) return;
     setFormEmailError('');
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!guestEmailInput.trim()) {
@@ -279,8 +340,8 @@ export const SupportChatWidget: React.FC = () => {
 
   const dockBottom =
     compareCount > 0
-      ? 'calc(max(1rem, env(safe-area-inset-bottom)) + 5rem)'
-      : 'max(1rem, env(safe-area-inset-bottom))';
+      ? 'calc(var(--agm-tabbar, 0px) + max(1rem, env(safe-area-inset-bottom)) + 5rem)'
+      : 'calc(var(--agm-tabbar, 0px) + max(1rem, env(safe-area-inset-bottom)))';
 
   const widgetStyle: React.CSSProperties = {
     maxHeight: 'min(560px, calc(100dvh - 5rem))',
@@ -292,12 +353,14 @@ export const SupportChatWidget: React.FC = () => {
   const headerStatus = supportAiTyping
     ? { label: t('support.chatStatusTyping'), dot: 'bg-amber-300 animate-pulse' }
     : supportChatSending
+
       ? { label: t('support.chatStatusSending'), dot: 'bg-blue-300 animate-pulse' }
       : agentActive
         ? { label: t('support.chatStatusAgentConnected'), dot: 'bg-green-400' }
         : waitingForAgent
           ? { label: t('support.chatStatusWaitingForAgent'), dot: 'bg-yellow-400 animate-pulse' }
           : { label: t('support.chatStatusOnline'), dot: 'bg-green-400 animate-pulse' };
+
 
   if (!store) return null;
 
@@ -312,10 +375,10 @@ export const SupportChatWidget: React.FC = () => {
           onPointerUp={handleFabPointerUp}
           onPointerCancel={handleFabPointerCancel}
           onClick={handleFabClick}
-          className="fixed z-50 bg-blue-600 text-white p-3.5 sm:p-4 rounded-full shadow-lg hover:bg-blue-700 transition-colors hover:scale-110 flex items-center justify-center ring-2 ring-blue-400/30 cursor-grab active:cursor-grabbing touch-none select-none"
+          className="fixed z-50 h-14 w-14 shrink-0 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition-colors hover:scale-110 flex items-center justify-center ring-2 ring-blue-400/30 cursor-grab active:cursor-grabbing touch-none select-none"
           style={
             fabPosition
-              ? { top: fabPosition.top, left: fabPosition.left }
+              ? { top: fabPosition.top, left: fabPosition.left, right: 'auto', bottom: 'auto' }
               : { bottom: dockBottom, right: 'max(0.75rem, env(safe-area-inset-right))' }
           }
           aria-label={t('support.openChatAria')}
@@ -374,10 +437,43 @@ export const SupportChatWidget: React.FC = () => {
           </button>
         </div>
 
-        {/* Messages */}
+        {!aiConsented ? (
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 bg-gray-50">
+            <h4 className="text-sm font-semibold text-gray-900">{t('support.aiConsentTitle')}</h4>
+            <p className="text-sm text-gray-600">{t('support.aiConsentBody')}</p>
+            <label className="flex items-start gap-2 text-sm text-gray-800">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                checked={aiConsentChecked}
+                onChange={(e) => setAiConsentChecked(e.target.checked)}
+              />
+              <span>{t('support.aiConsentCheck')}</span>
+            </label>
+            <button
+              type="button"
+              disabled={!aiConsentChecked}
+              onClick={() => {
+                nativeStorageSet(AI_CONSENT_KEY, '1');
+                setAiConsented(true);
+              }}
+              className="w-full bg-blue-600 text-white py-2.5 px-3 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+            >
+              {t('support.aiConsentContinue')}
+            </button>
+          </div>
+        ) : (
+          <>
+
+        {/* Messages.
+            `min-h-0` is load-bearing: a flex child defaults to `min-height:auto`,
+            so without it this list refuses to shrink below its content height and
+            the widget (fixed height + overflow-hidden) clips the composer below
+            the fold — the send button disappears on small screens as soon as the
+            messages or the notice blocks get long. */}
         <div
           ref={chatBodyRef}
-          className="flex-1 bg-gradient-to-b from-gray-50 to-gray-100/80 p-3 sm:p-4 overflow-y-auto overflow-x-hidden space-y-3 scroll-smooth"
+          className="flex-1 min-h-0 bg-gradient-to-b from-gray-50 to-gray-100/80 p-3 sm:p-4 overflow-y-auto overflow-x-hidden space-y-3 scroll-smooth"
         >
           {supportMessages.map((msg) => {
             const isUser = msg.sender === 'USER';
@@ -522,12 +618,14 @@ export const SupportChatWidget: React.FC = () => {
                 />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium leading-snug">
+
                     {agentActive ? t('support.connectedAgent') : t('support.waitingHumanTitle')}
                   </p>
                   <p className={`mt-0.5 leading-snug ${agentActive ? 'text-green-700' : 'text-yellow-700'}`}>
                     {agentActive
                       ? t('support.agentWithYou')
                       : t('support.waitingHumanDesc')}
+
                   </p>
                   <button
                     type="button"
@@ -563,7 +661,9 @@ export const SupportChatWidget: React.FC = () => {
                 ) : (
                   <Headphones className="h-3.5 w-3.5" aria-hidden />
                 )}
+
                 {requestingAgent ? t('support.connecting') : t('support.talkToHuman')}
+
               </button>
             </div>
           )}
@@ -584,9 +684,14 @@ export const SupportChatWidget: React.FC = () => {
 
         {/* Composer / guest form */}
         {showGuestForm && !user ? (
+          /* Capped and scrollable: this block is taller than the plain composer
+             (intro copy + two labelled fields + button), and the intro wraps to
+             more lines in some languages. Left unbounded in a fixed-height
+             widget it pushed its own submit button past the bottom edge and
+             squeezed the message list to nothing. */
           <form
             onSubmit={handleSubmitGuestForm}
-            className="p-4 bg-white border-t border-gray-200 space-y-3 shrink-0"
+            className="p-4 bg-white border-t border-gray-200 space-y-3 shrink-0 max-h-[70%] overflow-y-auto"
           >
             <p className="text-xs text-gray-500">{t('support.guestIntro')}</p>
             <div>
@@ -658,6 +763,8 @@ export const SupportChatWidget: React.FC = () => {
               )}
             </button>
           </form>
+        )}
+          </>
         )}
       </div>
     </>

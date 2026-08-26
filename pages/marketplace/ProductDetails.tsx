@@ -1,17 +1,19 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { ArrowLeft, ShoppingCart, MessageCircle, MapPin, ShieldCheck, Package, Plus, Minus, User, Lock, Truck, AlertCircle, Calendar, Clock, Star, Image as ImageIcon, PlayCircle, X, Heart, Layers, Share2 } from 'lucide-react';
-import { MarketType, OfferType, OrderStatus, UserRole, Review } from '../../types';
+import { MarketType, OfferType, OrderStatus, UserRole, Review, Offer } from '../../types';
 import { SEO } from '../../components/SEO';
 import { buildProductBreadcrumbSchema } from '../../services/seo/schemaBuilders';
 import { ProductDetailsSkeleton } from '../../components/skeletons/ProductDetailsSkeleton';
 import { ServiceSlotsSkeleton } from '../../components/Loaders';
 import { Spinner } from '../../components/Spinner';
 import { ConfirmModal } from '../../components/ConfirmModal';
-import { offerImageHero, offerImageInBox } from '../../utils/offerImageDisplay';
+import { ReportBlockControl } from '../../components/ReportBlockControl';
+import { OfferImage } from '../../components/OfferImage';
+import { offerImageHero, offerImageInBox, offerImageThumb, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
 import { getOfferImageUrls } from '../../utils/offerImages';
 import { displayNameTruncateClass, resolveProducerDisplayName, resolveProfileImageUrl } from '../../utils/displayName';
 import { getAverageRatingFromReviews, getReviewsForOffer } from '../../utils/offerReviews';
@@ -19,6 +21,7 @@ import { isProducerDashboardUser } from '../../services/producerSession';
 import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 import { showAppToast } from '../../services/appToast';
+import { nativeShareOrCopy } from '../../services/nativeShare';
 import { usePwaInstall } from '../../contexts/PwaInstallContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import {
@@ -27,6 +30,7 @@ import {
   buildOfferShareText,
   buildOfferShareUrl,
 } from '../../utils/offerShare';
+import { unitLabel } from '../../utils/unitLabel';
 
 /** Parse `YYYY-MM-DD` from `<input type="date">` as a local calendar day (avoids UTC weekday shifts). */
 function parseLocalYmd(ymd: string): Date {
@@ -62,7 +66,47 @@ export const ProductDetails: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
-  const offer = offerId ? getOfferById(offerId) : undefined;
+  // The store only ever holds the newest 100 marketplace offers (plus the ATI
+  // list), so a direct or shared link to an older offer resolved to nothing and
+  // rendered a confident "Product not found" for a product that exists. Fetch
+  // this one offer by id alongside the list refresh: it's a small request, it
+  // lets the page paint without waiting for the whole catalog, and it keeps the
+  // page working even if that list request fails outright.
+  const [fetchedOffer, setFetchedOffer] = useState<Offer | undefined>(undefined);
+  const [offerLookupSettled, setOfferLookupSettled] = useState(false);
+  const fetchedOfferIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!offerId) return;
+    if (fetchedOfferIdRef.current === offerId) return;
+    fetchedOfferIdRef.current = offerId;
+    setFetchedOffer(undefined);
+    setOfferLookupSettled(false);
+    apiFetch<any>(API_ENDPOINTS.offers.detail(offerId), { silent401: true } as any)
+      .then((row) => {
+        if (fetchedOfferIdRef.current !== offerId) return; // navigated to another offer
+        if (!row?.id) return;
+        setFetchedOffer({
+          ...row,
+          imageUrl: resolveOfferImageSrc(row.imageUrl),
+          imageUrls: Array.isArray(row.imageUrls)
+            ? row.imageUrls.map((u: string) => resolveOfferImageSrc(u))
+            : [],
+        } as Offer);
+      })
+      .catch(() => {
+        /* Genuinely missing or a network failure — the not-found branch below
+           only renders once BOTH this lookup and the list refresh have settled. */
+      })
+      .finally(() => {
+        if (fetchedOfferIdRef.current === offerId) setOfferLookupSettled(true);
+      });
+  }, [offerId]);
+
+  const storeOffer = offerId ? getOfferById(offerId) : undefined;
+  // Prefer the store copy (kept fresh by refreshOffers), fall back to the one we
+  // fetched directly.
+  const offer = storeOffer ?? (fetchedOffer?.id === offerId ? fetchedOffer : undefined);
   const producer = offer ? producers.find(p => p.id === offer.producerId) : undefined;
 
   // Initialize quantity to minQuantity if available, else 1
@@ -146,10 +190,39 @@ export const ProductDetails: React.FC = () => {
 
   const producerReviews = allProducerReviews;
 
+  // Reviews for THIS offer. The server resolves the review→offer link (a Review
+  // points at an Order, not an Offer) because the local join can only see the
+  // viewer's own orders — so a shopper saw just their own review and a signed-out
+  // visitor saw none at all. The local join is kept as a fallback so a review left
+  // in this session shows up before the refetch lands.
+  const [fetchedOfferReviews, setFetchedOfferReviews] = useState<any[]>([]);
+  useEffect(() => {
+    if (!offerId) {
+      setFetchedOfferReviews([]);
+      return;
+    }
+    let alive = true;
+    apiFetch<any[]>(API_ENDPOINTS.reviews.byOffer(offerId), { silent401: true } as any)
+      .then((data) => {
+        if (alive && Array.isArray(data)) setFetchedOfferReviews(data);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [offerId, reviews.length]);
+
   const offerReviews = React.useMemo(() => {
     if (!offerId) return [];
-    return getReviewsForOffer(offerId, reviews, orders);
-  }, [offerId, reviews, orders]);
+    const byId = new Map<string, Review>();
+    [
+      ...getReviewsForOffer(offerId, reviews, orders),
+      ...fetchedOfferReviews.map(mapReviewRow),
+    ].forEach((r) => byId.set(r.id, r));
+    return Array.from(byId.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }, [offerId, reviews, orders, fetchedOfferReviews]);
 
   const getClientByUserOrProfileId = (id: string) =>
     clients.find((c) => c.id === id || c.userId === id);
@@ -284,7 +357,9 @@ export const ProductDetails: React.FC = () => {
     }
   }, [offer, producer]);
 
-  if (pageLoading && !offer) {
+  // Only claim "not found" once BOTH the catalog refresh and the by-id lookup
+  // have settled — otherwise a slow network reads as a missing product.
+  if (!offer && (pageLoading || !offerLookupSettled)) {
     return <ProductDetailsSkeleton />;
   }
 
@@ -384,7 +459,7 @@ export const ProductDetails: React.FC = () => {
   };
 
   const producerDisplayName = !isProducerMarket
-    ? 'ATI Retail Store'
+    ? t('product.atiStoreName')
     : resolveProducerDisplayName(producer);
   const producerAvatarUrl = isProducerMarket ? resolveProfileImageUrl(producer) : undefined;
 
@@ -397,16 +472,9 @@ export const ProductDetails: React.FC = () => {
       rating: productRating > 0 ? productRating : null,
       producerName: producerDisplayName,
     });
-    const shareData = {
-      title: offer.title,
-      text,
-      url: shareUrl,
-    };
     try {
-      if (typeof navigator !== 'undefined' && navigator.share) {
-        await navigator.share(shareData);
-      } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(`${text}\n${shareUrl}`);
+      const result = await nativeShareOrCopy({ title: offer.title, text, url: shareUrl });
+      if (result === 'copied') {
         showAppToast(t('product.linkCopied'), 'SUCCESS');
       }
     } catch {
@@ -475,12 +543,15 @@ export const ProductDetails: React.FC = () => {
             {/* Image Section — primary + additional photos */}
             <div className="md:w-1/2 flex flex-col bg-gray-100 p-3 sm:p-4">
               <div className="h-72 sm:h-80 md:h-96 md:min-h-96 flex items-center justify-center relative">
-              <img
+              <OfferImage
                 src={getOfferImageUrls(offer)[selectedOfferImageIndex] ?? offer.imageUrl}
                 alt={offer.title}
+                size="detail"
+                eager
                 className={offerImageHero}
+                wrapperClassName="absolute inset-0 flex items-center justify-center p-2"
               />
-              <div className="absolute top-3 left-3 sm:top-4 sm:left-4 flex flex-col gap-2">
+              <div className="absolute top-3 left-3 sm:top-4 sm:left-4 flex flex-col gap-2 z-[3]">
                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold shadow-sm ${isProducerMarket ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
                   }`}>
                   {isProducerMarket ? t('product.producerOffer') : t('product.atiOffer')}
@@ -510,7 +581,13 @@ export const ProductDetails: React.FC = () => {
                         selectedOfferImageIndex === idx ? 'border-primary-600' : 'border-gray-200'
                       }`}
                     >
-                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      <img
+                        src={offerImageThumb(url, 'thumb')}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
                     </button>
                   ))}
                 </div>
@@ -551,6 +628,14 @@ export const ProductDetails: React.FC = () => {
                     >
                       <Share2 className="h-5 w-5" />
                     </button>
+                    {offer && producer?.userId && producer.userId !== user?.id ? (
+                      <ReportBlockControl
+                        compact
+                        targetType="OFFER"
+                        targetId={offer.id}
+                        blockUserIdValue={producer.userId}
+                      />
+                    ) : null}
 
                     {isNegotiationAllowed && (
                       <span className="inline-flex items-center px-2 py-1 rounded bg-blue-100 text-blue-800 text-xs font-bold">
@@ -573,7 +658,7 @@ export const ProductDetails: React.FC = () => {
 
                 <div className="flex items-baseline flex-wrap mb-6 pb-6 border-b border-gray-100 gap-x-2">
                   <span className="text-3xl sm:text-4xl font-bold text-primary-600 break-words">{formatXaf(offer.price)}</span>
-                  <span className="text-gray-500 font-medium">/ {t(`unit.${offer.unit}`)}</span>
+                  <span className="text-gray-500 font-medium">/ {unitLabel(t, offer.unit)}</span>
                 </div>
 
                 <div className="prose prose-sm text-gray-600 mb-8">
@@ -586,15 +671,15 @@ export const ProductDetails: React.FC = () => {
                     <div className="flex items-center text-sm text-gray-500 mb-1">
                       <Package className="h-4 w-4 mr-2" /> {offer.type === OfferType.SERVICE ? t('product.capacity') : t('product.stock')}
                     </div>
-                    <p className="font-bold text-gray-900">{offer.quantity} {t(`unit.${offer.unit}`)}</p>
+                    <p className="font-bold text-gray-900">{offer.quantity} {unitLabel(t, offer.unit)}</p>
                   </div>
                   <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
                     <div className="flex items-center text-sm text-gray-500 mb-1">
                       <AlertCircle className="h-4 w-4 mr-2" /> {t('product.limits')}
                     </div>
-                    <p className="text-xs text-gray-700">{t('product.minPrefix')} <strong>{minOrder}</strong> {t(`unit.${offer.unit}`)}</p>
+                    <p className="text-xs text-gray-700">{t('product.minPrefix')} <strong>{minOrder}</strong> {unitLabel(t, offer.unit)}</p>
                     {maxOrder < offer.quantity && (
-                      <p className="text-xs text-gray-700">{t('product.maxPrefix')} <strong>{maxOrder}</strong> {t(`unit.${offer.unit}`)}</p>
+                      <p className="text-xs text-gray-700">{t('product.maxPrefix')} <strong>{maxOrder}</strong> {unitLabel(t, offer.unit)}</p>
                     )}
                   </div>
                 </div>
@@ -866,8 +951,8 @@ export const ProductDetails: React.FC = () => {
                     to={`/offer/${rel.id}`}
                     className="agm-card-lift flex-none snap-start w-44 sm:w-52 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden"
                   >
-                    <div className="h-28 bg-gray-100">
-                      <img src={rel.imageUrl} alt="" className={offerImageInBox} />
+                    <div className="h-28 bg-gray-100 relative">
+                      <OfferImage src={rel.imageUrl} alt="" size="card" />
                     </div>
                     <div className="p-3">
                       <p className="text-sm font-semibold text-gray-900 line-clamp-2 min-h-[2.5rem]">{rel.title}</p>
@@ -1025,7 +1110,7 @@ export const ProductDetails: React.FC = () => {
       {/* Sticky mobile CTA */}
       <div
         className="md:hidden fixed left-0 right-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur-sm px-3 py-2.5 flex gap-2 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]"
-        style={{ bottom: 'env(safe-area-inset-bottom)' }}
+        style={{ bottom: 'var(--agm-tabbar, env(safe-area-inset-bottom))' }}
       >
         {canContactSeller && (
           <button

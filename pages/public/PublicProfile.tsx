@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useStore } from "../../services/storeContext";
 import { useTranslation } from "../../services/i18nContext";
@@ -25,6 +25,8 @@ import { displayNameTruncateClass } from "../../utils/displayName";
 import { canonicalizeCategoryList } from "../../data/categories";
 import { SEO } from "../../components/SEO";
 import { buildProducerProfileSchema } from "../../services/seo/schemaBuilders";
+import { unitLabel } from '../../utils/unitLabel';
+import { ReportBlockControl } from '../../components/ReportBlockControl';
 
 function mapReviewRow(r: any): Review {
   const pic = r.reviewerProfileImageUrl;
@@ -60,6 +62,8 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
     refreshProducers,
     refreshClients,
     refreshOffers,
+    loadPublicProfileById,
+    user,
   } = useStore();
   const { t, language } = useTranslation();
   const { formatXaf } = useCurrency();
@@ -93,6 +97,31 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
       setProfileData(client);
     }
   }, [id, role, producers, clients]);
+
+  // The store catalogs are not guaranteed to hold this profile: the clients
+  // catalog only ever contains the viewer's own buyer profile (and nothing for
+  // anonymous visitors), so a shared /profile/client/:id link showed "User not
+  // found" for practically everyone. Resolve it directly when it's missing.
+  const [profileLookupSettled, setProfileLookupSettled] = useState(false);
+  const profileLookupKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!id) return;
+    const key = `${role}:${id}`;
+    if (profileLookupKeyRef.current === key) return;
+    profileLookupKeyRef.current = key;
+    setProfileLookupSettled(false);
+    const alreadyInStore =
+      role === "PRODUCER"
+        ? producers.some((p) => p.id === id)
+        : clients.some((c) => c.id === id);
+    if (alreadyInStore) {
+      setProfileLookupSettled(true);
+      return;
+    }
+    void loadPublicProfileById(role, id).finally(() => {
+      if (profileLookupKeyRef.current === key) setProfileLookupSettled(true);
+    });
+  }, [id, role]);
 
   useEffect(() => {
     const uid = profileData?.userId;
@@ -204,12 +233,14 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
     return () => clearInterval(timer);
   }, [role, producerPortfolios]);
 
-  if (pageLoading && !profileData) {
+  // Only claim "not found" once the catalog refresh AND the direct by-id lookup
+  // have both settled — otherwise a slow network reads as a missing user.
+  if (!profileData && (pageLoading || !profileLookupSettled)) {
     return <PublicProfileSkeleton />;
   }
 
   if (!profileData) {
-    return <div className="p-8 text-center">User not found</div>;
+    return <div className="p-8 text-center">{t('profile.notFound')}</div>;
   }
 
   const isVerified =
@@ -301,7 +332,14 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
             </div>
 
             {/* Rating Badge */}
-            <div className="flex flex-col sm:items-end">
+            <div className="flex flex-col sm:items-end gap-2">
+              {profileData.userId && profileData.userId !== user?.id ? (
+                <ReportBlockControl
+                  targetType="USER"
+                  targetId={profileData.userId}
+                  blockUserIdValue={profileData.userId}
+                />
+              ) : null}
               <div className="flex items-center bg-yellow-50 px-3 py-1 rounded-lg border border-yellow-100">
                 <Star className="w-5 h-5 text-yellow-400 fill-current mr-1" />
                 <span className="text-xl font-bold text-yellow-700">
@@ -384,26 +422,28 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ role }) => {
                       No active offers at the moment.
                     </p>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4">
                       {activeOffers.slice(0, 4).map((offer) => (
                         <div
                           key={offer.id}
-                          className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow bg-white flex items-center cursor-pointer"
+                          className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow bg-white flex flex-col sm:flex-row sm:items-center cursor-pointer"
                           onClick={() => navigate(`/offer/${offer.id}`)}
                         >
-                          <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded bg-gray-100 mr-3">
+                          {/* Stacks on mobile so two cards per row stay legible;
+                              the wide layout is unchanged from sm: up. */}
+                          <div className="h-24 w-full sm:h-12 sm:w-12 flex-shrink-0 overflow-hidden rounded bg-gray-100 mb-2 sm:mb-0 sm:mr-3">
                             <img
                               src={offer.imageUrl}
                               className={offerImageInBox}
                               alt={offer.title}
                             />
                           </div>
-                          <div className="overflow-hidden">
+                          <div className="min-w-0">
                             <p className="font-medium text-gray-900 truncate">
                               {offer.title}
                             </p>
-                            <p className="text-xs text-gray-500">
-                              {formatXaf(offer.price)} / {t(`unit.${offer.unit}`)}
+                            <p className="text-xs text-gray-500 truncate">
+                              {formatXaf(offer.price)} / {unitLabel(t, offer.unit)}
                             </p>
                           </div>
                         </div>

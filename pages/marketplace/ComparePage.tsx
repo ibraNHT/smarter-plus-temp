@@ -4,15 +4,17 @@ import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Star, X, ShoppingCart, Check, XCircle } from 'lucide-react';
-import { OfferType } from '../../types';
+import { MarketType, OfferType } from '../../types';
 import { comparePageAddQuantity, effectiveMinOrder } from '../../utils/offerCart';
 import { ComparePageSkeleton } from '../../components/skeletons/ComparePageSkeleton';
+import { OfferImage } from '../../components/OfferImage';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { showAppToast } from '../../services/appToast';
 import { SEO } from '../../components/SEO';
 import { SEO_PAGE_META } from '../../services/seo/seoConfig';
 import { useCurrency } from '../../contexts/CurrencyContext';
+import { unitLabel } from '../../utils/unitLabel';
 
 export const ComparePage: React.FC = () => {
   const { compareList, offers, producers, getAverageRating, removeFromCompare, addToCart, clearCart, clearCompare, refreshOffers, refreshProducers } = useStore();
@@ -58,6 +60,9 @@ export const ComparePage: React.FC = () => {
       </div>
     );
   }
+
+  const allOffersAreAti =
+     selectedOffers.length > 0 && selectedOffers.every(o => o.marketType === MarketType.ATI);
 
   const getProducerName = (producerId: string) => {
      const p = producers.find(prod => prod.id === producerId);
@@ -113,12 +118,12 @@ export const ComparePage: React.FC = () => {
                       <th key={offer.id} scope="col" className="px-6 py-3 text-left text-sm font-bold text-gray-900 min-w-[250px] relative group">
                          <button 
                            onClick={() => removeFromCompare(offer.id)}
-                           className="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                           className="absolute top-2 right-2 text-gray-400 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                          >
                             <X className="h-5 w-5" />
                          </button>
-                         <div className="h-32 mb-3 rounded overflow-hidden bg-gray-100">
-                            <img src={offer.imageUrl} alt={offer.title} className={offerImageInBox} />
+                         <div className="h-32 mb-3 rounded overflow-hidden bg-gray-100 relative">
+                            <OfferImage src={offer.imageUrl} alt={offer.title} size="card" className={offerImageInBox} />
                          </div>
                          <div className="line-clamp-2 h-10">{offer.title}</div>
                       </th>
@@ -138,7 +143,7 @@ export const ComparePage: React.FC = () => {
                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-500 bg-gray-50">{t('compare.unit')}</td>
                    {selectedOffers.map(offer => (
                       <td key={offer.id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                         {t(`unit.${offer.unit}`)}
+                         {unitLabel(t, offer.unit)}
                       </td>
                    ))}
                 </tr>
@@ -146,18 +151,27 @@ export const ComparePage: React.FC = () => {
                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-500 bg-gray-50">{t('compare.minOrder')}</td>
                    {selectedOffers.map(offer => (
                       <td key={offer.id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                         {effectiveMinOrder(offer)} {t(`unit.${offer.unit}`)}
+                         {effectiveMinOrder(offer)} {unitLabel(t, offer.unit)}
                       </td>
                    ))}
                 </tr>
-                <tr>
-                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-500 bg-gray-50">{t('compare.producer')}</td>
-                   {selectedOffers.map(offer => (
-                      <td key={offer.id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                         {getProducerName(offer.producerId)}
-                      </td>
-                   ))}
-                </tr>
+                {/* Producer row is hidden when everything being compared comes from the
+                    ATI store: those offers are first-party, so `getProducerName` resolves
+                    to the staff member who created the listing — an internal name that
+                    must never surface to buyers. In a mixed comparison the row stays (the
+                    marketplace offers need it) but ATI columns show the store of record. */}
+                {!allOffersAreAti && (
+                   <tr>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-500 bg-gray-50">{t('compare.producer')}</td>
+                      {selectedOffers.map(offer => (
+                         <td key={offer.id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {offer.marketType === MarketType.ATI
+                               ? t('product.atiStoreName')
+                               : getProducerName(offer.producerId)}
+                         </td>
+                      ))}
+                   </tr>
+                )}
                 <tr>
                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-500 bg-gray-50">{t('compare.rating')}</td>
                    {selectedOffers.map(offer => {

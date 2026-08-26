@@ -1,0 +1,75 @@
+name: Security guard
+
+# Free substitute for branch protection: it cannot BLOCK a bad push, but it
+# turns "discovered days later" into a failed run within a minute.
+on: push
+
+permissions:
+  contents: read
+
+jobs:
+  force-push:
+    name: Force-push alarm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if history was rewritten
+        if: github.event.forced
+        run: |
+          echo "::error title=Force-push detected::${{ github.actor }} rewrote ${{ github.ref_name }}"
+          echo "before: ${{ github.event.before }}"
+          echo "after:  ${{ github.event.after }}"
+          echo "No pipeline here ever force-pushes. Treat this as an intrusion"
+          echo "until proven otherwise, and check GitHub's audit log for the"
+          echo "credential used (deploy keys, PATs and OAuth apps included)."
+          exit 1
+
+  scan:
+    name: Injected-code scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan tree for injected loaders
+        run: |
+          set -uo pipefail
+          fail=0
+          # This workflow names the IOCs, so exclude it from its own scan.
+          EXCL=':!.github/workflows'
+
+          echo "--- known loader signatures ---"
+          if git grep -n -I -e 'eth_getBlockByNumber' -e '0x/cls' -e '0x/ls' \
+                          -- . "$EXCL"; then
+            echo "::error title=Malware IOC::Known loader signature found above"; fail=1
+          fi
+
+          echo "--- editor auto-run (RCE on folder open) ---"
+          if git grep -n -I -e 'folderOpen' -e 'allowAutomaticTasks' -- '.vscode'; then
+            echo "::error title=Editor auto-run::.vscode auto-executes on open"; fail=1
+          fi
+
+          echo "--- fonts that are not fonts ---"
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            magic=$(head -c 4 "$f")
+            case "$f" in
+              *.woff2) [ "$magic" = "wOF2" ] || { echo "::error file=$f::not a real .woff2"; fail=1; } ;;
+              *.woff)  [ "$magic" = "wOFF" ] || { echo "::error file=$f::not a real .woff"; fail=1; } ;;
+            esac
+          done < <(git ls-files '*.woff' '*.woff2')
+
+          echo "--- payload-hiding whitespace runs ---"
+          # The postcss/eslint trojan left the real config intact and pushed the
+          # payload past a long run of spaces so it sits off-screen in an editor.
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            if grep -qE ' {200,}' "$f"; then
+              echo "::error file=$f::200+ consecutive spaces (payload-hiding pattern)"; fail=1
+            fi
+          done < <(git ls-files '*.js' '*.mjs' '*.cjs' '*.ts' '*.json' \
+                   | grep -vE '(^|/)(dist|build|coverage)/')
+
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::Injected-code scan FAILED — do not deploy this commit."
+            exit 1
+          fi
+          echo "Clean."

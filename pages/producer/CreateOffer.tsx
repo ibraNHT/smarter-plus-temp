@@ -6,7 +6,10 @@ import { useTranslation } from '../../services/i18nContext';
 import { OfferType, UnitOfMeasure, MarketType, Offer } from '../../types';
 import { generateProductDescription } from '../../services/geminiService';
 import { uploadOfferImage } from '../../services/uploadService';
-import { offerImageInBox } from '../../utils/offerImageDisplay';
+import { apiFetch } from '../../services/apiService';
+import { nativeStorageGet, nativeStorageSet, nativeStorageRemove } from '../../services/nativeStorage';
+import { API_ENDPOINTS } from '../../client-api/endpoints';
+import { offerImageInBox, resolveOfferImageSrc } from '../../utils/offerImageDisplay';
 import NumberStepper from '../../components/NumberStepper';
 import { Sparkles, Loader2, Camera, MapPin, Clock, X, AlertTriangle } from 'lucide-react';
 import { isProducerPendingApproval } from '../../utils/producerAccountStatus';
@@ -14,6 +17,7 @@ import { MARKETPLACE_CATEGORIES, isServiceCategory } from '../../data/categories
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { BASE_CURRENCY, SUPPORTED_CURRENCIES, currencyLabel } from '../../utils/formatMoney';
 import { z } from 'zod';
+import { unitLabel } from '../../utils/unitLabel';
 
 const SERVICE_UNITS = new Set<UnitOfMeasure>([
   UnitOfMeasure.HOUR,
@@ -22,6 +26,53 @@ const SERVICE_UNITS = new Set<UnitOfMeasure>([
 ]);
 const PRODUCT_DEFAULT_UNIT = UnitOfMeasure.KG;
 const SERVICE_DEFAULT_UNIT = UnitOfMeasure.HOUR;
+
+// Mobile browsers frequently reload/remount this page mid-creation — the native
+// photo picker backgrounds the tab (which iOS/Android often discard-and-reload
+// on return), and a resumed session can hit a forced logout if the token expired
+// while backgrounded. Neither is a real page reload the user asked for, but both
+// wiped the in-progress "new offer" form. Autosave a lightweight draft (this is
+// NEW-offer only — editing reloads the real saved offer from the server, so
+// there is nothing in-progress to lose there) and restore it on mount.
+const NEW_OFFER_DRAFT_KEY = 'agm_new_offer_draft_v1';
+
+type NewOfferDraft = {
+  formData: Record<string, unknown>;
+  imageUrl: string;
+  imageUrls: string[];
+  savedAt: number;
+};
+
+const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000; // discard drafts older than a day
+
+function readNewOfferDraft(): NewOfferDraft | null {
+  try {
+    const raw = nativeStorageGet(NEW_OFFER_DRAFT_KEY);
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as NewOfferDraft;
+    if (!draft || typeof draft !== 'object' || !draft.formData) return null;
+    if (Date.now() - Number(draft.savedAt || 0) > DRAFT_MAX_AGE_MS) return null;
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
+function writeNewOfferDraft(draft: Omit<NewOfferDraft, 'savedAt'>): void {
+  try {
+    nativeStorageSet(NEW_OFFER_DRAFT_KEY, JSON.stringify({ ...draft, savedAt: Date.now() }));
+  } catch {
+    /* storage full/unavailable — draft persistence is best-effort */
+  }
+}
+
+function clearNewOfferDraft(): void {
+  try {
+    nativeStorageRemove(NEW_OFFER_DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 const createOfferSchema = (t: (key: string) => string) => z.object({
   title: z.string().trim().min(3, t('validation.titleMin')),
   description: z.string().trim().min(10, t('validation.descriptionMinTen')),
@@ -77,14 +128,17 @@ export const CreateOffer: React.FC = () => {
   const { toXaf, rates, currency: preferredCurrency } = useCurrency();
   const navigate = useNavigate();
   const { offerId } = useParams<{ offerId: string }>();
-  
+  // Only a brand-new, not-yet-saved offer has a draft — editing loads the real
+  // saved offer from the server below, so there's nothing in-progress to restore.
+  const initialDraft = offerId ? null : readNewOfferDraft();
+
   const [loadingAI, setLoadingAI] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [existingOffer, setExistingOffer] = useState<Offer | undefined>(undefined);
-  const [imageUrl, setImageUrl] = useState<string>('');
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [imageUrl, setImageUrl] = useState<string>(() => initialDraft?.imageUrl ?? '');
+  const [imageUrls, setImageUrls] = useState<string[]>(() => initialDraft?.imageUrls ?? []);
   const [imageUploading, setImageUploading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
 
@@ -92,20 +146,13 @@ export const CreateOffer: React.FC = () => {
   const currentProducer = producers.find(p => p.id === user?.producerId);
   const registeredLocation = currentProducer?.locations?.[0]?.address || '';
   
-  // Get Categories from Producer Profile
-  const producerProductionTypes = currentProducer?.productionTypes || [];
-  // If producer has specific types, use them. Otherwise default to a broad list.
-  const allAvailableCategories = useMemo(
-    () => {
-      // An offer must belong to a sector the producer actually selected in their
-      // profile — so list ONLY their registered production types, not the full
-      // catalog. Fall back to the full list only when the producer has no sectors
-      // yet, so they can still create an offer.
-      return producerProductionTypes.length > 0
-        ? Array.from(new Set(producerProductionTypes))
-        : Array.from(MARKETPLACE_CATEGORIES);
-    },
-    [producerProductionTypes],
+  // Always offer the full catalog. Restricting the dropdown to the producer's
+  // registered production types hid every other category on EDIT — a producer
+  // could only ever see the single category their offer already had, with no
+  // way to browse or pick a different one.
+  const allAvailableCategories = useMemo<string[]>(
+    () => Array.from(MARKETPLACE_CATEGORIES),
+    [],
   );
   const productCategories = useMemo(
     () => allAvailableCategories.filter(cat => !isServiceCategory(cat)),
@@ -120,24 +167,51 @@ export const CreateOffer: React.FC = () => {
   const selectableProductCategories = productCategories.length > 0 ? productCategories : [fallbackProductCategory];
   const selectableServiceCategories = serviceCategories.length > 0 ? serviceCategories : [fallbackServiceCategory];
   const hasInitializedEditForm = useRef(false);
+  // Tracks the offer id we've already requested directly from the API, so the
+  // fallback fetch below fires once per offer instead of on every re-render.
+  const fetchedOfferIdRef = useRef<string | null>(null);
+  const [editLoadFailed, setEditLoadFailed] = useState(false);
   const firstFieldErrorRef = useRef<HTMLDivElement | null>(null);
 
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    category: fallbackProductCategory,
-    type: OfferType.PRODUCT,
-    unit: PRODUCT_DEFAULT_UNIT,
-    quantity: 0,
-    minQuantity: 1,
-    maxQuantity: 0, // 0 means unlimited (up to total stock)
-    price: 0,
-    listingCurrency: preferredCurrency || BASE_CURRENCY,
-    features: '', // Used for AI prompt
-    offerLocation: registeredLocation,
-    isNegotiable: false,
-    isDeliveryAvailable: true,
-    serviceDuration: 1 // Default 1 hour
+  const [formData, setFormData] = useState(() => {
+    const base = {
+      title: '',
+      description: '',
+      category: fallbackProductCategory,
+      type: OfferType.PRODUCT,
+      unit: PRODUCT_DEFAULT_UNIT,
+      quantity: 0,
+      minQuantity: 1,
+      maxQuantity: 0, // 0 means unlimited (up to total stock)
+      price: 0,
+      listingCurrency: preferredCurrency || BASE_CURRENCY,
+      features: '', // Used for AI prompt
+      offerLocation: registeredLocation,
+      isNegotiable: false,
+      isDeliveryAvailable: true,
+      serviceDuration: 1 // Default 1 hour
+    };
+    const d = initialDraft?.formData;
+    if (!d) return base;
+    // Restore field-by-field with type guards so a corrupt/stale draft can never
+    // produce a malformed formData shape.
+    return {
+      title: typeof d.title === 'string' ? d.title : base.title,
+      description: typeof d.description === 'string' ? d.description : base.description,
+      category: typeof d.category === 'string' && d.category ? d.category : base.category,
+      type: d.type === OfferType.SERVICE ? OfferType.SERVICE : base.type,
+      unit: typeof d.unit === 'string' && d.unit ? (d.unit as UnitOfMeasure) : base.unit,
+      quantity: typeof d.quantity === 'number' ? d.quantity : base.quantity,
+      minQuantity: typeof d.minQuantity === 'number' ? d.minQuantity : base.minQuantity,
+      maxQuantity: typeof d.maxQuantity === 'number' ? d.maxQuantity : base.maxQuantity,
+      price: typeof d.price === 'number' ? d.price : base.price,
+      listingCurrency: typeof d.listingCurrency === 'string' && d.listingCurrency ? d.listingCurrency : base.listingCurrency,
+      features: typeof d.features === 'string' ? d.features : base.features,
+      offerLocation: typeof d.offerLocation === 'string' && d.offerLocation ? d.offerLocation : base.offerLocation,
+      isNegotiable: typeof d.isNegotiable === 'boolean' ? d.isNegotiable : base.isNegotiable,
+      isDeliveryAvailable: typeof d.isDeliveryAvailable === 'boolean' ? d.isDeliveryAvailable : base.isDeliveryAvailable,
+      serviceDuration: typeof d.serviceDuration === 'number' ? d.serviceDuration : base.serviceDuration,
+    };
   });
 
   const estimatedXaf = useMemo(
@@ -157,57 +231,113 @@ export const CreateOffer: React.FC = () => {
     }
   }, [fieldErrors]);
 
+  // Autosave the in-progress NEW offer so an unwanted mobile reload/remount
+  // (backgrounded photo picker, resumed-session forced logout) doesn't wipe it.
+  // Skip empty/pristine state so we don't persist a blank draft on first mount.
+  // Writes SYNCHRONOUSLY on every change (no debounce) — a manual refresh can
+  // happen within milliseconds of the last keystroke, and a debounced write
+  // that hadn't fired yet was silently lost when the page reloaded.
+  useEffect(() => {
+    if (offerId || existingOffer) return;
+    const isPristine =
+      !formData.title && !formData.description && !imageUrl &&
+      formData.price === 0 && formData.quantity === 0;
+    if (isPristine) return;
+    writeNewOfferDraft({ formData, imageUrl, imageUrls });
+  }, [offerId, existingOffer, formData, imageUrl, imageUrls]);
+
   useEffect(() => {
     hasInitializedEditForm.current = false;
+    fetchedOfferIdRef.current = null;
+    setEditLoadFailed(false);
   }, [offerId]);
 
   useEffect(() => {
-    if (offerId) {
-      if (hasInitializedEditForm.current) return;
-      const offer = getOfferById(offerId);
-      if (offer) {
-        if (offer.producerId !== user?.producerId) {
-            navigate('/producer/dashboard'); // Security check
-            return;
-        }
-        const normalizedType = normalizeOfferType(
-          offer.type,
-          offer.unit,
-          offer.category,
-          offer.serviceDuration,
-        );
-        const normalizedCategory =
-          normalizedType === OfferType.SERVICE
-            ? (selectableServiceCategories.includes(offer.category) ? offer.category : fallbackServiceCategory)
-            : (selectableProductCategories.includes(offer.category) ? offer.category : fallbackProductCategory);
-        const normalizedUnit =
-          normalizedType === OfferType.SERVICE
-            ? (SERVICE_UNITS.has(offer.unit) ? offer.unit : SERVICE_DEFAULT_UNIT)
-            : (SERVICE_UNITS.has(offer.unit) ? PRODUCT_DEFAULT_UNIT : offer.unit);
-        setExistingOffer(offer);
-        setImageUrl(offer.imageUrl ?? '');
-        setImageUrls(offer.imageUrls ?? []);
-        setFormData({
-          title: offer.title,
-          description: offer.description,
-          category: normalizedCategory,
-          type: normalizedType,
-          unit: normalizedUnit,
-          quantity: offer.quantity,
-          minQuantity: offer.minQuantity || 1,
-          maxQuantity: offer.maxQuantity || 0,
-          price: offer.listingPrice ?? offer.price,
-          listingCurrency: offer.listingCurrency || BASE_CURRENCY,
-          features: '',
-          offerLocation: offer.offerLocation || registeredLocation,
-          isNegotiable: offer.isNegotiable,
-          isDeliveryAvailable: offer.isDeliveryAvailable,
-          serviceDuration: normalizedType === OfferType.SERVICE ? (offer.serviceDuration || 1) : 0
-        });
-        hasInitializedEditForm.current = true;
+    if (!offerId) return;
+    if (hasInitializedEditForm.current) return;
+    if (!user) return; // route is guarded, but don't act before the session exists
+
+    const applyOffer = (offer: Offer) => {
+      // Security check — only run it once we actually know the producer id, so a
+      // session that hasn't resolved it yet can't bounce the rightful owner to
+      // the dashboard. The API enforces ownership on save regardless.
+      if (user.producerId && offer.producerId !== user.producerId) {
+        navigate('/producer/dashboard');
+        return;
       }
+      const normalizedType = normalizeOfferType(
+        offer.type,
+        offer.unit,
+        offer.category,
+        offer.serviceDuration,
+      );
+      const normalizedCategory =
+        normalizedType === OfferType.SERVICE
+          ? (selectableServiceCategories.includes(offer.category) ? offer.category : fallbackServiceCategory)
+          : (selectableProductCategories.includes(offer.category) ? offer.category : fallbackProductCategory);
+      const normalizedUnit =
+        normalizedType === OfferType.SERVICE
+          ? (SERVICE_UNITS.has(offer.unit) ? offer.unit : SERVICE_DEFAULT_UNIT)
+          : (SERVICE_UNITS.has(offer.unit) ? PRODUCT_DEFAULT_UNIT : offer.unit);
+      setExistingOffer(offer);
+      setImageUrl(offer.imageUrl ?? '');
+      setImageUrls(offer.imageUrls ?? []);
+      setFormData({
+        title: offer.title,
+        description: offer.description,
+        category: normalizedCategory,
+        type: normalizedType,
+        unit: normalizedUnit,
+        quantity: offer.quantity,
+        minQuantity: offer.minQuantity || 1,
+        maxQuantity: offer.maxQuantity || 0,
+        price: offer.listingPrice ?? offer.price,
+        listingCurrency: offer.listingCurrency || BASE_CURRENCY,
+        features: '',
+        offerLocation: offer.offerLocation || registeredLocation,
+        isNegotiable: offer.isNegotiable,
+        isDeliveryAvailable: offer.isDeliveryAvailable,
+        serviceDuration: normalizedType === OfferType.SERVICE ? (offer.serviceDuration || 1) : 0
+      });
+      hasInitializedEditForm.current = true;
+    };
+
+    const local = getOfferById(offerId);
+    if (local) {
+      applyOffer(local);
+      return;
     }
-  }, [offerId, getOfferById, navigate, user?.producerId, registeredLocation, fallbackProductCategory, fallbackServiceCategory, selectableProductCategories, selectableServiceCategories]);
+
+    // The offer isn't in the in-memory catalog. On a hard reload straight onto
+    // /producer/offers/edit/:id that list starts empty and may never fill in:
+    // fetchData() bails early while a token refresh is on cooldown, and it only
+    // requests the first page. Previously that left the form silently falling
+    // back to a blank "New Offer" — which read as "my data vanished on refresh".
+    // Fetch this one offer directly so edit mode never depends on the catalog.
+    // Guarded by a ref so it runs once per offer, not on every re-render
+    // (getOfferById changes identity each render).
+    if (fetchedOfferIdRef.current === offerId) return;
+    fetchedOfferIdRef.current = offerId;
+    apiFetch<any>(API_ENDPOINTS.offers.detail(offerId), { silent401: true } as any)
+      .then((row) => {
+        if (fetchedOfferIdRef.current !== offerId) return; // navigated elsewhere
+        if (hasInitializedEditForm.current) return; // the store caught up first
+        if (!row?.id) {
+          setEditLoadFailed(true);
+          return;
+        }
+        applyOffer({
+          ...row,
+          imageUrl: resolveOfferImageSrc(row.imageUrl),
+          imageUrls: Array.isArray(row.imageUrls)
+            ? row.imageUrls.map((u: string) => resolveOfferImageSrc(u))
+            : [],
+        } as Offer);
+      })
+      .catch(() => {
+        if (fetchedOfferIdRef.current === offerId) setEditLoadFailed(true);
+      });
+  }, [offerId, getOfferById, navigate, user, registeredLocation, fallbackProductCategory, fallbackServiceCategory, selectableProductCategories, selectableServiceCategories]);
 
   const allOfferImages = imageUrl ? [imageUrl, ...imageUrls] : [...imageUrls];
 
@@ -349,6 +479,7 @@ export const CreateOffer: React.FC = () => {
           return;
         }
       }
+      clearNewOfferDraft();
       navigate('/producer/dashboard');
     } finally {
       setSubmitting(false);
@@ -357,6 +488,37 @@ export const CreateOffer: React.FC = () => {
 
   const isEditMode = !!existingOffer;
   const isPendingApproval = isProducerPendingApproval(user, currentProducer);
+
+  // Editing an offer we haven't resolved yet: show a loader (or a clear error)
+  // instead of the blank "New Offer" form, which made it look like the offer's
+  // data had been lost on refresh. Checked BEFORE the pending-approval branch so
+  // a not-yet-verified producer editing an existing offer doesn't get bounced to
+  // the verification screen while the offer is still loading.
+  if (offerId && !isEditMode) {
+    if (editLoadFailed) {
+      return (
+        <div className="max-w-3xl mx-auto py-6 sm:py-10 px-4 sm:px-6 lg:px-8">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 sm:p-8 text-center shadow-sm">
+            <AlertTriangle className="h-10 w-10 text-red-500 mx-auto mb-3" aria-hidden />
+            <h1 className="text-xl font-bold text-red-900">{t('form.offerNotFound')}</h1>
+            <button
+              type="button"
+              onClick={() => navigate('/producer/dashboard')}
+              className="mt-6 inline-flex justify-center rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-900 hover:bg-red-50"
+            >
+              {t('producerStatus.goToDashboard')}
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="max-w-3xl mx-auto py-16 px-4 flex justify-center" role="status" aria-live="polite">
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" aria-hidden />
+        <span className="sr-only">{t('form.loading')}</span>
+      </div>
+    );
+  }
 
   if (isPendingApproval && !isEditMode) {
     return (
@@ -579,7 +741,7 @@ export const CreateOffer: React.FC = () => {
                        ? SERVICE_UNITS.has(u as UnitOfMeasure)
                        : !SERVICE_UNITS.has(u as UnitOfMeasure),
                    )
-                   .map(u => <option key={u} value={u}>{t(`unit.${u}`)}</option>)}
+                   .map(u => <option key={u} value={u}>{unitLabel(t, u)}</option>)}
                </select>
              </div>
 
@@ -613,7 +775,7 @@ export const CreateOffer: React.FC = () => {
                    value={formData.offerLocation}
                    onChange={e => setFormData({...formData, offerLocation: e.target.value})}
                  >
-                   <option value={registeredLocation}>{t('form.myLocation' + ' ')} {registeredLocation}</option>
+                   <option value={registeredLocation}>{t('form.myLocation')} {registeredLocation}</option>
                    {/* Future: Add more locations here */}
                  </select>
                </div>
@@ -723,7 +885,7 @@ export const CreateOffer: React.FC = () => {
            <div className="flex justify-end">
              <button
                type="button"
-               onClick={() => navigate('/producer/dashboard')}
+               onClick={() => { if (!offerId) clearNewOfferDraft(); navigate('/producer/dashboard'); }}
                disabled={submitting}
                className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
              >

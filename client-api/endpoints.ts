@@ -14,6 +14,8 @@ export const API_ENDPOINTS = {
     forgotPassword: "/api/auth/forgot-password",
     forgotPasswordVerifyOtp: "/api/auth/forgot-password/verify-otp",
     resetPassword: "/api/auth/reset-password",
+    /** Authenticated irreversible account deletion (Apple 5.1.1(v) / Play). */
+    deleteAccount: "/api/auth/account",
   },
   otp: {
     request: "/api/otp/request",
@@ -57,6 +59,10 @@ export const API_ENDPOINTS = {
     list: "/api/offers",
     /** Official ATI retail catalog (all ATI marketType offers). */
     retailList: "/api/retail/offers",
+    /** Single offer by id (public). Needed when the cached catalog list — which
+     *  only holds the first page — doesn't contain it, e.g. after a hard reload
+     *  straight onto the edit page. */
+    detail: (id: string) => `/api/offers/${id}`,
     create: "/api/offers",
     update: (id: string) => `/api/offers/${id}`,
     remove: (id: string) => `/api/offers/${id}`,
@@ -114,6 +120,10 @@ export const API_ENDPOINTS = {
   reviews: {
     create: "/api/reviews",
     byUser: (userId: string) => `/api/reviews/user/${userId}`,
+    /** Public per-offer reviews — readable while signed out. */
+    byOffer: (offerId: string) => `/api/reviews/offer/${offerId}`,
+    /** Public {offerId, count, average} for every reviewed offer — one call for a grid. */
+    offerRatings: '/api/reviews/offer-ratings',
     all: "/api/reviews",
   },
   portfolios: {
@@ -122,6 +132,10 @@ export const API_ENDPOINTS = {
     create: "/api/portfolios",
     update: (id: string) => `/api/portfolios/${id}`,
     remove: (id: string) => `/api/portfolios/${id}`,
+  },
+  reports: {
+    /** UGC report (Apple 1.2 / Play). Backend may 404 until deployed — UI falls back to email. */
+    create: "/api/reports",
   },
   pickupPoints: {
     list: "/api/pickup-points",
@@ -145,6 +159,9 @@ export const API_ENDPOINTS = {
       `/api/support/sessions/${sessionId}/request-agent`,
     guestRequestAgent: (sessionId: string) =>
       `/api/support/guest/sessions/${sessionId}/request-agent`,
+    /** Guest returns their session to the AI bot (no auth; guestEmail in body). */
+    guestReturnToAi: (sessionId: string) =>
+      `/api/support/guest/sessions/${sessionId}/return-to-ai`,
     guestSessionMessagesPost: (sessionId: string) =>
       `/api/support/guest/sessions/${sessionId}/messages`,
     guestSessionMessages: (sessionId: string, guestEmail: string) =>

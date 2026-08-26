@@ -2,9 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../services/storeContext';
 import { useTranslation } from '../../services/i18nContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
+import { EvidenceFilePreviews } from '../../components/EvidenceFilePreviews';
+import { DisputeSummary } from '../../components/DisputeSummary';
+import { useLiveOrders } from '../../hooks/useLiveOrders';
 import { ProducerStatus, OrderStatus, Order, OfferType, Review } from '../../types';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2, ShoppingBag } from 'lucide-react';
+import { Plus, AlertTriangle, CheckCircle, Package, XCircle, Truck, Eye, User, MapPin, History, ArrowLeft, Calendar, Star, Phone, Mail, Navigation, Upload, X, ThumbsUp, Trash2, ShoppingBag, Loader2 } from 'lucide-react';
 import { BuyerOrderFlowsProvider, BuyerOrderActions, BuyerPurchaseOrdersSection, BuyerPurchaseProducerContact, isOrderAsBuyer } from '../../components/BuyerOrderFlows';
 import { SEO } from '../../components/SEO';
 import { Spinner } from '../../components/Spinner';
@@ -13,13 +16,14 @@ import { Modal } from '../../components/Modal';
 import { ListSkeleton } from '../../components/Loaders';
 import { DashboardSkeleton } from '../../components/skeletons/DashboardSkeleton';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
-import { orderHasService, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
+import { orderHasService, orderIsRetail, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
 import {
   findProducerForUser,
   isProducerPendingApproval,
   resolveManagedProducerProfileId,
 } from '../../utils/producerAccountStatus';
 import { isProducerDashboardUser, isManagerSession, producerAccountUserId } from '../../services/producerSession';
+import { unitLabel } from '../../utils/unitLabel';
 
 export const ProducerDashboard: React.FC = () => {
    const { user, getProducerOffers, deleteOffer, producers, clients, orders, offers, confirmOrder, rejectOrder, startDelivery, markOrderDelivered, submitReview, revealContactInfo, addDisputeEvidence, reviews, getAverageRating, pickupPoints, refreshOrders, refreshOffers, refreshProducers, refreshClients } = useStore();
@@ -86,9 +90,15 @@ export const ProducerDashboard: React.FC = () => {
    const [comment, setComment] = useState('');
 
    // Evidence Upload State
+   // New orders and buyer-side transitions arrive without any local trigger, so
+   // the dashboard polls while it is on screen instead of waiting for a refresh.
+   useLiveOrders();
+
    const [showEvidenceModal, setShowEvidenceModal] = useState(false);
    const [evidenceOrderId, setEvidenceOrderId] = useState<string | null>(null);
    const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+   const [uploadingEvidence, setUploadingEvidence] = useState(false);
+   const [evidenceNote, setEvidenceNote] = useState('');
    const [orderActionBusy, setOrderActionBusy] = useState<string | null>(null);
 
    const handleMarkDelivered = async (orderId: string) => {
@@ -403,14 +413,23 @@ export const ProducerDashboard: React.FC = () => {
       e.stopPropagation();
       setEvidenceOrderId(orderId);
       setEvidenceFiles([]);
+      setEvidenceNote('');
       setShowEvidenceModal(true);
    };
 
-   const handleEvidenceUpload = (e: React.FormEvent) => {
+   const handleEvidenceUpload = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (evidenceOrderId && evidenceFiles.length > 0) {
-         addDisputeEvidence(evidenceOrderId, evidenceFiles);
-         setShowEvidenceModal(false);
+      // Was fire-and-forget: the modal closed instantly while the multipart
+      // upload was still running, so the only feedback was the order status
+      // changing by itself a while later. Now the button shows progress and the
+      // modal only closes once the upload has actually persisted.
+      if (!evidenceOrderId || evidenceFiles.length === 0 || uploadingEvidence) return;
+      setUploadingEvidence(true);
+      try {
+         const ok = await addDisputeEvidence(evidenceOrderId, evidenceFiles, evidenceNote);
+         if (ok) setShowEvidenceModal(false);
+      } finally {
+         setUploadingEvidence(false);
       }
    };
 
@@ -427,7 +446,7 @@ export const ProducerDashboard: React.FC = () => {
 
    const formatProducerOrderSubtitle = (order: Order) => {
       // Producers see their sale value (subtotal) — NOT the buyer's total, which
-      // includes the 16.5% buyer service fee the platform keeps. Buyer views use totalAmount.
+      // includes the 16% buyer service fee the platform keeps. Buyer views use totalAmount.
       const producerValue = order.subtotal ?? order.totalAmount;
       if (orderIsServiceOnly(order)) {
          const lc = serviceLineCount(order);
@@ -1060,10 +1079,14 @@ export const ProducerDashboard: React.FC = () => {
                            <div className="flex items-center mb-2">
                               <Package className="h-4 w-4 text-gray-500 mr-2" />
                               <span className="text-sm font-medium text-gray-900">
-                                 Sold by:{' '}
-                                 <Link to={`/profile/producer/${selectedOrderLive.producerId}`} className="text-blue-600 hover:underline">
-                                    {getProducerDisplayName(selectedOrderLive)}
-                                 </Link>
+                                 {t('order.soldBy')}:{' '}
+                                 {orderIsRetail(selectedOrderLive) ? (
+                                    <span className="text-gray-900">{t('product.atiStoreName')}</span>
+                                 ) : (
+                                    <Link to={`/profile/producer/${selectedOrderLive.producerId}`} className="text-blue-600 hover:underline">
+                                       {getProducerDisplayName(selectedOrderLive)}
+                                    </Link>
+                                 )}
                               </span>
                            </div>
                            {selectedOrderLive.deliveryMethod === 'HOME' && selectedOrderLive.shippingAddress && typeof selectedOrderLive.shippingAddress === 'object' && (
@@ -1154,22 +1177,12 @@ export const ProducerDashboard: React.FC = () => {
 
                      {/* Dispute Info if any */}
                      {selectedOrderLive.status === OrderStatus.DISPUTE && (
-                        <div className="bg-red-50 p-3 rounded-md mb-4 border border-red-200">
-                           <h4 className="text-sm font-bold text-red-800 mb-2 flex items-center"><AlertTriangle className="h-4 w-4 mr-2" /> {t('dash.disputeActive')}</h4>
-                           <p className="text-sm text-red-700 mb-2"><span className="font-semibold">{t('dash.reasonLabel')}</span> {selectedOrderLive.disputeReason || t('dash.notAvailable')}</p>
-                           {selectedOrderLive.disputeEvidence && selectedOrderLive.disputeEvidence.length > 0 && (
-                              <div>
-                                 <p className="text-xs font-bold text-red-800 mb-1">{t('dash.evidenceUploaded')}</p>
-                                 <ul className="list-disc ml-4">
-                                    {selectedOrderLive.disputeEvidence.map(ev => (
-                                       <li key={ev.id} className="text-xs text-red-600">
-                                          {ev.fileName} ({ev.uploaderId === user?.id ? t('dash.you') : t('dash.clientLabel')})
-                                       </li>
-                                    ))}
-                                 </ul>
-                              </div>
-                           )}
-                        </div>
+                        <DisputeSummary
+                           order={selectedOrderLive}
+                           viewerId={user?.id}
+                           otherPartyLabel={t('dispute.clientLabel')}
+                           className="mb-4"
+                        />
                      )}
 
                      {/* Items / scheduled services */}
@@ -1207,7 +1220,7 @@ export const ProducerDashboard: React.FC = () => {
                                        {item.type === OfferType.SERVICE ? (
                                           <>
                                              <p className="text-xs text-gray-600 mt-1">
-                                                {t('service.bookedQty')}: {item.cartQuantity} {t(`unit.${item.unit}`)} · {formatXaf(item.price)} / {t(`unit.${item.unit}`)}
+                                                {t('service.bookedQty')}: {item.cartQuantity} {t('service.slotsUnit')} · {formatXaf(item.price)} / {unitLabel(t, item.unit)}
                                              </p>
                                              {item.bookingDate && (
                                                 <p className="text-xs text-purple-800 font-semibold mt-1 flex items-center gap-1">
@@ -1306,13 +1319,26 @@ export const ProducerDashboard: React.FC = () => {
          </Modal>
 
          {/* Evidence Upload Modal */}
-         <Modal open={showEvidenceModal} onClose={() => setShowEvidenceModal(false)} maxWidth="lg" zIndex={50} panelClassName="p-4 sm:p-6">
+         <Modal open={showEvidenceModal} onClose={() => { if (!uploadingEvidence) setShowEvidenceModal(false); }} maxWidth="lg" zIndex={50} panelClassName="p-4 sm:p-6">
                      <div className="flex justify-between items-center mb-4">
                         <h3 className="text-lg font-bold text-gray-900">{t('dash.uploadEvidence')}</h3>
-                        <button onClick={() => setShowEvidenceModal(false)}><X className="h-5 w-5 text-gray-400" /></button>
+                        <button type="button" disabled={uploadingEvidence} onClick={() => setShowEvidenceModal(false)}><X className="h-5 w-5 text-gray-400" /></button>
                      </div>
 
                      <form onSubmit={handleEvidenceUpload}>
+                        {/* The producer's own account of the dispute. Without this the
+                            admin saw their images with nothing to read — the buyer had a
+                            reason field but the seller had none. */}
+                        <div className="mb-4">
+                           <label className="block text-sm font-medium text-gray-700 mb-1">{t('dash.evidenceNote')}</label>
+                           <textarea
+                              rows={3}
+                              className="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
+                              value={evidenceNote}
+                              onChange={(e) => setEvidenceNote(e.target.value)}
+                              placeholder={t('dash.evidenceNotePlaceholder')}
+                           />
+                        </div>
                         <div className="mb-6">
                            <div className="flex items-center justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
                               <div className="space-y-1 text-center">
@@ -1325,25 +1351,43 @@ export const ProducerDashboard: React.FC = () => {
                                           multiple
                                           accept=".jpg,.jpeg,.png,.pdf"
                                           className="sr-only"
-                                          onChange={(e) => e.target.files && setEvidenceFiles(Array.from(e.target.files).slice(0, 3))}
+                                          onChange={(e) => {
+                                             // Append rather than replace: a FileList only holds the
+                                             // LAST dialog's picks, so clicking three times kept just
+                                             // one file. Dedupe by name+size+mtime, cap at the API's 3.
+                                             const picked = Array.from(e.target.files ?? []);
+                                             if (picked.length) {
+                                                setEvidenceFiles(prev => {
+                                                   const merged = [...prev];
+                                                   for (const f of picked) {
+                                                      if (!merged.some(x => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) merged.push(f);
+                                                   }
+                                                   return merged.slice(0, 3);
+                                                });
+                                             }
+                                             e.target.value = '';
+                                          }}
                                        />
                                     </label>
                                  </div>
                                  <p className="text-xs text-gray-500">JPG, PNG, PDF up to 10MB — up to 3 files</p>
                               </div>
                            </div>
-                           {evidenceFiles.length > 0 && (
-                              <div className="mt-2">
-                                 <p className="text-xs font-bold text-gray-700">{t('dash.filesSelected', { count: evidenceFiles.length })}</p>
-                                 <ul className="list-disc ml-4">
-                                    {evidenceFiles.map((f, i) => <li key={i} className="text-xs text-gray-600">{f.name}</li>)}
-                                 </ul>
-                              </div>
-                           )}
+                           <EvidenceFilePreviews
+                              files={evidenceFiles}
+                              onRemove={(i: number) => setEvidenceFiles(prev => prev.filter((_, idx) => idx !== i))}
+                           />
                         </div>
 
                         <div className="flex justify-end">
-                           <button type="submit" className="px-4 py-2 text-white bg-primary-600 rounded-md text-sm hover:bg-primary-700">{t('dash.upload')}</button>
+                           <button
+                              type="submit"
+                              disabled={uploadingEvidence}
+                              className="px-4 py-2 text-white bg-primary-600 rounded-md text-sm hover:bg-primary-700 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                           >
+                              {uploadingEvidence && <Loader2 className="h-4 w-4 animate-spin" />}
+                              {uploadingEvidence ? t('dispute.uploading') : t('dash.upload')}
+                           </button>
                         </div>
                      </form>
          </Modal>

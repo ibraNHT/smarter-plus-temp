@@ -5,12 +5,13 @@ import {
   forceLogoutRedirect,
   getToken,
 } from '../services/apiService';
+import { nativeStorageGet } from '../services/nativeStorage';
 
 const TOKEN_KEYS = ['authToken', 'token', 'accessToken'] as const;
 
 const readToken = (): string | null => {
   for (const key of TOKEN_KEYS) {
-    const value = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    const value = nativeStorageGet(key);
     if (value) return value;
   }
   return null;
@@ -86,7 +87,9 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    const refreshed = await attemptTokenRefresh();
+    // Honour silent401 — otherwise a guest support call refreshed, got 401, and
+    // was redirected to /login from inside the refresh helper.
+    const refreshed = await attemptTokenRefresh({ silent: silent401 });
     if (!refreshed) {
       // Refresh failed → the session itself is dead. (attemptTokenRefresh already
       // redirects when the refresh endpoint 401/403s.) Force out unless silent.

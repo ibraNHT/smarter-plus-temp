@@ -10,8 +10,8 @@ import {
 } from './LegalDocumentLayout';
 
 const SUPPORT_EMAIL = (
-  <a href="mailto:helpdesk@aheteici.com" className="text-primary-600 hover:underline">
-    helpdesk@aheteici.com
+  <a href="mailto:helpdesk@acheteici.com" className="text-primary-600 hover:underline">
+    helpdesk@acheteici.com
   </a>
 );
 
@@ -348,7 +348,7 @@ export const TermsAndConditionsFr: React.FC<Props> = ({ title, meta }) => (
         </LegalParagraph>
         <LegalList
           items={[
-            <>Frais de service de 16,5 % pour toute commande passée sur la place de marché principale (le cas échéant);</>,
+            <>Frais de service de 16 % pour toute commande passée sur la place de marché principale (le cas échéant);</>,
             <>Frais de service de 3 % pour toute commande passée en boutique (le cas échéant).</>,
             <>Frais de retrait de 1,5 %. Ces frais nous sont facturés par Tranzak pour la gestion de votre paiement.</>,
         <>Frais de rechargement de portefeuille : il s'agit de la commission que nous percevons sur chaque commande vendue avec succès par un producteur avant le dépôt des fonds sur son portefeuille. Nous déduisons 5 % de ce montant.</>,
@@ -599,9 +599,16 @@ export const TermsAndConditionsFr: React.FC<Props> = ({ title, meta }) => (
           <a href="/privacy" className="text-primary-600 hover:underline">
             Politique de Confidentialité
           </a>
-          . Nous pouvons conserver des données relatives à la sécurité des comptes, aux conversations de support, aux
+          . Cela inclut la localisation utilisée pour préremplir l'adresse de livraison, les photos que vous
+          téléversez, les paiements portefeuille via Tranzak pour des biens physiques, et le stockage natif des jetons
+          de session. Nous pouvons conserver des données relatives à la sécurité des comptes, aux conversations de support, aux
           commandes et transactions, aux preuves de litige et aux journaux d'audit selon les besoins pour fournir la
-          Plateforme, assurer la conformité, prévenir la fraude et tenir des registres.
+          Plateforme, assurer la conformité, prévenir la fraude et tenir des registres. Vous pouvez supprimer votre
+          compte dans l'application via Profil → Sécurité, ou demander la suppression sur le web à{' '}
+          <a href="/account-deletion" className="text-primary-600 hover:underline">
+            /account-deletion
+          </a>
+          .
         </LegalParagraph>
       </LegalSection>
 

@@ -3,6 +3,7 @@ import React from 'react';
 import { useStoreOptional } from '../services/storeContext';
 import { useTranslation } from '../services/i18nContext';
 import { Link } from 'react-router-dom';
+import { OfferImage } from '../components/OfferImage';
 import { offerImageInBox } from '../utils/offerImageDisplay';
 import { Layers, X, ArrowRight } from 'lucide-react';
 
@@ -19,8 +20,8 @@ export const CompareWidget: React.FC = () => {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl z-40 px-3 py-3 sm:p-4 animate-slide-up agm-compare-bar"
-      style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      className="fixed left-0 right-0 bg-white border-t border-gray-200 shadow-2xl z-40 px-3 pt-3 pb-0 sm:px-4 sm:pt-4 animate-slide-up agm-compare-bar"
+      style={{ bottom: 'var(--agm-tabbar, 0px)' }}
     >
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
 
@@ -33,10 +34,10 @@ export const CompareWidget: React.FC = () => {
 
            {selectedOffers.map((offer: any) => (
               <div key={offer.id} className="relative group flex-shrink-0 w-10 h-10 sm:w-16 sm:h-16 bg-gray-100 rounded border border-gray-300 overflow-hidden">
-                 <img src={offer.imageUrl} alt={offer.title} className={offerImageInBox} />
+                 <OfferImage src={offer.imageUrl} alt={offer.title} size="thumb" className={offerImageInBox} />
                  <button
                    onClick={() => removeFromCompare(offer.id)}
-                   className="absolute top-0 right-0 bg-red-500 text-white p-0.5 rounded-bl sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                   className="absolute top-0 right-0 z-[3] bg-red-500 text-white p-0.5 rounded-bl sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                    aria-label="Remove from compare"
                  >
                     <X className="h-3 w-3" />

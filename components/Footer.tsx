@@ -117,6 +117,11 @@ export const Footer: React.FC = () => {
                   {t('footer.link.privacy')}
                 </Link>
               </li>
+              <li>
+                <Link to="/account-deletion" className="text-base text-primary-100 hover:text-white transition-colors">
+                  {t('footer.link.accountDeletion')}
+                </Link>
+              </li>
             </ul>
           </div>
 

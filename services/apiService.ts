@@ -5,8 +5,11 @@
  * attaches the JWT Authorization header when a token is present.
  */
 
+import { resolveApiBaseUrl } from './nativePlatform';
+import { nativeStorageGet, nativeStorageRemove, nativeStorageSet } from './nativeStorage';
+
 // In dev, use same origin so Vite proxy forwards /api to the backend (avoids CORS).
-export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? '' : 'http://localhost:3000');
+export const BASE_URL = resolveApiBaseUrl();
 const TOKEN_KEY = 'authToken';
 const REFRESH_TOKEN_KEY = 'refreshToken';
 
@@ -14,24 +17,24 @@ const REFRESH_TOKEN_KEY = 'refreshToken';
 // but nothing writes those anymore, so any value there is a stale/expired leftover.
 // Reading it after logout caused a spurious 401 → forceLogoutRedirect on the next
 // login (looked like a reload; needed a second login). clearToken() also purges them.
-export const getToken = (): string | null => localStorage.getItem(TOKEN_KEY);
+export const getToken = (): string | null => nativeStorageGet(TOKEN_KEY);
 
-export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token);
+export const setToken = (token: string) => nativeStorageSet(TOKEN_KEY, token);
 export const clearToken = () => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    nativeStorageRemove(TOKEN_KEY);
+    nativeStorageRemove(REFRESH_TOKEN_KEY);
     // Purge legacy token keys too. They are never written anymore, so if present
     // they are stale/expired leftovers; leaving them behind made logout incomplete
     // and produced a 401 → forced re-login on the next attempt.
-    localStorage.removeItem('token');
-    localStorage.removeItem('accessToken');
+    nativeStorageRemove('token');
+    nativeStorageRemove('accessToken');
     // Also drop cached session user — anything reading `currentUser` will see
     // the logged-out state immediately on next render.
-    try { localStorage.removeItem('currentUser'); } catch { /* noop */ }
+    try { nativeStorageRemove('currentUser'); } catch { /* noop */ }
 };
 
-export const getRefreshToken = (): string | null => localStorage.getItem(REFRESH_TOKEN_KEY);
-export const setRefreshToken = (token: string) => localStorage.setItem(REFRESH_TOKEN_KEY, token);
+export const getRefreshToken = (): string | null => nativeStorageGet(REFRESH_TOKEN_KEY);
+export const setRefreshToken = (token: string) => nativeStorageSet(REFRESH_TOKEN_KEY, token);
 
 /**
  * Hard log-out used when the refresh token itself fails (the session is dead).
@@ -45,16 +48,16 @@ export const forceLogoutRedirect = (): void => {
     if (typeof window === 'undefined') return;
     // Tell other tabs to clear their in-memory session immediately.
     try { window.dispatchEvent(new Event('agm:session-expired')); } catch { /* noop */ }
+    const path = `${window.location.pathname || ''}${window.location.search || ''}`;
     const hash = window.location.hash || '';
-    if (hash === '#/login' || hash.startsWith('#/login?')) return;
-    // Preserve the page user was trying to reach so we can redirect post-login if desired.
+    if (path === '/login' || path.startsWith('/login?') || hash === '#/login' || hash.startsWith('#/login?')) return;
     try {
-        const intended = `${window.location.pathname}${window.location.hash}`;
-        if (intended && !intended.startsWith('/login')) {
+        const intended = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+        if (intended && !intended.startsWith('/login') && intended !== '#/login') {
             sessionStorage.setItem('postLoginRedirect', intended);
         }
     } catch { /* noop */ }
-    window.location.hash = '#/login';
+    window.location.replace('/login');
 };
 
 const buildHeaders = (extra?: Record<string, string>): Record<string, string> => {
@@ -73,6 +76,16 @@ interface ApiFetchOptions extends Omit<RequestInit, 'headers'> {
     headers?: Record<string, string>;
     /** If true, a 401 response will NOT trigger a logout+redirect. Use for background/polling calls. */
     silent401?: boolean;
+    /**
+     * If true, a 401 will NOT attempt a token refresh at all. Use for requests
+     * that have no session to refresh in the first place (e.g. login itself) —
+     * without this, a failed login still triggered attemptTokenRefresh(), which
+     * calls forceLogoutRedirect() internally whenever /auth/refresh 401/403s
+     * (the common case with no/stale refresh token), bypassing `silent401`
+     * entirely and clearing storage + firing the global session-expired event
+     * before the caller's own error handling ever ran.
+     */
+    skipAuthRefresh?: boolean;
     /** Internal flag — set to true after one refresh attempt to prevent infinite loops */
     _isRetry?: boolean;
     /** Internal — after a 304, retry GET once without conditional cache headers */
@@ -96,7 +109,15 @@ export const isRefreshOnCooldown = (): boolean =>
  *  in-flight promise and cooldown state as the fetch-based `apiFetch` below.
  *  Otherwise both pipelines would attempt refresh independently and could
  *  burn the rotated refresh token before either retry runs. */
-export const attemptTokenRefresh = async (): Promise<boolean> => {
+/**
+ * @param opts.silent  Never force a logout/redirect on failure. Required for
+ *   guest-facing calls (support chat): a signed-out visitor has nothing to
+ *   refresh, so a 401 here is expected — redirecting them was the "talk to a
+ *   human agent sends me to the login page" bug.
+ */
+export const attemptTokenRefresh = async (opts: { silent?: boolean } = {}): Promise<boolean> => {
+    // A pure guest has nothing to refresh — don't try, and never redirect.
+    if (!getToken() && !getRefreshToken()) return false;
     if (refreshInFlight) return refreshInFlight;
     if (Date.now() - lastRefreshFailed < REFRESH_COOLDOWN_MS) return false;
 
@@ -117,7 +138,7 @@ export const attemptTokenRefresh = async (): Promise<boolean> => {
                 // sign the user out and route to login. For other 5xx errors
                 // we don't force-logout: the request may succeed later.
                 if (response.status === 401 || response.status === 403) {
-                    forceLogoutRedirect();
+                    if (!opts.silent) forceLogoutRedirect();
                 }
                 return false;
             }
@@ -150,7 +171,7 @@ export const apiFetch = async <T = unknown>(
     path: string,
     options: ApiFetchOptions = {}
 ): Promise<T> => {
-    const { headers: extraHeaders, silent401, _isRetry, _after304Retry, ...rest } = options;
+    const { headers: extraHeaders, silent401, skipAuthRefresh, _isRetry, _after304Retry, ...rest } = options;
     const response = await fetch(`${BASE_URL}${path}`, {
         ...rest,
         credentials: 'include',
@@ -186,9 +207,9 @@ export const apiFetch = async <T = unknown>(
             throw err;
         }
 
-        if (response.status === 401) {
+        if (response.status === 401 && !skipAuthRefresh) {
             if (!_isRetry) {
-                const refreshed = await attemptTokenRefresh();
+                const refreshed = await attemptTokenRefresh({ silent: !!silent401 });
                 if (refreshed) {
                     return apiFetch<T>(path, { ...options, _isRetry: true });
                 }
@@ -205,6 +226,11 @@ export const apiFetch = async <T = unknown>(
             // required), NOT an auth failure. Do NOT log out — fall through and throw so
             // the caller can handle the specific error (e.g. prompt for OTP).
         }
+        // skipAuthRefresh === true: this request never had a session to refresh in
+        // the first place (e.g. a login attempt) — a 401 here is just this request's
+        // own business-logic failure (invalid credentials). Skip refresh AND
+        // forceLogoutRedirect entirely; fall through and throw so the caller shows
+        // its own error message.
 
         let message = `API error ${response.status}`;
         try {

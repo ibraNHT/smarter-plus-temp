@@ -1,8 +1,8 @@
+import { getPublicWebOrigin } from '../services/nativePlatform';
+
 /** Canonical path-style offer URL for sharing (never hash routes). */
 export function buildOfferShareUrl(offerId: string, origin?: string): string {
-  const base =
-    origin ??
-    (typeof window !== 'undefined' ? window.location.origin : 'https://acheteici.com');
+  const base = origin ?? getPublicWebOrigin();
   return `${base.replace(/\/$/, '')}/offer/${encodeURIComponent(offerId)}`;
 }
 

@@ -13,13 +13,14 @@ import {
   isSocialBot,
 } from './buildOfferOgHtml.mjs';
 
+//random psuh 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST_DIR = process.env.STATIC_ROOT
   ? path.resolve(process.env.STATIC_ROOT)
   : path.resolve(__dirname, '..', 'dist');
 const PORT = Number(process.env.PORT || 80);
 const HOST = process.env.HOST || '0.0.0.0';
-
+//asda
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',

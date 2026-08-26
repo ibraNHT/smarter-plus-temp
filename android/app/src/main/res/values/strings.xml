@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AgriMarket Connect</string>
+    <string name="title_activity_main">AgriMarket Connect</string>
+    <string name="package_name">com.acheteici.app</string>
+    <string name="custom_url_scheme">com.acheteici.app</string>
+</resources>

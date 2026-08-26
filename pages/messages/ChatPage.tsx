@@ -10,6 +10,9 @@ import { ListSkeleton } from '../../components/Loaders';
 import { Modal } from '../../components/Modal';
 import { ServiceAppointmentPicker } from '../../components/ServiceAppointmentPicker';
 import { useCurrency } from '../../contexts/CurrencyContext';
+import { unitLabel } from '../../utils/unitLabel';
+import { ReportBlockControl } from '../../components/ReportBlockControl';
+import { BLOCKLIST_EVENT, isUserBlocked } from '../../services/contentModeration';
 
 export const ChatPage: React.FC = () => {
    const { chatId } = useParams<{ chatId: string }>();
@@ -59,12 +62,19 @@ export const ChatPage: React.FC = () => {
    // near the bottom; otherwise show a pill telling them new messages arrived.
    const [isNearBottom, setIsNearBottom] = useState(true);
    const [newIncomingCount, setNewIncomingCount] = useState(0);
+   const [blocklistTick, setBlocklistTick] = useState(0);
    // Typing-indicator transmit state. We throttle `typing=true` so we don't
    // emit on every keystroke, and debounce `typing=false` to fire after a
    // short idle window. Refs (not state) so updates don't re-render.
    const lastTypingEmitRef = useRef<number>(0);
    const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
    const isTypingActiveRef = useRef<boolean>(false);
+
+   useEffect(() => {
+      const bump = () => setBlocklistTick((n) => n + 1);
+      window.addEventListener(BLOCKLIST_EVENT, bump);
+      return () => window.removeEventListener(BLOCKLIST_EVENT, bump);
+   }, []);
 
    const TEXTAREA_MAX_PX = 160;
 
@@ -181,7 +191,15 @@ export const ChatPage: React.FC = () => {
          return latestResolvedTimestamp == null || ts > latestResolvedTimestamp;
       });
    })();
-   const canInitiateFirstProposal = isProducerDashboardUser(user) || hasExistingProposalInCurrentRound;
+   // A round is opened by the SELLER — the owner of this listing — not by any
+   // producer account. Keeping this on account type let a producer who is BUYING
+   // open a round, which the API now rejects; the UI would have offered a button
+   // that always failed. (Declared here rather than reusing `listingOffer` below,
+   // which is defined further down the component.)
+   const chatListingOffer = activeChat?.offerId ? getOfferById(activeChat.offerId) ?? null : null;
+   const iOwnChatListing =
+      !!chatListingOffer && !!user?.producerId && chatListingOffer.producerId === user.producerId;
+   const canInitiateFirstProposal = iOwnChatListing || hasExistingProposalInCurrentRound;
 
    const getUserSide = useCallback((senderId: string): 'CLIENT' | 'PRODUCER' | 'UNKNOWN' => {
       const isClient = clients.some((c) => c.id === senderId || c.userId === senderId);
@@ -442,9 +460,11 @@ export const ChatPage: React.FC = () => {
 
    // Variables hoisted above for scroll calculation
 
+   const getOtherParticipantId = (chat: typeof chats[number]) =>
+      (chat.participantIds || []).find((pid) => pid && pid !== user?.id);
+
    const getOtherParticipantName = (chat: typeof chats[number]) => {
-      const participantIds = chat.participantIds || [];
-      const otherId = participantIds.find(id => id !== user?.id);
+      const otherId = getOtherParticipantId(chat);
       if (!otherId) return t('chat.unknown');
       const fromParticipantsData = chat.participantsData?.find((p) => p.id === otherId)?.displayName;
       if (fromParticipantsData && fromParticipantsData.trim()) return fromParticipantsData.trim();
@@ -661,7 +681,7 @@ export const ChatPage: React.FC = () => {
 
    const listingOffer = activeChat?.offerId ? getOfferById(activeChat.offerId) ?? null : null;
    const isServiceListing = String(listingOffer?.type ?? '').toUpperCase() === OfferType.SERVICE;
-   const listingUnitLabel = listingOffer ? t(`unit.${listingOffer.unit}`) : '';
+   const listingUnitLabel = listingOffer ? unitLabel(t, listingOffer.unit) : '';
    const maxPricePerUnit =
       listingOffer != null
          ? (() => {
@@ -694,6 +714,16 @@ export const ChatPage: React.FC = () => {
          return toXaf(p) * q;
       })();
 
+   void blocklistTick;
+   const visibleSidebarChats = user
+      ? chats.filter(
+           (c) =>
+              c.participantIds?.includes(user.id) &&
+              !isUserBlocked(getOtherParticipantId(c)),
+        )
+      : [];
+   const activeOtherId = activeChat ? getOtherParticipantId(activeChat) : undefined;
+
    return (
       <div className="agm-chat-shell flex bg-gray-100 overflow-hidden">
          {/* Sidebar List */}
@@ -705,12 +735,12 @@ export const ChatPage: React.FC = () => {
                </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-               {chatListLoading && chats.filter(c => c.participantIds?.includes(user.id)).length === 0 ? (
+               {chatListLoading && visibleSidebarChats.length === 0 ? (
                   <div className="p-3"><ListSkeleton rows={6} /></div>
-               ) : chats.filter(c => c.participantIds?.includes(user.id)).length === 0 ? (
+               ) : visibleSidebarChats.length === 0 ? (
                   <div className="p-8 text-center text-gray-500 text-sm">{t('chat.noChats')}</div>
                ) : (
-                  chats.filter(c => c.participantIds?.includes(user.id)).map(chat => {
+                  visibleSidebarChats.map(chat => {
                      const otherName = getOtherParticipantName(chat);
                      const threadUnread = Math.max(0, Number(chat.unreadCounts?.[user.id]) || 0);
                      const offerContext = getOfferContextLabel(chat.offerId);
@@ -743,7 +773,10 @@ export const ChatPage: React.FC = () => {
          </div>
 
          {/* Chat Area */}
-         <div className={`${!chatId ? 'hidden md:flex' : 'flex'} flex-1 flex-col bg-white`}>
+         {/* `min-h-0` lets the message list shrink so the composer stays on screen;
+             `min-w-0` keeps long names and offer labels truncating instead of
+             widening the column past the viewport. */}
+         <div className={`${!chatId ? 'hidden md:flex' : 'flex'} flex-1 min-h-0 min-w-0 flex-col bg-white`}>
             {activeChat ? (
                <>
                   {/* Header */}
@@ -769,16 +802,26 @@ export const ChatPage: React.FC = () => {
                            )}
                         </div>
                      </div>
-                     <button onClick={() => navigate(-1)} className="text-sm text-gray-500 hover:text-primary-600 hidden md:block">
-                        {t('common.close')}
-                     </button>
+                     <div className="flex items-center gap-2 shrink-0">
+                        {activeOtherId ? (
+                           <ReportBlockControl
+                              compact
+                              targetType="CHAT"
+                              targetId={activeChat.id}
+                              blockUserIdValue={activeOtherId}
+                           />
+                        ) : null}
+                        <button onClick={() => navigate(-1)} className="text-sm text-gray-500 hover:text-primary-600 hidden md:block">
+                           {t('common.close')}
+                        </button>
+                     </div>
                   </div>
 
                   {/* Messages */}
                   <div
                      ref={messagesContainerRef}
                      onScroll={handleMessagesScroll}
-                     className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 relative"
+                     className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 bg-gray-50 relative"
                   >
                      {activeChat.offerId ? (
                         <div className="flex justify-center">
@@ -915,7 +958,7 @@ export const ChatPage: React.FC = () => {
                                        )}
                                     </div>
                                  ) : (
-                                    <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                                    <p className="agm-chat-message text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">{msg.text}</p>
                                  )}
                                  <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isMe ? 'text-primary-200' : 'text-gray-400'}`}>
                                     <span>
@@ -1035,6 +1078,21 @@ export const ChatPage: React.FC = () => {
                      </p>
                   </div>
                </>
+            ) : chatId && chatListLoading ? (
+               /* Deep-linked straight into a thread: the conversation list is still
+                  loading, so we can't know yet whether this chat exists. Showing the
+                  generic "select a conversation" empty state here was a dead end —
+                  on mobile the list is hidden, so there was nothing to select. */
+               <div className="flex-1 flex items-center justify-center">
+                  <Spinner />
+               </div>
+            ) : chatId ? (
+               /* List has loaded and this id genuinely isn't in it. */
+               <div className="flex-1 flex flex-col items-center justify-center text-gray-400 px-6 text-center">
+                  <AlertCircle className="h-16 w-16 mb-4 opacity-20" />
+                  <p>{t('chat.notFound')}</p>
+                  <button onClick={() => navigate('/messages')} className="mt-4 text-primary-600">{t('profile.tabs.back')}</button>
+               </div>
             ) : (
                <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
                   <MessageCircle className="h-16 w-16 mb-4 opacity-20" />

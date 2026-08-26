@@ -1,5 +1,6 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { nativeStorageGet, nativeStorageSet } from './nativeStorage';
 
 type Language = 'en' | 'fr';
 
@@ -55,6 +56,7 @@ const translations: Record<string, Record<Language, string>> = {
   'footer.link.faq': { en: 'FAQ', fr: 'FAQ' },
   'footer.link.terms': { en: 'Terms & Conditions', fr: 'Conditions Générales' },
   'footer.link.privacy': { en: 'Privacy Policy', fr: 'Politique de Confidentialité' },
+  'footer.link.accountDeletion': { en: 'Delete account', fr: 'Supprimer le compte' },
   'footer.rights': { en: 'All rights reserved.', fr: 'Tous droits réservés.' },
   'footer.exploreHelp': { en: 'Need a hand?', fr: 'Besoin d’aide ?' },
   'footer.exploreBlog': { en: 'Latest from the blog', fr: 'Dernières du blog' },
@@ -267,6 +269,7 @@ const translations: Record<string, Record<Language, string>> = {
   'form.publish': { en: 'Publish', fr: 'Publier' },
   'form.unpublish': { en: 'Unpublish', fr: 'Dépublier' },
   'form.editOffer': { en: 'Edit Offer', fr: 'Modifier l\'Offre' },
+  'form.offerNotFound': { en: 'This offer could not be loaded. It may have been removed.', fr: 'Cette offre n\'a pas pu être chargée. Elle a peut-être été supprimée.' },
   'form.update': { en: 'Update', fr: 'Mettre à jour' },
   'form.location': { en: 'Product Location', fr: 'Lieu du Produit' },
   'form.deliveryAvailable': { en: 'Delivery Available', fr: 'Livraison Possible' },
@@ -327,6 +330,13 @@ const translations: Record<string, Record<Language, string>> = {
   'unit.DAY': { en: 'Day', fr: 'Jour' },
   'unit.HECTARE': { en: 'Hectare', fr: 'Hectare' },
   'unit.JOB': { en: 'Job/Task', fr: 'Tâche' },
+  'unit.G': { en: 'Gram (g)', fr: 'Gramme (g)' },
+  'unit.PACK': { en: 'Pack', fr: 'Paquet' },
+  'unit.PLASTIC BAG': { en: 'Plastic bag', fr: 'Sachet plastique' },
+  'unit.BOTTLES': { en: 'Bottle', fr: 'Bouteille' },
+  'unit.CANS': { en: 'Can', fr: 'Boîte de conserve' },
+  'unit.LITRES': { en: 'Liter', fr: 'Litre' },
+  'unit.BOXES': { en: 'Box', fr: 'Carton' },
 
   // Marketplaces
   'market.searchPlaceholder': { en: 'Search products...', fr: 'Rechercher des produits...' },
@@ -402,7 +412,12 @@ const translations: Record<string, Record<Language, string>> = {
     fr: 'Votre service est dans le panier. Choisissez la livraison ci-dessous, puis appuyez sur « Passer la commande » pour finaliser.',
   },
   'cart.subtotal': { en: 'Subtotal', fr: 'Sous-total' },
-  'cart.serviceFee': { en: 'Service Fee (16.5%)', fr: 'Frais de service (16,5%)' },
+  'cart.serviceFee': { en: 'Service Fee (6%)', fr: 'Frais de service (6%)' },
+  'cart.serviceFeeRetail': { en: 'Service Fee (4%)', fr: 'Frais de service (4%)' },
+  'cart.selectDeliveryTime': { en: 'Delivery time', fr: 'Heure de livraison' },
+  'cart.selectDeliveryMethodWarning': { en: 'Please select a valid delivery method and address or pickup point.', fr: 'Veuillez choisir un mode de livraison et une adresse ou un point de retrait valides.' },
+  'cart.selectDeliveryDateWarning': { en: 'Please select a delivery date.', fr: 'Veuillez sélectionner une date de livraison.' },
+  'cart.selectDeliveryTimeHint': { en: 'Choose a delivery window.', fr: 'Choisissez un créneau de livraison.' },
   'cart.total': { en: 'Order Total', fr: 'Total Commande' },
   'cart.placeOrder': { en: 'Place Order', fr: 'Passer la commande' },
   'cart.continue': { en: 'Continue Shopping', fr: 'Continuer vos achats' },
@@ -458,6 +473,46 @@ const translations: Record<string, Record<Language, string>> = {
   'service.scheduledServices': { en: 'Scheduled services', fr: 'Services planifiés' },
   'service.appointment': { en: 'Appointment', fr: 'Rendez-vous' },
   'service.perSlotHours': { en: 'h per slot', fr: 'h par créneau' },
+  // A service line's cartQuantity is a SLOT COUNT, not hours — rendering it with
+  // the offer's pricing unit produced "Booked: 7 Hour(s)" for 7 slots of 3h.
+  'service.slotsUnit': { en: 'slot(s)', fr: 'créneau(x)' },
+  'dispute.active': { en: 'Dispute in progress', fr: 'Litige en cours' },
+  'dispute.reasonLabel': { en: 'Reason:', fr: 'Motif :' },
+  'dispute.notAvailable': { en: 'Not provided', fr: 'Non fourni' },
+  'dispute.noEvidenceYet': { en: 'No evidence submitted yet.', fr: 'Aucune preuve soumise pour le moment.' },
+  'dispute.youSubmitted': { en: 'You submitted', fr: 'Vous avez soumis' },
+  'dispute.partySubmitted': { en: '{party} submitted', fr: '{party} a soumis' },
+  'dispute.underReview': { en: 'Our team is reviewing this dispute and will contact both parties.', fr: "Notre équipe examine ce litige et contactera les deux parties." },
+  'dispute.producerLabel': { en: 'The seller', fr: 'Le vendeur' },
+  'dispute.clientLabel': { en: 'The buyer', fr: "L'acheteur" },
+  'dispute.uploading': { en: 'Uploading evidence…', fr: 'Envoi des preuves…' },
+  'dispute.submitting': { en: 'Submitting…', fr: 'Envoi…' },
+  'order.filesAttached': { en: '{count} file(s) attached', fr: '{count} fichier(s) joint(s)' },
+  'order.removeFile': { en: 'Remove file', fr: 'Supprimer le fichier' },
+  // Keys referenced by t() but never defined — t() echoes an unknown key verbatim,
+  // so each of these was rendering raw text (or a raw key) to users.
+  'auth.loginRequired': { en: 'Please sign in to continue.', fr: 'Veuillez vous connecter pour continuer.' },
+  'form.description': { en: 'Description', fr: 'Description' },
+  'form.listingCurrencyAria': { en: 'Listing currency', fr: 'Devise de l’annonce' },
+  'form.quantityPlaceholder': { en: 'Quantity', fr: 'Quantité' },
+  'form.removeImageAria': { en: 'Remove image', fr: 'Supprimer l’image' },
+  'guest.emailLabel': { en: 'Email address', fr: 'Adresse e-mail' },
+  'order.balanceAfterPayment': { en: 'Balance after payment', fr: 'Solde après paiement' },
+  'order.contactNotAvailable': { en: 'Contact not available', fr: 'Contact non disponible' },
+  'product.busySlot': { en: 'Booked', fr: 'Réservé' },
+  'product.mineSlot': { en: 'Your booking', fr: 'Votre réservation' },
+  'product.duplicateSlotError': { en: 'That slot is already in your cart.', fr: 'Ce créneau est déjà dans votre panier.' },
+  'profile.verifiedProducer': { en: 'Verified producer', fr: 'Producteur vérifié' },
+  'register.phonePlaceholder': { en: 'Phone number', fr: 'Numéro de téléphone' },
+  'register.producer.locationRequired': { en: 'Please select a location.', fr: 'Veuillez sélectionner un emplacement.' },
+  'support.chatStatusChanging': { en: 'Updating…', fr: 'Mise à jour…' },
+  'upload.upLoading': { en: 'Uploading…', fr: 'Téléversement…' },
+  'validation.currentPasswordRequired': { en: 'Enter your current password.', fr: 'Saisissez votre mot de passe actuel.' },
+  'validation.passwordRule': { en: 'Password must be at least 8 characters and include a letter and a number.', fr: 'Le mot de passe doit contenir au moins 8 caractères, dont une lettre et un chiffre.' },
+  'validation.confirmPasswordRequired': { en: 'Please confirm your new password.', fr: 'Veuillez confirmer votre nouveau mot de passe.' },
+  'validation.passwordSameAsOld': { en: 'The new password must differ from the current one.', fr: 'Le nouveau mot de passe doit différer de l’actuel.' },
+  'validation.currentPasswordIncorrect': { en: 'Current password is incorrect.', fr: 'Mot de passe actuel incorrect.' },
+  'validation.fixErrors': { en: 'Please fix the errors above.', fr: 'Veuillez corriger les erreurs ci-dessus.' },
   'service.lineSingular': { en: 'service', fr: 'service' },
   'service.linePlural': { en: 'services', fr: 'services' },
   'service.slotSingular': { en: 'slot', fr: 'créneau' },
@@ -578,7 +633,8 @@ const translations: Record<string, Record<Language, string>> = {
   'validation.passwordsMatch': { en: 'Passwords do not match.', fr: 'Les mots de passe ne correspondent pas.' },
   'validation.descriptionMin': { en: 'Description should be at least 10 characters.', fr: 'La description doit contenir au moins 10 caractères.' },
   'validation.farmNameRequired': { en: 'Farm/Business name is required for business accounts.', fr: 'Le nom de la ferme/entreprise est requis pour les comptes professionnels.' },
-  'validation.taxIdRequired': { en: 'Tax ID (NIU) is required.', fr: 'L\'identifiant fiscal (NIU) est requis.' },
+  'validation.taxIdRequired': { en: 'Your NIU / tax ID or Business ID is required .', fr: 'Votre numéro NIU / numéro d\'identification fiscale ou numéro d\'identification d\'entreprise est requis.' },
+  'validation.categoriesRequired': { en: 'Please select at least one category.', fr: 'Veuillez sélectionner au moins une catégorie.' },
   'validation.commentMin': { en: 'Please add a short comment.', fr: 'Veuillez ajouter un court commentaire.' },
   'validation.disputeReasonMin': { en: 'Please describe the issue in at least 5 characters.', fr: 'Veuillez décrire le problème en au moins 5 caractères.' },
 
@@ -591,6 +647,12 @@ const translations: Record<string, Record<Language, string>> = {
   'ui.profile': { en: 'Profile', fr: 'Profil' },
   'ui.emailPlaceholder': { en: 'you@example.com', fr: 'vous@exemple.com' },
   'ui.phonePlaceholder': { en: '612 345 678', fr: '612 345 678' },
+  'ui.firstNamePlaceholder': { en: 'e.g. Jean', fr: 'ex. Jean' },
+  'ui.lastNamePlaceholder': { en: 'e.g. Nkeng', fr: 'ex. Nkeng' },
+  'ui.cityPlaceholder': { en: 'e.g. Douala', fr: 'ex. Douala' },
+  'ui.regionPlaceholder': { en: 'e.g. Littoral', fr: 'ex. Littoral' },
+  'ui.farmNamePlaceholder': { en: 'e.g. Green Valley Farm', fr: 'ex. Ferme Green Valley' },
+  'ui.taxIdPlaceholder': { en: 'e.g. P123456789012A', fr: 'ex. P123456789012A' },
 
   // Client profile specific
   'client.profileTitle': { en: 'Client Profile', fr: 'Profil Client' },
@@ -628,7 +690,7 @@ const translations: Record<string, Record<Language, string>> = {
   'dash.items': { en: 'Items', fr: 'Articles' },
   'dash.mixedOrderHint': { en: 'Includes products and services', fr: 'Inclut produits et services' },
   'dash.orderValue': { en: 'Order value', fr: 'Valeur de la commande' },
-  'dash.producerPayoutHint': { en: 'Your payout is this amount minus the 5% platform commission.', fr: 'Votre versement correspond à ce montant moins la commission de 5% de la plateforme.' },
+  'dash.producerPayoutHint': { en: 'Your payout is this amount minus the 9% platform commission.', fr: 'Votre versement correspond à ce montant moins la commission de 9% de la plateforme.' },
   'dash.close': { en: 'Close', fr: 'Fermer' },
   'dash.availability': { en: 'Availability', fr: 'Disponibilité' },
   'dash.rateClient': { en: 'Rate Client', fr: 'Noter le Client' },
@@ -669,8 +731,8 @@ const translations: Record<string, Record<Language, string>> = {
   'wallet.amountMin': { en: 'Amount must be at least 100 XAF.', fr: 'Le montant doit être d’au moins 100 XAF.' },
   'wallet.withdrawAmountMin': { en: 'Enter a valid amount (min 100 XAF).', fr: 'Entrez un montant valide (min. 100 XAF).' },
   'wallet.amountFeeLimit': {
-    en: 'Amount + 1.5% fee ({total} XAF) cannot exceed your balance of {balance} XAF.',
-    fr: 'Le montant + frais de 1,5 % ({total} XAF) ne peut pas dépasser votre solde de {balance} XAF.',
+    en: 'Amount + 2% fee ({total} XAF) cannot exceed your balance of {balance} XAF.',
+    fr: 'Le montant + frais de 2 % ({total} XAF) ne peut pas dépasser votre solde de {balance} XAF.',
   },
   'wallet.startPaymentFailed': { en: 'Could not start payment.', fr: 'Impossible de démarrer le paiement.' },
   'wallet.noTx': { en: 'No transactions yet.', fr: 'Aucune transaction.' },
@@ -684,7 +746,7 @@ const translations: Record<string, Record<Language, string>> = {
   'otp.verify': { en: 'Verify', fr: 'Vérifier' },
   'otp.verifyTitle': { en: 'Verify with OTP', fr: 'Vérifier avec OTP' },
   'otp.requestNewCode': { en: 'Request new code', fr: 'Demander un nouveau code' },
-  'otp.enterCode': { en: 'Enter the 6-digit code sent to your registered phone number.', fr: 'Entrez le code à 6 chiffres envoyé à votre numéro enregistré.' },
+  'otp.enterCode': { en: 'Enter the 6-digit code sent to your registered email address.', fr: 'Entrez le code à 6 chiffres envoyé à votre adresse e-mail enregistrée.' },
 
   // Orders
   'order.id': { en: 'Order ID', fr: 'ID Commande' },
@@ -764,11 +826,91 @@ const translations: Record<string, Record<Language, string>> = {
   'profile.tabs.reputation': { en: 'My Reputation', fr: 'Ma Réputation' },
   'profile.update': { en: 'Update Profile', fr: 'Mettre à jour' },
   'profile.password': { en: 'Change Password', fr: 'Changer le mot de passe' },
+  'profile.deleteAccount': { en: 'Delete account', fr: 'Supprimer le compte' },
+  'profile.deleteAccountTitle': { en: 'Delete your account?', fr: 'Supprimer votre compte ?' },
+  'profile.deleteAccountBody': {
+    en: 'You can permanently delete your account and associated personal data from this screen. This cannot be undone.',
+    fr: 'Vous pouvez supprimer définitivement votre compte et les données personnelles associées depuis cet écran. Cette action est irréversible.',
+  },
+  'profile.deleteAccountConfirm': {
+    en: 'This permanently deletes your account, profile, and personal data. Orders needed for legal or dispute records may be retained in anonymized form. Type-confirm by tapping Delete account.',
+    fr: 'Cela supprime définitivement votre compte, votre profil et vos données personnelles. Les commandes nécessaires aux obligations légales ou aux litiges peuvent être conservées sous forme anonymisée. Confirmez en appuyant sur Supprimer le compte.',
+  },
+  'profile.deleteAccountSuccess': { en: 'Your account has been deleted.', fr: 'Votre compte a été supprimé.' },
+  'profile.deleteAccountFailed': {
+    en: 'We could not delete the account. Please try again or contact support.',
+    fr: 'Impossible de supprimer le compte. Réessayez ou contactez le support.',
+  },
+  'accountDeletion.title': { en: 'Delete your AgriMarket Connect account', fr: 'Supprimer votre compte AgriMarket Connect' },
+  'accountDeletion.subtitle': {
+    en: 'This page is the Google Play and web resource for AgriMarket Connect (Achète Tout Ici) account and data deletion requests.',
+    fr: 'Cette page est la ressource web Google Play d’AgriMarket Connect (Achète Tout Ici) pour demander la suppression du compte et des données.',
+  },
+  'accountDeletion.inAppTitle': { en: 'Delete in the app', fr: 'Supprimer dans l’application' },
+  'accountDeletion.inAppBody': {
+    en: 'If you have the iOS or Android app (or are signed in on the website), you can delete the account immediately:',
+    fr: 'Si vous avez l’application iOS ou Android (ou êtes connecté sur le site), vous pouvez supprimer le compte immédiatement :',
+  },
+  'accountDeletion.stepSignIn': { en: 'Sign in.', fr: 'Connectez-vous.' },
+  'accountDeletion.stepProfile': { en: 'Open My Profile.', fr: 'Ouvrez Mon profil.' },
+  'accountDeletion.stepSecurity': { en: 'Open Security → Delete account and confirm.', fr: 'Ouvrez Sécurité → Supprimer le compte et confirmez.' },
+  'accountDeletion.webTitle': { en: 'Request deletion by email', fr: 'Demander la suppression par e-mail' },
+  'accountDeletion.webBody': {
+    en: 'You can also request deletion without the app. Submit the form to email helpdesk@acheteici.com. We verify the request, then delete or irreversibly anonymize account data. We confirm by email. Orders kept for tax or disputes may be retained in anonymized form.',
+    fr: 'Vous pouvez aussi demander la suppression sans l’application. Le formulaire envoie un e-mail à helpdesk@acheteici.com. Après vérification, nous supprimons ou anonymisons les données. Nous confirmons par e-mail. Les commandes conservées pour des obligations fiscales ou des litiges peuvent l’être sous forme anonymisée.',
+  },
+  'accountDeletion.email': { en: 'Email on the account', fr: 'E-mail du compte' },
+  'accountDeletion.phone': { en: 'Phone (optional)', fr: 'Téléphone (facultatif)' },
+  'accountDeletion.details': { en: 'Anything else we should know (optional)', fr: 'Précisions (facultatif)' },
+  'accountDeletion.submit': { en: 'Email deletion request', fr: 'Envoyer la demande' },
+  'accountDeletion.sent': {
+    en: 'Your mail app should have opened. If it did not, write to helpdesk@acheteici.com with subject “account deletion request”.',
+    fr: 'Votre application e-mail devrait s’être ouverte. Sinon, écrivez à helpdesk@acheteici.com avec l’objet « demande de suppression de compte ».',
+  },
+  'accountDeletion.retain': {
+    en: 'Questions about what we keep for legal reasons: see the Privacy Policy or write to',
+    fr: 'Questions sur les conservations légales : voir la Politique de confidentialité ou écrire à',
+  },
+  'report.action': { en: 'Report', fr: 'Signaler' },
+  'report.title': { en: 'Report this content?', fr: 'Signaler ce contenu ?' },
+  'report.body': {
+    en: 'We review reports and remove content that breaks our rules. Blocking hides that person in your chats on this device.',
+    fr: 'Nous examinons les signalements et retirons le contenu contraire aux règles. Le blocage masque cette personne dans vos discussions sur cet appareil.',
+  },
+  'report.submit': { en: 'Submit report', fr: 'Envoyer le signalement' },
+  'report.success': { en: 'Thanks. We received your report.', fr: 'Merci. Nous avons reçu votre signalement.' },
+  'report.failed': { en: 'We could not send the report. Try again or email helpdesk.', fr: 'Impossible d’envoyer le signalement. Réessayez ou écrivez au support.' },
+  'report.reasonLabel': { en: 'Reason', fr: 'Motif' },
+  'report.reason.spam': { en: 'Spam or advertising', fr: 'Spam ou publicité' },
+  'report.reason.harassment': { en: 'Harassment or hate', fr: 'Harcèlement ou haine' },
+  'report.reason.scam': { en: 'Scam or fraud', fr: 'Arnaque ou fraude' },
+  'report.reason.illegal': { en: 'Illegal or unsafe listing', fr: 'Annonce illégale ou dangereuse' },
+  'report.reason.other': { en: 'Other', fr: 'Autre' },
+  'report.notes': { en: 'More detail (optional)', fr: 'Précisions (facultatif)' },
+  'report.alsoBlock': { en: 'Also block this user in my chats', fr: 'Bloquer aussi cette personne dans mes discussions' },
+  'support.aiConsentTitle': { en: 'AI support', fr: 'Assistance IA' },
+  'support.aiConsentBody': {
+    en: 'AgriBot uses a third-party AI model (Google Gemini) through our servers to answer support questions. Messages you send here can include personal details. You can ask for a human agent after you start.',
+    fr: 'AgriBot utilise un modèle d’IA tiers (Google Gemini) via nos serveurs pour répondre. Vos messages peuvent contenir des données personnelles. Vous pourrez demander un agent humain ensuite.',
+  },
+  'support.aiConsentCheck': {
+    en: 'I agree to send my support messages to AgriMarket and its AI provider (Google Gemini) to get help.',
+    fr: 'J’accepte d’envoyer mes messages d’assistance à AgriMarket et à son fournisseur d’IA (Google Gemini) pour obtenir de l’aide.',
+  },
+  'support.aiConsentContinue': { en: 'Continue to support chat', fr: 'Continuer vers l’assistance' },
+  'offline.banner': {
+    en: 'You’re offline — the marketplace needs a connection.',
+    fr: 'Vous êtes hors ligne — le marché nécessite une connexion.',
+  },
+  'validation.mustBe18': {
+    en: 'You must be at least 18 years old to create an account.',
+    fr: 'Vous devez avoir au moins 18 ans pour créer un compte.',
+  },
   'profile.currentPassword': { en: 'Current Password', fr: 'Mot de passe actuel' },
   'profile.newPassword': { en: 'New Password', fr: 'Nouveau mot de passe' },
   'profile.confirmNewPassword': { en: 'Confirm New Password', fr: 'Confirmer le nouveau mot de passe' },
   'profile.passwordVerificationHint': { en: 'We will verify your current password first, then send a code to your phone and email.', fr: 'Nous vérifierons d’abord votre mot de passe actuel, puis enverrons un code à votre téléphone et à votre e-mail.' },
-  'profile.otpVerificationHint': { en: 'Enter the 6-digit code sent to your registered phone and email.', fr: 'Entrez le code à 6 chiffres envoyé à votre téléphone et votre e-mail enregistrés.' },
+  'profile.otpVerificationHint': { en: 'Enter the 6-digit code sent to your registered email address.', fr: 'Entrez le code à 6 chiffres envoyé à votre adresse e-mail enregistrée.' },
   'profile.otpCodePlaceholder': { en: '000000', fr: '000000' },
   'profile.otpCodeRequired': { en: 'Enter the 6-digit code from your phone or email.', fr: 'Entrez le code à 6 chiffres envoyé à votre téléphone ou e-mail.' },
   'profile.checking': { en: 'Checking…', fr: 'Vérification…' },
@@ -790,8 +932,8 @@ const translations: Record<string, Record<Language, string>> = {
   },
   'profile.producerPendingTitle': { en: 'Producer account pending', fr: 'Compte producteur en attente' },
   'profile.producerPendingMsg': {
-    en: 'Your producer account is pending. You can still buy as a client. Enter your NIU / tax ID and upload your NIU certificate (and business registration if applicable) below to complete verification.',
-    fr: 'Votre compte producteur est en attente. Vous pouvez toujours acheter en tant que client. Saisissez votre NIU et téléversez votre certificat NIU (et l\'immatriculation le cas échéant) ci-dessous pour finaliser la vérification.',
+    en: 'Your producer account is pending. You can still buy as a client. Enter your NIU / tax ID or Business ID and upload your NIU certificate or Business certificate below to complete verification.',
+    fr: 'Votre compte producteur est en attente. Vous pouvez toujours acheter en tant que client. Saisissez votre numéro NIU/d\'identification fiscale ou votre numéro d\'identification d\'entreprise et téléchargez votre certificat NIU ou votre certificat d\'entreprise ci-dessous pour finaliser la vérification.',
   },
   'profile.complianceDocsTitle': { en: 'Tax & compliance documents', fr: 'Documents fiscaux et administratifs' },
   'upload.fileTooLarge': { en: 'File size exceeds 10MB limit.', fr: 'La taille du fichier dépasse la limite de 10 Mo.' },
@@ -800,28 +942,28 @@ const translations: Record<string, Record<Language, string>> = {
   'upload.chooseFile': { en: 'Choose file', fr: 'Choisir un fichier' },
   'upload.formatHint': { en: 'PNG, JPG, or PDF — max 10 MB', fr: 'PNG, JPG ou PDF — 10 Mo maximum' },
   'profile.complianceDocsIntro': {
-    en: 'Required for all producers (individual and business): your TIN/NIU number, NIU certificate file, and tax compliance certificate (ACF). Use the same upload control for each document. Business registration (RCCM) is optional.',
-    fr: 'Obligatoire pour tous les producteurs : numéro NIU/TIN, certificat NIU et attestation ACF (deux documents distincts). Même bouton de téléversement pour chaque fichier. RCCM facultatif.',
+    en: 'Required for all producers (individual and business): your TIN/NIU number and or Business number, NIU/Business certificate file, and the photo ID card of the person in charge. The tax compliance certificate (ACF) or equivalent depending on your country, is optional. Use the same upload control for each document.',
+    fr: 'Obligatoire pour tous les producteurs : votre numéro TIN/NIU et/ou numéro d\'entreprise, le dossier de certificat NIU/Business et la carte d\'identité avec photo de la personne responsable. L\’attestation de conformité fiscale (ACF) ou équivalent selon votre pays, est facultative. Utilisez le même contrôle de téléchargement pour chaque document.',
   },
-  'profile.taxIdNumber': { en: 'Tax identification number (TIN/NIU)', fr: 'Numéro d\'identification fiscale (NIU/TIN)' },
+  'profile.taxIdNumber': { en: 'Tax identification number (TIN/NIU or Business number)', fr: 'Numéro d\'identification fiscale (NIF/NIU ou numéro d\'entreprise)' },
   'profile.taxIdNumberHint': {
-    en: 'The unique tax ID printed on your NIU registration (not the uploaded file).',
-    fr: 'Le numéro fiscal unique figurant sur votre enregistrement NIU (pas le fichier téléversé).',
+    en: 'The unique tax ID printed on your NIU registration or on your Business registration (not the uploaded file).',
+    fr: 'L\'identifiant fiscal unique imprimé sur votre inscription NIU ou sur votre inscription d\'entreprise (pas le fichier téléversé).',
   },
-  'profile.taxClearanceDoc': { en: 'Tax clearance certificate (ACF)', fr: 'Attestation de non-redevance (ACF)' },
+  'profile.taxClearanceDoc': { en: 'Your national Photo ID (recto & verso on one file)', fr: 'Votre pièce d\'identité nationale avec photo (recto et verso sur un seul fichier)' },
   'profile.taxClearanceDocHint': {
-    en: 'Tax completion / clearance document from the tax authority.',
-    fr: 'Document attestant la régularité fiscale auprès de l\'administration.',
+    en: 'A clear, legible and up to date image of your National photo ID Card..',
+    fr: 'Une image claire, lisible et à jour de votre carte d\'identité nationale avec photo..',
   },
-  'profile.niuCertificate': { en: 'NIU certificate', fr: 'Certificat NIU' },
+  'profile.niuCertificate': { en: 'NIU certificate or Business certificate', fr: 'Certificat NIU ou certificat d\'entreprise' },
   'profile.niuCertificateHint': {
-    en: 'Official NIU registration certificate for your business or activity.',
-    fr: 'Certificat officiel d\'enregistrement au NIU pour votre activité.',
+    en: 'Official NIU or Business registration certificate for your business or activity.',
+    fr: 'Certificat officiel d\'enregistrement NIU ou d\'entreprise pour votre entreprise ou activité.',
   },
-  'profile.businessRegistration': { en: 'Business registration', fr: 'Immatriculation / registre de commerce' },
+  'profile.businessRegistration': { en: 'Tax clearance certificate (ACF)', fr: 'Attestation de non-redevance (ACF)' },
   'profile.businessRegistrationHint': {
-    en: 'RCCM or equivalent — optional but helps speed up approval.',
-    fr: 'RCCM ou équivalent — facultatif mais accélère la validation.',
+    en: 'ACF or equivalent — optional but helps speed up approval.',
+    fr: 'ACF ou équivalent — facultatif mais accélère la validation.',
   },
   'profile.favorites.empty': { en: 'No favorite items yet.', fr: 'Pas encore de favoris.' },
   'profile.findSimilar': { en: 'Find Similar', fr: 'Trouver Similaire' },
@@ -856,6 +998,18 @@ const translations: Record<string, Record<Language, string>> = {
   'profile.uploadDocs': { en: 'Upload Certificates (Max 10MB)', fr: 'Télécharger Certificats (Max 10MB)' },
 
   // Chat
+  // These were switched from hardcoded literals to t() calls without the keys
+  // ever being added, so t() fell through to returning the key itself.
+  'chat.today': { en: 'Today', fr: "Aujourd'hui" },
+  'chat.yesterday': { en: 'Yesterday', fr: 'Hier' },
+  'chat.service': { en: 'Service', fr: 'Service' },
+  'chat.product': { en: 'Product', fr: 'Produit' },
+  'chat.offer': { en: 'Offer', fr: 'Offre' },
+  'chat.unknown': { en: 'Unknown', fr: 'Inconnu' },
+  'chat.unknownClient': { en: 'Unknown Client', fr: 'Client inconnu' },
+  'chat.unknownProducer': { en: 'Unknown Producer', fr: 'Producteur inconnu' },
+  'chat.user': { en: 'User', fr: 'Utilisateur' },
+
   'chat.proposal': { en: 'Formal Proposal', fr: 'Proposition Formelle' },
   'chat.proposed': { en: 'Proposed', fr: 'Proposé' },
   'chat.makeProposal': { en: 'Make a Proposal', fr: 'Faire une Proposition' },
@@ -924,6 +1078,8 @@ const translations: Record<string, Record<Language, string>> = {
   'support.typing': { en: 'Typing', fr: 'En train d\'écrire' },
   'chat.sendCounter': { en: 'Send Counter-Offer', fr: 'Envoyer une contre-proposition' },
   'chat.select': { en: 'Select a conversation', fr: 'Sélectionnez une conversation' },
+  'chat.notFound': { en: 'This conversation could not be found.', fr: 'Cette conversation est introuvable.' },
+  'profile.notFound': { en: 'User not found', fr: 'Utilisateur introuvable' },
   'chat.loadingMessages': { en: 'Loading messages…', fr: 'Chargement des messages…' },
   'chat.loadingChats': { en: 'Loading conversations…', fr: 'Chargement des conversations…' },
 
@@ -1047,7 +1203,7 @@ const translations: Record<string, Record<Language, string>> = {
   // Profile (upgrade modal)
   'profile.producerType': { en: 'Producer Type', fr: 'Type de producteur' },
   'profile.farmBusinessName': { en: 'Farm/Business Name', fr: 'Nom de la ferme/entreprise' },
-  'profile.niuTaxId': { en: 'NIU / Tax ID', fr: 'NIU / N° fiscal' },
+  'profile.niuTaxId': { en: 'NIU / Tax ID or Business ID', fr: 'NIU / Numéro d\'identification fiscale ou numéro d\'entreprise' },
   'profile.categoriesClick': { en: 'Categories (Click to select)', fr: 'Catégories (Cliquez pour sélectionner)' },
   'profile.upgradeAccount': { en: 'Upgrade Account', fr: 'Mettre à niveau le compte' },
 
@@ -1086,7 +1242,7 @@ const translations: Record<string, Record<Language, string>> = {
   'faq.q4': { en: 'How do I become a verified producer?', fr: 'Comment devenir un producteur vérifié ?' },
   'faq.a4': { en: 'To become a verified producer, sign up for a producer account and upload the required documents (Business License or ID, and any relevant certificates) in your profile. Our team will review your documents and verify your status within 48 hours.', fr: 'Pour devenir producteur vérifié, inscrivez-vous pour un compte producteur et téléchargez les documents requis (licence commerciale ou pièce d\'identité, et tout certificat pertinent) dans votre profil. Notre équipe examinera vos documents et vérifiera votre statut dans les 48 heures.' },
   'faq.q5': { en: 'Are there fees for using the platform?', fr: 'Y a-t-il des frais pour utiliser la plateforme ?' },
-  'faq.a5': { en: 'Clients pay a 16.5% service fee on each order. Producers are charged a 5% commission on successful sales, which is deducted automatically from their earnings before withdrawal.', fr: 'Les clients paient des frais de service de 16,5 % sur chaque commande. Les producteurs paient une commission de 5 % sur les ventes réussies, qui est déduite automatiquement de leurs gains avant le retrait.' },
+  'faq.a5': { en: 'Clients pay a 16% service fee on each order. Producers are charged a 5% commission on successful sales, which is deducted automatically from their earnings before withdrawal.', fr: 'Les clients paient des frais de service de 16 % sur chaque commande. Les producteurs paient une commission de 5 % sur les ventes réussies, qui est déduite automatiquement de leurs gains avant le retrait.' },
 
   // More order (for all-orders list)
   // Partners (Company.tsx)
@@ -1253,9 +1409,11 @@ const translations: Record<string, Record<Language, string>> = {
   en: 'Not selected',
   fr: 'Non sélectionné',
 },
+// Legal seller of record for every ATI retail order. Retail has no producer
+// profile behind it, so this is the name shown as "Sold by" and on receipts.
 'product.atiStoreName': {
-  en: 'ATI Retail Store',
-  fr: 'Boutique de détail ATI',
+  en: 'Achete Tout ICI Sarl',
+  fr: 'Achete Tout ICI Sarl',
 },
 'product.vettedQuality': {
   en: 'Vetted Quality',
@@ -1788,8 +1946,8 @@ const translations: Record<string, Record<Language, string>> = {
   fr: 'Vous recevez',
 },
 'wallet.tranzakFee': {
-  en: 'Tranzak fee (1.5%)',
-  fr: 'Frais Tranzak (1,5 %)',
+  en: 'Tranzak fee (2%)',
+  fr: 'Frais Tranzak (2%)',
 },
 'wallet.deductedFromWallet': {
   en: 'Deducted from wallet',
@@ -1839,6 +1997,8 @@ const translations: Record<string, Record<Language, string>> = {
   'dash.total': { en: 'Total', fr: 'Total' },
   'dash.reviewPlaceholder': { en: 'Comments about this client...', fr: 'Commentaires sur ce client...' },
   'dash.uploadFiles': { en: 'Upload files', fr: 'Téléverser des fichiers' },
+  'dash.evidenceNote': { en: 'Your explanation', fr: 'Votre explication' },
+  'dash.evidenceNotePlaceholder': { en: 'Explain your side of this dispute — the admin reviewing it will read this alongside your files.', fr: 'Expliquez votre version du litige — l’administrateur le lira avec vos fichiers.' },
   'dash.evidenceUploadHint': { en: 'JPG, PNG, PDF up to 10MB — up to 3 files', fr: 'JPG, PNG, PDF jusqu’à 10 Mo — 3 fichiers maximum' },
   'dash.filesSelected': { en: '{count} files selected:', fr: '{count} fichiers sélectionnés :' },
   'dash.upload': { en: 'Upload', fr: 'Téléverser' },
@@ -2035,8 +2195,34 @@ const translations: Record<string, Record<Language, string>> = {
 
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
 
+const LANGUAGE_STORAGE_KEY = 'agm_language';
+
+/** Read the saved language choice, ignoring anything unrecognised/corrupt. */
+function readStoredLanguage(): Language {
+  if (typeof window === 'undefined') return 'en';
+  try {
+    const saved = nativeStorageGet(LANGUAGE_STORAGE_KEY);
+    if (saved === 'fr' || saved === 'en') return saved;
+  } catch {
+    /* storage unavailable (private mode / blocked) — fall through to default */
+  }
+  return 'en';
+}
+
 export const I18nProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [language, setLanguage] = useState<Language>('en');
+  // The language used to live in plain state, so every reload — and every fresh
+  // launch of the installed PWA — snapped the whole app back to English no
+  // matter what the visitor had picked. Persist the choice so it survives.
+  const [language, setLanguageState] = useState<Language>(readStoredLanguage);
+
+  const setLanguage = (lang: Language) => {
+    setLanguageState(lang);
+    try {
+      nativeStorageSet(LANGUAGE_STORAGE_KEY, lang);
+    } catch {
+      /* best-effort: keep the in-memory switch working even if we can't store it */
+    }
+  };
   const t = (key: string, replacements?: Record<string, string | number>): string => {
   const entry = translations[key];
   if (!entry) {

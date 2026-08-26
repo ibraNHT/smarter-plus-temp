@@ -11,6 +11,7 @@ import { Modal } from '../../components/Modal';
 import { OfferType, MarketType, Location, PreferredHomeDeliverySnapshot } from '../../types';
 import { LegalAcceptanceCheckbox } from '../../components/LegalAcceptanceCheckbox';
 import { isProducerDashboardUser } from '../../services/producerSession';
+import { addressTruncateClass, truncateAddress } from '../../utils/addressDisplay';
 
 function pickDefaultHomeLocationIndex(
   locs: Location[],
@@ -52,12 +53,16 @@ function pickDefaultHomeLocationIndex(
   return best;
 }
 import { loadGooglePlacesApi, parseGooglePlace, citiesLooselyMatch } from '../../services/googlePlaces';
+import { OfferImage } from '../../components/OfferImage';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { cartHasService } from '../../utils/orderLabels';
 import { showAppToast } from '../../services/appToast';
 import { useFormik } from 'formik';
 import { z } from 'zod';
 import { useCurrency } from '../../contexts/CurrencyContext';
+
+/** Delivery windows ATI can actually serve. */
+const ATI_DELIVERY_SLOTS = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00'];
 
 export const ShoppingCart: React.FC = () => {
   const { cart, removeFromCart, placeOrder, user, clearCart, clients, producers, moveToFavorites, validateCoupon, pickupPoints, guestEmail, setGuestEmail, refreshOffers, refreshProducers, refreshPickupPoints, refreshCart, refreshClients } = useStore();
@@ -119,6 +124,11 @@ export const ShoppingCart: React.FC = () => {
 
   // Delivery Date State (ATI Only)
   const [deliveryDate, setDeliveryDate] = useState('');
+  // ATI retail also needs the delivery WINDOW — staff cannot turn up at any hour.
+  // The order payload always carried a time (hardcoded to noon); this makes the
+  // customer choose it. Fixed slots rather than a free time input so the windows
+  // stay ones ATI can actually serve.
+  const [deliveryTime, setDeliveryTime] = useState('');
   const [calendarViewDate, setCalendarViewDate] = useState(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const calendarRef = useRef<HTMLDivElement>(null);
@@ -134,7 +144,11 @@ export const ShoppingCart: React.FC = () => {
   const checkoutSectionRef = useRef<HTMLElement | null>(null);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
-  const serviceFee = subtotal * 0.165; // 16.5% buyer commission (kept in sync with API create-order use-case)
+  // ATI retail store = 4% service fee; producer marketplace = 16% buyer commission.
+  // Kept in sync with API create-order use-case (order-amounts.util.ts FEE_RATES).
+  const cartIsAti = cart.length > 0 && cart[0].marketType === MarketType.ATI;
+  const serviceFeeRate = cartIsAti ? 0.04 : 0.16;
+  const serviceFee = subtotal * serviceFeeRate;
   const totalAmount = Math.max(0, subtotal + serviceFee - discountAmount);
   const isServiceCart = cartHasService(cart);
 
@@ -273,14 +287,14 @@ export const ShoppingCart: React.FC = () => {
   const isDeliveryMethodValid = deliveryMethod === 'HOME' ? isHomeAddressValid : isPickupValid;
 
   // ATI Specific Validation: If ATI order, Date is required.
-  const isAtiDateValid = !isAtiOrder || !!deliveryDate;
+  const isAtiDateValid = !isAtiOrder || (!!deliveryDate && !!deliveryTime);
 
   // Global Valid Check
   const canPlaceOrder = isDeliveryMethodValid && isAtiDateValid;
 
   // Date Logic for Calendar
   const minDateObj = new Date();
-  minDateObj.setDate(minDateObj.getDate() + 1); // Tomorrow
+  minDateObj.setDate(minDateObj.getDate() + 3); // Earliest delivery = today + 3 days (no same/next-day delivery yet)
   minDateObj.setHours(0, 0, 0, 0);
 
   const maxDateObj = new Date();
@@ -368,8 +382,9 @@ export const ShoppingCart: React.FC = () => {
     }
 
     if (!canPlaceOrder) {
-      if (!isDeliveryMethodValid) showAppToast('Please select a valid delivery method and address/pickup point.', 'WARNING');
-      else if (!isAtiDateValid) showAppToast('Please select a delivery date.', 'WARNING');
+      if (!isDeliveryMethodValid) showAppToast(t('cart.selectDeliveryMethodWarning'), 'WARNING');
+      else if (!deliveryDate) showAppToast(t('cart.selectDeliveryDateWarning'), 'WARNING');
+      else if (!deliveryTime) showAppToast(t('cart.selectDeliveryTimeHint'), 'WARNING');
       return;
     }
 
@@ -404,10 +419,17 @@ export const ShoppingCart: React.FC = () => {
               lng: selectedHomeLocation.lng,
             }
           : undefined,
+        isAtiOrder ? deliveryTime : undefined,
       );
       if (ok) {
         setShowRecap(false);
-        navigate('/');
+        // Send the buyer straight to their orders, NOT the homepage. Retail is
+        // pay-upfront but placing the order does not pay for it, and dropping the
+        // customer on the landing page left the order sitting unpaid with nothing
+        // prompting them — which is how unpaid orders reached the retail board in
+        // the first place (client walkthrough, 2026-08-12). The orders tab is where
+        // the Pay Now button lives.
+        navigate('/client/profile?tab=orders');
       }
     } finally {
       setOrderPlacing(false);
@@ -471,13 +493,9 @@ export const ShoppingCart: React.FC = () => {
                     className={`p-4 sm:p-6 flex gap-3 sm:gap-4 ${item.type === OfferType.SERVICE ? 'bg-purple-50/40 border-l-4 border-l-purple-300' : ''}`}
                   >
                     <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 border border-gray-200 bg-gray-100 rounded-md overflow-hidden relative">
-                      <img
-                        src={item.imageUrl}
-                        alt={item.title}
-                        className={offerImageInBox}
-                      />
+                      <OfferImage src={item.imageUrl} alt={item.title} size="thumb" className={offerImageInBox} />
                       {item.type === OfferType.SERVICE && (
-                        <div className="absolute bottom-0 left-0 right-0 bg-purple-600 text-white text-[10px] text-center py-1 font-bold">
+                        <div className="absolute bottom-0 left-0 right-0 bg-purple-600 text-white text-[10px] text-center py-1 font-bold z-[3]">
                           {t('service.badge').toUpperCase()}
                         </div>
                       )}
@@ -513,7 +531,7 @@ export const ShoppingCart: React.FC = () => {
                         <p className="text-gray-500">
                           {item.type === OfferType.SERVICE ? (
                             <>
-                              {t('service.bookedQty')}: {item.cartQuantity} {t(`unit.${item.unit}`)}
+                              {t('service.bookedQty')}: {item.cartQuantity} {t('service.slotsUnit')}
                             </>
                           ) : (
                             <>
@@ -598,12 +616,14 @@ export const ShoppingCart: React.FC = () => {
                         >
                           {homeLocations.map((loc, idx) => (
                             <option key={loc.id ?? `${loc.address}-${idx}`} value={idx}>
-                              {loc.address}
+                              {truncateAddress(loc.address)}
                             </option>
                           ))}
                         </select>
                       </div>
-                      <p className="text-gray-900">{selectedHomeLocation?.address}</p>
+                      <p className={`text-gray-900 ${addressTruncateClass}`} title={selectedHomeLocation?.address}>
+                        {selectedHomeLocation?.address}
+                      </p>
                       <p className="text-gray-500">{selectedHomeLocation?.city}, {selectedHomeLocation?.region}</p>
                     </>
                   ) : (
@@ -690,12 +710,23 @@ export const ShoppingCart: React.FC = () => {
                     >
                       <option value="">--</option>
                       {availablePickupPoints.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name} — {p.address}, {p.city}</option>
+                        <option key={p.id} value={p.id}>{p.name} — {truncateAddress(p.address, 40)}, {p.city}</option>
                       ))}
                     </select>
                     {selectedPickupCity && availablePickupPoints.length === 0 && (
                       <p className="text-xs text-red-500 mt-1">{t('cart.pickupNoPointsHint')}</p>
                     )}
+                    {(() => {
+                      const sel = availablePickupPoints.find((p) => p.id === selectedPickupPointId);
+                      return sel?.image ? (
+                        <img
+                          src={sel.image}
+                          alt={sel.name}
+                          className="mt-2 w-full h-32 object-cover rounded-md border border-gray-200"
+                          loading="lazy"
+                        />
+                      ) : null;
+                    })()}
                   </div>
                 </div>
               )}
@@ -722,7 +753,7 @@ export const ShoppingCart: React.FC = () => {
                     >
                       <span className={deliveryDate ? 'font-medium' : 'text-gray-500'}>
                         {deliveryDate
-                          ? new Date(deliveryDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+                          ? new Date(`${deliveryDate}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
                           : t('cart.selectDatePlaceholder')}
                       </span>
                       <Calendar className={`h-5 w-5 text-blue-600`} />
@@ -790,6 +821,31 @@ export const ShoppingCart: React.FC = () => {
                       </div>
                     )}
                   </div>
+
+                  <div className="mt-4">
+                    <label className="block text-xs font-bold text-blue-800 mb-2">
+                      {t('cart.selectDeliveryTime')}
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {ATI_DELIVERY_SLOTS.map((slot) => (
+                        <button
+                          key={slot}
+                          type="button"
+                          onClick={() => setDeliveryTime(slot)}
+                          className={`px-2 py-2 rounded-md border text-sm font-medium transition-colors ${
+                            deliveryTime === slot
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                          }`}
+                        >
+                          {slot}
+                        </button>
+                      ))}
+                    </div>
+                    {!deliveryTime && (
+                      <p className="mt-1 text-xs text-gray-500">{t('cart.selectDeliveryTimeHint')}</p>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -800,7 +856,7 @@ export const ShoppingCart: React.FC = () => {
                     <dd className="font-medium text-gray-900">{formatXaf(subtotal)}</dd>
                   </div>
                   <div className="py-4 flex items-center justify-between">
-                    <dt className="text-gray-600">{t('cart.serviceFee')}</dt>
+                    <dt className="text-gray-600">{t(cartIsAti ? 'cart.serviceFeeRetail' : 'cart.serviceFee')}</dt>
                     <dd className="font-medium text-gray-900">{formatXaf(serviceFee)}</dd>
                   </div>
 
@@ -912,7 +968,7 @@ export const ShoppingCart: React.FC = () => {
                               </p>
                             )}
                             <p>
-                              <span className="font-semibold">{t('service.bookedQty')}:</span> {item.cartQuantity} {t(`unit.${item.unit}`)}
+                              <span className="font-semibold">{t('service.bookedQty')}:</span> {item.cartQuantity} {t('service.slotsUnit')}
                             </p>
                           </div>
                         )}
@@ -924,7 +980,7 @@ export const ShoppingCart: React.FC = () => {
                     <span>{formatXaf(subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-sm text-gray-600 mb-1">
-                    <span>{t('cart.serviceFee')}</span>
+                    <span>{t(cartIsAti ? 'cart.serviceFeeRetail' : 'cart.serviceFee')}</span>
                     <span>{formatXaf(serviceFee)}</span>
                   </div>
                   {appliedCoupon && (
@@ -947,13 +1003,23 @@ export const ShoppingCart: React.FC = () => {
                   {deliveryMethod === 'HOME' ? (
                     <p className="text-sm text-blue-900">
                       <span className="font-bold">{isServiceCart ? t('service.atClientLocation') : t('cart.homeDelivery')}:</span><br />
-                      {selectedHomeLocation?.address}, {selectedHomeLocation?.city}
+                      <span
+                        className={`inline-block ${addressTruncateClass}`}
+                        title={`${selectedHomeLocation?.address ?? ''}, ${selectedHomeLocation?.city ?? ''}`}
+                      >
+                        {selectedHomeLocation?.address}, {selectedHomeLocation?.city}
+                      </span>
                     </p>
                   ) : (
                     <p className="text-sm text-blue-900">
                       <span className="font-bold">{isServiceCart ? t('service.atServicePoint') : t('cart.pickupStation')}:</span><br />
                       {pickupPoints.find(p => p.id === selectedPickupPointId)?.name}<br />
-                      <span className="text-xs opacity-75">{pickupPoints.find(p => p.id === selectedPickupPointId)?.address}</span>
+                      <span
+                        className={`text-xs opacity-75 inline-block ${addressTruncateClass}`}
+                        title={pickupPoints.find(p => p.id === selectedPickupPointId)?.address}
+                      >
+                        {pickupPoints.find(p => p.id === selectedPickupPointId)?.address}
+                      </span>
                     </p>
                   )}
 
@@ -963,7 +1029,8 @@ export const ShoppingCart: React.FC = () => {
                         <Calendar className="h-3 w-3 mr-1" /> {t('cart.deliveryDate')}
                       </h4>
                       <p className="text-sm text-blue-900 font-medium">
-                        {new Date(deliveryDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                        {new Date(`${deliveryDate}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                        {deliveryTime ? ` · ${deliveryTime}` : ''}
                       </p>
                     </div>
                   )}

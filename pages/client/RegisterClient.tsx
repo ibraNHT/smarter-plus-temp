@@ -17,6 +17,7 @@ import {
 import { FieldError, inputErrorClasses, showFieldError } from '../../components/FieldError';
 import { RegisterPhoneOtpModal } from '../../components/RegisterPhoneOtpModal';
 import { buildRegisterPhone } from '../../utils/registerPhone';
+import { isAtLeastAge, maxDobForAge } from '../../utils/ageGate';
 import { SEO } from '../../components/SEO';
 import { SEO_PAGE_META } from '../../services/seo/seoConfig';
 
@@ -94,7 +95,7 @@ export const RegisterClient: React.FC = () => {
       firstName: z.string().trim().min(2, t('validation.firstNameRequired')),
       lastName: z.string().trim().min(2, t('validation.lastNameRequired')),
       gender: z.string().min(1, t('validation.genderRequired')),
-      dateOfBirth: z.string().min(1, t('validation.dobRequired')),
+      dateOfBirth: z.string().min(1, t('validation.dobRequired')).refine((ymd) => isAtLeastAge(ymd), t('validation.mustBe18')),
       email: z.string().trim().email(t('validation.emailRequired')),
       password: z.string().min(1, t('validation.passwordRequired')).regex(PASSWORD_RULE, t('form.passwordRequirements')),
       confirmPassword: z.string().min(1, t('validation.confirmPassword')),
@@ -282,6 +283,7 @@ export const RegisterClient: React.FC = () => {
               value={formik.values.firstName}
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}
+              placeholder={t('ui.firstNamePlaceholder')}
             />
             <FieldError formik={formik} name="firstName" />
           </div>
@@ -294,12 +296,13 @@ export const RegisterClient: React.FC = () => {
               value={formik.values.lastName}
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}
+              placeholder={t('ui.lastNamePlaceholder')}
             />
             <FieldError formik={formik} name="lastName" />
           </div>
 
           <div className="sm:col-span-3">
-            <label className="block text-sm font-medium text-gray-700">{t('profile.gender')}</label>
+            <label className="block text-sm font-medium text-gray-700">{t('profile.gender')} <span className="text-red-500">*</span></label>
             <select required
               className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm text-gray-900"
               name="gender"
@@ -315,10 +318,11 @@ export const RegisterClient: React.FC = () => {
           </div>
 
           <div className="sm:col-span-3">
-            <label className="block text-sm font-medium text-gray-700">{t('profile.dob')}</label>
+            <label className="block text-sm font-medium text-gray-700">{t('profile.dob')} <span className="text-red-500">*</span></label>
             <input type="date" required
               className="mt-1 focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white text-gray-900"
               name="dateOfBirth"
+              max={maxDobForAge()}
               value={formik.values.dateOfBirth}
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}
@@ -481,26 +485,30 @@ export const RegisterClient: React.FC = () => {
             <FieldError formik={formik} name="address" />
           </div>
           <div className="sm:col-span-3">
-            <label className="block text-sm font-medium text-gray-700">{t('profile.city')}</label>
+            <label className="block text-sm font-medium text-gray-700">{t('profile.city')} <span className="text-red-500">*</span></label>
             <input
               type="text"
+              required
               className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900"
               name="city"
               value={formik.values.city}
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}
+              placeholder={t('ui.cityPlaceholder')}
             />
             <FieldError formik={formik} name="city" />
           </div>
           <div className="sm:col-span-3">
-            <label className="block text-sm font-medium text-gray-700">{t('profile.region')}</label>
+            <label className="block text-sm font-medium text-gray-700">{t('profile.region')} <span className="text-red-500">*</span></label>
             <input
               type="text"
+              required
               className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900"
               name="region"
               value={formik.values.region}
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}
+              placeholder={t('ui.regionPlaceholder')}
             />
             <FieldError formik={formik} name="region" />
           </div>

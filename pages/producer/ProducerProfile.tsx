@@ -9,6 +9,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { User, Wallet, Shield, Tractor, CreditCard, Trash2, Plus, Camera, MapPin, X, LogOut, Image as ImageIcon, Video, Eye, Edit, CheckCircle, Heart, ArrowLeft, Search, Users, Copy, Loader2 } from 'lucide-react';
 import { useUpdateProducerProfileMutation } from '../../client-api/hooks/useUpdateProducerProfileMutation';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
+import { DeleteAccountSection } from '../../components/DeleteAccountSection';
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 import { OtpVerificationModal } from '../../components/OtpVerificationModal';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -792,7 +793,7 @@ export const ProducerProfile: React.FC = () => {
             <button onClick={() => navigateToTab('security')} className={`${activeTab === 'security' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
               <Shield className={`${activeTab === 'security' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.security')}</span>
             </button>
-            <button type="button" onClick={() => setLogoutConfirmOpen(true)} className="hidden lg:flex text-red-600 hover:bg-red-50 group rounded-md px-3 py-2 items-center text-sm font-medium w-full transition-colors mt-4 pt-4 border-t border-gray-200">
+            <button type="button" onClick={() => setLogoutConfirmOpen(true)} className="flex text-red-600 hover:bg-red-50 group rounded-md px-3 py-2 items-center text-sm font-medium w-full transition-colors mt-4 pt-4 border-t border-gray-200">
               <LogOut className="flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> <span className="truncate">{t('nav.logout')}</span>
             </button>
           </nav>
@@ -887,8 +888,8 @@ export const ProducerProfile: React.FC = () => {
                           setLocationSearch(loc.address ?? '');
                         }}
                       >
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{loc.address}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900 truncate" title={loc.address}>{loc.address}</p>
                           <p className="text-xs text-gray-500">{loc.city}, {loc.region}</p>
                         </div>
                         <button
@@ -974,7 +975,7 @@ export const ProducerProfile: React.FC = () => {
                               }}
                               className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
                             >
-                              <p className="text-sm text-gray-900">{item.address}</p>
+                              <p className="text-sm text-gray-900 truncate" title={item.address}>{item.address}</p>
                               <p className="text-xs text-gray-500">{[item.city, item.region].filter(Boolean).join(', ')}</p>
                             </button>
                           ))}
@@ -1161,6 +1162,7 @@ export const ProducerProfile: React.FC = () => {
                   {t('profile.password')}
                 </button>
               </div>
+              <DeleteAccountSection />
             </div>
           )}
         </div>

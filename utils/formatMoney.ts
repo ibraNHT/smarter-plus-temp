@@ -182,8 +182,16 @@ export function formatMoney(
   const currency = (opts?.currency || BASE_CURRENCY).toUpperCase();
   const rates = opts?.rates ?? DEFAULT_RATES;
   const value = fromXaf(amountXaf, currency, rates);
-  const digits =
-    opts?.maximumFractionDigits ?? (ZERO_DECIMAL.has(currency) ? 0 : 2);
+  const explicitDigits = opts?.maximumFractionDigits;
+  let digits = explicitDigits ?? (ZERO_DECIMAL.has(currency) ? 0 : 2);
+  // XAF has no minor unit in circulation, so whole numbers suit ordinary amounts —
+  // but percentage-derived amounts are legitimately fractional. Rounding them hides
+  // money the customer is actually charged: a 16% fee of 2.4 showed as "2" while the
+  // order total beside it showed 17.4, so the column did not add up. Reveal decimals
+  // whenever rounding would change the number; whole amounts are untouched.
+  if (explicitDigits == null && digits === 0 && !Number.isInteger(value)) {
+    digits = 2;
+  }
   const formatted = value.toLocaleString(undefined, {
     minimumFractionDigits: 0,
     maximumFractionDigits: digits,

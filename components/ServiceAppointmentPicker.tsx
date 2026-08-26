@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Calendar, Clock } from 'lucide-react';
 import { apiFetch } from '../services/apiService';
 import { API_ENDPOINTS } from '../client-api/endpoints';
@@ -29,6 +29,15 @@ export interface ServiceAppointmentPickerProps {
   className?: string;
 }
 
+/**
+ * Stable identities for the optional list props. Inline `= []` defaults allocate a
+ * new array on every render, and these feed the availability effect's dependency
+ * array — which is how the reschedule modals (which pass `orders` but not `cart`)
+ * ended up in an infinite fetch loop.
+ */
+const NO_ORDERS: Order[] = [];
+const NO_CART: CartItem[] = [];
+
 export const ServiceAppointmentPicker: React.FC<ServiceAppointmentPickerProps> = ({
   producerId,
   durationHours,
@@ -36,8 +45,8 @@ export const ServiceAppointmentPicker: React.FC<ServiceAppointmentPickerProps> =
   onSelectSlot,
   offerId,
   clientId,
-  orders = [],
-  cart = [],
+  orders = NO_ORDERS,
+  cart = NO_CART,
   currentBookingIso,
   className = '',
 }) => {
@@ -52,6 +61,45 @@ export const ServiceAppointmentPicker: React.FC<ServiceAppointmentPickerProps> =
   const [serviceSlotStates, setServiceSlotStates] = useState<ServiceSlotState[]>([]);
   const [slotBlockReason, setSlotBlockReason] = useState('');
   const [slotsLoading, setSlotsLoading] = useState(false);
+
+  // Depend on the CONTENT of orders/cart, not their identity. Callers legitimately
+  // hand us a fresh array each render (store state is rebuilt on every refresh
+  // poll), so keying the effect on identity re-fetches forever. These collapse to
+  // stable strings that only change when a relevant booking actually changes.
+  const myBookedKey = useMemo(
+    () =>
+      orders
+        .filter(
+          (o) =>
+            o.producerId === producerId &&
+            o.status !== OrderStatus.CANCELLED &&
+            !!clientId &&
+            o.clientId === clientId,
+        )
+        .flatMap((o) =>
+          (o.items || [])
+            .filter((item) => item.type === OfferType.SERVICE && !!item.bookingDate)
+            .map((item) => new Date(item.bookingDate!).toISOString()),
+        )
+        .sort()
+        .join('|'),
+    [orders, producerId, clientId],
+  );
+
+  const myCartKey = useMemo(
+    () =>
+      cart
+        .filter(
+          (item) =>
+            item.type === OfferType.SERVICE &&
+            (!offerId || item.id === offerId) &&
+            !!item.bookingDate,
+        )
+        .map((item) => new Date(item.bookingDate!).toISOString())
+        .sort()
+        .join('|'),
+    [cart, offerId],
+  );
 
   useEffect(() => {
     let alive = true;
@@ -79,28 +127,8 @@ export const ServiceAppointmentPicker: React.FC<ServiceAppointmentPickerProps> =
         const currentIso = currentBookingIso
           ? new Date(currentBookingIso).toISOString()
           : null;
-        const activeOrders = orders.filter(
-          (o) => o.producerId === producerId && o.status !== OrderStatus.CANCELLED,
-        );
-        const myBookedStarts = new Set(
-          activeOrders
-            .filter((o) => !!clientId && o.clientId === clientId)
-            .flatMap((o) =>
-              (o.items || [])
-                .filter((item) => item.type === OfferType.SERVICE && !!item.bookingDate)
-                .map((item) => new Date(item.bookingDate!).toISOString()),
-            ),
-        );
-        const myCartBookedStarts = new Set(
-          cart
-            .filter(
-              (item) =>
-                item.type === OfferType.SERVICE &&
-                (!offerId || item.id === offerId) &&
-                !!item.bookingDate,
-            )
-            .map((item) => new Date(item.bookingDate!).toISOString()),
-        );
+        const myBookedStarts = new Set(myBookedKey ? myBookedKey.split('|') : []);
+        const myCartBookedStarts = new Set(myCartKey ? myCartKey.split('|') : []);
         const allSlots = (res?.slots || []).map((s) => {
           const iso = new Date(s.time).toISOString();
           if (currentIso && iso === currentIso) {
@@ -146,8 +174,8 @@ export const ServiceAppointmentPicker: React.FC<ServiceAppointmentPickerProps> =
     selectedDate,
     producerId,
     durationHours,
-    orders,
-    cart,
+    myBookedKey,
+    myCartKey,
     offerId,
     clientId,
     currentBookingIso,

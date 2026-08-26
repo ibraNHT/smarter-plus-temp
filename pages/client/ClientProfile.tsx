@@ -5,16 +5,18 @@ import { clientProfileMatchesSession } from '../../services/clientProfileMatcher
 import { useTranslation } from '../../services/i18nContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { CurrencyPreferenceCard } from '../../components/CurrencyPreferenceCard';
-import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order, Review, OfferType } from '../../types';
+import { UserRole, OrderStatus, ClientProfile as ClientProfileType, Location, Order, Review, OfferType, MarketType } from '../../types';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { User, Package, Wallet, Shield, CheckCircle, AlertTriangle, CreditCard, Camera, MapPin, ArrowLeft, Tractor, Plus, Trash2, LogOut, Star, History, Archive, Heart, Search, X, ThumbsUp, Users, Eye, XCircle, Loader2, Calendar, Phone, Mail } from 'lucide-react';
 import { useUpdateClientProfileMutation } from '../../client-api/hooks/useUpdateClientProfileMutation';
 import { SEO } from '../../components/SEO';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
+import { DeleteAccountSection } from '../../components/DeleteAccountSection';
 import { LogoutConfirmModal } from '../../components/LogoutConfirmModal';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Modal } from '../../components/Modal';
 import { SectionLoader, ListSkeleton } from '../../components/Loaders';
+import { useLiveOrders } from '../../hooks/useLiveOrders';
 import { ClientProfileSkeleton } from '../../components/skeletons/ClientProfileSkeleton';
 import { requestBrowserLocation, nominatimReverseGeocode } from '../../services/geolocation';
 import { LocationMapPicker } from '../../components/LocationMapPicker';
@@ -23,10 +25,11 @@ import { apiFetch } from '../../services/apiService';
 import { API_ENDPOINTS } from '../../client-api/endpoints';
 import { offerImageInBox } from '../../utils/offerImageDisplay';
 import { PAYMENTS_ENABLED } from '../../utils/featureFlags';
-import { orderHasService, orderIsServiceOnly, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
+import { orderHasService, orderIsRetail, orderIsServiceOnly, serviceDurationHoursForOrder, serviceLineCount, serviceSlotTotal } from '../../utils/orderLabels';
 import { ORDER_STATUS_LABEL_KEY, ORDER_STATUS_PILL_CLASS } from '../../utils/orderStatusDisplay';
 import {
   canCancelDirectly,
+  canPayNow,
   canRequestCancellation,
   canReportProblem,
   canLeaveReview,
@@ -37,8 +40,11 @@ import { z } from 'zod';
 import { showAppToast } from '../../services/appToast';
 import { buildClientReferralLink } from '../../utils/referralLink';
 import { ServiceAppointmentPicker } from '../../components/ServiceAppointmentPicker';
+import { EvidenceFilePreviews } from '../../components/EvidenceFilePreviews';
+import { DisputeSummary } from '../../components/DisputeSummary';
 
 import { MARKETPLACE_CATEGORIES } from '../../data/categories';
+import { unitLabel } from '../../utils/unitLabel';
 
 const PRODUCTION_TYPES = MARKETPLACE_CATEGORIES;
 
@@ -82,6 +88,10 @@ export const ClientProfile: React.FC = () => {
    // Only the data the active tab actually renders is fetched. Switching
    // tabs (or hard-reloading on a deep-linked tab) fires just that tab's
    // refreshers; the React Query cache makes subsequent visits instant.
+   // Live status while the buyer is on the orders tab — the seller's transitions
+   // (in transit, delivered) have no local trigger here.
+   useLiveOrders(activeTab === 'orders' ? 25_000 : 120_000);
+
    // `tabLoading` is local so each tab shows its own scoped loader.
    const [tabLoading, setTabLoading] = useState(true);
    useEffect(() => {
@@ -192,6 +202,7 @@ export const ClientProfile: React.FC = () => {
    const [showDisputeModal, setShowDisputeModal] = useState(false);
    const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
    const [disputeFiles, setDisputeFiles] = useState<File[]>([]);
+   const [submittingDispute, setSubmittingDispute] = useState(false);
 
    const [showPaymentRecap, setShowPaymentRecap] = useState(false);
    const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
@@ -257,9 +268,18 @@ export const ClientProfile: React.FC = () => {
       },
       onSubmit: async (values) => {
          if (!user || !currentClient?.id) return;
+         // An individual producer has no separate trading name — it is simply their
+         // own name, so send first + last rather than leaving it undefined and
+         // relying on a server-side fallback. Same rule as RegisterProducer and
+         // ProducerProfile, so a producer is named consistently however they
+         // were created.
+         const individualName = `${(currentClient.firstName ?? '').trim()} ${(currentClient.lastName ?? '').trim()}`.trim()
+            || currentClient.name
+            || user.displayName
+            || user.name;
          const ok = await upgradeClientToProducer(currentClient.id, {
             type: values.type,
-            name: values.type === 'BUSINESS' ? values.farmName : undefined,
+            name: values.type === 'BUSINESS' ? values.farmName.trim() : individualName,
             description: values.description,
             productionTypes: values.productionTypes,
             taxIdentificationNumber: values.taxIdentificationNumber || undefined,
@@ -304,14 +324,20 @@ export const ClientProfile: React.FC = () => {
          if (parsed.success) return {};
          return { disputeReason: parsed.error.issues[0]?.message || t('validation.disputeReasonMin') };
       },
-      onSubmit: (values, { setFieldError }) => {
-         if (disputeOrderId) {
-            if (disputeFiles.length === 0) {
-               setFieldError('disputeReason', t('order.disputeFileRequired'));
-               return;
-            }
-            reportProblem(disputeOrderId, values.disputeReason, disputeFiles);
-            setShowDisputeModal(false);
+      onSubmit: async (values, { setFieldError }) => {
+         if (!disputeOrderId || submittingDispute) return;
+         if (disputeFiles.length === 0) {
+            setFieldError('disputeReason', t('order.disputeFileRequired'));
+            return;
+         }
+         // Awaited: the modal used to close the instant submit was pressed, while
+         // the files were still uploading, so a failure was invisible.
+         setSubmittingDispute(true);
+         try {
+            const ok = await reportProblem(disputeOrderId, values.disputeReason, disputeFiles);
+            if (ok) setShowDisputeModal(false);
+         } finally {
+            setSubmittingDispute(false);
          }
       },
    });
@@ -804,7 +830,24 @@ export const ClientProfile: React.FC = () => {
       return `${date} · ${order.items?.length ?? 0} ${t('dash.itemsProduct')}`;
    };
   const openDisputeModal = (orderId: string) => { setDisputeOrderId(orderId); disputeFormik.setFieldValue('disputeReason', ''); setDisputeFiles([]); setShowDisputeModal(true); };
-   const handleDisputeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) { setDisputeFiles(Array.from(e.target.files)); } };
+   /** Cap at 3 — the API's FilesInterceptor("files", 3) rejects the whole submission
+    * beyond that, so an uncapped picker silently failed the entire dispute report. */
+   /** Append rather than replace — a FileList only holds the LAST dialog's picks,
+    * so choosing files one at a time kept only the final one. Deduped, capped at
+    * the API's FilesInterceptor("files", 3). */
+   const handleDisputeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const picked = Array.from(e.target.files ?? []);
+      if (picked.length) {
+         setDisputeFiles(prev => {
+            const merged = [...prev];
+            for (const f of picked) {
+               if (!merged.some(x => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) merged.push(f);
+            }
+            return merged.slice(0, 3);
+         });
+      }
+      e.target.value = '';
+   };
    /** Service appointments can be rescheduled until the order goes in transit. */
    const canRescheduleAppointment = (order: Order) =>
       orderHasService(order)
@@ -821,13 +864,9 @@ export const ClientProfile: React.FC = () => {
       setRescheduleSlotIso(firstServiceBookingIso(order));
    };
    const rescheduleOrder = rescheduleOrderId ? orders.find((o) => o.id === rescheduleOrderId) ?? null : null;
-   const rescheduleServiceItem = rescheduleOrder
-      ? (rescheduleOrder.items || []).find((it: any) => String(it.type ?? '').toUpperCase() === 'SERVICE')
-      : null;
-   const rescheduleDurationHours = Math.max(
-      1,
-      Number((rescheduleServiceItem as any)?.serviceDuration ?? 1) || 1,
-   );
+   const rescheduleDurationHours = rescheduleOrder
+      ? serviceDurationHoursForOrder(rescheduleOrder, offers)
+      : 1;
    const openCancelRequestModal = (orderId: string) => { setCancelRequestOrderId(orderId); setCancelRequestReason(''); };
    const getStatusBadge = (status: OrderStatus) => (
       <span
@@ -847,7 +886,7 @@ export const ClientProfile: React.FC = () => {
 
       return (
          <>
-            {PAYMENTS_ENABLED && order.status === OrderStatus.CONFIRMED_AWAITING_PAYMENT && (
+            {PAYMENTS_ENABLED && canPayNow(order) && (
                <button onClick={wrap(() => initiatePayment(order.id))} className={`bg-primary-600 text-white ${btnBold} rounded-md font-bold hover:bg-primary-700 shadow-sm flex items-center gap-1`}><CreditCard className={iconSm} /> {t('order.payNow')}</button>
             )}
             {canRescheduleAppointment(order) && (
@@ -981,7 +1020,7 @@ export const ClientProfile: React.FC = () => {
                   <button onClick={() => setActiveTab('security')} className={`${activeTab === 'security' ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200 lg:ring-0 hover:text-primary-700 hover:bg-white' : 'bg-gray-50 lg:bg-transparent text-gray-700 hover:text-gray-900 hover:bg-gray-100 lg:hover:bg-gray-50'} group rounded-full lg:rounded-md px-3 py-2 flex items-center text-sm font-medium w-full transition-colors`}>
                      <Shield className={`${activeTab === 'security' ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'} flex-shrink-0 mr-2 lg:-ml-1 lg:mr-3 h-5 w-5 lg:h-6 lg:w-6`} /> <span className="truncate">{t('profile.tabs.security')}</span>
                   </button>
-                  <button type="button" onClick={() => setLogoutConfirmOpen(true)} className="hidden lg:flex text-red-600 hover:bg-red-50 group rounded-md px-3 py-2 items-center text-sm font-medium w-full transition-colors mt-4 pt-4 border-t border-gray-200">
+                  <button type="button" onClick={() => setLogoutConfirmOpen(true)} className="flex text-red-600 hover:bg-red-50 group rounded-md px-3 py-2 items-center text-sm font-medium w-full transition-colors mt-4 pt-4 border-t border-gray-200">
                      <LogOut className="flex-shrink-0 -ml-1 mr-3 h-6 w-6" /> <span className="truncate">{t('nav.logout')}</span>
                   </button>
                </nav>
@@ -1095,8 +1134,8 @@ export const ClientProfile: React.FC = () => {
                                        setLocationSearch(loc.address ?? '');
                                     }}
                                  >
-                                    <div>
-                                       <p className="text-sm font-medium text-gray-900">{loc.address}</p>
+                                    <div className="min-w-0 flex-1">
+                                       <p className="text-sm font-medium text-gray-900 truncate" title={loc.address}>{loc.address}</p>
                                        <p className="text-xs text-gray-500">{loc.city}, {loc.region}</p>
                                     </div>
                                     <button
@@ -1186,7 +1225,7 @@ export const ClientProfile: React.FC = () => {
                                              }}
                                              className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
                                           >
-                                             <p className="text-sm text-gray-900">{item.address}</p>
+                                             <p className="text-sm text-gray-900 truncate" title={item.address}>{item.address}</p>
                                              <p className="text-xs text-gray-500">{[item.city, item.region].filter(Boolean).join(', ')}</p>
                                           </button>
                                        ))}
@@ -1506,6 +1545,7 @@ export const ClientProfile: React.FC = () => {
                      <div className="mt-4">
                         <button onClick={() => setShowPasswordModal(true)} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-300 transition-colors w-full sm:w-auto">{t('profile.password')}</button>
                      </div>
+                     <DeleteAccountSection />
                   </div>
                )}
             </div>
@@ -1523,7 +1563,7 @@ export const ClientProfile: React.FC = () => {
                               <label className="flex items-center"><input type="radio" name="type" value="BUSINESS" checked={upgradeFormik.values.type === 'BUSINESS'} onChange={upgradeFormik.handleChange} className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300" /><span className="ml-2 text-sm text-gray-700">{t('profile.business')}</span></label>
                            </div>
                         </div>
-                        {upgradeFormik.values.type === 'BUSINESS' && (<div><label className="block text-sm font-medium text-gray-700">{t('profile.producerType')}<span className="text-red-500">*</span></label><input type="text" name="farmName" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.farmName} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.farmName && upgradeFormik.errors.farmName ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.farmName}</p> : null}</div>)}
+                        {upgradeFormik.values.type === 'BUSINESS' && (<div><label className="block text-sm font-medium text-gray-700">{t('form.farmName')}<span className="text-red-500">*</span></label><input type="text" name="farmName" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.farmName} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />{upgradeFormik.touched.farmName && upgradeFormik.errors.farmName ? <p className="text-xs text-red-600 mt-1">{upgradeFormik.errors.farmName}</p> : null}</div>)}
                         <div>
                            <label className="block text-sm font-medium text-gray-700">{t('profile.niuTaxId')} <span className="text-red-500">*</span></label>
                            <input type="text" name="taxIdentificationNumber" required placeholder="Enter your NIU" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white text-gray-900" value={upgradeFormik.values.taxIdentificationNumber} onChange={upgradeFormik.handleChange} onBlur={upgradeFormik.handleBlur} />
@@ -1606,7 +1646,7 @@ export const ClientProfile: React.FC = () => {
                               <span className="font-medium">{formatXaf(payOrder.subtotal)}</span>
                            </div>
                            <div className="flex justify-between text-gray-600">
-                              <span>{t('cart.serviceFee')}</span>
+                              <span>{t(payOrder.items?.some(i => i.marketType === MarketType.ATI) ? 'cart.serviceFeeRetail' : 'cart.serviceFee')}</span>
                               <span className="font-medium">{formatXaf(payOrder.serviceFee)}</span>
                            </div>
                            {(payOrder.discountAmount ?? 0) > 0 && (
@@ -1720,10 +1760,29 @@ export const ClientProfile: React.FC = () => {
                         <p className="text-xs text-gray-500 mt-2">{t('dash.orderPlaced')}: {new Date(selectedOrderLive.createdAt).toLocaleString()}</p>
                      </div>
 
+                     {/* Dispute recap — the buyer opens the dispute but previously saw
+                         nothing back: no reason echoed, no evidence, no sign the seller
+                         had responded. Same panel the seller sees. */}
+                     {selectedOrderLive.status === OrderStatus.DISPUTE && (
+                        <DisputeSummary
+                           order={selectedOrderLive}
+                           viewerId={user?.id}
+                           otherPartyLabel={t('dispute.producerLabel')}
+                           className="mb-4"
+                        />
+                     )}
+
                      {/* Seller */}
                      <div className="bg-gray-50 p-3 rounded-md mb-4">
                         <p className="text-sm font-medium text-gray-900">
-                           {t('order.soldBy')}: <Link to={`/profile/producer/${selectedOrderLive.producerId}`} className="text-primary-600 hover:underline">{getProducerDisplayName(selectedOrderLive)}</Link>
+                           {t('order.soldBy')}:{' '}
+                           {orderIsRetail(selectedOrderLive) ? (
+                              // ATI retail is first-party — there is no producer profile
+                              // or portfolio to open, so show the seller of record as text.
+                              <span className="text-gray-900">{t('product.atiStoreName')}</span>
+                           ) : (
+                              <Link to={`/profile/producer/${selectedOrderLive.producerId}`} className="text-primary-600 hover:underline">{getProducerDisplayName(selectedOrderLive)}</Link>
+                           )}
                         </p>
                      </div>
 
@@ -1756,7 +1815,7 @@ export const ClientProfile: React.FC = () => {
                                        {item.type === OfferType.SERVICE ? (
                                           <>
                                              <p className="text-xs text-gray-600 mt-1">
-                                                {t('service.bookedQty')}: {item.cartQuantity ?? item.quantity ?? 1} {t(`unit.${item.unit}`)} · {formatXaf(item.price ?? 0)} / {t(`unit.${item.unit}`)}
+                                                {t('service.bookedQty')}: {item.cartQuantity ?? item.quantity ?? 1} {t('service.slotsUnit')} · {formatXaf(item.price ?? 0)} / {unitLabel(t, item.unit)}
                                              </p>
                                              {item.bookingDate && (
                                                 <p className="text-xs text-purple-800 font-semibold mt-1 flex items-center gap-1">
@@ -1800,14 +1859,18 @@ export const ClientProfile: React.FC = () => {
                      {selectedOrderLive.deliveryMethod === 'PICKUP' && selectedOrderLive.pickupPointId && (
                         <div className="mt-3 p-3 bg-gray-50 rounded-md border border-gray-200 text-sm">
                            <p className="font-medium text-gray-700 mb-1">{t('order.pickupPointLabel')}</p>
-                           <p className="text-gray-600">
-                              {(() => { const pp = pickupPoints.find(p => p.id === selectedOrderLive.pickupPointId); return pp ? `${pp.name} — ${pp.address}, ${pp.city}` : selectedOrderLive.pickupPointId; })()}
-                           </p>
+                           {(() => {
+                              const pp = pickupPoints.find(p => p.id === selectedOrderLive.pickupPointId);
+                              const label = pp ? `${pp.name} — ${pp.address}, ${pp.city}` : selectedOrderLive.pickupPointId;
+                              return <p className="text-gray-600 truncate" title={label}>{label}</p>;
+                           })()}
                         </div>
                      )}
 
-                     {/* Contact reveal for IN_TRANSIT orders */}
-                     {selectedOrderLive.status === OrderStatus.IN_TRANSIT && (
+                     {/* Contact reveal for IN_TRANSIT marketplace orders. ATI retail
+                         orders are sold by the platform, not a producer — there is no
+                         seller profile to reveal, so the block is hidden for them. */}
+                     {selectedOrderLive.status === OrderStatus.IN_TRANSIT && !orderIsRetail(selectedOrderLive) && (
                         <div className="mt-3 p-3 bg-blue-50 rounded-md border border-blue-200 text-sm">
                            <p className="font-medium text-blue-800 mb-1 flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> Producer Contact</p>
                            {selectedOrderLive.contactRevealed ? (
@@ -1873,8 +1936,19 @@ export const ClientProfile: React.FC = () => {
                      <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2"><h3 className="text-lg font-bold text-gray-900">{t('order.reportProblem')}</h3><button onClick={() => setShowDisputeModal(false)}><X className="h-5 w-5 text-gray-400" /></button></div>
                      <form onSubmit={disputeFormik.handleSubmit} className="space-y-4">
                         <div><label className="block text-sm font-medium text-gray-700 mb-1">{t('order.reason')}</label><textarea name="disputeReason" required rows={3} className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white text-gray-900" value={disputeFormik.values.disputeReason} onChange={disputeFormik.handleChange} onBlur={disputeFormik.handleBlur} placeholder={t('order.disputePlaceholder')} />{disputeFormik.touched.disputeReason && disputeFormik.errors.disputeReason ? <p className="text-xs text-red-600 mt-1">{disputeFormik.errors.disputeReason}</p> : null}</div>
-                        <div><label className="block text-sm font-medium text-gray-700 mb-1">{t('order.uploadFiles')}</label><input type="file" multiple accept="image/*,application/pdf" className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100" onChange={handleDisputeFileChange} /></div>
-                        <div className="flex justify-end gap-3 pt-4"><button type="button" onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700">{t('form.cancel')}</button><button type="submit" className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700">{t('order.submitReport')}</button></div>
+                        <div>
+                           <label className="block text-sm font-medium text-gray-700 mb-1">{t('order.uploadFiles')}</label>
+                           <input type="file" multiple accept="image/*,application/pdf" className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100" onChange={handleDisputeFileChange} />
+                           <p className="text-xs text-gray-400 mt-1">{t('order.uploadFilesHint')}</p>
+                           <EvidenceFilePreviews files={disputeFiles} onRemove={(i) => setDisputeFiles(prev => prev.filter((_, idx) => idx !== i))} />
+                        </div>
+                        <div className="flex justify-end gap-3 pt-4">
+                           <button type="button" disabled={submittingDispute} onClick={() => setShowDisputeModal(false)} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:cursor-not-allowed">{t('form.cancel')}</button>
+                           <button type="submit" disabled={submittingDispute} className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700 disabled:cursor-not-allowed inline-flex items-center gap-2">
+                              {submittingDispute && <Loader2 className="h-4 w-4 animate-spin" />}
+                              {submittingDispute ? t('dispute.submitting') : t('order.submitReport')}
+                           </button>
+                        </div>
                      </form>
          </Modal>
 
