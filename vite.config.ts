@@ -57,8 +57,8 @@ export default defineConfig(({ mode }) => {
           name: 'Smarter Panel',
           short_name: 'SmarterPanel',
           description: 'Advanced administration and business logic panel.',
-          theme_color: '#1f2937', // gray-800
-          background_color: '#111827', // gray-900
+          theme_color: '#f3f4f6', // gray-100
+          background_color: '#f3f4f6', // gray-100
           display: 'standalone',
           icons: [
             {

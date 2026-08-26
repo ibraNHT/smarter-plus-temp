@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider, createTheme, useColorScheme } from '@mui/material/styles';
 import type { ThemeOptions } from '@mui/material/styles';
 import { inputsCustomizations } from './customizations/inputs';
 import { dataDisplayCustomizations } from './customizations/dataDisplay';
@@ -15,6 +15,16 @@ interface AppThemeProps {
    */
   disableCustomTheme?: boolean;
   themeComponents?: ThemeOptions['components'];
+}
+
+function MarketingThemeInitializer() {
+  const { setMode } = useColorScheme();
+
+  React.useEffect(() => {
+    setMode('light');
+  }, [setMode]);
+
+  return null;
 }
 
 export default function AppTheme(props: AppThemeProps) {
@@ -42,11 +52,17 @@ export default function AppTheme(props: AppThemeProps) {
           },
         });
   }, [disableCustomTheme, themeComponents]);
+  React.useEffect(() => {
+    if (!disableCustomTheme) {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [disableCustomTheme]);
   if (disableCustomTheme) {
     return <React.Fragment>{children}</React.Fragment>;
   }
   return (
-    <ThemeProvider theme={theme} disableTransitionOnChange>
+    <ThemeProvider theme={theme} defaultMode="light" disableTransitionOnChange>
+      <MarketingThemeInitializer />
       {children}
     </ThemeProvider>
   );

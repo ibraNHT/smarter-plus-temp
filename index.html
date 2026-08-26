@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#1f2937">
+  <meta name="theme-color" content="#f3f4f6">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="/smarter-apple-touch-icon.png">
@@ -17,8 +17,8 @@
     (function () {
       try {
         var theme = localStorage.getItem('smarter-panel-theme');
-        if (theme === 'light') document.documentElement.classList.remove('dark');
-        else document.documentElement.classList.add('dark');
+        if (theme === 'dark') document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
       } catch (e) {}
     })();
   </script>
