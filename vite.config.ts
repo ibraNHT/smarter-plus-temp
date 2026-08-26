@@ -30,14 +30,14 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
     server: {
-      port: 5173,
+      port: 3015,
       host: '127.0.0.1',
       strictPort: true,
       // Proxy API + upload routes + static /uploads to backend: same browser origin as Vite → no CORS in dev.
       proxy: {
-        '/api': { target: 'http://127.0.0.1:5002', changeOrigin: true },
-        '/upload': { target: 'http://127.0.0.1:5002', changeOrigin: true },
-        '/uploads': { target: 'http://127.0.0.1:5002', changeOrigin: true },
+        '/api': { target: 'http://127.0.0.1:3016', changeOrigin: true },
+        '/upload': { target: 'http://127.0.0.1:3016', changeOrigin: true },
+        '/uploads': { target: 'http://127.0.0.1:3016', changeOrigin: true },
       },
     },
     // Only add security headers plugin in production (e.g. `vite preview`). In dev they block Vite's inline scripts and break the app.
@@ -65,14 +65,27 @@ export default defineConfig(({ mode }) => {
               src: '/smarter-pwa-192x192.png',
               sizes: '192x192',
               type: 'image/png',
-              purpose: 'any maskable'
+              purpose: 'any',
             },
             {
               src: '/smarter-pwa-512x512.png',
               sizes: '512x512',
-              type: 'image/png'
-            }
-          ]
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
+              src: '/smarter-pwa-192x192.png',
+              sizes: '192x192',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+            {
+              src: '/smarter-pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+          ],
         }
       }),
       fixPwaMetaPlugin(),
