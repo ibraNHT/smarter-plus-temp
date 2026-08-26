@@ -58,6 +58,7 @@ const translations: Record<string, Record<Language, string>> = {
   'footer.rights': { en: 'All rights reserved.', fr: 'Tous droits réservés.' },
   'footer.exploreHelp': { en: 'Need a hand?', fr: 'Besoin d’aide ?' },
   'footer.exploreBlog': { en: 'Latest from the blog', fr: 'Dernières du blog' },
+  'footer.actionButton': { en: 'Explore our smart solution', fr: 'Explorer notre solution intelligente' },
 
   // Static Pages Content
   'blog.title': { en: 'AgriMarket Insights', fr: 'Actualités AgriMarket' },

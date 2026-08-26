@@ -173,10 +173,15 @@ export const Partners: React.FC = () => {
   const { t, language } = useTranslation();
 
   const partners = [
-    { name: t('partners.orangeMoney'), icon: Award, color: 'text-orange-500' },
-    { name: t('partners.mtn'), icon: Award, color: 'text-yellow-500' },
-    { name: t('partners.uba'), icon: Award, color: 'text-blue-600' },
-    { name: t('partners.minAgri'), icon: Award, color: 'text-green-600' },
+    // Use images links instead of icons for partners if available, otherwise use icons as placeholders
+    { name: t('partners.orangeMoney'),
+      imageLink: '/assets/om.jpg', icon: Award, color: 'text-orange-500' },
+    { name: t('partners.mtn'),
+      imageLink: '/assets/mtn.png', icon: Award, color: 'text-yellow-500' },
+    { name: t('partners.uba'),
+      imageLink: '/assets/uba.png', icon: Award, color: 'text-blue-600' },
+    { name: t('partners.minAgri'),
+      imageLink: '/assets/minader.jpg', icon: Award, color: 'text-green-600' },
   ];
 
   return (
@@ -193,12 +198,16 @@ export const Partners: React.FC = () => {
           <p className="text-base sm:text-xl text-gray-600 max-w-2xl mx-auto px-2">{t('partners.subtitle')}</p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-8 items-center opacity-70 grayscale hover:grayscale-0 transition-all duration-500">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-8 items-center hover:grayscale-0 transition-all duration-500">
           {partners.map((partner, idx) => {
             const Icon = partner.icon;
             return (
               <div key={idx} className="flex flex-col items-center justify-center p-4 sm:p-8 bg-gray-50 rounded-lg">
-                <Icon className={`h-10 w-10 sm:h-16 sm:w-16 ${partner.color} mb-3 sm:mb-4`} />
+                {partner.imageLink ? (
+                  <img src={partner.imageLink} alt={partner.name} className={`h-10 w-10 sm:h-32 sm:w-32 ${partner.color} mb-3 sm:mb-4`} />
+                ) : (
+                  <Icon className={`h-10 w-10 sm:h-16 sm:w-16 ${partner.color} mb-3 sm:mb-4`} />
+                )}
                 <span className="font-bold text-base sm:text-xl text-gray-800 text-center">{partner.name}</span>
               </div>
             );
