@@ -11,11 +11,41 @@ const raw = typeof import.meta !== 'undefined' && import.meta.env
 const PRODUCTION_API_BASE = 'https://api.smarterpanel.cloud';
 
 /**
+ * Map SPA hosts to the API host that actually serves /api/* routes.
+ * On appstaging, Nginx proxies /api → backend while stripping the /api prefix, so
+ * /api/auth/signup/start becomes /auth/signup/start (404). The real API is on apistaging.
+ */
+const HOST_API_MAP: Record<string, { api: string; upload: string }> = {
+  'appstaging.smarterpanel.cloud': {
+    api: 'https://apistaging.smarterpanel.cloud/api',
+    upload: 'https://apistaging.smarterpanel.cloud',
+  },
+  'app.smarterpanel.cloud': {
+    api: 'https://api.smarterpanel.cloud/api',
+    upload: 'https://api.smarterpanel.cloud',
+  },
+};
+
+function hostMappedApi(pathSuffix: string): string | null {
+  if (typeof window === 'undefined') return null;
+  const mapped = HOST_API_MAP[window.location.hostname.toLowerCase()];
+  if (!mapped) return null;
+  return pathSuffix === '/api' ? mapped.api : mapped.upload;
+}
+
+/**
  * In production (smarterpanel.cloud), if the baked-in URL contains a port (:3000, :5002),
  * use the known public API base so uploads and API calls don't fail (ERR_SSL_PROTOCOL_ERROR).
+ * On smarterpanel.cloud app hosts, always use the dedicated API subdomain.
  */
 function normalizeApiUrl(url: string, pathSuffix: string): string {
   if (typeof window === 'undefined') return url;
+
+  const hostMapped = hostMappedApi(pathSuffix);
+  if (hostMapped) {
+    return hostMapped;
+  }
+
   const isProductionHost = /smarterpanel\.cloud$/i.test(window.location.hostname);
   const hasWrongPort = /:\d+(\/|$)/.test(url) && (url.includes(':3000') || url.includes(':5002'));
   if (isProductionHost && hasWrongPort) {
