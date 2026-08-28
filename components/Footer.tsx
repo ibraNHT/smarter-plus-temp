@@ -133,14 +133,14 @@ export const Footer: React.FC = () => {
         </div>
         {/* Just insert a centered action button there containing the link that redirect to our smarter pannel marketing page on a new tab */}
 
-        <div className="mt-10 sm:mt-12 border-t border-primary-800 pt-6 sm:pt-8 flex justify-center">
+        {/* <div className="mt-10 sm:mt-12 border-t border-primary-800 pt-6 sm:pt-8 flex justify-center">
           <button
             onClick={() => window.open('https://app.smarterpanel.cloud/home', '_blank')}
             className="w-full sm:w-auto bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded transition-colors"
           >
             {t('footer.actionButton')}
           </button>
-        </div>
+        </div> */}
 
         
         <div className="mt-10 sm:mt-12 border-t border-primary-800 pt-6 sm:pt-8">
