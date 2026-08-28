@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from '../../services/i18nContext';
-import { Briefcase, Users, Award, Globe, Target, CheckCircle, AlertCircle, User, UserCheck, Megaphone, GraduationCap, DollarSign, Eye, Calendar } from 'lucide-react';
+import { Briefcase, Users, Award, Globe, CheckCircle, AlertCircle, User, UserCheck, Megaphone, GraduationCap } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { SEO_PAGE_META } from '../../services/seo/seoConfig';
 
