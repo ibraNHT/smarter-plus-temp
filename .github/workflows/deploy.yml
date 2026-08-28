@@ -192,50 +192,30 @@ jobs:
             HOST_PORT="${{ steps.vars.outputs.host_port }}"
             FULL_IMAGE="$REGISTRY/$REPO_LOWER:$TAG"
             ENV_FILE="$APP_PATH/.env"
-            VITE_API_URL="${{ steps.vars.outputs.api_url }}"
-            VITE_UPLOAD_API_URL="${{ steps.vars.outputs.upload_url }}"
 
             echo "📁 Preparation du répertoire $APP_PATH..."
             mkdir -p "$APP_PATH"
 
-            # Fonction robuste pour mettre à jour ou ajouter une variable
-            set_or_add_var() {
-              local var="$1"
-              local value="$2"
-              local file="$3"
-              if grep -q "^${var}=" "$file"; then
-                # Utiliser sudo et un sub-shell pour écrire le contenu modifié
-                sudo sh -c "awk -v var='$var' -v val='$value' 'BEGIN{FS=OFS=\"=\"} \$1==var {\$2=val; print} \$1!=var {print}' \"$file\" > \"${file}.tmp\" && mv \"${file}.tmp\" \"$file\""
-              else
-                echo "${var}=${value}" | sudo tee -a "$file" >/dev/null
-              fi
-            }
-
-            echo "📝 Configuration du fichier .env..."
-            if [ ! -f "$ENV_FILE" ] || [ ! -s "$ENV_FILE" ]; then
-              echo "⚠️  $ENV_FILE est manquant ou vide. Création avec les valeurs de base."
-              sudo tee "$ENV_FILE" >/dev/null <<EOF
-            VITE_API_URL=$VITE_API_URL
-            VITE_UPLOAD_API_URL=$VITE_UPLOAD_API_URL
-            VITE_USE_MOCKS=false
-            VITE_USE_HTTPONLY_COOKIES=false
-            EOF
-              sudo chown deployer:deployer "$ENV_FILE"
-            else
-              echo "✅ Fichier .env existant. Mise à jour des URLs API..."
-              set_or_add_var "VITE_API_URL" "$VITE_API_URL" "$ENV_FILE"
-              set_or_add_var "VITE_UPLOAD_API_URL" "$VITE_UPLOAD_API_URL" "$ENV_FILE"
-              # S'assurer que les autres variables sont présentes
-              grep -q '^VITE_USE_MOCKS=' "$ENV_FILE" || echo "VITE_USE_MOCKS=false" | sudo tee -a "$ENV_FILE" >/dev/null
-              grep -q '^VITE_USE_HTTPONLY_COOKIES=' "$ENV_FILE" || echo "VITE_USE_HTTPONLY_COOKIES=false" | sudo tee -a "$ENV_FILE" >/dev/null
+            # --- Vérification du fichier .env (géré manuellement) ---
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "❌ Le fichier $ENV_FILE est introuvable."
+              echo "   Veuillez le créer manuellement sur le VPS avec les variables nécessaires."
+              echo "   Exemple de contenu :"
+              echo "     VITE_API_URL=https://api.smarterpanel.cloud/api"
+              echo "     VITE_UPLOAD_API_URL=https://api.smarterpanel.cloud/upload"
+              echo "     VITE_USE_MOCKS=false"
+              echo "     VITE_USE_HTTPONLY_COOKIES=false"
+              exit 1
             fi
+            echo "✅ Fichier .env présent."
 
-            echo "✅ Contenu final de $ENV_FILE :"
-            cat "$ENV_FILE"
-
+            echo "🔐 Login au registre..."
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
+
+            echo "⬇️ Pull de l'image $FULL_IMAGE..."
             docker pull "$FULL_IMAGE"
 
+            # Gestion du port
             PORT_OWNER=$(docker ps --filter "publish=$HOST_PORT" --format '{{.Names}}' | head -n 1)
             if [ -n "$PORT_OWNER" ] && [ "$PORT_OWNER" != "$CONTAINER_NAME" ]; then
               echo "Host port $HOST_PORT is already used by $PORT_OWNER. Stopping and removing it."
@@ -243,9 +223,11 @@ jobs:
               docker rm "$PORT_OWNER" >/dev/null 2>&1 || true
             fi
 
+            echo "🛑 Arrêt et suppression de l'ancien conteneur..."
             docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
             docker rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
+            echo "🚀 Lancement du nouveau conteneur..."
             docker run -d \
               --name "$CONTAINER_NAME" \
               --restart unless-stopped \
@@ -253,6 +235,7 @@ jobs:
               --env-file "$ENV_FILE" \
               "$FULL_IMAGE"
 
+            # Attente du healthcheck
             for attempt in $(seq 1 12); do
               STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER_NAME")
               echo "Tentative $attempt : statut = $STATUS"

@@ -9,6 +9,7 @@ import { Spinner } from './components/UI';
 import { NotificationProvider } from './context/NotificationContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { PwaInstallProvider } from './hooks/usePwaInstall';
 import MarketingPage from './marketing-page/MarketingPage';
 import HelpCenterPage from './marketing-page/components/HelpCenterPage';
 import PrivacyPolicyPage from './marketing-page/components/PrivacyPolicyPage';
@@ -19,6 +20,7 @@ import { MarketingLangProvider } from './marketing-page/MarketingLangContext';
 import Login from './pages/Login';
 import ChangePassword from './pages/ChangePassword';
 import OrgProfile from './pages/OrgProfile';
+import { PwaInstallCta } from './components/PwaInstallCta';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Income = lazy(() => import('./pages/Income'));
@@ -133,6 +135,8 @@ const MainApp = () => {
         forgotPasswordStart={forgotPasswordStart}
         forgotPasswordVerify={forgotPasswordVerify}
         t={t}
+        lang={lang}
+        setLang={setLang}
       />
     );
   }
@@ -202,6 +206,7 @@ const MainApp = () => {
             </button>
           </div>
         )}
+        <PwaInstallCta t={t} variant="banner" />
         <Header
           setIsOpen={setSidebarOpen}
           lang={lang}
@@ -279,9 +284,11 @@ export default function App() {
           path="*"
           element={
             <ThemeProvider>
-              <NotificationProvider>
-                <MainApp />
-              </NotificationProvider>
+              <PwaInstallProvider>
+                <NotificationProvider>
+                  <MainApp />
+                </NotificationProvider>
+              </PwaInstallProvider>
             </ThemeProvider>
           }
         />
