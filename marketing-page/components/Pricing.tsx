@@ -200,7 +200,7 @@ export default function Pricing({ lang, currency = 'XAF' }: PricingProps) {
                       tier.title === t('planGrowthTitle') ? { color: 'grey.100' } : { color: '' },
                     ]}
                   >
-                    {formatCurrency(tier.price, selectedCurrency, 'XAF')}  {/* Convert from original XAF */}
+                    {formatCurrency(tier.price, selectedCurrency, 'XAF')}  {/* Convert from  XAF */}
                   </Typography>
                   <Typography
                     component="h4"
