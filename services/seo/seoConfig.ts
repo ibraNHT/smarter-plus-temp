@@ -71,6 +71,11 @@ export const SEO_PAGE_META: Record<string, { title: string; description: string;
     description:
       'Meet the partners powering AgriMarket Connect — Africa\'s marketplace to buy and sell agricultural products with trust.',
   },
+  agents: {
+    title: 'Strategic Agents',
+    description:
+      'Meet the agents powering AgriMarket Connect — Africa\'s marketplace to buy and sell agricultural products with trust.',
+  },
   terms: {
     title: 'Terms and Conditions',
     description:

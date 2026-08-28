@@ -88,6 +88,11 @@ export const Footer: React.FC = () => {
                   {t('footer.link.blog')}
                 </Link>
               </li>
+              <li>
+                <Link to="/agents" className="text-base text-primary-100 hover:text-white transition-colors">
+                  {t('footer.link.agents')}
+                </Link>
+              </li>
             </ul>
           </div>
 

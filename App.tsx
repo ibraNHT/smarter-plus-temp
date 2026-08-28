@@ -67,6 +67,9 @@ const Jobs = lazy(() => import('./pages/footer/Company').then((m) => ({ default:
 const Partners = lazy(() =>
   import('./pages/footer/Company').then((m) => ({ default: m.Partners })),
 );
+const Agents = lazy(() =>
+  import('./pages/footer/Company').then((m) => ({ default: m.Agents })),
+);
 const Terms = lazy(() => import('./pages/footer/Legal').then((m) => ({ default: m.Terms })));
 const Privacy = lazy(() => import('./pages/footer/Legal').then((m) => ({ default: m.Privacy })));
 const AccountDeletion = lazy(() =>
@@ -250,6 +253,7 @@ const AppShell: React.FC = () => {
                 <Route path="/faq" element={<FAQ />} />
                 <Route path="/jobs" element={<Jobs />} />
                 <Route path="/partners" element={<Partners />} />
+                <Route path="/agents" element={<Agents />} />
                 <Route path="/terms" element={<Terms />} />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/account-deletion" element={<AccountDeletion />} />

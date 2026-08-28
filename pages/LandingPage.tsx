@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, CheckCircle, ShieldCheck, Truck, ShoppingBasket, Tractor } from 'lucide-react';
+import { ArrowRight, CheckCircle, ExternalLink, LayoutDashboard, ShieldCheck, Truck, ShoppingBasket, Tractor } from 'lucide-react';
 import { useTranslation } from '../services/i18nContext';
 import { useStore } from '../services/storeContext';
 import { SEO } from '../components/SEO';
@@ -11,7 +11,7 @@ import { MarketType } from '../types';
 import { getCategoryAvatar, CATEGORY_SCROLLER_ITEMS } from '../data/categoryVisuals';
 import { useCurrency } from '../contexts/CurrencyContext';
 
-const FEATURE_ICONS = [ShieldCheck, Truck, CheckCircle] as const;
+const FEATURE_ICONS = [ShieldCheck, Truck, CheckCircle, LayoutDashboard] as const;
 
 export const LandingPage: React.FC = () => {
   const { t, language } = useTranslation();
@@ -51,6 +51,7 @@ export const LandingPage: React.FC = () => {
     { nameKey: 'landing.features.verified', descKey: 'landing.features.verifiedDesc', icon: FEATURE_ICONS[0] },
     { nameKey: 'landing.features.logistics', descKey: 'landing.features.logisticsDesc', icon: FEATURE_ICONS[1] },
     { nameKey: 'landing.features.escrow', descKey: 'landing.features.escrowDesc', icon: FEATURE_ICONS[2] },
+    { nameKey: 'landing.features.smarterPanel', descKey: 'landing.features.smarterPanelDesc', icon: FEATURE_ICONS[3] },
   ] as const;
 
   return (
@@ -199,7 +200,7 @@ export const LandingPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="mt-10 sm:mt-14 grid gap-8 sm:grid-cols-3">
+          <div className="mt-10 sm:mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
             {features.map((item) => (
               <div key={item.nameKey} className="agm-page-in border-t border-primary-800 pt-6">
                 <div className="flex items-center justify-center h-11 w-11 rounded-lg bg-primary-800 text-green-300">
@@ -217,20 +218,45 @@ export const LandingPage: React.FC = () => {
       <section className="relative py-14 sm:py-16 bg-primary-800 overflow-hidden">
         <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'url(/categories/agriculture.webp)', backgroundSize: 'cover', backgroundPosition: 'center' }} />
         <div className="absolute inset-0 bg-primary-800/85" />
-        <div className="relative max-w-3xl mx-auto px-4 text-center">
-          <h2 className="font-display text-2xl sm:text-3xl font-bold text-white">
+        <div className="relative max-w-7xl mx-auto text-center">
+          {/* <h2 className="font-display text-2xl sm:text-3xl font-bold text-white">
             {t('landing.closing.title')}
           </h2>
           <p className="mt-3 text-primary-100 text-sm sm:text-base">
             {t('landing.closing.subtitle')}
-          </p>
-          <Link
-            to="/register"
-            className="agm-btn-primary mt-8 inline-flex items-center justify-center gap-2 bg-white text-primary-900 px-6 py-3.5 rounded-lg font-bold text-sm sm:text-base shadow-lg hover:bg-primary-50"
-          >
-            {t('landing.createAccount')}
-            <ArrowRight className="h-4 w-4" aria-hidden />
-          </Link>
+          </p> */}
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 text-center">
+            <h2 className="font-display text-2xl sm:text-3xl font-bold text-white">
+              {t('landing.closing.title')}
+            </h2>
+            <h2 className="font-display text-2xl sm:text-3xl font-bold text-white">
+              {t('landing.smarter.title')}
+            </h2>
+            <div className="border-t border-primary-600 pt-5">
+              <h3 className="font-display text-lg font-semibold text-white">{t('landing.createAccount')}</h3>
+              <p className="mt-2 text-sm text-primary-100">{t('landing.closing.accountDesc')}</p>
+              <Link
+                to="/register"
+                className="agm-btn-primary mt-5 inline-flex items-center justify-center gap-2 bg-white text-primary-900 px-5 py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-primary-50"
+              >
+                {t('landing.createAccount')}
+                <ArrowRight className="h-4 w-4" aria-hidden />
+              </Link>
+            </div>
+            <div className="border-t border-primary-600 pt-5">
+              <h3 className="font-display text-lg font-semibold text-white">{t('landing.smarterPanel.title')}</h3>
+              <p className="mt-2 text-sm text-primary-100">{t('landing.smarterPanel.desc')}</p>
+              <a
+                href="https://app.smarterpanel.cloud/home"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-5 inline-flex items-center justify-center gap-2 bg-green-400 text-primary-950 px-5 py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-green-300"
+              >
+                {t('landing.smarterPanel.cta')}
+                <ExternalLink className="h-4 w-4" aria-hidden />
+              </a>
+            </div>
+          </div>
         </div>
       </section>
     </div>

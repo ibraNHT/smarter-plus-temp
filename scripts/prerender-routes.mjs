@@ -46,6 +46,7 @@ const ROUTES = [
   '/blog',
   '/jobs',
   '/partners',
+  '/agents',
   ...HELP_TOPIC_IDS.map((id) => `/help/${id}`),
 ];
 

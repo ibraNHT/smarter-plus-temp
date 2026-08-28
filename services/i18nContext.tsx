@@ -51,6 +51,7 @@ const translations: Record<string, Record<Language, string>> = {
   'footer.col.support': { en: 'Support & Legal', fr: 'Aide & Légal' },
   'footer.link.jobs': { en: 'Jobs', fr: 'Emplois' },
   'footer.link.partners': { en: 'Partners', fr: 'Partenaires' },
+  'footer.link.agents': { en: 'Agents', fr: 'Agents' },
   'footer.link.blog': { en: 'Blog', fr: 'Blog' },
   'footer.link.helpCenter': { en: 'Help Center', fr: "Centre d'aide" },
   'footer.link.faq': { en: 'FAQ', fr: 'FAQ' },
@@ -68,7 +69,7 @@ const translations: Record<string, Record<Language, string>> = {
   'blog.readArticle': { en: 'Read Article', fr: 'Lire l\'article' },
   'jobs.title': { en: 'Join Our Team', fr: 'Rejoignez Notre Équipe' },
   'jobs.subtitle': { en: 'Help us revolutionize agriculture in Africa.', fr: 'Aidez-nous à révolutionner l\'agriculture en Afrique.' },
-  'partners.title': { en: 'Our Strategic Partners', fr: 'Nos Partenaires Stratégiques' },
+  'agents.title': { en: 'Our Operating Agents', fr: 'Nos Agents Operationnels' },
   'faq.title': { en: 'Frequently Asked Questions', fr: 'Foire Aux Questions' },
   'helpCenter.title': { en: 'Help Center', fr: "Centre d'aide" },
   'helpCenter.subtitle': {
@@ -143,8 +144,15 @@ const translations: Record<string, Record<Language, string>> = {
   'landing.features.logisticsDesc': { en: 'Choose home delivery or pick up at authorized focal points near you.', fr: 'Choisissez la livraison à domicile ou le retrait aux points focaux autorisés près de chez vous.' },
   'landing.features.escrow': { en: 'Secure escrow', fr: 'Séquestre sécurisé' },
   'landing.features.escrowDesc': { en: 'Payments stay protected until you confirm delivery — reducing risk for both sides.', fr: 'Les paiements restent protégés jusqu’à confirmation de livraison — moins de risque pour les deux parties.' },
+  'landing.features.smarterPanel': { en: 'SmarterPanel tools', fr: 'Outils SmarterPanel' },
+  'landing.features.smarterPanelDesc': { en: 'Explore our smarter solution for simplifying your agricultural operations and decisions.', fr: 'Découvrez notre solution intelligente pour simplifier vos opérations et vos décisions agricoles.' },
   'landing.closing.title': { en: 'Ready to buy or sell fresh?', fr: 'Prêt à acheter ou vendre du frais ?' },
+  'landing.smarter.title': { en: 'Ready to test our smart solution?', fr: 'Prêt à tester notre solution intelligente ?' },
   'landing.closing.subtitle': { en: 'Create a free account and join AgriMarket Connect today.', fr: 'Créez un compte gratuit et rejoignez AgriMarket Connect dès aujourd’hui.' },
+  'landing.closing.accountDesc': { en: 'Join the marketplace to buy fresh produce or sell directly to customers.', fr: 'Rejoignez la marketplace pour acheter des produits frais ou vendre directement aux clients.' },
+  'landing.smarterPanel.title': { en: 'Discover SmarterPanel', fr: 'Découvrez SmarterPanel' },
+  'landing.smarterPanel.desc': { en: 'Take the next step with our smarter platform solution for agricultural businesses.', fr: 'Passez à l’étape suivante avec notre solution intelligente pour les entreprises agricoles.' },
+  'landing.smarterPanel.cta': { en: 'Explore SmarterPanel', fr: 'Explorer SmarterPanel' },
 
   // Login
   'login.bridging': { en: 'Bridging the gap between producers and consumers.', fr: 'Comblez le gap entre les producteurs et les consommateurs.' },
@@ -1250,6 +1258,10 @@ const translations: Record<string, Record<Language, string>> = {
   en: 'We collaborate with industry leaders to bring you the best services.',
   fr: 'Nous collaborons avec des leaders du secteur pour vous offrir les meilleurs services.',
 },
+'agents.subtitle': {
+  en: 'We collaborate with industry leaders to bring you the best services.',
+  fr: 'Nous collaborons avec des leaders du secteur pour vous offrir les meilleurs services.',
+},
 'partners.orangeMoney': {
   en: 'Orange Money',
   fr: 'Orange Money',
@@ -1266,10 +1278,26 @@ const translations: Record<string, Record<Language, string>> = {
   en: 'Min. of Agriculture',
   fr: 'Min. de l\'Agriculture',
 },
-'partners.becomeTitle': {
-  en: 'Become a Partner',
-  fr: 'Devenir Partenaire',
+'agents.solex': {
+  en: 'Solex Transports and Logistics',
+  fr: 'Solex Transport et Logistique',
 },
+'agents.mta': {
+  en: 'MTA Logistique and Services',
+  fr: 'MTA Logistique et services',
+},
+'agents.touristique': {
+  en: 'Touristique Express Services',
+  fr: 'Touristique Express',
+},
+'agents.generalVoyage': {
+  en: 'General Travel Services',
+  fr: 'General Voyages',
+},
+// 'agents.becomeTitle': {
+//   en: 'Become a agent',
+//   fr: 'Devenir Partenaire',
+// },
 'partners.becomeDesc': {
   en: 'Interested in integrating your logistics, financial, or agricultural services with AgriMarket Connect?',
   fr: 'Intéressé par l\'intégration de vos services logistiques, financiers ou agricoles avec AgriMarket Connect ?',
@@ -1278,6 +1306,196 @@ const translations: Record<string, Record<Language, string>> = {
   en: 'Contact Partnerships',
   fr: 'Contacter les partenariats',
 },
+// 'agents.becomeDesc': {
+//   en: 'Interested in integrating your logistics, financial, or agricultural services with AgriMarket Connect?',
+//   fr: 'Intéressé par l\'intégration de vos services logistiques, financiers ou agricoles avec AgriMarket Connect ?',
+// },
+// 'agents.contactBtn': {
+//   en: 'Contact Agents',
+//   fr: 'Contacter les partenariats',
+// },
+
+  'agents.becomeTitle': {
+    en: 'Become a Field Agent Today',
+    fr: 'Devenez agent de terrain dès aujourd\'hui',
+  },
+  'agents.becomeDesc': {
+    en: 'Join our team of field agents and earn competitive remuneration while helping farmers and businesses connect through our platform.',
+    fr: 'Rejoignez notre équipe d\'agents de terrain et gagnez une rémunération compétitive tout en aidant les agriculteurs et les entreprises à se connecter via notre plateforme.',
+  },
+  'agents.contactBtn': {
+    en: 'Apply Now',
+    fr: 'Postuler maintenant',
+  },
+  // ── Agents program (new affiliate page) ──────────────────────────────
+  'agents.program.title': {
+    en: 'Field Agent Remuneration Program for AgriMarket Connect',
+    fr: 'Programme de rémunération des agents de terrain pour AgriMarket Connect',
+  },
+  'agents.program.subtitle': {
+    en: 'Clarifying the relationship between ATI Sarl and field agents, and the basis of remuneration.',
+    fr: 'Clarifier et préciser la relation entre ATI Sarl et les agents de terrain, ainsi que les bases de leur rémunération.',
+  },
+  'agents.program.overview.title': {
+    en: 'Overview',
+    fr: 'Vue d\'ensemble',
+  },
+  'agents.program.overview.desc': {
+    en: 'This program clarifies and specifies the relationship between ATI Sarl and field agents, and sets out the basis on which they will be remunerated.',
+    fr: 'Le programme suivant a pour but de clarifier et préciser la relation qui lie ATI Sarl aux agents de terrain, et précise également sous quelles bases ils ou elles seront rémunérés.',
+  },
+  'agents.program.overview.note': {
+    en: 'This is not a job offer, but rather a mutually beneficial contract between the agents and ATI.',
+    fr: 'Ceci n\'est pas une offre d\'emploi, mais plutôt un contrat gré à gré gagnant entre les intervenants et ATI.',
+  },
+  'agents.program.objectives.title': {
+    en: 'Objectives',
+    fr: 'Objectifs',
+  },
+  'agents.program.objectives.item1': {
+    en: 'Define the agents',
+    fr: 'Définir les intervenants',
+  },
+  'agents.program.objectives.item2': {
+    en: 'Determine the main axes that identify and differentiate the types of agents.',
+    fr: 'Déterminer les grands axes qui identifient et différencient les types d\'agents.',
+  },
+  'agents.program.categories.title': {
+    en: 'Agent Categories',
+    fr: 'Catégories d\'agents',
+  },
+  'agents.program.categories.targetLabel': {
+    en: 'Target',
+    fr: 'Cible',
+  },
+  'agents.program.categories.field.title': {
+    en: 'Field Agents',
+    fr: 'Field Agents',
+  },
+  'agents.program.categories.field.desc': {
+    en: 'Individuals who prospect on behalf of AgriMarket Connect to meet enrollment quotas. They must demonstrate technical expertise in one or more agricultural fields and have the ability to convince and educate users to navigate the app. Their target is the general public.',
+    fr: 'Toutes personnes désireuses de prospecter au nom de AgriMarket Connect dans le but de remplir les quotas d\'enroulements. Elles doivent démontrer une certaine technicité dans un ou plusieurs domaines agricoles et avoir les capacités de convaincre et d\'éduquer les utilisateurs à naviguer dans l\'application. Leur cible est le grand public.',
+  },
+  'agents.program.categories.field.target': {
+    en: 'General public',
+    fr: 'Grand public',
+  },
+  'agents.program.categories.field.remuneration': {
+    en: 'Guaranteed minimum salary of 50,000 FCFA, with bonus potential up to 100,000 FCFA.',
+    fr: 'Salaire minimum garanti de 50 000 FCFA, avec bonus possible jusqu\'à 100 000 FCFA.',
+  },
+  'agents.program.categories.field.quota': {
+    en: 'Quota: at least 30 users per month (15 clients, 5 producers (agriculture/aquaculture), 5 producers (general services), 5 livestock producers).',
+    fr: 'Quota : au moins 30 utilisateurs par mois (15 clients, 5 producteurs (agriculture/aquaculture), 5 producteurs (services généraux), 5 producteurs élevage).',
+  },
+  'agents.program.categories.field.bonus': {
+    en: 'If quota is met, bonus of 50,000 FCFA (total 100,000 FCFA).',
+    fr: 'Si le quota est atteint, bonus de 50 000 FCFA (total 100 000 FCFA).',
+  },
+  'agents.program.categories.field.prorata': {
+    en: 'If quota is not met, remuneration = (number of users × 100) / 30.',
+    fr: 'Si le quota n\'est pas atteint, rémunération = (nombre d\'utilisateurs × 100) / 30.',
+  },
+  'agents.program.categories.topfield.title': {
+    en: 'Top Field Agents',
+    fr: 'Top Field Agents',
+  },
+  'agents.program.categories.topfield.desc': {
+    en: 'Individuals who prospect on behalf of AgriMarket Connect to meet enrollment quotas. They must demonstrate technical expertise in one or more agricultural fields and have the ability to convince and educate users to navigate the app. Their target is industries, organisations and distributors.',
+    fr: 'Toutes personnes désireuses de prospecter au nom de AgriMarket Connect dans le but de remplir les quotas d\'enroulements. Elles doivent démontrer une certaine technicité dans un ou plusieurs domaines agricoles et avoir les capacités de convaincre et d\'éduquer les utilisateurs à naviguer dans l\'application. Leur cible sont les industries, les organismes et les distributeurs.',
+  },
+  'agents.program.categories.topfield.target': {
+    en: 'Industries, organisations, distributors',
+    fr: 'Industries, organismes, distributeurs',
+  },
+  'agents.program.categories.topfield.remuneration': {
+    en: 'Guaranteed minimum salary of 100,000 FCFA, with bonus potential up to 150,000 FCFA.',
+    fr: 'Salaire minimum garanti de 100 000 FCFA, avec bonus possible jusqu\'à 150 000 FCFA.',
+  },
+  'agents.program.categories.topfield.quota': {
+    en: 'Quota: at least 15 top users per month (5 top producers (agriculture/aquaculture), 5 top producers (general services), 5 top producers (animal feed / input distributors).',
+    fr: 'Quota : au moins 15 top utilisateurs par mois (5 top producteurs (agriculture/aquaculture), 5 top producteurs (services généraux), 5 top producteurs (alimentation animale / distributeurs d\'intrants).',
+  },
+  'agents.program.categories.topfield.bonus': {
+    en: 'If quota is met, bonus of 50,000 FCFA (total 150,000 FCFA).',
+    fr: 'Si le quota est atteint, bonus de 50 000 FCFA (total 150 000 FCFA).',
+  },
+  'agents.program.categories.topfield.prorata': {
+    en: 'If quota is not met, remuneration = (number of users × 100) / 15.',
+    fr: 'Si le quota n\'est pas atteint, rémunération = (nombre d\'utilisateurs × 100) / 15.',
+  },
+  'agents.program.categories.pub.title': {
+    en: 'Ad Agents',
+    fr: 'Agents Pub',
+  },
+  'agents.program.categories.pub.desc': {
+    en: 'Individuals who promote AgriMarket Connect on all possible communication channels. They must have knowledge of social media and the ability to generate engagement.',
+    fr: 'Toutes personnes désireuses de promouvoir AgriMarket Connect sur tous les canaux de communication possibles. Elles doivent avoir une certaine connaissance des médias sociaux et la capacité de générer de l\'engagement.',
+  },
+  'agents.program.categories.pub.target': {
+    en: 'General public (via social media)',
+    fr: 'Grand public (via les réseaux sociaux)',
+  },
+  'agents.program.categories.pub.remuneration': {
+    en: '10,000 FCFA per original post that generates at least 1,000 views (combined across platforms).',
+    fr: '10 000 FCFA par publication originale qui génère au moins 1 000 vues (cumulées sur plusieurs plateformes).',
+  },
+  'agents.program.categories.formation.title': {
+    en: 'Training Agents',
+    fr: 'Agents de formation',
+  },
+  'agents.program.categories.formation.desc': {
+    en: 'Individuals who conduct field training according to the internal program. They must demonstrate technical expertise in one or more agricultural fields and have the ability to convince and educate users.',
+    fr: 'Toutes personnes désireuses de prospecter sur le terrain selon le programme interne. Elles doivent démontrer une certaine technicité dans un ou plusieurs domaines agricoles et avoir les capacités de convaincre et d\'éduquer les utilisateurs.',
+  },
+  'agents.program.categories.formation.target': {
+    en: 'Industries, organisations, distributors and the general public',
+    fr: 'Industries, organismes, distributeurs et grand public',
+  },
+  'agents.program.categories.formation.remuneration': {
+    en: 'Minimum 10,000 FCFA per field day for Field Agents; 20,000 FCFA per field day for Top Field Agents and Trainers.',
+    fr: 'Minimum 10 000 FCFA par jour de descente pour les Field Agents ; 20 000 FCFA par jour de descente pour les Top Field Agents et les formateurs.',
+  },
+  'agents.program.conditions.title': {
+    en: 'Conditions to be considered an Agent',
+    fr: 'Conditions pour être considéré comme agent',
+  },
+  'agents.program.conditions.item1': {
+    en: 'Have reached the legal age in your jurisdiction.',
+    fr: 'Avoir atteint l\'âge légal selon la juridiction dans laquelle vous travaillez.',
+  },
+  'agents.program.conditions.item2': {
+    en: 'Be identifiable and provide emergency contact references.',
+    fr: 'Être identifiable et fournir des références individuelles en cas d\'urgence.',
+  },
+  'agents.program.conditions.item3': {
+    en: 'Have a client account on the AgriMarket Connect platform.',
+    fr: 'Avoir un compte client sur la plate-forme AgriMarket Connect.',
+  },
+  'agents.program.conditions.item4': {
+    en: 'Act in good faith and with good morals.',
+    fr: 'Être de bonne foi et de bonne moralité.',
+  },
+  'agents.program.notes.title': {
+    en: 'Important Notes',
+    fr: 'Notes importantes',
+  },
+  'agents.program.notes.item1': {
+    en: 'Agents must share their referral code with potential targets.',
+    fr: 'Les agents doivent partager leur code de référence à leur cible potentielle.',
+  },
+  'agents.program.notes.item2': {
+    en: 'Agents must justify their quotas by showing accounts created with their referral code.',
+    fr: 'Les agents doivent justifier leurs quotas en montrant les comptes créés grâce à leur code de référence.',
+  },
+  'agents.program.notes.item3': {
+    en: 'Any attempted fraud will result in disqualification and forfeiture of future earnings.',
+    fr: 'Toute tentative de fraude entraînera une disqualification et aucun futur gain ne sera reversé.',
+  },
+  'agents.program.notes.item4': {
+    en: 'Accounts created must be legitimate and have posted at least one post within 3 days of registration, otherwise they will not count toward quotas.',
+    fr: 'Les comptes créés doivent être légitimes et avoir créé au moins un post dans un délai de 3 jours après leur enregistrement, sinon ils ne seront pas comptabilisés.',
+  },
 
 // FAQ intro
 'faq.subtitle': {
