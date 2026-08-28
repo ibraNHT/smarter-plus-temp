@@ -619,6 +619,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
       "The product enforces practical rules such as 7-day date limits and 24-hour edit/delete locks on many records to reduce fraud and errors.",
     termsContact: "Contact legal: {email}",
 
+    currency: "Currency",
+
     helpCenterContent: `
 # Help Center — Smarter Panel
 
@@ -2007,6 +2009,9 @@ These Terms are governed by the laws of \`[Governing Law / Jurisdiction]\`, excl
     termsRulesTitle: "Règles du produit",
     termsRulesText: "Le produit applique des règles pratiques telles que des limites de date de 7 jours et des verrous de modification/suppression de 24 heures sur de nombreux enregistrements pour réduire la fraude et les erreurs.",
     termsContact: "Contact légal : {email}",
+
+    currency: "Monnaie",
+
 
     termsContent: `
 # Conditions générales — Smarter Panel
