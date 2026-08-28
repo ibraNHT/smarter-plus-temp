@@ -132,7 +132,6 @@ export const Partners: React.FC = () => {
 //   const { t, language } = useTranslation();
 
 //   const agents = [
-//     // Use images links instead of icons for agents if available, otherwise use icons as placeholders
 //     { name: t('agents.solex'),
 //       imageLink: '/assets/solex.png', icon: Award, color: 'text-orange-500' },
 //     { name: t('agents.mta'),
